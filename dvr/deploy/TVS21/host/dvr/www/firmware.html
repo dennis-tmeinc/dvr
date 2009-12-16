@@ -1,0 +1,43 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<link href="eagle.css" rel="stylesheet" type="text/css" /><title>Firmware Update</title>
+<script type="text/javascript" src="eagle.js"></script>
+</head>
+
+<body>
+<!--#include file="header.i"-->
+<p>&nbsp;</p>
+<table>
+<tr>
+<td>Updating Firmware...<br />
+<!--#include file="firmware_msg"-->
+</td>
+<td></td>
+</tr>
+<tr>
+<td>
+<div id="countdown"> </div>
+</td>
+</tr>
+</table>
+
+<script type="text/javascript">
+var countdown=300 ;
+function countdownfunc()
+{
+    document.getElementById("countdown").innerHTML="Please wait "+countdown+" seconds." ;
+    countdown-- ;
+    if( countdown > 0 ) {
+        setTimeout("countdownfunc()", 1000);
+    }
+    else {
+        window.location.assign("system.html");
+    }
+}
+countdownfunc();
+</script>
+
+</body></html>

@@ -1,0 +1,36 @@
+#!/bin/sh
+# ** MDVR510X **
+# Downloading smartlog file to USB stick.
+# 247 Security Inc. 2009
+
+if [ ! -d ${USBROOT}/smartlog ] ; then
+ mkdir ${USBROOT}/smartlog
+fi
+
+# start flashing "Don't Remove USB" LED
+/davinci/dvr/panelled 1
+
+for disk in `ls -d /var/dvr/disks/*` 
+do
+	if [ -d ${disk}/smartlog ]; then
+		for lfile in `ls ${disk}/smartlog/*_L.001`
+		do
+			echo ${lfile}
+			cp -f ${lfile} ${USBROOT}/smartlog/
+			mv ${lfile} ${lfile%L.001}N.001
+		done
+	fi
+done
+
+sleep 1
+sync
+sleep 1
+sync
+cd /
+umount ${USBROOT}
+sleep 1
+sync
+
+# stop flashing "Remove USB" LED
+/davinci/dvr/panelled 0
+

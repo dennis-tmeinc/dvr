@@ -1,0 +1,28 @@
+#!/bin/sh
+
+cd /davinci
+
+# reconfigure wifi
+ifconfig rausb0 down 
+/bin/rmmod rt73
+/bin/insmod rt73.ko
+
+cd /davinci/dvr 
+
+# reconfigure ether net
+if [ -f /davinci/dvr/eth_ip ]; then
+    ifconfig eth0:1 `cat /davinci/dvr/eth_ip`
+fi
+
+if [ -f /davinci/dvr/eth_mask ]; then
+    ifconfig eth0:1 netmask `cat /davinci/dvr/eth_mask`
+fi
+
+sleep 3
+
+route del default
+
+for gw in `ls gateway*` ; do 
+   route add default gw `cat $gw`   
+done
+

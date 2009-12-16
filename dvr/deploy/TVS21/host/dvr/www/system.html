@@ -1,0 +1,84 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<link href="eagle.css" rel="stylesheet" type="text/css" /><title>System Setup Page</title>
+
+<script type="text/javascript" src="eagle.js"></script>
+</head>
+
+<body>
+<!--#include file="header.i"-->
+<div class="tabs">
+<ul>
+<li class="current"><a onclick="on_system_click()"><span>System</span></a></li>
+<li><a onclick="on_camera_click()"><span>Camera</span></a></li>
+<li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
+<li><a onclick="on_status_click()"><span>Status</span></a></li>
+<li><a onclick="on_tools_click()"><span>Tools</span></a></li>
+</ul>
+</div>
+<p>&nbsp;</p>
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="apply.html">
+<input name="page" value="system" type="hidden" />
+<table>
+
+<tr>
+<td class="col1">Manufacture USB ID #:</td>
+<td> <!--#include mfid="tvs_manufacture_id" --> </td>
+</tr>
+
+<tr>
+<td class="col1">Medallion / VIN #:</td>
+<td><input name="tvs_medallion" /></td>
+</tr>
+
+<tr>
+<td class="col1">License Plate #:</td>
+<td><input name="tvs_licenseplate" /></td>
+</tr>
+
+<tr>
+<td class="col1">Controller Serial #:</td>
+<td>
+<!--#include mfid="tvs_ivcs_prefix" -->
+<input name="tvs_ivcs_serial" />
+</td>
+</tr>
+
+<tr>
+<td class="col1">Time Zone:</td>
+<td>
+</td>
+</tr>
+
+<tr>
+<td colspan="2">
+&nbsp; &nbsp;&nbsp; &nbsp;
+<select size="1" name="dvr_time_zone" id="id_dvr_time_zone"><!--#include file="tz_option" --></select>
+</td>
+<td></td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td></td>
+<td> <input id="id_apply" value="Apply" type="submit" />
+</td>
+</tr>
+
+</table>
+</form>
+<script type="text/javascript">
+var formdata = 
+<!--#include file="system_value" --> 
+;
+JSONinitfield( formdata );
+
+</script>
+</body>
+</html>

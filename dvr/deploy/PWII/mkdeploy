@@ -1,0 +1,132 @@
+#!/bin/sh
+
+if [ $# -lt 1 ]; then
+  echo 'Usage mkdeplay <APPID> '
+  exit 1
+fi
+
+PATH=~/proj/eagle32/hik_toolchain/bin:/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin
+
+DEPROOT=$PWD
+
+APPROOT=${DEPROOT}/../..
+
+DATENTIME=`date +%y.%m%d.%H`
+
+OUTPUTDIR=${DEPROOT}/${DATENTIME}
+
+appid=""
+special=""
+appid=$1
+special=$2
+
+if [ ${appid} = "clean" ]; then
+
+#clear utilities
+    rm -f cfgpc mksfx sfx
+ 
+# clean host www files
+    cd ${DEPROOT}/host/dvr/www
+    rm -f applysetup eagle_setup eaglehttpd getsetup cfgdown.cgi dvrstatus.cgi cfgreport.cgi
+
+# clean host firmware filesa
+    cd ${DEPROOT}/host/dvr
+    rm -f httpd.sfx
+    rm -f dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer libfbdraw.so tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
+    rm -f ../sfxrun  
+
+    exit 0
+fi
+
+www_depfile=${DEPROOT}/www_depfile
+
+if [ $appid = "clean" ]; then
+    if [ -f ${www_depfile} ]; then
+        rm ${www_depfile}
+    fi
+    exit 0
+fi
+
+mkdir ${OUTPUTDIR}
+
+slvfirmwareid=TVS21.1.0.${DATENTIME}
+
+if [ ${special} = "cycle" ]; then
+  firmwareid=${appid}.1.cycle.${DATENTIME}
+  echo "Firmware ID: " $firmwareid
+else
+  firmwareid=${appid}.1.0.${DATENTIME}
+  echo "Firmware ID: " $firmwareid
+fi
+
+#copy utilities
+cd ${DEPROOT}
+cp -v ${APPROOT}/cfg/cfgpc .
+cp -v ${APPROOT}/sfx/mksfx .
+cp -v ${APPROOT}/sfx/sfx .
+
+# modify default settings
+
+${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set glog tab102b_enable 0
+${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set glog serialport /dev/ttyUSB1
+${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set system totalcamera 2
+${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set system smartftp_disable 1
+
+arm-linux-strip sfx
+
+# makeing host board deploy firmware
+
+cd ${DEPROOT}/host/dvr/www
+echo "Build http files"
+cp -v ${APPROOT}/httpd/eaglehttpd .
+cp -v ${APPROOT}/httpd/getsetup/getsetup .
+cp -v ${APPROOT}/httpd/getsetup/applysetup .
+cp -v ${APPROOT}/httpd/eagle_setup/eagle_setup .
+cp -v ${APPROOT}/httpd//cfgdown/cfgdown.cgi .
+cp -v ${APPROOT}/httpd//cfgdown/dvrstatus.cgi .
+cp -v ${APPROOT}/httpd//cfgdown/cfgreport.cgi .
+arm-linux-strip applysetup eagle_setup eaglehttpd getsetup cfgdown.cgi dvrstatus.cgi cfgreport.cgi
+
+${DEPROOT}/mksfx ${DEPROOT}/sfx wwwlist ../httpd.sfx
+
+chmod a+x ../httpd.sfx
+
+cd ${DEPROOT}/host/ID
+echo 1 > BOARDNUM
+echo ${appid} > APPID
+echo 1 > BOARDID
+
+echo Building Host deploy firmware.
+cd ${DEPROOT}/host/dvr
+echo copy dvr host files
+cp -v ${APPROOT}/dvrsvr/dvrsvr .
+cp -v ${APPROOT}/dvrsvr/libfbdraw.so .
+cp -v ${APPROOT}/dvrtime/dvrtime .
+cp -v ${APPROOT}/eaglehost/eaglehost .
+cp -v ${APPROOT}/glog/glog .
+cp -v ${APPROOT}/ioprocess/ioprocess .
+cp -v ${APPROOT}/ioprocess/devicepower  .
+cp -v ${APPROOT}/ioprocess/panelled  .
+cp -v ${APPROOT}/ioprocess/buzzer  .
+cp -v ${APPROOT}/tdev/tdevd .
+cp -v ${APPROOT}/tdev/tdevmount .
+cp -v ${APPROOT}/usbgenkey/usbcheck .
+cp -v ${APPROOT}/tmeft/tmefile .
+cp -v ${APPROOT}/volumeid/md5check .
+cp -v ${APPROOT}/volumeid/volumeid .
+cp -v ${APPROOT}/cfg/cfg .
+
+arm-linux-strip dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer libfbdraw.so tdevd tdevmount usbcheck tmefile md5check volumeid cfg
+cd ${DEPROOT}/host
+echo ${firmwareid} > dvr/firmwareid
+cp  sfxrun.dep  sfxrun
+${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.dep ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW
+chmod a+x ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW
+
+echo Building Host update firmware
+cp  sfxrun.upd  sfxrun
+${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.upd ${OUTPUTDIR}/HOST_${firmwareid}.FW
+chmod a+x ${OUTPUTDIR}/HOST_${firmwareid}.FW
+
+echo Finish!
+

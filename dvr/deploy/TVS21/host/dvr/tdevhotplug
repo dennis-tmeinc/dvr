@@ -1,0 +1,341 @@
+#!/bin/sh
+# Hot-plug script for Eagle32 project
+
+# a bit of sync
+for lock in 1 2 3 4 5 6 7 8 9 10 
+do
+  if [ -f /var/dvr/hotpluglock ] ; then
+    sleep 1
+  fi
+done
+echo 1 > /var/dvr/hotpluglock
+
+#  dvrsvr information?
+dvrpidfile=/var/dvr/dvrsvr.pid
+
+#  dvrsvr current working disk.
+dvrcurdisk=/var/dvr/dvrcurdisk
+
+# where dvr disks mounted.
+dvrmountdir=/var/dvr/disks
+
+if [ ! -d ${dvrmountdir} ] ; then
+    mkdir ${dvrmountdir}
+fi
+
+# where archive disks mounted.
+dvrarchdir=/var/dvr/arch
+
+if [ ! -d ${dvrarchdir} ] ; then
+    mkdir ${dvrarchdir}
+fi
+
+# hotplug disk mounted here.
+xmountdir=/var/dvr/xdisk
+
+devpath=/sys$2
+devname=${devpath##*/}
+
+subsys=$2
+subsys=${subsys#/}
+subsys=${subsys%%/*}
+
+if [ -f /var/dvr/TZ ] ; then
+  TZ=`cat /var/dvr/TZ`
+  export TZ
+fi
+
+case $1 in
+    "add")
+
+        # hotplug block device (USB disk)
+        if [ ${subsys} = "block" -a -r ${devpath}/dev  ] ; then
+            devnum=`cat ${devpath}/dev`
+            # generate device if not exist
+            if [ ! -e /dev/${devname} ] ; then
+                mknod /dev/${devname} b ${devnum%%:*} ${devnum##*:}
+            fi
+
+            partition=${devname##*[a-z]}
+            if [ ${partition:-0} -ge 1 -a ! -f ${xmountdir}/mount_${devname} ]; then
+
+                echo  ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
+                mkdir -p ${xmountdir}/${devname}
+
+                if mount /dev/${devname} ${xmountdir}/${devname} -t ext3 -o noatime ; then
+                    if [ -f ${xmountdir}/${devname}/archive ] ; then
+                        d_mount=${dvrarchdir}/d_${devname}
+                    else
+                        d_mount=${dvrmountdir}/d_${devname}
+                    fi
+
+                    if umount ${xmountdir}/${devname} ; then
+                        rm -r ${xmountdir}/${devname}
+                        mkdir -p ${d_mount}
+                        if mount /dev/${devname} ${d_mount} -t ext3 -o noatime ; then
+                            # mark mounted disk
+                            echo  ${d_mount} > ${xmountdir}/mount_${devname}
+                        else
+                            rm ${xmountdir}/mount_${devname}
+                        fi
+
+                    fi
+
+                elif mount /dev/${devname} ${xmountdir}/${devname} -t ext2 -o noatime ; then
+                    if [ -f ${xmountdir}/${devname}/archive ] ; then
+                        d_mount=${dvrarchdir}/d_${devname}
+                    else
+                        d_mount=${dvrmountdir}/d_${devname}
+                    fi
+
+                    if umount ${xmountdir}/${devname} ; then
+                        rm -r ${xmountdir}/${devname}
+                        mkdir -p ${d_mount}
+                        if mount /dev/${devname} ${d_mount} -t ext2 -o noatime ; then
+                            # mark mounted disk
+                            echo  ${d_mount} > ${xmountdir}/mount_${devname}
+                        else
+                            rm ${xmountdir}/mount_${devname}
+                        fi
+
+                    fi
+
+                elif mount /dev/${devname} ${xmountdir}/${devname} -o shortname=winnt ; then
+
+                    # dvr recording disk ?
+                    if [ -f ${xmountdir}/${devname}/dvrdisk -o -f ${xmountdir}/${devname}/DVRDISK ] ; then
+
+                        if umount ${xmountdir}/${devname} ; then
+
+                            d_mount=${dvrmountdir}/d_${devname}
+
+                            rm -r ${xmountdir}/${devname}
+                            
+                            # do dosfs check here
+                            /davinci/dosfsck -a /dev/${devname}
+
+                            mkdir -p ${d_mount}
+                            if mount /dev/${devname} ${d_mount} -o shortname=winnt ; then
+                                rm -f ${d_mount}/FSCK*
+                                # mark mounted disk
+                                echo  ${d_mount} > ${xmountdir}/mount_${devname}
+                            else 
+                                rm ${xmountdir}/mount_${devname}
+                            fi
+                        fi
+
+                    # dvr archive disk ?
+                    elif [ -f ${xmountdir}/${devname}/archive -o -f ${xmountdir}/${devname}/ARCHIVE ] ; then
+
+                        if umount ${xmountdir}/${devname} ; then
+
+                            d_mount=${dvrarchdir}/d_${devname}
+
+                            rm -r ${xmountdir}/${devname}
+                            
+                            # do dosfs check here
+                            /davinci/dosfsck -a /dev/${devname}
+
+                            mkdir -p ${d_mount}
+                            if mount /dev/${devname} ${d_mount} -o shortname=winnt ; then
+                                rm -f ${d_mount}/FSCK*
+                                # mark mounted disk
+                                echo  ${d_mount} > ${xmountdir}/mount_${devname}
+                            else 
+                                rm ${xmountdir}/mount_${devname}
+                            fi
+                        fi
+                        
+                    # autorun disk .. key ...
+                    elif [ -f ${xmountdir}/${devname}/key ] ; then
+
+                        if /davinci/dvr/volumeid /dev/${devname} ${xmountdir}/${devname} ; then
+                            # key check passed
+                            echo ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
+                            
+                            USBROOT=${xmountdir}/${devname} 
+                            export USBROOT
+
+                            # check directory 510
+                            if [ -d ${USBROOT}/510 ]; then 
+                                EXEDIR=${USBROOT}/510
+                            else
+                                EXEDIR=${USBROOT}
+                            fi
+
+                            export EXEDIR
+                            cd ${EXEDIR}
+
+                            for autoruncheck in `ls *.check`
+                            do
+                                if /davinci/dvr/md5check ${autoruncheck} ; then
+                                    autorun_file=${autoruncheck%.check}.autorun
+                                    if [ -x ${autorun_file} ] ; then
+                                        # run autorun file
+                                        mkdir /home/usbrun_${autorun_file}
+                                        cd /home/usbrun_${autorun_file}
+                                        ${EXEDIR}/${autorun_file}  &
+                                    fi
+                                fi
+                            done
+
+                            cd /
+
+                        else    # no autorun file
+
+                            cd /
+                            if umount ${xmountdir}/${devname} ; then
+                                rm -r ${xmountdir}/${devname}
+                            fi
+                          
+                        fi
+
+                    # autorun disk by usbkey
+                    elif [ -f ${xmountdir}/${devname}/usbkey ] ; then
+
+                        # check auto runable disk
+                        cd ${xmountdir}/${devname}		# required to be current dir, so usbcheck can read FW file.
+
+                        autorun_appid=`cat /davinci/ID/APPID` 
+                        autorun_file_app=`/davinci/dvr/usbcheck /dev/${devname%[1-9]} usbkey ${autorun_appid}`
+                        autorun_file=`/davinci/dvr/usbcheck /dev/${devname%[1-9]} usbkey`
+                        if [ -f ${xmountdir}/${devname}/${autorun_file} ] ; then
+
+                            echo ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
+
+                            mkdir /home/usbautorun
+                            cd /home/usbautorun
+                            # run autorun file
+                            EXEDIR=${xmountdir}/${devname}
+                            export EXEDIR
+                            USBROOT=${EXEDIR}
+                            export USBROOT
+                            ${EXEDIR}/${autorun_file}  &
+                           
+                        elif [ -f ${xmountdir}/${devname}/${autorun_file_app} ] ; then
+
+                            echo ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
+
+                            mkdir /home/usbautorun
+                            cd /home/usbautorun
+                            # run autorun file
+                            EXEDIR=${xmountdir}/${devname}
+                            export EXEDIR
+                            USBROOT=${EXEDIR}
+                            export USBROOT
+                            ${EXEDIR}/${autorun_file}  &
+                           
+                        else    # no autorun file
+
+                            cd /
+                            if umount ${xmountdir}/${devname} ; then
+                                rm -r ${xmountdir}/${devname}
+                            fi
+                           
+                        fi
+                        
+                    # other disk
+                    else
+                        if umount ${xmountdir}/${devname} ; then
+                            rm -r ${xmountdir}/${devname}
+                        fi
+                    fi
+
+                else    # can't mount this disk
+
+                    rm ${xmountdir}/mount_${devname}
+                    rm -r ${xmountdir}/${devname}
+
+                fi      # mounted
+            fi      # partitions 
+
+        fi	# block device 
+
+        # chec usb serial adapter
+        if [ -r ${devpath}/dev -a ${devname%[0-9]} = "ttyUSB" ]; then
+            devnum=`cat ${devpath}/dev`
+            mknod /dev/${devname} c ${devnum%%:*} ${devnum##*:}
+        fi
+
+        # check usb wifi
+        if [ ${devname%[0-9]} = "rausb" ]; then	
+            cd /davinci/dvr
+
+            if [ -f /davinci/dvr/wifi_ip ]; then
+                ifconfig ${devname} `cat /davinci/dvr/wifi_ip`
+            fi
+
+            if [ -f /davinci/dvr/wifi_mask ]; then
+                ifconfig ${devname} netmask `cat /davinci/dvr/wifi_mask`
+            fi
+
+            if [ -f /davinci/dvr/wifi_id ]; then
+                /davinci/iwconfig ${devname} `cat /davinci/dvr/wifi_id`
+            fi
+
+            if [ -f /davinci/dvr/wifi_ip ]; then
+                ifconfig ${devname} `cat /davinci/dvr/wifi_ip`
+            fi
+
+            if [ -f /davinci/dvr/wifi_mask ]; then
+                ifconfig ${devname} netmask `cat /davinci/dvr/wifi_mask`
+            fi
+
+            if [ -f /davinci/dvr/wifi_id ]; then
+                /davinci/iwconfig ${devname} `cat /davinci/dvr/wifi_id`
+            fi
+
+        fi
+
+        ;;
+
+    "remove")
+        if [ ${subsys} = "block" -a -r ${xmountdir}/mount_${devname} ]; then
+
+            mountdir=`cat ${xmountdir}/mount_${devname}`
+            dvrsvrdown=0
+            dvrpid=0
+
+            # suspend dvrsvr
+            if [ -f ${dvrpidfile} -a -f ${dvrcurdisk} ]; then
+                dvrdisk=`cat ${dvrcurdisk}`
+                if [ ${dvrdisk} = ${mountdir} ] ; then
+                    dvrpid=`cat ${dvrpidfile}`
+                    kill -USR1 ${dvrpid}
+                    for x in 1 2 3 4 5 6 7 8 9 10 ; do
+                        if [ -f ${dvrcurdisk} ]; then
+                            sleep 3
+                        else
+                            break
+                        fi
+                    done
+                    dvrsvrdown=1
+                fi
+            fi
+
+            for x in 1 2 3 4 5 6 7 8 ; do
+                if [ -d ${mountdir} ] ; then
+                   sync;
+                   if umount ${mountdir} ; then
+                      rm -r ${mountdir}
+                   else
+                      sleep 1
+                   fi
+                else
+                   break
+                fi ;
+            done ;
+
+            # restart dvrsvr
+            if [ $dvrsvrdown = 1 ]; then
+                kill -USR2 $dvrpid
+            fi
+
+            rm ${xmountdir}/mount_${devname}
+
+        fi;
+        ;;
+esac 
+
+# unlock hotplug
+rm /var/dvr/hotpluglock

@@ -1,0 +1,3161 @@
+#include <stdio.h>
+#include <sys/mman.h>
+#include <signal.h>
+#include <termios.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdarg.h>
+#include <sys/reboot.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/ioctl.h>
+#include <linux/rtc.h>
+// #include <pthread.h>
+
+#include "../cfg.h"
+
+#include "../dvrsvr/eagle32/davinci_sdk.h"
+#include "../dvrsvr/genclass.h"
+#include "../dvrsvr/cfg.h"
+#include "diomap.h"
+
+// options
+int standbyhdoff = 0 ;
+int usewatchdog = 0 ;
+
+// HARD DRIVE LED and STATUS
+#define HDLED	(0x10)
+
+// input pin maping
+#define HDINSERTED	(0x40)
+#define HDKEYLOCK	(0x80)
+#define RECVBUFSIZE (50)
+
+#define MAXINPUT    (12)
+unsigned int input_map_table [MAXINPUT] = {
+    1,          // bit 0
+    (1<<1),     // bit 1
+    (1<<2),     // bit 2
+    (1<<3),     // bit 3
+    (1<<4),     // bit 4
+    (1<<5),     // bit 5
+    (1<<10),    // bit 6
+    (1<<11),    // bit 7
+    (1<<12),    // bit 8
+    (1<<13),    // bit 9
+    (1<<14),    // bit 10
+    (1<<15),    // bit 11
+} ;
+
+// translate output bits
+#define MAXOUTPUT    (8)
+unsigned int output_map_table [MAXOUTPUT] = {
+    1,              // bit 0
+    (1<<1),         // bit 1
+    (1<<8),         // bit 2   (buzzer)
+    (1<<3),         // bit 3
+    (1<<4),         // bit 4
+    (1<<2),         // bit 5
+    (1<<6),         // bit 6
+    (1<<7)          // bit 7
+} ;
+
+int hdlock=0 ;								// HD lock status
+int hdinserted=0 ;
+
+#define PANELLEDNUM (3)
+#define DEVICEPOWERNUM (5)
+
+struct baud_table_t {
+    speed_t baudv ;
+    int baudrate ;
+} baud_table[7] = {
+    { B2400, 	2400},
+    { B4800,	4800},
+    { B9600,	9600},
+    { B19200,	19200},
+    { B38400,	38400},
+    { B57600,	57600},
+    { B115200,	115200} 
+} ;
+
+struct dio_mmap * p_dio_mmap=NULL ;
+
+#define SERIAL_DELAY	(100000)
+#define DEFSERIALBAUD	(115200)
+
+char dvriomap[256] = "/var/dvr/dvriomap" ;
+char serial_dev[256] = "/dev/ttyS1" ;
+char * pidfile = "/var/dvr/ioprocess.pid" ;
+int serial_handle = 0 ;
+int serial_baud = 115200 ;
+int mcupowerdelaytime = 0 ;
+char mcu_firmware_version[80] ;
+
+// unsigned int outputmap ;	// output pin map cache
+char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
+char logfile[128] = "dvrlog.txt" ;
+char temp_logfile[128] ;
+int watchdogenabled=0 ;
+int watchdogtimeout=30 ;
+int gpsvalid = 0 ;
+int gforce_log_enable=0 ;
+int output_inverted=0 ;
+
+int pwii_tracemark_inverted=0 ;
+
+#define APPMODE_QUIT            (0)
+#define APPMODE_RUN             (1)
+#define APPMODE_SHUTDOWNDELAY   (2)
+#define APPMODE_NORECORD        (3)
+#define APPMODE_STANDBY         (5)
+#define APPMODE_SHUTDOWN        (6)
+#define APPMODE_REBOOT          (7)
+#define APPMODE_REINITAPP       (8)
+
+int app_mode = APPMODE_QUIT ;
+
+unsigned int panelled=0 ;
+unsigned int devicepower=0xffff;
+
+pid_t   pid_smartftp = 0 ;
+
+void sig_handler(int signum)
+{
+    if( signum==SIGUSR2 ) {
+        app_mode=APPMODE_REINITAPP ;
+    }
+    else {
+        app_mode=APPMODE_QUIT;
+    }
+}
+
+// return bcd value
+int getbcd(unsigned char c)
+{
+    return (int)(c/16)*10 + c%16 ;
+}
+
+// write log to file.
+// return 
+//       1: log to recording hd
+//       0: log to temperary file
+int dvr_log(char *fmt, ...)
+{
+    int res = 0 ;
+    static char logfilename[512]="" ;
+    char lbuf[512];
+    char hostname[128] ;
+    FILE *flog;
+    time_t ti;
+    int l;
+    va_list ap ;
+
+    flog = fopen("/var/dvr/dvrcurdisk", "r");
+    if( flog ) {
+        if( fscanf(flog, "%s", lbuf )==1 ) {
+            gethostname(hostname, 128);
+            sprintf(logfilename, "%s/_%s_/%s", lbuf, hostname, logfile);
+        }
+        fclose(flog);
+    }
+        
+    ti = time(NULL);
+    ctime_r(&ti, lbuf);
+    l = strlen(lbuf);
+    if (lbuf[l - 1] == '\n')
+        lbuf[l - 1] = '\0';
+
+    flog = fopen(logfilename, "a");
+    if (flog) {
+        fprintf(flog, "%s:IO:", lbuf);
+        va_start( ap, fmt );
+        vfprintf(flog, fmt, ap );
+        va_end( ap );
+        fprintf(flog, "\n");		
+        if( fclose(flog)==0 ) {
+            res=1 ;
+        }
+    }
+
+    if( res==0 ) {
+        flog = fopen(temp_logfile, "a");
+        if (flog) {
+            fprintf(flog, "%s:IO:", lbuf);
+            va_start( ap, fmt );
+            vfprintf(flog, fmt, ap );
+            va_end( ap );
+            fprintf(flog, " *\n");		
+            if( fclose(flog)==0 ) {
+                res=1 ;
+            }
+        }
+    }
+    
+#ifdef MCU_DEBUG
+    // also output to stdout (if in debugging)
+    printf("%s:IO:", lbuf);
+    va_start( ap, fmt );
+    vprintf(fmt, ap );
+    va_end( ap );
+    printf("\n");		
+#endif
+        
+    return res ;
+}
+
+int getshutdowndelaytime()
+{
+    config dvrconfig(dvrconfigfile);
+    int v ;
+    v = dvrconfig.getvalueint( "system", "shutdowndelay");
+    if( v<10 ) {
+        v=10 ;
+    }
+    if( v>7200 ) {
+        v=7200 ;
+    }
+    return v ;
+}
+
+int getstandbytime()
+{
+    config dvrconfig(dvrconfigfile);
+    int v ;
+    v = dvrconfig.getvalueint( "system", "standbytime");
+    if( v<0 ) {
+        v=0 ;
+    }
+    if( v>43200 ) {
+        v=43200 ;
+    }
+    return v ;
+}
+
+static unsigned int starttime=0 ;
+void initruntime()
+{
+    struct timeval tv ;
+    gettimeofday( &tv, NULL );
+    starttime=tv.tv_sec ;
+}
+
+// return runtime in mili-seconds
+unsigned int getruntime()
+{
+    struct timeval tv ;
+    gettimeofday( &tv, NULL );
+    return (unsigned int)(tv.tv_sec-starttime)*1000 + tv.tv_usec/1000 ;
+}
+
+// atomically swap value
+int atomic_swap( int *m, int v)
+{
+    register int result ;
+/*
+    result=*m ;
+    *m = v ;
+*/
+    asm volatile (
+        "swp  %0, %2, [%1]\n\t"
+        : "=r" (result)
+        : "r" (m), "r" (v)
+    ) ;
+    return result ;
+}
+
+/*
+void dio_lock()
+{
+    int i;
+    for( i=0; i<1000; i++ ) {
+        if( p_dio_mmap->lock>0 ) {
+            usleep(1);
+        }
+        else {
+            break ;
+        }
+    }
+    p_dio_mmap->lock=1;
+}
+*/
+
+void dio_lock()
+{
+    while( atomic_swap( &(p_dio_mmap->lock), 1 ) ) {
+        sched_yield();      // or sleep(0)
+    }
+}
+
+void dio_unlock()
+{
+    p_dio_mmap->lock=0;
+}
+
+// set onboard rtc 
+void rtc_set(time_t utctime)
+{
+    struct tm ut ;
+    int hrtc = open("/dev/rtc", O_WRONLY );
+    if( hrtc>0 ) {
+        gmtime_r(&utctime, &ut);
+        ioctl( hrtc, RTC_SET_TIME, &ut ) ;
+        close( hrtc );
+    }
+}
+
+#define SERIAL_BUFFER_TSIZE (2000)
+static char serial_buffer[SERIAL_BUFFER_TSIZE] ;
+static int  serial_buffer_len ;
+static int  serial_buffer_pointer ;
+
+// Check if data ready to read on serial port
+//     return 0: no data
+//            1: yes
+int serial_dataready(int microsecondsdelay)
+{
+    struct timeval timeout ;
+    fd_set fds;
+    if( serial_handle<=0 ) {
+        return 0;
+    }
+    if( serial_buffer_len > 0 ) {       // buffer available?
+        return 1 ;
+    }
+    timeout.tv_sec = microsecondsdelay/1000000 ;
+    timeout.tv_usec = microsecondsdelay%1000000 ;
+    FD_ZERO(&fds);
+    FD_SET(serial_handle, &fds);
+    if (select(serial_handle + 1, &fds, NULL, NULL, &timeout) > 0) {
+        return FD_ISSET(serial_handle, &fds);
+    } else {
+        return 0;
+    }
+}
+
+int serial_read_hlp(void * buf, int bufsize)
+{
+    if( serial_buffer_len<=0 ) {   // serial buffer empty
+        serial_buffer_pointer=0 ;
+        serial_buffer_len = read(serial_handle, serial_buffer, SERIAL_BUFFER_TSIZE);
+    }
+    if( serial_buffer_len>0 ) { // buffer available
+        int cpbytes = (serial_buffer_len > bufsize)?bufsize:serial_buffer_len ;
+        memcpy( buf, &serial_buffer[serial_buffer_pointer], cpbytes );
+        serial_buffer_pointer += cpbytes ;
+        serial_buffer_len -= cpbytes ;
+        return cpbytes ;
+    }
+    return 0 ;                  // err, no data.
+}
+
+int serial_read(void * buf, size_t bufsize)
+{
+    if( serial_handle>0 ) {
+#ifdef MCU_DEBUG
+        int i, n ;
+        char * cbuf ;
+        cbuf = (char *)buf ;
+        n=serial_read_hlp(buf, bufsize);
+        for( i=0; i<n ; i++ ) {
+            printf("%02x ", (int)cbuf[i] );
+        }
+        return n ;
+#else        
+        return serial_read_hlp(buf, bufsize);
+#endif
+    }
+    return 0;
+}
+
+int serial_read_withtimeout(void * buf, size_t bufsize, int microsecondstimeout)
+{
+    int n_toread = (int)bufsize ;
+    int n_read ;
+    char * readpointer = (char *)buf ;
+    while( n_toread > 0 ) {
+        if( serial_dataready(microsecondstimeout) ) {
+            n_read = serial_read( readpointer, n_toread );
+            if( n_read > 0 ) {
+                n_toread-=n_read ;
+                readpointer+=n_read ;
+            }
+            else {
+                return 0 ;  // err?
+            }
+        }
+        else {      // time out
+            return (int)bufsize - n_toread ;
+        }
+    }
+    return (int)bufsize ;
+}
+
+int serial_write(void * buf, size_t bufsize)
+{
+    if( serial_handle>0 ) {
+#ifdef MCU_DEBUG
+        size_t i ;
+        char * cbuf ;
+        cbuf = (char *)buf ;
+        for( i=0; i<bufsize ; i++ ) {
+            printf("%02x ", (int)cbuf[i] );
+        }
+#endif
+        return write( serial_handle, buf, bufsize);
+    }
+    return 0;
+}
+
+void serial_clear(int usdelay=100 );
+
+// clear receiving buffer
+void serial_clear(int usdelay)
+{
+    int i;
+    char rbuf[100] ;
+#ifdef MCU_DEBUG
+    printf("clear: ");
+#endif     
+    for(i=0;i<5000;i++) {
+        if( serial_dataready(usdelay) ) {
+            serial_read( rbuf, sizeof(rbuf));
+        }
+        else {
+            break;
+        }
+    }
+#ifdef MCU_DEBUG
+    printf("\n");
+#endif                
+    serial_buffer_len = 0 ;
+}
+
+// initialize serial port
+void serial_init() 
+{
+   int i;
+    int port=0 ;
+   
+    if( serial_handle > 0 ) {
+        close( serial_handle );
+        serial_handle = 0 ;
+    }
+    if( strcmp( serial_dev, "/dev/ttyS1")==0 ) {
+        port=1 ;
+    }
+//    serial_handle = open( serial_dev, O_RDWR | O_NOCTTY | O_NDELAY );
+    serial_handle = open( serial_dev, O_RDWR | O_NOCTTY );
+    if( serial_handle > 0 ) {
+//        fcntl(serial_handle, F_SETFL, 0);
+        if( port==1 ) {		// port 1
+            // Use Hikvision API to setup serial port (RS485)
+            InitRS485(serial_handle, serial_baud, DATAB8, STOPB1, NOPARITY, NOCTRL);
+        }
+        else {
+            struct termios tios ;
+            speed_t baud_t ;
+            tcgetattr(serial_handle, &tios);
+            // set serial port attributes
+            tios.c_cflag = CS8|CLOCAL|CREAD;
+            tios.c_iflag = IGNPAR;
+            tios.c_oflag = 0;
+            tios.c_lflag = 0;       // ICANON;
+            tios.c_cc[VMIN]=10;		// minimum char 
+            tios.c_cc[VTIME]=1;		// 0.1 sec time out
+            baud_t = B115200 ;
+            for( i=0; i<7; i++ ) {
+                if( serial_baud == baud_table[i].baudrate ) {
+                    baud_t = baud_table[i].baudv ;
+                    break;
+                }
+            }
+            
+            cfsetispeed(&tios, baud_t);
+            cfsetospeed(&tios, baud_t);
+            
+            tcflush(serial_handle, TCIFLUSH);
+            tcsetattr(serial_handle, TCSANOW, &tios);
+        }
+        serial_buffer_len = 0 ;
+    }
+    else {
+        // even no serail port, we still let process run
+        printf("Serial port failed!\n");
+    }
+}
+
+#define MCU_INPUTNUM (6)
+#define MCU_OUTPUTNUM (4)
+
+unsigned int mcu_doutputmap ;
+
+// check data check sum
+// return 0: checksum correct
+int mcu_checksum( char * data ) 
+{
+    char ck;
+    int i ;
+    if( data[0]<5 || data[0]>40 ) {
+        return -1 ;
+    }
+    ck=0;
+    for( i=0; i<(int)data[0]; i++ ) {
+        ck+=data[i] ;
+    }
+    return (int)ck;
+}
+
+// calculate check sum of data
+void mcu_calchecksum( char * data )
+{
+    char ck = 0 ;
+    unsigned int si = (unsigned int) *data ;
+    while( --si>0 ) {
+        ck-=*data++ ;
+    }
+    *data = ck ;
+}
+
+int mcu_input(int usdelay);
+
+// send command to mcu
+// return 0 : failed
+//        >0 : success
+int mcu_send( char * cmd ) 
+{
+    if( *cmd<5 || *cmd>40 ) { 	// wrong data
+        return 0 ;
+    }
+    mcu_calchecksum( cmd );
+
+#ifdef  MCU_DEBUG
+// for debugging    
+    struct timeval tv ;
+    gettimeofday(&tv, NULL);
+    int r ;
+    struct tm * ptm ;
+    ptm = localtime(&tv.tv_sec);
+    double sec ;
+    sec = ptm->tm_sec + tv.tv_usec/1000000.0 ;
+    
+    printf("%02d:%02d:%02.3f Send: ", ptm->tm_hour, ptm->tm_min, sec);
+    r=serial_write(cmd, (int)(*cmd));
+    printf("\n");
+    return r ;
+#else    
+    return serial_write(cmd, (int)(*cmd));
+#endif
+}
+
+int mcu_recv( char * recv, int size, int usdelay=SERIAL_DELAY );
+int mcu_checkinputbuf(char * ibuf);
+
+static int mcu_recverror = 0 ;
+
+// receive one data package from mcu
+// return 0: failed
+//       >0: bytes of data received
+int mcu_recvmsg( char * recv, int size )
+{
+    int n;
+
+#ifdef MCU_DEBUG
+    // for debugging 
+    struct timeval tv ;
+    gettimeofday(&tv, NULL);
+    struct tm * ptm ;
+    ptm = localtime(&tv.tv_sec);
+    double sec ;
+    sec = ptm->tm_sec + tv.tv_usec/1000000.0 ;
+    
+    printf("%02d:%02d:%02.3f Recv: ", ptm->tm_hour, ptm->tm_min, sec);
+#endif    
+    
+    if( serial_read(recv, 1) ) {
+        n=(int) *recv ;
+        if( n>=5 && n<=size ) {
+            n=serial_read_withtimeout(recv+1, n-1, 100000)+1 ;
+            if( n==recv[0] && 
+                recv[1]==0 && 
+//                recv[2]==1 &&
+                mcu_checksum( recv ) == 0 ) 
+            {
+#ifdef MCU_DEBUG
+                printf("\n");
+#endif
+                return n ;
+            }
+        }
+    }
+
+#ifdef MCU_DEBUG
+    // for debugging 
+    printf(" - ERROR!\n");
+#endif
+
+    serial_clear();
+    return 0 ;
+}
+
+// receiving a respondes message from mcu
+int mcu_recv( char * recv, int size, int usdelay )
+{
+    int n;
+    if( size<5 ) {				// minimum packge size?
+        return 0 ;
+    }
+    
+    while( serial_dataready(usdelay) ) {
+        n = mcu_recvmsg (recv, size) ;
+        if( n>0 ) {
+            mcu_recverror=0 ;
+            if( recv[4]=='\x02' ) {             // is it a input message ?
+                mcu_checkinputbuf(recv) ;
+                continue ;
+            }
+            else {
+                if( recv[3]=='\x1f' ) {         // it is a error report, ignor this for now
+#ifdef MCU_DEBUG
+                    printf(" A error report detected!\n" );
+#endif
+                    continue ;
+                }
+                return n ;                      // it could be a respondes message
+            }
+        }
+        else {
+            break;
+        }
+    }
+
+    if( ++mcu_recverror>5 ) {
+        sleep(1);
+        serial_init();
+        mcu_recverror=0 ;
+    }
+
+    return 0 ;
+}
+
+// receive "Enter a command" , success: return 1, failed: return 0
+int mcu_recv_enteracommand()
+{
+    int res = 0 ;
+    char enteracommand[200] ;
+    while( serial_dataready(100000) ) {
+        memset( enteracommand, 0, sizeof(enteracommand));
+        serial_read_withtimeout(enteracommand, sizeof(enteracommand), 100000);
+        if( strcasestr( enteracommand, "Enter a command" )) {
+            res=1 ;
+        }
+    }
+    return res ;
+}
+
+// g value converting vectors , (Forward, Right, Down) = [vecttabe] * (Back, Right, Buttom)
+static signed char g_convert[24][3][3] = 
+{
+//  Front -> Forward    
+    {   // Front -> Forward, Right -> Upward
+        {-1, 0, 0},
+        { 0, 0,-1},
+        { 0,-1, 0}
+    },
+    {   // Front -> Forward, Left  -> Upward
+        {-1, 0, 0},
+        { 0, 0, 1},
+        { 0, 1, 0}
+    },
+    {   // Front -> Forward, Bottom  -> Upward
+        {-1, 0, 0},
+        { 0, 1, 0},
+        { 0, 0,-1}
+    },
+    {   // Front -> Forward, Top -> Upward
+        {-1, 0, 0},
+        { 0,-1, 0},
+        { 0, 0, 1}
+    },
+//---- Back->Forward
+    {   // Back -> Forward, Right -> Upward
+        { 1, 0, 0},
+        { 0, 0, 1},
+        { 0,-1, 0}
+    },
+    {   // Back -> Forward, Left -> Upward
+        { 1, 0, 0},
+        { 0, 0,-1},
+        { 0, 1, 0}
+    },
+    {   // Back -> Forward, Button -> Upward
+        { 1, 0, 0},
+        { 0,-1, 0},
+        { 0, 0,-1}
+    },
+    {   // Back -> Forward, Top -> Upward
+        { 1, 0, 0},
+        { 0, 1, 0},
+        { 0, 0, 1}
+    },
+//---- Right -> Forward
+    {   // Right -> Forward, Front -> Upward
+        { 0, 1, 0},
+        { 0, 0, 1},
+        { 1, 0, 0}
+    },
+    {   // Right -> Forward, Back -> Upward
+        { 0, 1, 0},
+        { 0, 0,-1},
+        {-1, 0, 0}
+    },
+    {   // Right -> Forward, Bottom -> Upward
+        { 0, 1, 0},
+        { 1, 0, 0},
+        { 0, 0,-1}
+    },
+    {   // Right -> Forward, Top -> Upward
+        { 0, 1, 0},
+        {-1, 0, 0},
+        { 0, 0, 1}
+    },
+//---- Left -> Forward
+    {   // Left -> Forward, Front -> Upward
+        { 0,-1, 0},
+        { 0, 0,-1},
+        { 1, 0, 0}
+    },
+    {   // Left -> Forward, Back -> Upward
+        { 0,-1, 0},
+        { 0, 0, 1},
+        {-1, 0, 0}
+    },
+    {   // Left -> Forward, Bottom -> Upward
+        { 0,-1, 0},
+        {-1, 0, 0},
+        { 0, 0,-1}
+    },
+    {   // Left -> Forward, Top -> Upward
+        { 0,-1, 0},
+        { 1, 0, 0},
+        { 0, 0, 1}
+    },
+//---- Bottom -> Forward
+    {   // Bottom -> Forward, Front -> Upward
+        { 0, 0, 1},
+        { 0,-1, 0},
+        { 1, 0, 0}
+    },
+    {   // Bottom -> Forward, Back -> Upward
+        { 0, 0, 1},
+        { 0, 1, 0},
+        {-1, 0, 0}
+    },
+    {   // Bottom -> Forward, Right -> Upward
+        { 0, 0, 1},
+        {-1, 0, 0},
+        { 0,-1, 0}
+    },
+    {   // Bottom -> Forward, Left -> Upward
+        { 0, 0, 1},
+        { 1, 0, 0},
+        { 0, 1, 0}
+    },
+//---- Top -> Forward
+    {   // Top -> Forward, Front -> Upward
+        { 0, 0,-1},
+        { 0, 1, 0},
+        { 1, 0, 0}
+    },
+    {   // Top -> Forward, Back -> Upward
+        { 0, 0,-1},
+        { 0,-1, 0},
+        {-1, 0, 0}
+    },
+    {   // Top -> Forward, Right -> Upward
+        { 0, 0,-1},
+        { 1, 0, 0},
+        { 0,-1, 0}
+    },
+    {   // Top -> Forward, Left -> Upward
+        { 0, 0,-1},
+        {-1, 0, 0},
+        { 0, 1, 0}
+    }
+
+} ;
+        
+static char direction_table[24][2] = 
+{
+    {0, 2}, {0, 3}, {0, 4}, {0,5},      // Front -> Forward
+    {1, 2}, {1, 3}, {1, 4}, {1,5},      // Back  -> Forward
+    {2, 0}, {2, 1}, {2, 4}, {2,5},      // Right -> Forward
+    {3, 0}, {3, 1}, {3, 4}, {3,5},      // Left  -> Forward
+    {4, 0}, {4, 1}, {4, 2}, {4,3},      // Buttom -> Forward
+    {5, 0}, {5, 1}, {5, 2}, {5,3},      // Top   -> Forward
+};
+
+#define DEFAULT_DIRECTION   (7)
+static int gsensor_direction = DEFAULT_DIRECTION ;
+int  g_sensor_available ;
+float g_sensor_trigger_forward ;
+float g_sensor_trigger_backward ;
+float g_sensor_trigger_right ;
+float g_sensor_trigger_left ;
+float g_sensor_trigger_down ;
+float g_sensor_trigger_up ;
+
+
+#ifdef PWIIMCU_SUPPORT
+int mcu_pwii_bootupready()
+{
+    static char cmd_pwii_bootupready[8]="\x06\x05\x00\x04\x02\xcc" ;
+    char responds[RECVBUFSIZE] ;
+    int retry=10;
+    
+    while( --retry>0 ) {
+        serial_clear() ;
+        if(mcu_send(cmd_pwii_bootupready)) {
+            if( mcu_recv( responds, RECVBUFSIZE ) ) {
+                if( responds[3]=='\x04' &&
+                   responds[4]=='\x03' ) {
+                       return 1 ;
+                   }
+            }
+        }
+        sleep(1);
+    }
+    return 0 ;
+}
+
+// turn on off mic led
+int mcu_pwii_mic_led( int ledon )
+{
+    static char cmd_mic_led[10]="\x07\x05\x00\x0f\x02\xdd\xcc" ;
+    char responds[RECVBUFSIZE] ;
+
+    cmd_mic_led[5] = (char) ledon ;
+    serial_clear() ;
+    if(mcu_send(cmd_mic_led)) {
+        mcu_recv( responds, RECVBUFSIZE ) ;
+    }
+   return 0 ;
+}
+
+// turn on off pw led
+int mcu_pwii_pw_led( int ledon )
+{
+    static char cmd_pw_led[10]="\x07\x05\x00\x14\x02\xdd\xcc" ;
+    char responds[RECVBUFSIZE] ;
+
+    cmd_pw_led[5] = (char) ledon ;
+    serial_clear() ;
+    if(mcu_send(cmd_pw_led)) {
+        mcu_recv( responds, RECVBUFSIZE ) ;
+    }
+   return 0 ;
+}
+
+// pwii mcu erro led control
+int mcu_pwii_error_led()
+{
+    static char cmd_error_led[10]="\x08\x05\x00\x10\x02\xdd\x00\xcc" ;
+    char responds[RECVBUFSIZE] ;
+    int retry=10;
+
+    cmd_error_led[5] = (char) p_dio_mmap->pwii_error_LED_control ;
+    if( cmd_error_led[5] >= 2 ) {
+        cmd_error_led[5] = (char) p_dio_mmap->pwii_error_LED_flash_timer ;
+    }
+    else {
+        cmd_error_led[5] = 0 ;
+    }
+    
+    while( --retry>0 ) {
+        serial_clear() ;
+        if(mcu_send(cmd_error_led)) {
+            if( mcu_recv( responds, RECVBUFSIZE ) ) {
+                if( responds[2]=='\x05' &&
+                   responds[3]=='\x10' &&
+                   responds[4]=='\x03' ) {
+                       return 1 ;
+                   }
+            }
+        }
+        usleep(10000);
+    }
+    return 0 ;
+}
+
+// get pwii MCU firmware version.
+// return 0: failed
+//       >0: size of version string (not include null char)
+int mcu_pwii_version(char * version)
+{
+    static char cmd_pwii_firmwareversion[8]="\x06\x05\x00\x11\x02\xcc" ;
+    char responds[RECVBUFSIZE] ;
+    int  sz ;
+    int retry ;
+    
+    for( retry=0; retry<10; retry++ ) {
+        if(mcu_send(cmd_pwii_firmwareversion)) {
+            sz = mcu_recv( responds, sizeof(responds) );
+            if( sz > 0 ) {
+                if( responds[2]=='\x05' &&
+                   responds[3]=='\x11' &&
+                   responds[4]=='\x03' ) 
+                {
+                    memcpy( version, &responds[5], sz-6 );
+                    version[sz-6]=0 ;
+                    return sz-6 ;
+                }
+            }
+        }
+    }
+    return 0 ;
+}
+
+// Called when C1 (REC) button pressed.
+// return 1: turn on C1 LED
+//        0: turn off C1 LED
+int mcu_pwii_c1()
+{
+    p_dio_mmap->pwii_front_camera_rec = 1 ;
+    if( p_dio_mmap->camera_status[0] & 2 ) {
+        return 1 ;
+    }
+    else {
+        return 0 ;
+    }
+}
+
+// Called when C2 button pressed.
+// return 1: turn on C2 LED
+//        0: turn off C2 LED
+int mcu_pwii_c2()
+{
+    p_dio_mmap->pwii_back_camera_rec = 1 ;
+    if( p_dio_mmap->camera_status[1] & 2 ) {
+        return 1 ;
+    }
+    else {
+        return 0 ;
+    }
+}
+
+// Set C1/C2 LED
+void mcu_pwii_setc1c2() 
+{
+    char responds[RECVBUFSIZE] ;
+   // C1 LED
+   static char cmd_C1Led[8] = "\x07\x05\x00\x12\x02\x00\xcc" ;
+   if( p_dio_mmap->camera_status[0] & 2 ) {         // channel 0 recording?
+       cmd_C1Led[5] = 1 ;
+   }
+    else {
+        cmd_C1Led[5] = 0 ;
+    }
+
+    if(mcu_send(cmd_C1Led)) {
+        mcu_recv( responds, sizeof(responds) );
+    }
+
+   // C2 LED
+   static char cmd_C2Led[8] = "\x07\x05\x00\x13\x02\x00\xcc" ;
+   if( p_dio_mmap->camera_status[1] & 2 ) {         // channel 0 recording?
+       cmd_C2Led[5] = 1 ;
+   }
+    else {
+        cmd_C2Led[5] = 0 ;
+    }
+    if(mcu_send(cmd_C2Led)) {
+        mcu_recv( responds, sizeof(responds) );
+    }
+}
+
+#endif  // PWIIMCU_SUPPORT
+
+int mcu_checkinputbuf(char * ibuf)
+{
+    unsigned int imap1, imap2 ;
+    int i;
+    float gback, gright, gbuttom ;
+    float gbusforward, gbusright, gbusdown ;
+
+    if( ibuf[4]=='\x02' && ibuf[2]=='\x01' ) {     // mcu initiated message ?
+        switch( ibuf[3] ) {
+        case '\x1c' :                   // dinput event
+            static char rsp_dinput[7] = "\x06\x01\x00\x1c\x03\xcc" ;
+            mcu_send(rsp_dinput);
+            // get digital input map
+            imap1 = (unsigned char)ibuf[5]+256*(unsigned int)(unsigned char)ibuf[6] ;
+            imap2 = 0 ;
+            for( i=0; i<MAXINPUT; i++ ) {
+                if( imap1 & input_map_table[i] )
+                    imap2 |= (1<<i) ;
+            }
+            // hdlock = (imap1 & (HDINSERTED|HDKEYLOCK) )==0 ;	// HD plugged in and locked
+            hdlock = (imap1 & (HDKEYLOCK) )==0 ;	// HD plugged in and locked
+            hdinserted = (imap1 & HDINSERTED)==0 ;  // HD inserted
+            p_dio_mmap->inputmap = imap2;
+            break;
+
+        case '\x08' :               // ignition off event
+            static char rsp_poweroff[10] = "\x08\x01\x00\x08\x03\x00\x00\xcc" ;
+            mcu_send(rsp_poweroff);
+            mcupowerdelaytime = 0 ;
+            p_dio_mmap->poweroff = 1 ;						// send power off message to DVR
+#ifdef MCU_DEBUG
+            printf("Ignition off, mcu delay %d s\n", mcupowerdelaytime );
+#endif            
+            break;
+            
+        case '\x09' :	// ignition on event
+            static char rsp_poweron[10] = "\x07\x01\x00\x09\x03\x00\xcc" ;
+            rsp_poweron[5]=(char)watchdogenabled;
+            mcu_send( rsp_poweron );
+            p_dio_mmap->poweroff = 0 ;						// send power on message to DVR
+#ifdef MCU_DEBUG
+            printf("ignition on\n");
+#endif            
+            break ;
+
+        case '\x40' :               // Accelerometer data
+            static char rsp_accel[10] = "\x06\x01\x00\x40\x03\xcc" ;
+            mcu_send(rsp_accel);
+            
+            gright  = ((float)(signed char)ibuf[5])/0xe ;
+            gback   = ((float)(signed char)ibuf[6])/0xe ;
+            gbuttom = ((float)(signed char)ibuf[7])/0xe ;
+
+#ifdef MCU_DEBUG
+            printf("Accelerometer, --------- right=%.2f , back   =%.2f , buttom=%.2f .\n",     
+                   gright,
+                   gback,
+                   gbuttom );
+#endif            
+            
+            // converting
+            gbusforward = 
+                ((float)(signed char)(g_convert[gsensor_direction][0][0])) * gback + 
+                ((float)(signed char)(g_convert[gsensor_direction][0][1])) * gright + 
+                ((float)(signed char)(g_convert[gsensor_direction][0][2])) * gbuttom ;
+            gbusright = 
+                ((float)(signed char)(g_convert[gsensor_direction][1][0])) * gback + 
+                ((float)(signed char)(g_convert[gsensor_direction][1][1])) * gright + 
+                ((float)(signed char)(g_convert[gsensor_direction][1][2])) * gbuttom ;
+            gbusdown = 
+                ((float)(signed char)(g_convert[gsensor_direction][2][0])) * gback + 
+                ((float)(signed char)(g_convert[gsensor_direction][2][1])) * gright + 
+                ((float)(signed char)(g_convert[gsensor_direction][2][2])) * gbuttom ;
+
+#ifdef MCU_DEBUG
+            printf("Accelerometer, converted right=%.2f , forward=%.2f , down  =%.2f .\n",     
+                   gbusright,
+                   gbusforward,
+                   gbusdown );
+#endif            
+            // save to log
+            if( p_dio_mmap->gforce_log0==0 ) {
+                p_dio_mmap->gforce_right_0 = gbusright ;
+                p_dio_mmap->gforce_forward_0 = gbusforward ;
+                p_dio_mmap->gforce_down_0 = gbusdown ;
+                if( gforce_log_enable ) {
+                    p_dio_mmap->gforce_log0 = 1 ;
+                }
+            }
+            else {
+                p_dio_mmap->gforce_right_1 = gbusright ;
+                p_dio_mmap->gforce_forward_1 = gbusforward ;
+                p_dio_mmap->gforce_down_1 = gbusdown ;
+                if( gforce_log_enable ) {
+                    p_dio_mmap->gforce_log1 = 1 ;
+                }
+            }                
+
+            break;
+            
+        default :
+#ifdef MCU_DEBUG
+            printf("Other message from MCU.\n");
+#endif
+            break;
+        }
+        return 1 ;
+    }
+
+#ifdef PWIIMCU_SUPPORT
+
+    else if( ibuf[4]=='\x02' && ibuf[2]=='\x05' )          // input from MCU5 (MR. Henry?)
+    {
+#ifdef MCU_DEBUG
+            printf("Messages from MR. Henry!\n" );
+#endif            
+       switch( ibuf[3] ) {
+       case '\x05' :                   // Front Camera (REC) Starts/Stops Recording
+           static char rsp_front_camera_rec[8] = "\x07\x05\x00\x05\x03\x00\xcc" ;
+           rsp_front_camera_rec[5] = (char)mcu_pwii_c1();
+           mcu_send(rsp_front_camera_rec);
+           break;
+
+       case '\x06' :                   // Back Seat Camera (C2) Starts/Stops Recording
+           static char rsp_back_camera_rec[8] = "\x07\x05\x00\x06\x03\x00\xcc" ;
+           rsp_back_camera_rec[5] = (char)mcu_pwii_c2();
+           mcu_send(rsp_back_camera_rec);
+           break;
+
+       case '\x07' :                   // Event Marker Button
+           static char rsp_pw_event_marker[7] = "\x06\x05\x00\x07\x03\xcc" ;
+           p_dio_mmap->pwii_event_marker = (int) ibuf[5] ;
+           mcu_send(rsp_pw_event_marker);
+           break;
+
+       case '\x09' :                   // Video play Control
+           static char rsp_video_play[7] = "\x06\x05\x00\x09\x03\xcc" ;
+           p_dio_mmap->pwii_video_play = (int)(unsigned char)ibuf[5] ;
+           mcu_send(rsp_video_play);
+           break;
+
+       case '\x0b' :                   // Power off
+           static char rsp_power_off[7] = "\x06\x05\x00\x0b\x03\xcc" ;
+           p_dio_mmap->pwii_power_off = 1 ;
+           mcu_send(rsp_power_off);
+           break;
+
+       case '\x0c' :                   // RF900 Power Control
+           static char rsp_RF900_power[7] = "\x06\x05\x00\x0c\x03\xcc" ;
+           p_dio_mmap->pwii_RF900_power = (int)(unsigned char)ibuf[5] ;
+           mcu_send(rsp_RF900_power);
+           break;
+
+       case '\x0d' :                   // GPS Power Control
+           static char rsp_GPS_power[7] = "\x06\x05\x00\x0d\x03\xcc" ;
+           p_dio_mmap->pwii_GPS_power = (int)(unsigned char)ibuf[5] ;
+           mcu_send(rsp_GPS_power);
+           break;
+
+       case '\x0e' :                   // GPS Antenna Power 
+           static char rsp_GPS_antenna_power[7] = "\x06\x05\x00\x0e\x03\xcc" ;
+           p_dio_mmap->pwii_GPS_antenna_power = (int)(unsigned char)ibuf[5] ;
+           mcu_send(rsp_GPS_antenna_power);
+           break;
+
+       case '\x0f' :                   // MIC LED Control
+           static char rsp_MIC_LED[7] = "\x06\x05\x00\x0f\x03\xcc" ;
+           p_dio_mmap->pwii_MIC_LED = (int)(unsigned char)ibuf[5] ;
+           mcu_send(rsp_MIC_LED);
+           break;
+       }
+        
+    }
+
+#endif    // PWIIMCU_SUPPORT
+
+    return 0 ;
+}
+
+// check mcu input
+// parameter
+//      usdelay - micro-seconds waiting
+// return 
+//		1: got something, digital input or power off input?
+//		0: nothing
+int mcu_input(int usdelay)
+{
+    int res = 0 ;
+    int n ;
+    int repeat ;
+    char ibuf[RECVBUFSIZE] ;
+    int udelay = usdelay ;
+    
+    for(repeat=0; repeat<10; repeat++ ) {
+        if( serial_dataready(udelay) ) {
+            n = mcu_recvmsg( ibuf, sizeof(ibuf) ) ;            // mcu_recv() will process mcu input messages
+            if( n>0 ) {
+                udelay=10 ;
+                if( ibuf[3] != '\x1f' ) {                   // ignor error reports for now
+                    res=mcu_checkinputbuf(ibuf);
+                }
+#ifdef MCU_DEBUG
+                else {
+                    printf( "Error Report Detected!\n");
+                }
+#endif                
+            }
+        }
+        else {
+            break;
+        }
+    }
+    return res;
+}
+
+int mcu_bootupready()
+{
+    static char cmd_bootupready[8]="\x07\x01\x00\x11\x02\x00\xcc" ;
+    char responds[RECVBUFSIZE] ;
+    int retry=10;
+    
+    while( --retry>0 ) {
+        serial_clear() ;
+        if(mcu_send(cmd_bootupready)) {
+            if( mcu_recv( responds, RECVBUFSIZE ) ) {
+                if( responds[3]=='\x11' &&
+                   responds[4]=='\x03' ) {
+                       return 1 ;
+                   }
+            }
+        }
+        sleep(1);
+    }
+    return 0 ;
+}
+
+int code ;
+
+int mcu_readcode()
+{
+    static char cmd_readcode[8]="\x06\x01\x00\x41\x02\xcc" ;
+    unsigned char responds[RECVBUFSIZE] ;
+    if(mcu_send(cmd_readcode)) {
+        if( mcu_recv( (char *)responds, RECVBUFSIZE ) ) {
+            if( responds[3]=='\x41' &&
+               responds[4]=='\x03' && 
+               responds[0]>8 ) 
+            {
+                if( responds[5]!=(unsigned char)0xff ) {
+                    code = responds[5] ;      
+                    struct tm ttm ;
+                    time_t tt ;
+                    memset( &ttm, 0, sizeof(ttm) );
+                    ttm.tm_year = getbcd(responds[12]) + 100 ;
+                    ttm.tm_mon  = getbcd(responds[11]) - 1;
+                    ttm.tm_mday = getbcd(responds[10]) ;
+                    ttm.tm_hour = getbcd(responds[8]) ;
+                    ttm.tm_min  = getbcd(responds[7]) ;
+                    ttm.tm_sec  = getbcd(responds[6]) ;
+                    ttm.tm_isdst= -1 ;
+                    tt=timegm(&ttm);
+                    if( (int)tt>0 ) {
+                        localtime_r(&tt, &ttm);
+                        dvr_log( "MCU shutdown code: %02x at %04d-%02d-%02d %02d:%02d:%02d",
+                                code,
+                                ttm.tm_year+1900,
+                                ttm.tm_mon+1,
+                                ttm.tm_mday,
+                                ttm.tm_hour,
+                                ttm.tm_min,
+                                ttm.tm_sec );
+                    }
+                }
+                return 1 ;
+            }
+        }
+    }
+    dvr_log( "Read MCU shutdown code failed.");
+    return 0 ;
+}
+
+int mcu_reboot()
+{
+    static char cmd_reboot[8]="\x06\x01\x00\x12\x02\xcc" ;
+    
+    mcu_send(cmd_reboot) ;
+    // no responds
+    return 0 ;
+}
+
+// return gsensor available
+int mcu_gsensorinit()
+{
+    static char cmd_gsensorinit[16]="\x0c\x01\x00\x34\x02\x01\x02\x03\x04\x05\x06\xcc" ;
+    char responds[RECVBUFSIZE] ;
+    int retry=10;
+    float trigger_back, trigger_front ;
+    float trigger_right, trigger_left ;
+    float trigger_bottom, trigger_top ;
+    
+    if( !gforce_log_enable ) {
+        return 0 ;
+    }
+           
+    trigger_back = 
+        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_trigger_forward + 
+        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_trigger_right + 
+        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_trigger_down ;
+    trigger_right = 
+        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_trigger_forward + 
+        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_trigger_right + 
+        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_trigger_down ;
+    trigger_bottom = 
+        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_trigger_forward + 
+        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_trigger_right + 
+        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_trigger_down ;
+    
+    trigger_front = 
+        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_trigger_backward + 
+        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_trigger_left + 
+        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_trigger_up ;
+    trigger_left = 
+        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_trigger_backward + 
+        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_trigger_left + 
+        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_trigger_up ;
+    trigger_top = 
+        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_trigger_backward + 
+        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_trigger_left + 
+        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_trigger_up ;
+    
+    if( trigger_right >= trigger_left ) {
+        cmd_gsensorinit[5]  = (signed char)(trigger_right*0xe) ;    // Right Trigger
+        cmd_gsensorinit[6]  = (signed char)(trigger_left*0xe) ;     // Left Trigger
+    }
+    else {
+        cmd_gsensorinit[5]  = (signed char)(trigger_left*0xe) ;     // Right Trigger
+        cmd_gsensorinit[6]  = (signed char)(trigger_right*0xe) ;    // Left Trigger
+    }
+    
+    if( trigger_back >= trigger_front ) {
+        cmd_gsensorinit[7]  = (signed char)(trigger_back*0xe) ;    // Back Trigger
+        cmd_gsensorinit[8]  = (signed char)(trigger_front*0xe) ;    // Front Trigger
+    }
+    else {
+        cmd_gsensorinit[7]  = (signed char)(trigger_front*0xe) ;    // Back Trigger
+        cmd_gsensorinit[8]  = (signed char)(trigger_back*0xe) ;    // Front Trigger
+    }
+    
+    if( trigger_bottom >= trigger_top ) {
+        cmd_gsensorinit[9]  = (signed char)(trigger_bottom*0xe) ;    // Bottom Trigger
+        cmd_gsensorinit[10] = (signed char)(trigger_top*0xe) ;    // Top Trigger
+    }
+    else {
+        cmd_gsensorinit[9]  = (signed char)(trigger_top*0xe) ;    // Bottom Trigger
+        cmd_gsensorinit[10] = (signed char)(trigger_bottom*0xe) ;    // Top Trigger
+    }
+    
+    g_sensor_available = 0 ;
+    while( --retry>0 ) {
+        serial_clear() ;
+        if(mcu_send(cmd_gsensorinit)) {
+            if( mcu_recv( responds, RECVBUFSIZE ) ) {
+                if( responds[3]=='\x34' &&
+                   responds[4]=='\x03'&&
+                   responds[0]>6 ) 
+                {
+                    g_sensor_available = responds[5] ;
+                    return g_sensor_available ;
+                }
+            }
+        }
+        sleep(1);
+    }
+    return 0 ;
+}
+
+// get MCU firmware version.
+// return 0: failed
+//       >0: size of version string (not include null char)
+int mcu_version(char * version)
+{
+    static char cmd_firmwareversion[8]="\x06\x01\x00\x2d\x02\xcc" ;
+    char responds[RECVBUFSIZE] ;
+    int  sz ;
+    int retry ;
+    
+    for( retry=0; retry<10; retry++ ) {
+        if(mcu_send(cmd_firmwareversion)) {
+            sz = mcu_recv( responds, sizeof(responds) );
+            if( sz > 0 ) {
+                if( responds[3]=='\x2d' &&
+                   responds[4]=='\x03' ) 
+                {
+                    memcpy( version, &responds[5], sz-6 );
+                    version[sz-6]=0 ;
+                    return sz-6 ;
+                }
+            }
+        }
+    }
+    return 0 ;
+}
+
+int mcu_doutput()
+{
+    static char cmd_doutput[8] ="\x07\x01\x00\x31\x02\x00\xcc" ;
+    char responds[RECVBUFSIZE] ;
+    unsigned int outputmap = p_dio_mmap->outputmap ;
+    unsigned int outputmapx ;
+    int i ;
+    
+    if( outputmap == mcu_doutputmap ) return 1 ;
+
+    outputmapx = (outputmap^output_inverted) ;
+
+    // bit 2 is beep. (from July 6, 2009)
+    // translate output bits ;
+    cmd_doutput[5] = 0 ;
+    for(i=0; i<MAXOUTPUT; i++) {
+        if( outputmapx & output_map_table[i] ) {
+            cmd_doutput[5]|=(1<<i) ;
+        }
+    }
+    
+    // send output command
+    if( mcu_send(cmd_doutput)) {
+        if( mcu_recv( responds, RECVBUFSIZE ) ) {
+            if( responds[3]=='\x31' &&
+               responds[4]=='\x3' ) 
+            {
+                mcu_doutputmap=outputmap ;
+            }
+        }
+    }
+    return 1;
+}
+
+// get mcu digital input
+int mcu_dinput()
+{
+    static char cmd_dinput[8]="\x06\x01\x00\x1d\x02\xcc" ;
+    char responds[RECVBUFSIZE] ;
+    unsigned int imap1, imap2 ;
+    int i;
+
+    mcu_input(10000);
+    if(mcu_send(cmd_dinput)) {
+        if( mcu_recv( responds, RECVBUFSIZE ) ) {
+            if( responds[3]=='\x1d' &&
+               responds[4]=='\x03' ) {
+                   // get digital input map
+                   imap1 = (unsigned char)responds[5]+256*(unsigned int)(unsigned char)responds[6] ; ;
+                   imap2 = 0 ;
+                   for( i=0; i<MAXINPUT; i++ ) {
+                       if( imap1 & input_map_table[i] )
+                           imap2 |= (1<<i) ;
+                   }
+                   p_dio_mmap->inputmap = imap2;
+                   // hdlock = (imap1 & (HDINSERTED|HDKEYLOCK) )==0 ;	// HD plugged in and locked
+                   hdlock = (imap1 & (HDKEYLOCK) )==0 ;	                // HD plugged in and locked
+                   hdinserted = (imap1 & HDINSERTED)==0 ;  // HD inserted
+                   return 1 ;
+               }
+        }
+    }
+    return 0 ;
+}
+
+static int delay_inc = 10 ;
+
+// set more mcu power off delay (keep power alive), (called every few seconds)
+void mcu_poweroffdelay()
+{
+    static char cmd_poweroffdelaytime[10]="\x08\x01\x00\x08\x02\x00\x00\xcc" ;
+    char responds[RECVBUFSIZE] ;
+    if( mcupowerdelaytime < 50 ) {
+        cmd_poweroffdelaytime[6]=delay_inc;
+    }
+    else {
+        cmd_poweroffdelaytime[6]=0 ;
+    }
+    if( mcu_send(cmd_poweroffdelaytime) ) {
+        if( mcu_recv( responds, RECVBUFSIZE ) ) {
+            if( responds[3]=='\x08' &&
+                responds[4]=='\x03' ) {
+                   mcupowerdelaytime = ((unsigned)(responds[5]))*256+((unsigned)responds[6]) ;
+#ifdef MCU_DEBUG        
+                   printf("mcu delay %d s\n", mcupowerdelaytime );
+#endif                    
+               }
+        }
+    }
+}
+
+void mcu_watchdogenable()
+{
+    int retry ;
+    char responds[RECVBUFSIZE] ;
+    static char cmd_watchdogtimeout[10]="\x08\x01\x00\x19\x02\x00\x00\xcc" ;
+    static char cmd_watchdogenable[10]="\x06\x01\x00\x1a\x02\xcc" ;
+
+    cmd_watchdogtimeout[5] = watchdogtimeout/256 ;
+    cmd_watchdogtimeout[6] = watchdogtimeout%256 ;
+    
+    for( retry=0; retry<5; retry++) {
+        if( mcu_send(cmd_watchdogtimeout) ) {
+            // ignor the responds, if any.
+            if( mcu_recv( responds,RECVBUFSIZE )>0 ) {
+                break;
+            }
+        }
+    }
+   
+    for( retry=0; retry<5; retry++) {
+        if( mcu_send(cmd_watchdogenable) ) {
+            // ignor the responds, if any.
+            if( mcu_recv( responds, RECVBUFSIZE )>0 ) {
+                break;
+            }
+        }
+    }
+    
+    watchdogenabled = 1 ;
+}
+
+void mcu_watchdogdisable()
+{
+    int retry ;
+    char responds[RECVBUFSIZE] ;
+    static char cmd_watchdogdisable[10]="\x06\x01\x00\x1b\x02\xcc" ;
+    for( retry=0; retry<5; retry++) {
+        if( mcu_send(cmd_watchdogdisable) ) {
+            // ignor the responds, if any.
+            if( mcu_recv( responds, RECVBUFSIZE )>0 ) {
+                break;
+            }
+        }
+    }
+    watchdogenabled = 0 ;
+}
+
+// return 0: error, >0 success
+int mcu_watchdogkick()
+{
+    int retry ;
+    char responds[RECVBUFSIZE] ;
+    static char cmd_kickwatchdog[10]="\x06\x01\x00\x18\x02\xcc" ;
+    for( retry=0; retry<10; retry++ ) {
+        if( mcu_send(cmd_kickwatchdog) ) {
+            if( mcu_recv( responds, RECVBUFSIZE ) > 0 ) {
+                if( responds[3]==0x18 && responds[4]==0x03 ) {
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+// get io board temperature
+int mcu_iotemperature()
+{
+    char responds[RECVBUFSIZE] ;
+    static char cmd_iotemperature[8]="\x06\x01\x00\x0b\x02\xcc" ;
+    if( mcu_send(cmd_iotemperature) ) {
+        if( mcu_recv( responds, RECVBUFSIZE ) > 0 ) {
+            if( responds[3]==0x0b && 
+               responds[4]==3 ) 
+            {
+                return (int)(signed char)responds[5] ;
+            }
+        }
+    }
+    return -128;
+}
+
+// get hd temperature
+int mcu_hdtemperature()
+{
+    char responds[RECVBUFSIZE] ;
+    static char cmd_hdtemperature[8]="\x06\x01\x00\x0c\x02\xcc" ;
+    if( mcu_send(cmd_hdtemperature) ) {
+        if( mcu_recv( responds,RECVBUFSIZE ) > 0 ) {
+            if( responds[3]==0x0c && 
+               responds[4]==3 ) 
+            {
+                return (int)(signed char)responds[5] ;
+            }
+        }
+    }
+    return -128;
+}
+
+
+void mcu_hdpoweron()
+{
+    char responds[RECVBUFSIZE] ;
+    static char cmd_hdpoweron[10]="\x06\x01\x00\x28\x02\xcc" ;
+    if( mcu_send(cmd_hdpoweron) ) {
+        // ignor the responds, if any.
+        mcu_recv( responds, RECVBUFSIZE );
+    }
+}
+
+void mcu_hdpoweroff()
+{
+    char responds[RECVBUFSIZE] ;
+    static char cmd_hdpoweroff[10]="\x06\x01\x00\x29\x02\xcc" ;
+    if( mcu_send(cmd_hdpoweroff) ) {
+        // ignor the responds, if any.
+        mcu_recv( responds, RECVBUFSIZE );
+    }
+}
+
+// return time_t: success
+//             -1: failed
+time_t mcu_r_rtc( struct tm * ptm = NULL )
+{
+    int retry ;
+    struct tm ttm ;
+    time_t tt ;
+    static char cmd_readrtc[8] = "\x06\x01\x00\x06\x02\xcc" ;
+    unsigned char responds[RECVBUFSIZE] ;
+    for( retry=0; retry<5; retry++ ) {
+        if( mcu_send( cmd_readrtc ) ) {
+            if( mcu_recv( (char *)responds, RECVBUFSIZE ) ) {
+                if( responds[3]==6 &&
+                   responds[4]==3 ) 
+                {
+                    memset( &ttm, 0, sizeof(ttm) );
+                    ttm.tm_year = getbcd(responds[11]) + 100 ;
+                    ttm.tm_mon  = getbcd(responds[10]) - 1;
+                    ttm.tm_mday = getbcd(responds[9]) ;
+                    ttm.tm_hour = getbcd(responds[7]) ;
+                    ttm.tm_min  = getbcd(responds[6]) ;
+                    ttm.tm_sec  = getbcd(responds[5]) ;
+                    ttm.tm_isdst= -1 ;
+                    
+                    if( ttm.tm_year>105 && ttm.tm_year<135 &&
+                       ttm.tm_mon>=0 && ttm.tm_mon<=11 &&
+                       ttm.tm_mday>=1 && ttm.tm_mday<=31 &&
+                       ttm.tm_hour>=0 && ttm.tm_hour<=24 &&
+                       ttm.tm_min>=0 && ttm.tm_min<=60 &&
+                       ttm.tm_sec>=0 && ttm.tm_sec<=60 ) 
+                    {
+                        tt = timegm( &ttm );
+                        if( (int)tt > 0 ) {
+                            if(ptm) {
+                                *ptm = ttm ;
+                            }
+                            return tt ;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    dvr_log("Read clock from MCU failed!");
+    return (time_t)-1;
+}
+
+void mcu_readrtc()
+{
+    time_t t ;
+    struct tm ttm ;
+    t = mcu_r_rtc(&ttm) ;
+    if( (int)t > 0 ) {
+        p_dio_mmap->rtc_year  = ttm.tm_year+1900 ;
+        p_dio_mmap->rtc_month = ttm.tm_mon+1 ;
+        p_dio_mmap->rtc_day   = ttm.tm_mday ;
+        p_dio_mmap->rtc_hour  = ttm.tm_hour ;
+        p_dio_mmap->rtc_minute= ttm.tm_min ;
+        p_dio_mmap->rtc_second= ttm.tm_sec ;
+        p_dio_mmap->rtc_millisecond = 0 ;
+        
+        p_dio_mmap->rtc_cmd   = 0 ;	// cmd finish
+        return ;
+    }
+    p_dio_mmap->rtc_cmd   = -1 ;	// cmd error.
+}
+
+// 3 LEDs On Panel
+//   parameters:
+//      led:  0= USB flash LED, 1= Error LED, 2 = Video Lost LED
+//      flash: 0=off, 1=flash
+void mcu_led(int led, int flash)
+{
+    static char cmd_ledctrl[10] = "\x08\x01\x00\x2f\x02\x00\x00\xcc" ;
+    char responds[RECVBUFSIZE] ;
+    cmd_ledctrl[5]=(char)led ;
+    cmd_ledctrl[6]=(char)(flash!=0) ;
+    mcu_send( cmd_ledctrl );
+    mcu_recv(responds, RECVBUFSIZE);        // ignor responds
+}
+
+// Device Power
+//   parameters:
+//      device:  0= GPS, 1= Slave Eagle boards, 2=Network switch
+//      poweron: 0=poweroff, 1=poweron
+void mcu_devicepower(int device, int poweron )
+{
+    static char cmd_devicepower[10] = "\x08\x01\x00\x2e\x02\x00\x00\xcc" ;
+    char responds[RECVBUFSIZE] ;
+    cmd_devicepower[5]=(char)device ;
+    cmd_devicepower[6]=(char)(poweron!=0) ;
+    mcu_send( cmd_devicepower );
+    mcu_recv(responds, RECVBUFSIZE);        // ignor responds
+}
+
+// ?
+int mcu_reset()
+{
+    static char cmd_reset[8]="\x06\x01\x00\x00\x02\xcc" ;
+    if( mcu_send( cmd_reset ) ) {
+        if( serial_dataready (30000000) ) {
+            if( mcu_recv_enteracommand() ) {
+                return 1;
+            }
+        }
+    }
+    return 0 ;
+}
+
+// update mcu firmware
+// return 1: success, 0: failed
+int mcu_update_firmware( char * firmwarefile) 
+{
+    int res = 0 ;
+    FILE * fwfile ;
+    int c ;
+    int rd ;
+    char responds[200] ;
+    static char cmd_updatefirmware[8] = "\x05\x01\x00\x01\x02\xcc" ;
+    
+    fwfile=fopen(firmwarefile, "rb");
+    
+    if( fwfile==NULL ) {
+        return 0 ;                  // failed, can't open firmware file
+    }
+    
+    // 
+    printf("Start update MCU firmware: %s\n", firmwarefile);
+    
+    // reset mcu
+    printf("Reset MCU.\n");
+    if( mcu_reset()==0 ) {              // reset failed.
+        printf("Failed\n");
+        return 0;
+    }
+    printf("Done.\n");
+    
+    // clean out serial buffer
+    memset( responds, 0, sizeof(responds)) ;
+    serial_write( responds, sizeof(responds));
+    serial_clear(1000000);
+    
+    
+    printf("Erasing.\n");
+    rd=0 ;
+    if( serial_write( cmd_updatefirmware, 5 ) ) {
+        if( serial_dataready (10000000 ) ) {
+            rd=serial_read_withtimeout ( responds, sizeof(responds), 500000 ) ;
+        }
+    }
+    
+    if( rd>=5 && 
+       responds[rd-5]==0x05 && 
+       responds[rd-4]==0x0 && 
+       responds[rd-3]==0x01 && 
+       responds[rd-2]==0x01 && 
+       responds[rd-1]==0x03 ) {
+       // ok ;
+       printf("Done.\n");
+       res=0 ;
+   }
+   else {
+       printf("Failed.\n");
+       return 0;                    // can't start fw update
+   }
+    
+    printf("Programming.\n");
+    // send firmware 
+    res = 0 ;
+    while( (c=fgetc( fwfile ))!=EOF ) {
+        if( serial_write( &c, 1)!=1 ) 
+            break;
+        if( c=='\n' && serial_dataready (0) ) {
+            rd = serial_read_withtimeout (responds, sizeof(responds), 200000 );
+            if( rd>=5 &&
+               responds[0]==0x05 && 
+               responds[1]==0x0 && 
+               responds[2]==0x01 && 
+               responds[3]==0x03 && 
+               responds[4]==0x02 ) {
+                   res=1 ;
+                    break;                  // program done.
+            }
+            else if( rd>=5 &&
+               responds[rd-5]==0x05 && 
+               responds[rd-4]==0x0 && 
+               responds[rd-3]==0x01 && 
+               responds[rd-2]==0x03 && 
+               responds[rd-1]==0x02 ) {
+                   res=1 ;
+                    break;                  // program done.
+            }
+            else if( rd>=6 &&
+               responds[0]==0x06 && 
+               responds[1]==0x0 && 
+               responds[2]==0x01 && 
+               responds[3]==0x01 && 
+               responds[4]==0x03 ) {
+                    break;                  // receive error report
+            }
+            else if( rd>=6 &&
+               responds[rd-6]==0x06 && 
+               responds[rd-5]==0x0 && 
+               responds[rd-4]==0x01 && 
+               responds[rd-3]==0x01 && 
+               responds[rd-2]==0x03 ) {
+                    break;                  // receive error report
+            }
+        }
+    }
+
+    fclose( fwfile );
+    
+    // wait a bit (5 seconds), for firmware update done signal
+    if( res==0 && serial_dataready(5000000) ) {
+            rd = serial_read_withtimeout (responds, sizeof(responds), 500000 );
+            if( rd>=5 &&
+               responds[0]==0x05 && 
+               responds[1]==0x0 && 
+               responds[2]==0x01 && 
+               responds[3]==0x03 && 
+               responds[4]==0x02 ) {
+               res=1 ;
+            }
+            else if( rd>=5 &&
+               responds[rd-5]==0x05 && 
+               responds[rd-4]==0x0 && 
+               responds[rd-3]==0x01 && 
+               responds[rd-2]==0x03 && 
+               responds[rd-1]==0x02 ) {
+               res=1 ;
+            }
+    }
+    if( res ) {
+        printf("Done.\n");
+    }
+    else {
+        printf("Failed.\n");
+    }
+    return res ;
+}
+
+static char bcd(int v)
+{
+    return (char)(((v/10)%10)*0x10 + v%10) ;
+}
+
+// return 1: success
+//        0: failed
+int mcu_w_rtc(time_t tt)
+{
+    static char cmd_setrtc[16]="\x0d\x01\x00\x07\x02" ;
+    char responds[20] ;
+    struct tm t ;
+    gmtime_r( &tt, &t);
+    cmd_setrtc[5] = bcd( t.tm_sec ) ;
+    cmd_setrtc[6] = bcd( t.tm_min ) ;
+    cmd_setrtc[7] = bcd( t.tm_hour );
+    cmd_setrtc[8] = bcd( t.tm_wday ) ;
+    cmd_setrtc[9] = bcd(  t.tm_mday );
+    cmd_setrtc[10] = bcd( t.tm_mon + 1 );
+    cmd_setrtc[11] = bcd( t.tm_year ) ;
+    
+    if( mcu_send(cmd_setrtc) ) {
+        if( mcu_recv(responds, 20 ) ) {
+            if( responds[3]==7 &&
+               responds[4]==3 ) 
+            {
+                return 1;
+            }
+        }
+    }
+    return 0 ;
+}
+
+void mcu_setrtc()
+{
+    static char cmd_setrtc[16]="\x0d\x01\x00\x07\x02" ;
+    char responds[20] ;
+    cmd_setrtc[5] = bcd( p_dio_mmap->rtc_second ) ;
+    cmd_setrtc[6] = bcd( p_dio_mmap->rtc_minute );
+    cmd_setrtc[7] = bcd( p_dio_mmap->rtc_hour );
+    cmd_setrtc[8] = 0 ;						// day of week ?
+    cmd_setrtc[9] = bcd( p_dio_mmap->rtc_day );
+    cmd_setrtc[10] = bcd( p_dio_mmap->rtc_month) ;
+    cmd_setrtc[11] = bcd( p_dio_mmap->rtc_year) ;
+    
+    if( mcu_send(cmd_setrtc) ) {
+        if( mcu_recv(responds, 20 ) ) {
+            if( responds[3]==7 &&
+               responds[4]==3 ) {
+                   p_dio_mmap->rtc_cmd   = 0 ;	// cmd finish
+                   return ;
+               }
+        }
+    }
+    p_dio_mmap->rtc_cmd   = -1 ;	// cmd error.
+}
+
+// sync system time to rtc
+void mcu_syncrtc()
+{
+    time_t t ;
+    struct timeval current_time;
+    gettimeofday(&current_time, NULL);
+    t = (time_t) current_time.tv_sec ;
+    if( mcu_w_rtc(t) ) {
+        p_dio_mmap->rtc_cmd   = 0 ;	// cmd finish
+    }
+    else {
+        p_dio_mmap->rtc_cmd   = -1 ;	// cmd error
+    }
+}
+
+void mcu_rtctosys()
+{
+    struct timeval tv ;
+    int retry ;
+    time_t rtc ;
+    for( retry=0; retry<10; retry++ ) {
+        rtc=mcu_r_rtc();
+        if( (int)rtc>0 ) {
+            tv.tv_sec=rtc ;
+            tv.tv_usec=0;
+            settimeofday(&tv, NULL);
+            // also set onboard rtc
+            rtc_set((time_t)tv.tv_sec);
+            break;
+        }
+    }
+}
+
+void time_syncgps ()
+{
+    struct timeval tv ;
+    int diff ;
+    time_t gpstime ;
+    if( p_dio_mmap->gps_valid ) {
+        gpstime = (time_t) p_dio_mmap->gps_gpstime ;
+        gettimeofday(&tv, NULL);
+        diff = (int)gpstime - (int)tv.tv_sec ;
+        if( diff>5 || diff<-5 ) {
+            tv.tv_sec=gpstime ;
+            tv.tv_usec= 0;
+            settimeofday( &tv, NULL );
+            dvr_log ( "Time sync use GPS time." );
+        }
+        else if( diff>1 || diff<-1 ) {
+            tv.tv_sec =(time_t)diff ;
+            tv.tv_usec = 0 ;
+            adjtime( &tv, NULL );
+        }
+        // set mcu time
+        mcu_w_rtc(gpstime) ;
+        // also set onboard rtc
+        rtc_set(gpstime);
+    }
+}
+
+void time_syncmcu()
+{
+    int diff ;
+    struct timeval tv ;
+    time_t rtc ;
+    rtc=mcu_r_rtc();
+    if( (int)rtc>0 ) {
+        gettimeofday(&tv, NULL);
+        diff = (int)rtc - (int)tv.tv_sec ;
+        if( diff>5 || diff<-5 ) {
+            tv.tv_sec=rtc ;
+            tv.tv_usec=0;
+            settimeofday( &tv, NULL );
+            dvr_log ( "Time sync use MCU time." );
+        }
+        else if( diff>1 || diff<-1 ){
+            tv.tv_sec =(time_t)diff ;
+            tv.tv_usec = 0 ;
+            adjtime( &tv, NULL );
+        }
+        // set onboard rtc
+        rtc_set(rtc);
+    }
+}
+
+void dvrsvr_down()
+{
+    pid_t dvrpid = p_dio_mmap->dvrpid ;
+    if( dvrpid > 0 ) {
+        kill( dvrpid, SIGUSR1 ) ;				// suspend DVRSVR
+        while( p_dio_mmap->dvrpid ) {
+            p_dio_mmap->outputmap ^= HDLED ;
+            mcu_input(200000);
+            mcu_doutput();
+        }
+        sync(); 
+    }
+}
+
+// execute setnetwork script to recover network interface.
+void setnetwork()
+{
+    int status ;
+    static pid_t pid_network=0 ;
+    if( pid_network>0 ) {
+        kill(pid_network, SIGTERM);
+        waitpid( pid_network, &status, 0 );
+    }
+    pid_network = fork ();
+    if( pid_network==0 ) {
+        static char snwpath[]="/davinci/dvr/setnetwork" ;
+        execl(snwpath, snwpath, NULL);
+        exit(0);    // should not return to here
+    }
+}
+
+// Buzzer functions
+static int buzzer_timer ;
+static int buzzer_count ;
+static int buzzer_on ;
+static int buzzer_ontime ;
+static int buzzer_offtime ;
+
+void buzzer(int times, int ontime, int offtime)
+{
+    if( times>=buzzer_count ) {
+        buzzer_timer = getruntime();
+        buzzer_count = times ;
+        buzzer_on = 0 ;
+        buzzer_ontime = ontime ;
+        buzzer_offtime = offtime ;
+    }
+}
+
+// run buzzer, runtime: runtime in ms
+void buzzer_run( int runtime )
+{
+    if( buzzer_count>0 && (runtime - buzzer_timer)>=0 ) {
+        if( buzzer_on ) {
+            buzzer_count-- ;
+            buzzer_timer = runtime+buzzer_offtime ;
+            p_dio_mmap->outputmap &= ~0x100 ;     // buzzer off
+        }
+        else {
+            buzzer_timer = runtime+buzzer_ontime ;
+            p_dio_mmap->outputmap |= 0x100 ;     // buzzer on
+        }
+        buzzer_on=!buzzer_on ;
+    }
+}    
+
+
+int smartftp_retry ;
+int smartftp_disable ;
+int smartftp_reporterror ;
+
+/*
+void smartftp_log(char * fmt, ...)
+{
+    va_list ap ;
+    char smlogfile[256] ;
+    FILE * fsmlog ;
+    
+    struct tm t ;
+	time_t tt ;
+   
+    smlogfile[0]=0 ;
+    fsmlog = fopen("/var/dvr/dvrcurdisk", "r");
+    if( fsmlog ) {
+        fscanf(fsmlog, "%s", smlogfile );
+        fclose(fsmlog);
+    }
+    if( smlogfile[0] ) {
+        strcat( smlogfile, "/smartlog/smartftplog.txt" );
+        fsmlog=fopen(smlogfile, "a");
+        if( fsmlog ) {
+            tt=time(NULL);
+            localtime_r(&tt, &t);
+            fprintf( fsmlog, "%04d-%02d-%02d %02d:%02d:%02d ", 
+                    t.tm_year+1900, t.tm_mon+1, t.tm_mday ,
+                    t.tm_hour, t.tm_min, t.tm_sec );
+#ifdef MCU_DEBUG
+            printf( "%04d-%02d-%02d %02d:%02d:%02d ", 
+                    t.tm_year+1900, t.tm_mon+1, t.tm_mday ,
+                    t.tm_hour, t.tm_min, t.tm_sec );
+#endif            
+            va_start(ap, fmt);
+            vfprintf( fsmlog, fmt, ap );
+#ifdef MCU_DEBUG
+            vprintf( fmt, ap );
+#endif            
+            va_end(ap);
+            fprintf( fsmlog, "\n" );
+#ifdef MCU_DEBUG
+            printf( "\n" );
+#endif            
+            fclose(fsmlog);
+        }
+    }
+}
+*/
+
+void smartftp_start()
+{
+
+    dvr_log( "Start smart server uploading.");
+    pid_smartftp = fork();
+    if( pid_smartftp==0 ) {     // child process
+        char hostname[128] ;
+//        char mountdir[250] ;
+        
+        // get BUS name
+        gethostname(hostname, 128) ;
+        
+        // get mount directory
+/*        
+        mountdir[0]=0 ;
+        FILE * fcurdirname = fopen( "/var/dvr/dvrcurdisk", "r" );
+        if( fcurdirname ) {
+            fscanf( fcurdirname, "%s", mountdir );
+            fclose( fcurdirname );
+        }
+        if( mountdir[0]==0 ) {
+            exit(102);                  // no disk mounted. quit!
+        }
+*/        
+        system("/davinci/dvr/setnetwork");  // reset network, this would restart wifi adaptor
+        
+        execl( "/davinci/dvr/smartftp", "/davinci/dvr/smartftp",
+              "rausb0",
+              hostname,
+              "247SECURITY",
+              "/var/dvr/disks",
+              "510",
+              "247ftp",
+              "247SECURITY",
+              "0",
+              smartftp_reporterror?"Y":"N",
+              getenv("TZ"), 
+              NULL 
+              );
+        
+//        smartftp_log( "Smartftp start failed." );
+
+        dvr_log( "Start smart server uploading failed!");
+
+        exit(101);      // error happened.
+    }
+    else if( pid_smartftp<0 ) {
+        pid_smartftp=0;
+    }
+//    smartftp_log( "Smartftp started." );
+}
+
+void smartftp_wait()
+{
+    int smartftp_status=0 ;
+    pid_t id ;
+    int exitcode=-1 ;
+    if( pid_smartftp>0 ) {
+        id=waitpid( pid_smartftp, &smartftp_status, WNOHANG  );
+        if( id==pid_smartftp ) {
+            pid_smartftp=0 ;
+            if( WIFEXITED( smartftp_status ) ) {
+                exitcode = WEXITSTATUS( smartftp_status ) ;
+                dvr_log( "\"smartftp\" exit. (code:%d)", exitcode );
+                if( (exitcode==3 || exitcode==6) && 
+                   --smartftp_retry>0 ) 
+                {
+                    dvr_log( "\"smartftp\" failed, retry...");
+                    smartftp_start();
+                }
+            }
+            else if( WIFSIGNALED(smartftp_status)) {
+                dvr_log( "\"smartftp\" killed by signal %d.", WTERMSIG(smartftp_status));
+            }
+            else {
+                dvr_log( "\"smartftp\" aborted." );
+            }
+        }
+    }
+}
+
+// Kill smartftp in case standby timeout or power turn on
+void smartftp_kill()
+{
+    if( pid_smartftp>0 ) {
+        kill( pid_smartftp, SIGTERM );
+        dvr_log( "Kill \"smartftp\"." );
+        pid_smartftp=0 ;
+    }
+}    
+
+int g_syncrtc=0 ;
+
+float cpuusage()
+{
+    static float s_cputime=0.0, s_idletime=0.0 ;
+    float cputime, idletime ;
+    float usage=0.0 ;
+    FILE * uptime ;
+    uptime = fopen( "/proc/uptime", "r" );
+    if( uptime ) {
+        fscanf( uptime, "%f %f", &cputime, &idletime );
+        fclose( uptime );
+        usage=1.0 -(idletime-s_idletime)/(cputime-s_cputime) ;
+        s_cputime=cputime ;
+        s_idletime=idletime ;
+    }
+    return usage ;
+}
+
+// return 
+//        0 : failed
+//        1 : success
+int appinit()
+{
+    FILE * pidf ;
+    int fd ;
+    char * p ;
+    config dvrconfig(dvrconfigfile);
+    string v ;
+    int i;
+    
+    // setup time zone
+    string tz ;
+    string tzi ;
+    tz=dvrconfig.getvalue( "system", "timezone" );
+    if( tz.length()>0 ) {
+        tzi=dvrconfig.getvalue( "timezones", tz.getstring() );
+        if( tzi.length()>0 ) {
+            p=strchr(tzi.getstring(), ' ' ) ;
+            if( p ) {
+                *p=0;
+            }
+            p=strchr(tzi.getstring(), '\t' ) ;
+            if( p ) {
+                *p=0;
+            }
+            setenv("TZ", tzi.getstring(), 1);
+        }
+        else {
+            setenv("TZ", tz.getstring(), 1);
+        }
+    }
+
+    v = dvrconfig.getvalue( "system", "logfile");
+    if (v.length() > 0){
+        strncpy( logfile, v.getstring(), sizeof(logfile));
+    }
+    v = dvrconfig.getvalue( "system", "temp_logfile");
+    if (v.length() > 0){
+        strncpy( temp_logfile, v.getstring(), sizeof(temp_logfile));
+    }
+        
+    v = dvrconfig.getvalue( "system", "iomapfile");
+    char * iomapfile = v.getstring();
+    if( iomapfile && strlen(iomapfile)>0 ) {
+        strncpy( dvriomap, iomapfile, sizeof(dvriomap));
+    }
+    fd = open(dvriomap, O_RDWR | O_CREAT, S_IRWXU);
+    if( fd<=0 ) {
+        printf("Can't create io map file!\n");
+        return 0 ;
+    }
+    ftruncate(fd, sizeof(struct dio_mmap));
+    p=(char *)mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
+    close( fd );								// fd no more needed
+    if( p==(char *)-1 || p==NULL ) {
+        printf( "IO memory map failed!");
+        return 0;
+    }
+    p_dio_mmap = (struct dio_mmap *)p ;
+    
+    if( p_dio_mmap->usage <=0 ) {
+        memset( p_dio_mmap, 0, sizeof( struct dio_mmap ) );
+    }
+    
+    p_dio_mmap->usage++;                           // add one usage
+
+    if( p_dio_mmap->iopid > 0 ) { 				// another ioprocess running?
+        pid_t pid = p_dio_mmap->iopid ;
+        // kill it
+        if( kill( pid,  SIGTERM )==0 ) {
+            // wait for it to quit
+            waitpid( pid, NULL, 0 );
+            sync();
+            sleep(2);
+        }
+        else {
+            sleep(5);
+        }
+    }
+
+    // initialize shared memory
+    p_dio_mmap->inputnum = dvrconfig.getvalueint( "io", "inputnum");	
+    if( p_dio_mmap->inputnum<=0 || p_dio_mmap->inputnum>32 )
+        p_dio_mmap->inputnum = MCU_INPUTNUM ;	
+    p_dio_mmap->outputnum = dvrconfig.getvalueint( "io", "outputnum");	
+    if( p_dio_mmap->outputnum<=0 || p_dio_mmap->outputnum>32 )
+        p_dio_mmap->outputnum = MCU_INPUTNUM ;	
+
+    p_dio_mmap->panel_led = 0;
+    p_dio_mmap->devicepower = 0xffff;				// assume all device is power on
+    
+    p_dio_mmap->iopid = getpid () ;					// io process pid
+    
+    output_inverted = 0 ;
+    
+    for( i=0; i<32 ; i++ ) {
+        char outinvkey[50] ;
+        sprintf(outinvkey, "output%d_inverted", i+1);
+        if( dvrconfig.getvalueint( "io", outinvkey ) ) {
+            output_inverted |= (1<<i) ;
+        }
+    }
+    
+    // check if sync rtc wanted
+    
+    g_syncrtc = dvrconfig.getvalueint("io", "syncrtc");
+    
+    // initilize serial port
+    v = dvrconfig.getvalue( "io", "serialport");
+    if( v.length()>0 ) {
+        strcpy( serial_dev, v.getstring() );
+    }
+    serial_baud = dvrconfig.getvalueint("io", "serialbaudrate");
+    if( serial_baud<2400 || serial_baud>115200 ) {
+            serial_baud=DEFSERIALBAUD ;
+    }
+    serial_init ();
+
+    // smartftp variable
+    smartftp_disable = dvrconfig.getvalueint("system", "smartftp_disable");
+   
+    // initialize mcu (power processor)
+    if( mcu_bootupready () ) {
+        printf("MCU UP!\n");
+        dvr_log("MCU ready.");
+        mcu_readcode();
+    }
+    else {
+        printf("MCU failed!\n");
+        dvr_log("MCU failed.");
+    }
+
+#ifdef PWIIMCU_SUPPORT
+    if( mcu_pwii_bootupready() ) {
+        printf( "PWII boot up ready!\n");
+        // get MCU version
+        char pwii_version[100] ;
+        if( mcu_pwii_version( pwii_version ) ) {
+            printf("PWII version: %s\n", pwii_version );
+            FILE * pwiiversionfile=fopen("/var/dvr/pwiiversion", "w");
+            if( pwiiversionfile ) {
+                fprintf( pwiiversionfile, "%s", pwii_version );
+                fclose( pwiiversionfile );
+            }
+        }     
+        
+    }
+#endif // PWIIMCU_SUPPORT   
+    
+    if( g_syncrtc ) {
+        mcu_rtctosys();
+    }
+    
+    // gforce sensor setup
+
+    gforce_log_enable = dvrconfig.getvalueint( "glog", "gforce_log_enable");
+
+    // get gsensor direction setup
+    
+    int dforward, dupward ;
+    dforward = dvrconfig.getvalueint( "io", "gsensor_forward");	
+    dupward  = dvrconfig.getvalueint( "io", "gsensor_upward");	
+    gsensor_direction = DEFAULT_DIRECTION ;
+    for(i=0; i<24; i++) {
+        if( dforward == direction_table[i][0] && dupward == direction_table[i][1] ) {
+            gsensor_direction = i ;
+            break;
+        }
+    }
+    p_dio_mmap->gforce_log0=0;
+    p_dio_mmap->gforce_log1=0;
+    
+    g_sensor_trigger_forward = 0.5 ;
+    v = dvrconfig.getvalue( "io", "gsensor_forward_trigger");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_trigger_forward);
+    }
+    g_sensor_trigger_backward = -0.5 ;
+    v = dvrconfig.getvalue( "io", "gsensor_backward_trigger");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_trigger_backward);
+    }
+    g_sensor_trigger_right = 0.5 ;
+    v = dvrconfig.getvalue( "io", "gsensor_right_trigger");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_trigger_right);
+    }
+    g_sensor_trigger_left = -0.5 ;
+    v = dvrconfig.getvalue( "io", "gsensor_left_trigger");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_trigger_left);
+    }
+    g_sensor_trigger_down = 1.0+2.5 ;
+    v = dvrconfig.getvalue( "io", "gsensor_down_trigger");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_trigger_down);
+    }
+    g_sensor_trigger_up = 1.0-2.5 ;
+    v = dvrconfig.getvalue( "io", "gsensor_up_trigger");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_trigger_up);
+    }
+    
+    // gsensor trigger setup
+    if( mcu_gsensorinit() ) {       // g sensor available
+        dvr_log("G sensor detected!");
+        pidf = fopen( "/var/dvr/gsensor", "w" );
+        if( pidf ) {
+            fprintf(pidf, "1");
+            fclose(pidf);
+        }
+    }
+    
+    usewatchdog = dvrconfig.getvalueint("io", "usewatchdog");
+    watchdogtimeout=dvrconfig.getvalueint("io", "watchdogtimeout");
+    if( watchdogtimeout<10 )
+        watchdogtimeout=10 ;
+    if( watchdogtimeout>200 )
+        watchdogtimeout=200 ;
+
+    pidf = fopen( pidfile, "w" );
+    if( pidf ) {
+        fprintf(pidf, "%d", (int)getpid() );
+        fclose(pidf);
+    }
+
+    // initialize timer
+    initruntime();
+    
+    return 1;
+}
+
+// app finish, clean up
+void appfinish()
+{
+    int lastuser ;
+    
+    // close serial port
+    if( serial_handle>0 ) {
+        close( serial_handle );
+        serial_handle=0;
+    }
+    
+    p_dio_mmap->iopid = 0 ;
+    p_dio_mmap->usage-- ;
+    
+    if( p_dio_mmap->usage <= 0 ) {
+        lastuser=1 ;
+    }
+    else {
+        lastuser=0;
+    }
+    
+    // clean up shared memory
+    munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
+    
+    if( lastuser ) {
+        unlink( dvriomap );         // remove map file.
+    }
+    
+    // delete pid file
+    unlink( pidfile );
+}
+
+int main(int argc, char * argv[])
+{
+    int i;
+    int hdpower=0 ;                             // assume HD power is off
+    int hdkeybounce = 0 ;                       // assume no hd
+    unsigned int modeendtime = 0;
+    unsigned int gpsavailable = 0 ;
+    
+    if( appinit()==0 ) {
+        return 1;
+    }
+
+    // get MCU version
+    if( mcu_version( mcu_firmware_version ) ) {
+        printf("MCU: %s\n", mcu_firmware_version );
+        FILE * mcuversionfile=fopen("/var/dvr/mcuversion", "w");
+        if( mcuversionfile ) {
+            fprintf( mcuversionfile, "%s", mcu_firmware_version );
+            fclose( mcuversionfile );
+        }
+    }        
+
+#ifdef PWIIMCU_SUPPORT    
+        // get MCU version
+    if( mcu_pwii_version( mcu_firmware_version ) ) {
+        printf("PWII: %s\n", mcu_firmware_version );
+        FILE * mcuversionfile=fopen("/var/dvr/pwiimcuversion", "w");
+        if( mcuversionfile ) {
+            fprintf( mcuversionfile, "%s", mcu_firmware_version );
+            fclose( mcuversionfile );
+        }
+    }        
+#endif
+    
+//    signal(SIGUSR1, sig_handler);
+//    signal(SIGUSR2, sig_handler);
+    
+    // disable watchdog at begining
+//  mcu_watchdogdisable();
+
+    // check if we need to update firmware
+    if( argc>=2 ) {
+        for(i=1; i<argc; i++ ) {
+            if( strcasecmp( argv[i], "-fw" )==0 ) {
+                if( argv[i+1] && mcu_update_firmware( argv[i+1] ) ) {
+                    appfinish ();
+                    return 0 ;
+                }
+                else {
+                    appfinish ();
+                    return 1;
+                }
+            }
+            else if( strcasecmp( argv[i], "-reboot" )==0 ) {
+                int delay = 5 ;
+                if( argv[i+1] ) {
+                    delay = atoi(argv[i+1]) ;
+                }
+                if( delay<5 ) {
+                    delay=5 ;
+                }
+                else if(delay>100 ) {
+                    delay=100;
+                }
+//                sleep(delay);
+//                mcu_reboot();
+                watchdogtimeout=delay ;
+                mcu_watchdogenable () ;
+                sleep(delay+20) ;
+                mcu_reboot ();
+                return 1;
+            }
+        }
+    }
+  
+    // setup signal handler	
+    app_mode = 1 ;
+    signal(SIGQUIT, sig_handler);
+    signal(SIGINT,  sig_handler);
+    signal(SIGTERM, sig_handler);
+    signal(SIGUSR2, sig_handler);
+    
+    printf( "DVR IO process started!\n");
+    
+   
+    // get default digital input
+    mcu_dinput();
+
+    // initialize output
+    mcu_doutputmap=~(p_dio_mmap->outputmap) ;
+    
+    // initialize panel led
+    panelled = 0xff ;
+    p_dio_mmap->panel_led = 0;
+    
+    // initialize device power
+    devicepower = 0 ;
+    p_dio_mmap->devicepower = 0xffff;				// assume all device is power on
+    
+    while( app_mode ) {
+        
+        // do digital output
+        mcu_doutput();
+
+        // do input pin polling
+        //
+        mcu_input(5000);
+
+        unsigned int runtime=getruntime() ;
+        
+        // rtc command check
+        if( p_dio_mmap->rtc_cmd != 0 ) {
+            if( p_dio_mmap->rtc_cmd == 1 ) {
+                mcu_readrtc(); 
+            }
+            else if( p_dio_mmap->rtc_cmd == 2 ) {
+                mcu_setrtc();
+            }
+            else if( p_dio_mmap->rtc_cmd == 3 ) {
+                mcu_syncrtc();
+            }
+            else {
+                p_dio_mmap->rtc_cmd=-1;		// command error, (unknown cmd)
+            }
+        }
+
+        static unsigned int cpuusage_timer ;
+        if( (runtime - cpuusage_timer)> 5000 ) {    // 5 seconds to monitor cpu usage
+            cpuusage_timer=runtime ;
+            static int usage_counter=0 ;
+            if( cpuusage()>0.995 ) {
+                if( ++usage_counter>12 ) {          // CPU keey busy for 1 minites
+                    buzzer( 10, 250, 250 );
+                    // let system reset by watchdog
+                    dvr_log( "CPU usage at 100%% for 60 seconds, system reset.");
+                    app_mode=APPMODE_REBOOT ;
+                }
+            }
+            else {
+                usage_counter=0 ;
+            }
+        }
+
+
+        // Buzzer functions
+        buzzer_run( runtime ) ;
+        
+        static unsigned int temperature_timer ;
+        if( (runtime - temperature_timer)> 10000 ) {    // 10 seconds to read temperature
+            temperature_timer=runtime ;
+
+            i=mcu_iotemperature();
+#ifdef MCU_DEBUG        
+            printf("Temperature: io(%d)",i );
+#endif
+            if( i > -127 && i < 127 ) {
+                static int saveiotemp = 0 ;
+                if( i>=75 && 
+                   (i-saveiotemp) > 2 ) 
+                {
+                    dvr_log ( "High system temperature: %d", i);
+                    saveiotemp=i ;
+                    sync();
+                }
+                
+                p_dio_mmap->iotemperature = i ;
+            }
+            else {
+                p_dio_mmap->iotemperature=-128 ;
+            }
+            
+            i=mcu_hdtemperature();
+#ifdef MCU_DEBUG        
+            printf(" hd(%d)\n", i );
+#endif
+            if( i > -127 && i < 127 ) {
+                static int savehdtemp = 0 ;
+
+                if( i>=75 && 
+                   (i-savehdtemp) > 2 ) 
+                {
+                    dvr_log ( "High hard disk temperature: %d", i);
+                    savehdtemp=i ;
+                    sync();
+                }
+
+                p_dio_mmap->hdtemperature = i ;
+            }
+            else {
+                p_dio_mmap->hdtemperature=-128 ;
+            }
+            
+            // The Buzzer beep 4time at 0.5s interval every 30s when HDD or system temperature is over 66C
+            if( p_dio_mmap->iotemperature > 66 || p_dio_mmap->hdtemperature > 66 ) {
+                static int hitempbeep=0 ;
+                if( ++hitempbeep>3 ) {
+                    buzzer( 4, 250, 250 ) ;
+                    hitempbeep=0 ;
+                }
+            }
+            
+            static int hightemp_norecord = 0 ;
+            if( p_dio_mmap->iotemperature > 83 || p_dio_mmap->hdtemperature > 83 ) {
+                if( hightemp_norecord == 0 &&
+                   app_mode==APPMODE_RUN &&                      
+                   p_dio_mmap->dvrpid>0 && 
+                   (p_dio_mmap->dvrstatus & DVR_RUN) &&
+                   (p_dio_mmap->dvrcmd == 0 ) &&
+                   ((p_dio_mmap->dvrstatus & DVR_RECORD)!=0) )
+                {
+                    dvr_log( "Stop DVR recording on high temperature."); 
+                    p_dio_mmap->dvrcmd = 3;     // stop recording
+                    hightemp_norecord = 1 ;
+                }
+            }
+            else if(  p_dio_mmap->iotemperature < 75 && p_dio_mmap->hdtemperature < 75 ) {
+                if( hightemp_norecord == 1 &&
+                   app_mode==APPMODE_RUN &&                      
+                   p_dio_mmap->dvrpid>0 && 
+                   (p_dio_mmap->dvrstatus & DVR_RUN) &&
+                   (p_dio_mmap->dvrcmd == 0 ) &&
+                   ((p_dio_mmap->dvrstatus & DVR_RECORD)==0) )
+                {
+                    p_dio_mmap->dvrcmd = 4;     // start recording
+                    hightemp_norecord = 0 ;
+                    dvr_log( "Resume DVR recording on lower temperature.");
+                }
+            }
+        }
+        
+                
+        static unsigned int appmode_timer ;
+        if( (runtime - appmode_timer)> 3000 ) {    // 3 seconds mode timer
+            appmode_timer=runtime ;
+
+            // printf("mode %d\n", app_mode);
+            // do power management mode switching
+            if( app_mode==APPMODE_RUN ) {                         // running mode
+                static int app_run_bell = 0 ;
+                if( app_run_bell==0 &&
+                   p_dio_mmap->dvrpid>0 && 
+                   (p_dio_mmap->dvrstatus & DVR_RUN) &&
+                   (p_dio_mmap->dvrstatus & DVR_RECORD) ) 
+                {
+                    app_run_bell=1 ;
+                    buzzer(1, 1000, 100);
+                }
+                
+                if( p_dio_mmap->poweroff )              // ignition off detected
+                {
+                    modeendtime = runtime + getshutdowndelaytime()*1000;
+                    app_mode=APPMODE_SHUTDOWNDELAY ;                        // hutdowndelay start ;
+                    dvr_log("Power off switch, enter shutdown delay (mode %d).", app_mode);
+                }
+            }
+            else if( app_mode==APPMODE_SHUTDOWNDELAY ) {   // shutdown delay
+                if( p_dio_mmap->poweroff ) {
+                    mcu_poweroffdelay() ;
+                    if( runtime>modeendtime  ) {
+                        // stop dvr recording
+                        if( p_dio_mmap->dvrpid>0 && 
+                           (p_dio_mmap->dvrstatus & DVR_RUN) &&
+                           (p_dio_mmap->dvrcmd == 0 )) 
+                        {
+                                p_dio_mmap->dvrcmd = 3;     // stop recording
+                        }
+                        sync();
+                        // stop glog recording
+                        if( p_dio_mmap->glogpid>0 ) {
+                            kill( p_dio_mmap->glogpid, SIGUSR1 );
+                        }
+                        modeendtime = runtime + 120000 ;
+                        app_mode=APPMODE_NORECORD ;                    // start standby mode
+                        dvr_log("Shutdown delay timeout, to stop recording (mode %d).", app_mode);
+                    }
+                }
+                else {
+                    // start dvr recording
+                    if( p_dio_mmap->dvrpid>0 && 
+                       (p_dio_mmap->dvrstatus & DVR_RUN) &&
+                       (p_dio_mmap->dvrcmd == 0 )) 
+                    {
+                        p_dio_mmap->dvrcmd = 4;     // start recording
+                    }
+                    p_dio_mmap->devicepower = 0xffff ;
+                    app_mode=APPMODE_RUN ;                        // back to normal
+                    dvr_log("Power on switch, set to running mode. (mode %d)", app_mode);
+                }
+            }
+            else if( app_mode==APPMODE_NORECORD ) {  // close recording and run smart ftp
+
+                if( p_dio_mmap->poweroff ) {
+                    mcu_poweroffdelay ();
+                }
+
+                if( p_dio_mmap->dvrpid>0 && 
+                   (p_dio_mmap->dvrstatus & DVR_RUN) &&
+                   ((p_dio_mmap->dvrstatus & DVR_RECORD)==0) ) 
+                {
+                        dvr_log("Recording stopped.");
+                        modeendtime = runtime ;        
+                }
+                sync();
+                
+                if( runtime>=modeendtime ) {
+                    app_mode = APPMODE_STANDBY ;
+                    modeendtime = runtime+getstandbytime()*1000 ;
+                    if( smartftp_disable==0 ) {
+                        
+                        // check video lost report to smartftp.
+                        if( (p_dio_mmap->dvrstatus & (DVR_VIDEOLOST|DVR_ERROR) )==0 )
+                        {
+                            smartftp_reporterror = 0 ;
+                        }
+                        else {
+                            smartftp_reporterror=1 ;
+                        }
+                        smartftp_retry=3 ;
+                        smartftp_start();
+                    }
+                    dvr_log("Enter standby mode. (mode %d).", app_mode);
+                    buzzer( 3, 250, 250);
+                    
+                    // if standby time is 0, we bypass it, just turn off system.
+                    if( modeendtime <= runtime ) {
+                        modeendtime = runtime+90000 ;
+                        app_mode=APPMODE_SHUTDOWN ;    // turn off mode
+                        dvr_log("System shutdown. (mode %d).", app_mode );
+                        buzzer( 5, 250, 250 );
+                        if( p_dio_mmap->dvrpid > 0 ) {
+                            kill(p_dio_mmap->dvrpid, SIGTERM);
+                        }
+                        if( p_dio_mmap->glogpid > 0 ) {
+                            kill(p_dio_mmap->glogpid, SIGTERM);
+                        }
+                    }
+                }
+            }
+            else if( app_mode==APPMODE_STANDBY ) {                    // standby
+
+                p_dio_mmap->outputmap ^= HDLED ;        // flash LED slowly for standy mode
+
+                if( p_dio_mmap->poweroff ) {
+                    mcu_poweroffdelay ();
+                }
+                
+                if( p_dio_mmap->dvrpid>0 && 
+                   (p_dio_mmap->dvrstatus & DVR_RUN) &&
+                   (p_dio_mmap->dvrstatus & DVR_NETWORK) )
+                {
+                    p_dio_mmap->devicepower=0xffff ;    // turn on all devices power
+                }
+                else {
+                    p_dio_mmap->devicepower=0 ;        // turn off all devices power
+                }
+
+                // continue wait for smartftp
+                if( pid_smartftp > 0 ) {
+                    smartftp_wait();
+                }
+                
+                if( p_dio_mmap->poweroff ) {         // ignition off
+                    // turn off HD power ?
+                    if( standbyhdoff ) {
+                        p_dio_mmap->outputmap &= ~HDLED ;   // turn off HDLED
+                        if( hdpower ) {
+                            hdpower=0;
+                            mcu_hdpoweroff ();
+                        }
+                    }
+                    
+                    if( runtime>modeendtime  ) {
+                        // start shutdown
+                        p_dio_mmap->devicepower=0 ;    // turn off all devices power
+                        modeendtime = runtime+90000 ;
+                        app_mode=APPMODE_SHUTDOWN ;    // turn off mode
+                        dvr_log("Standby timeout, system shutdown. (mode %d).", app_mode );
+                        buzzer( 5, 250, 250 );
+                        if( p_dio_mmap->dvrpid > 0 ) {
+                            kill(p_dio_mmap->dvrpid, SIGTERM);
+                        }
+                        if( p_dio_mmap->glogpid > 0 ) {
+                            kill(p_dio_mmap->glogpid, SIGTERM);
+                        }
+                        if( pid_smartftp > 0 ) {
+                            smartftp_kill();
+                        }
+                    }
+                }
+                else {                                          // ignition on
+                    if( p_dio_mmap->dvrpid>0 && 
+                       (p_dio_mmap->dvrstatus & DVR_RUN) &&
+                       p_dio_mmap->dvrcmd == 0 )
+                    {
+                        p_dio_mmap->dvrcmd = 4 ;             // start recording.
+                    }
+                    
+                    // we should start glog, since it'v been killed.
+                    if( p_dio_mmap->glogpid > 0 ) {
+                        kill(p_dio_mmap->glogpid, SIGUSR2);
+                    }
+                    
+                    p_dio_mmap->devicepower=0xffff ;    // turn on all devices power
+                    app_mode=APPMODE_RUN ;                        // back to normal
+                    dvr_log("Power on switch, set to running mode. (mode %d)", app_mode);
+                    if( pid_smartftp > 0 ) {
+                        smartftp_kill();
+                    }
+                }
+            }
+            else if( app_mode==APPMODE_SHUTDOWN ) {                    // turn off mode, no keep power on 
+                sync();
+                if( runtime>modeendtime ) {     // system suppose to turn off during these time
+                    // hard ware turn off failed. May be ignition turn on again? Reboot the system
+                    dvr_log("Hardware shutdown failed. Try reboot by software!" );
+                    app_mode=APPMODE_REBOOT ;
+                }
+            }
+            else if( app_mode==APPMODE_REBOOT ) {
+                static int reboot_begin=0 ;
+                sync();
+                if( reboot_begin==0 ) {
+                    if( p_dio_mmap->dvrpid > 0 ) {
+                        kill(p_dio_mmap->dvrpid, SIGTERM);
+                    }
+                    if( p_dio_mmap->glogpid > 0 ) {
+                        kill(p_dio_mmap->glogpid, SIGTERM);
+                    }
+                    // let MCU watchdog kick in to reboot the system
+                    watchdogtimeout=10 ;                    // 10 seconds watchdog time out
+                    mcu_watchdogenable() ;
+                    usewatchdog=0 ;                         // don't call watchdogenable again!
+                    watchdogenabled=0 ;                     // don't kick watchdog ;
+                    reboot_begin=1 ;                        // rebooting in process
+                    modeendtime=runtime+20000 ;             // 20 seconds time out, watchdog should kick in already!
+                }
+                else if( runtime>modeendtime ) { 
+                    // program should not go throught here,
+                    mcu_reboot ();
+                    system("/bin/reboot");                  // do software reboot
+                    app_mode=APPMODE_QUIT ;                 // quit IOPROCESS
+                }
+            }
+            else if( app_mode==APPMODE_REINITAPP ) {
+                dvr_log("IO re-initialize.");
+                appfinish();
+                appinit();
+                app_mode = APPMODE_RUN ;
+            }
+            else {
+                // no good, enter undefined mode 
+                dvr_log("Error! Enter undefined mode %d.", app_mode );
+                app_mode = APPMODE_RUN ;              // we retry from mode 1
+            }
+
+            // updating watch dog state
+            if( usewatchdog && watchdogenabled==0 ) {
+                mcu_watchdogenable();
+            }
+
+            // kick watchdog
+            if( watchdogenabled )
+                mcu_watchdogkick () ;
+
+            // DVRSVR watchdog running?
+            if( p_dio_mmap->dvrpid>0 && 
+               p_dio_mmap->dvrwatchdog >= 0 )
+            {      	
+                ++(p_dio_mmap->dvrwatchdog) ;
+                if( p_dio_mmap->dvrwatchdog == 50 ) {	// DVRSVR dead for 2.5 min?
+                    if( kill( p_dio_mmap->dvrpid, SIGUSR2 )!=0 ) {
+                        // dvrsvr may be dead already, pid not exist.
+                        p_dio_mmap->dvrwatchdog = 110 ;
+                    }
+                    else {
+                        dvr_log( "Dvr watchdog failed, try restart DVR!!!");
+                    }
+                }
+                else if( p_dio_mmap->dvrwatchdog > 110 ) {	
+                    buzzer( 10, 250, 250 );
+                    dvr_log( "Dvr watchdog failed, system reboot.");
+                    app_mode=APPMODE_REBOOT ;
+                    p_dio_mmap->dvrwatchdog=1 ;
+                }
+                
+                static int nodatawatchdog = 0;
+                if( (p_dio_mmap->dvrstatus & DVR_RUN) && 
+                   (p_dio_mmap->dvrstatus & DVR_NODATA ) &&     // some camera not data in
+                   app_mode==1 )
+                {
+                    if( ++nodatawatchdog > 20 ) {   // 1 minute
+                        buzzer( 10, 250, 250 );
+                        // let system reset by watchdog
+                        dvr_log( "One or more camera not working, system reset.");
+                        app_mode=APPMODE_REBOOT ;
+                    }
+                }
+                else 
+                {
+                    nodatawatchdog = 0 ;
+                }
+            }
+        }
+
+        static unsigned int hd_timer ;
+        if( (runtime - hd_timer)> 500 ) {    // 0.5 seconds to check hard drive
+            hd_timer=runtime ;
+            
+            // check HD plug-in state
+            if( hdlock && hdkeybounce<10 ) {          // HD lock on
+                if( hdpower==0 ) {
+                    // turn on HD power
+                    mcu_hdpoweron() ;
+                }
+                hdkeybounce = 0 ;
+               
+                if( hdinserted &&                      // hard drive inserted
+                    p_dio_mmap->dvrpid > 0 &&
+                    p_dio_mmap->dvrwatchdog >= 0 &&
+                    (p_dio_mmap->dvrstatus & DVR_RUN) &&
+                    (p_dio_mmap->dvrstatus & DVR_DISKREADY )==0 )        // dvrsvr is running but no disk detected
+                {
+                    p_dio_mmap->outputmap ^= HDLED ;
+                    
+                    if( ++hdpower>100 )                // 50 seconds
+                    {
+                        dvr_log("Hard drive failed, system reset!");
+                        buzzer( 10, 250, 250 );
+
+                        // turn off HD led
+                        p_dio_mmap->outputmap &= ~HDLED ;
+                        mcu_hdpoweroff();                   // FOR NEW MCU, THIS WOULD TURN OFF SYSTEM POWER?!
+                        hdpower=0;
+                    }
+                }
+                else {
+                    // turn on HD led
+                    if( app_mode < APPMODE_NORECORD ) {
+                        if( hdinserted ) {
+                            p_dio_mmap->outputmap |= HDLED ;
+                        }
+                        else {
+                            p_dio_mmap->outputmap &= ~HDLED ;
+                        }
+                    }
+                    hdpower=1 ;
+                }
+            }
+            else {                  // HD lock off
+                static pid_t hd_dvrpid_save ;
+                p_dio_mmap->outputmap ^= HDLED ;                    // flash led
+                if( hdkeybounce<10 ) {                          // wait for key lock stable
+                    hdkeybounce++ ;
+                    hd_dvrpid_save=0 ;
+                }
+                else if( hdkeybounce==10 ){
+                    hdkeybounce++ ;
+                    // suspend DVRSVR process
+                    if( p_dio_mmap->dvrpid>0 ) {
+                        hd_dvrpid_save=p_dio_mmap->dvrpid ;
+                        kill(hd_dvrpid_save, SIGUSR1);         // request dvrsvr to turn down
+                        // turn on HD LED
+                        p_dio_mmap->outputmap |= HDLED ;
+                    }
+                }
+                else if( hdkeybounce==11 ) {
+                    if( p_dio_mmap->dvrpid <= 0 )  {
+                        hdkeybounce++ ;
+                        sync();
+                        // umount disks
+                        system("/davinci/dvr/umountdisks") ;
+                    }
+                }
+                else if( hdkeybounce==12 ) {
+                    // do turn off hd power
+                    sync();
+                    mcu_hdpoweroff();       // FOR NEW MCU, THIS WOULD TURN OFF SYSTEM POWER?!
+                    hdkeybounce++;
+                }
+                else if( hdkeybounce<20 ) {
+                    hdkeybounce++;
+                }
+                else if( hdkeybounce==20 ) {
+                    hdkeybounce++;
+                    if( hd_dvrpid_save > 0 ) {
+                        kill(hd_dvrpid_save, SIGUSR2);              // resume dvrsvr
+                        hd_dvrpid_save=0 ;
+                    }
+                    // turn off HD LED
+                    p_dio_mmap->outputmap &= ~ HDLED ;
+
+                    // if the board survive (force on cable), we have a new IP address
+                    system("ifconfig eth0:247 2.4.7.247") ;
+                    
+                }
+                else {
+                    if( hdlock ) {
+                        hdkeybounce=0 ;
+                    }
+                }
+            }               // End HD key off
+        }
+
+        static unsigned int panel_timer ;
+        if( (runtime - panel_timer)> 2000 ) {    // 2 seconds to update pannel
+            panel_timer=runtime ;
+            unsigned int panled = p_dio_mmap->panel_led ;
+            if( p_dio_mmap->dvrpid> 0 && (p_dio_mmap->dvrstatus & DVR_RUN) ) {
+                static int videolostbell=0 ;
+                if( (p_dio_mmap->dvrstatus & DVR_VIDEOLOST)!=0 ) {
+                    panled|=4 ;
+                    if( videolostbell==0 ) {
+                        buzzer( 5, 500, 500 );
+                        videolostbell=1;
+                    }
+                }
+                else {
+                    videolostbell=0 ;
+                }
+            }
+            
+            if( p_dio_mmap->dvrpid>0 && (p_dio_mmap->dvrstatus & DVR_NODATA)!=0 && app_mode==APPMODE_RUN ) {
+                panled|=2 ;     // error led
+            }
+            
+            // update panel LEDs
+            if( panelled != panled ) {
+                for( i=0; i<PANELLEDNUM; i++ ) {
+                    if( (panelled ^ panled) & (1<<i) ) {
+                        mcu_led(i, panled & (1<<i) );
+                    }
+                }
+                panelled = panled ;
+            }
+            
+            // update device power
+            if( devicepower != p_dio_mmap->devicepower ) {
+                for( i=0; i<DEVICEPOWERNUM; i++ ) {
+                    if( (devicepower ^ p_dio_mmap->devicepower) & (1<<i) ) {
+                        mcu_devicepower(i, p_dio_mmap->devicepower & (1<<i) );
+                    }
+                }
+                devicepower = p_dio_mmap->devicepower ;
+                
+                // reset network interface, some how network interface dead after device power changes
+                setnetwork();
+            }
+
+#ifdef PWIIMCU_SUPPORT
+            // update C1/C2 LED
+            mcu_pwii_setc1c2();
+#endif            
+            
+        }
+        
+        // adjust system time with RTC
+        static unsigned int adjtime_timer ;
+        if( gpsvalid != p_dio_mmap->gps_valid ) {
+            gpsvalid = p_dio_mmap->gps_valid ;
+            if( gpsvalid ) {
+                time_syncgps () ;
+                adjtime_timer=runtime ;
+                gpsavailable = 1 ;
+            }
+        }
+        if( (runtime - adjtime_timer)> 600000 ||
+            (runtime < adjtime_timer) )
+        {    // call adjust time every 10 minute
+            if( g_syncrtc ) {
+                if( gpsavailable ) {
+                    if( gpsvalid ) {
+                        time_syncgps();
+                        adjtime_timer=runtime ;
+                    }
+                }
+                else {
+                    time_syncmcu();
+                    adjtime_timer=runtime ;
+                }
+            }
+        }
+    }
+    
+    if( watchdogenabled ) {
+        mcu_watchdogdisable();
+    }
+    
+    appfinish();
+    
+    printf( "DVR IO process ended!\n");
+    return 0;
+}
+
