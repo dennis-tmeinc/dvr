@@ -1,0 +1,10 @@
+<form enctype="multipart/form-data" method="post" action="tvsid.html">
+<tr>
+<td class="col1" rowspan="2">Update Manufacturer ID File:</td>
+<td><input name="mfid_file" type="file" /></td>
+</tr>
+<tr>
+<td><input value="Update" type="submit" /></td>
+</tr>
+</form>
+

@@ -257,7 +257,7 @@ void dvr_logkey( int op, struct key_data * key )
         }
         memcpy( TVSchecksum, key->checksum, sizeof( TVSchecksum ) );
         g_keyactive =  1 ;
-		strcpy( g_usbid, key->usbid );
+		memcpy( g_usbid, key->usbid );
         fprintf(flog, "\n%s:TVS connected, USB key ID: %s\n%s", 
                 lbuf, key->usbid, ((char *)&(key->size))+key->keyinfo_start );
         l = ftell(flog) ;

@@ -1,0 +1,21 @@
+
+[Anjuta]
+Geometry=1221x816+315+131
+
+[File Loader]
+Files=file:///home/dennis/proj/eagle32/pwii/dvr/deploy/TVS21/host/dvr/www/tools.html#56%%%file:///home/dennis/proj/eagle32/pwii/dvr/dvrsvr/main.cpp#260%%%file:///home/dennis/proj/eagle32/pwii/dvr/deploy/TVS21/host/dvr/www/apply.html#15%%%file:///home/dennis/proj/eagle32/pwii/dvr/httpd/eagle_setup/eagle_setup.cpp#389%%%file:///home/dennis/proj/eagle32/hik_toolchain/arm-linux/include/string.h#40
+
+[Document Manager]
+bookmarks=<?xml version="1.0" encoding="UTF-8"?>\n<bookmarks/>\n
+
+[Execution]
+Run in terminal=2
+Working directories=file:///home/dennis/proj/eagle32/pwii/dvr
+
+[Build]
+Configuration list=1:Default:%%%1:Debug:Debug%%%1:Profiling:Profiling%%%1:Optimized:Optimized
+Selected Configuration=Default
+BuildArgs/Default=--enable-maintainer-mode
+BuildArgs/Debug=--enable-maintainer-mode 'CFLAGS=-g -O0' 'CXXFLAGS=-g -O0' 'JFLAGS=-g -O0' 'FFLAGS=-g -O0'
+BuildArgs/Profiling=--enable-maintainer-mode 'CFLAGS=-g -pg' 'CXXFLAGS=-g -pg' 'JFLAGS=-g -pg' 'FFLAGS=-g -pg'
+BuildArgs/Optimized=--enable-maintainer-mode 'CFLAGS=-O2' 'CXXFLAGS=-O2' 'JFLAGS=-O2' 'FFLAGS=-O2'
