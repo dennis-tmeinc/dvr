@@ -31,4 +31,4 @@ dtime : $(SOURCES) $(EXTSOURCES) $(EXTHEADERS)
 
 clean :
 	rm -f *.o
-	rm -f dvrtime
+	rm -f dvrtime dtime

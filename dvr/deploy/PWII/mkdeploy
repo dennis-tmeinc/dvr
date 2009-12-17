@@ -11,9 +11,13 @@ DEPROOT=$PWD
 
 APPROOT=${DEPROOT}/../..
 
-DATENTIME=`date +%y.%m%d.%H`
+if [ -f ${APPROOT}/release ] ; then
+RELEASE=`cat ${APPROOT}/release`
+else
+RELEASE=`date +%y.%m%d.%H`
+fi
 
-OUTPUTDIR=${DEPROOT}/${DATENTIME}
+OUTPUTDIR=${DEPROOT}/${RELEASE}
 
 appid=""
 special=""
@@ -31,9 +35,12 @@ if [ ${appid} = "clean" ]; then
 
 # clean host firmware filesa
     cd ${DEPROOT}/host/dvr
-    rm -f httpd.sfx
+    rm -f httpd.sfx firmwareid
     rm -f dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer libfbdraw.so tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
     rm -f ../sfxrun  
+    
+    cd ${DEPROOT}/host/ID
+    rm -f BOARDNUM APPID BOARDID
 
     exit 0
 fi
@@ -49,13 +56,13 @@ fi
 
 mkdir ${OUTPUTDIR}
 
-slvfirmwareid=TVS21.1.0.${DATENTIME}
+slvfirmwareid=TVS21.1.0.${RELEASE}
 
 if [ ${special} = "cycle" ]; then
-  firmwareid=${appid}.1.cycle.${DATENTIME}
+  firmwareid=${appid}.1.cycle.${RELEASE}
   echo "Firmware ID: " $firmwareid
 else
-  firmwareid=${appid}.1.0.${DATENTIME}
+  firmwareid=${appid}.1.0.${RELEASE}
   echo "Firmware ID: " $firmwareid
 fi
 

@@ -8,7 +8,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <fcntl.h>
-#include "eagle32/davinci_sdk.h"
+#include "../dvrsvr/eagle32/davinci_sdk.h"
 
 #define BAUDTABLESIZE (23)
 
