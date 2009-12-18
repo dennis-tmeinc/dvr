@@ -80,7 +80,6 @@ class rec_channel {
 
         int m_recording ;
         
-        int m_active ;
         int m_activetime ;
 
         //	rec_index m_index ;			// on/off index
@@ -246,6 +245,7 @@ void rec_channel::start()
     else {
         m_recstate = REC_STOP ;
     }
+	m_recording = 0 ;
 }
 
 // stop recording, frame data discarded
@@ -653,21 +653,13 @@ int rec_channel::dorecord()
     
     fifo = getfifo();
     if (fifo == NULL)	{	// no fifos pending
-        if( m_file.isopen() ) {
-            if( m_active ) {
-                m_active=0 ;
-                m_activetime=g_timetick;
-            }
-            else {
-                if( (g_timetick-m_activetime)>5000 ) {  // inactive for 5 seconds
-                    closefile();
-                    m_recording = 0 ;
-                }
-            }
-        }
-        return 0;
+		if( m_recording && (g_timetick-m_activetime)>5000 ) {  // inactive for 5 seconds
+			closefile();
+			m_recording = 0 ;
+		}
+		return 0;
     }
-    m_active=1 ;
+	m_activetime=g_timetick;
     
     if( fifo->key ) {
         m_fileendtime=fifo->time ;
@@ -716,7 +708,7 @@ int rec_channel::dorecord()
 
 void *rec_thread(void *param)
 {
-    int ch;
+	int ch;
     int i ;
     int wframes ;
     int norec=0 ;
@@ -744,7 +736,7 @@ void *rec_thread(void *param)
         }
         if( wframes==0 ) {
             usleep(100000);
-            if( ++norec > 50 ) {
+			if( ++norec > 50 ) {
                 for (ch = 0; ch < rec_channels; ch++) {
                     recchannel[ch]->closefile();
                 }
@@ -755,8 +747,8 @@ void *rec_thread(void *param)
             }
         }
         else {
-            norec=0 ;
-        }
+			norec=0 ;
+		}
     }        
     for (ch = 0; ch < rec_channels; ch++) {
         recchannel[ch]->closefile();

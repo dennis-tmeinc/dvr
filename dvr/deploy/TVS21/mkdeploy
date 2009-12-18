@@ -101,6 +101,10 @@ ${DEPROOT}/mksfx ${DEPROOT}/sfx wwwlist ../httpd.sfx
 
 chmod a+x ../httpd.sfx
 
+if [ ! -d ${DEPROOT}/host/ID ] ; then
+  mkdir ${DEPROOT}/host/ID
+fi
+
 cd ${DEPROOT}/host/ID
 echo 1 > BOARDNUM
 echo ${appid} > APPID

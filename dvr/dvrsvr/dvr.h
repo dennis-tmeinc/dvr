@@ -1207,7 +1207,8 @@ enum e_keycode {
 
     // pwii definition
     VK_EM   = 0xE0 ,  // EVEMT
-    VK_LP             // LP
+    VK_LP,             // LP
+	VK_SILENCE
 } ;
 
 // digital io functions

@@ -43,7 +43,7 @@ int window::timertick ;
 // to support video out liveview on ip camera
 int screen_liveview_channel ;
 int screen_liveview_handle ;
-
+static int screen_audio ;
 static int screen_play_jumptime ;
 static int screen_play_cliptime ;
 static int screen_play_maxjumptime ;
@@ -255,7 +255,7 @@ class video_screen : public window {
             if( m_playchannel < eagle32_channels ) {
                 SetPreviewScreen(MAIN_OUTPUT,m_playchannel+1,1);
                 if( m_select ) {
-                    SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,1);
+                    SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_audio);
                 }
                 else {
                     SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,0);
@@ -539,7 +539,7 @@ class video_screen : public window {
             if( m_playchannel < eagle32_channels ) {
                 cap_stop();       // stop live codec, so decoder has full DSP power
                 res = SetDecodeScreen(MAIN_OUTPUT, m_playchannel+1, 1);
-                res = SetDecodeAudio(MAIN_OUTPUT, m_playchannel+1, 1);
+				res = SetDecodeAudio(MAIN_OUTPUT, m_playchannel+1, screen_audio);
 
                 m_decode_runmode = DECODE_MODE_PLAY ;
                 pthread_create(&m_decodethreadid, NULL, s_playback_thread, (void *)(this));
@@ -718,6 +718,15 @@ class video_screen : public window {
                 else if( keycode == VK_EM ) { //  event marker key
                     m_icon->seticon( "tm.pic" );
                 }
+				else if( keycode == VK_SILENCE ) { //  switch audio on <--> off 
+					screen_audio = !screen_audio ;
+					if( m_videomode == VIDEO_MODE_LIVE ) { // live mode
+						SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_audio);
+					}
+					else {
+						SetDecodeAudio(MAIN_OUTPUT, m_playchannel+1, screen_audio);
+					}
+				}
             }
             else {
 /*
@@ -1114,6 +1123,8 @@ void screen_init()
         ScreenStandard = STANDARD_NTSC ;
     }
 
+	screen_audio = 1;		// enable audio by default
+	
     screen_play_jumptime = dvrconfig.getvalueint("VideoOut", "jumptime" );
     if( screen_play_jumptime < 5 ) screen_play_jumptime=5 ;
 

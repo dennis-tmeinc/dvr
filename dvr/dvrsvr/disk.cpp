@@ -662,15 +662,27 @@ int disk_testwritable( char * dir )
     FILE * ftest = fopen( testfilename, "w" );
     if( ftest!=NULL ) {
         fwrite( &t1, 1, sizeof(t1), ftest );
-        fclose( ftest ) ;
+        if( fclose( ftest )!= 0 ) {
+			return 0 ;
+		}
     }
-    sync();
+	else {
+		return 0 ;
+	}
+
     ftest = fopen( testfilename, "r" );
     if( ftest!=NULL ) {
         fread( &t2, 1, sizeof(t2), ftest );
-        fclose( ftest );
+		if( fclose( ftest )!= 0 ) {
+			return 0 ;
+		}
     }
-    unlink( testfilename );
+	else {
+		return 0 ;
+	}
+	if( unlink( testfilename )!=0 ) {
+		return 0 ;
+	}
     return t1==t2 ;
 }
 

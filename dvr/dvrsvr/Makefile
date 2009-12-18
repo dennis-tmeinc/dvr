@@ -41,7 +41,7 @@ OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
 LDFLAGS= -lpthread -lstdc++ -L./eagle32 -lsdk -ldadsp  ./eagle32/dsplink.lib libfbdraw.so -Wl,-rpath,.
 
-all : dvrsvr eagleinit
+all : dvrsvr
 
 # dvrsvr : $(OBJS) $(LIBRARY)
 dvrsvr : $(OBJS)

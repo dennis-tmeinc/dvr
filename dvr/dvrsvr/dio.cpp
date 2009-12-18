@@ -239,18 +239,21 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
             pwiikey ^= 0x800 ;
             return 1 ;
         }
+        if( xkey & 0x1000 ) {        // bit 12: blackout
+            // dark out Now Means silence out
+			* keycode = (int) VK_SILENCE ;
+            * keydown = ((pwiikey&0x1000)==0 );
+			pwiikey ^= 0x1000 ;
+			return 1 ;
+        }
 
         if( xkey & 0x100 ) {        // bit 8: front camera rec
-            p_dio_mmap->pwii_buttons &= ~0x100 ;
+            p_dio_mmap->pwii_buttons &= ~0x100 ;		// auto clear
             rec_pwii_toggle_rec_front() ;
         }
         if( xkey & 0x200 ) {        // bit 9: back camera rec
-            p_dio_mmap->pwii_buttons &= ~0x200 ;
+            p_dio_mmap->pwii_buttons &= ~0x200 ;		// auto clear
             rec_pwii_toggle_rec_rear() ;
-        }
-        if( xkey & 0x1000 ) {        // bit 12: blackout
-            p_dio_mmap->pwii_buttons &= ~0x1000 ;            
-            ;   // do nothing for now?
         }
 
         pwiikey = p_dio_mmap->pwii_buttons ;            // save key pad status

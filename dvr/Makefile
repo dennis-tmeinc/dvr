@@ -79,14 +79,13 @@ firmware_cycle:
 	cd deploy/MDVR5100 ; ./mkdeploy MDVR5108 4 cycle
 
 
-release:
+rel:
 	date +%y.%m%d.%H > release
 
 tvs:
 	cp cfg.h.tvs cfg.h
 	make applications 
 	cd deploy/TVS21 ; ./mkdeploy TVS21 1 
-
 
 pwii:
 	cp cfg.h.pwii cfg.h
