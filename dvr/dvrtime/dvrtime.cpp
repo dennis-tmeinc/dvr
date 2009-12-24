@@ -900,23 +900,20 @@ int htptoutc(char * server)
     struct timeval tv ;
     struct timeval rem ;
     time_t thtp ;
-    int diffs, diffus ;
+    int diffs ;
     if( htp_gettime(server, &t) ) {
         thtp = timegm(&t);
         gettimeofday(&tv, NULL);
         diffs = (int)thtp - (int)tv.tv_sec ;
-        if( diffs>1 || diffs<-2 ) {
+        if( diffs>2 || diffs<-2 ) {
             tv.tv_sec = thtp ;
-            tv.tv_usec = 500000 ;
+            tv.tv_usec = 0 ;
             settimeofday( &tv, NULL );
         }
         else {
-            diffus = 500000 - (int)tv.tv_usec + diffs*1000000 ;
-            if( diffus>500000 || diffus<-500000 ) {
-                tv.tv_sec = diffus/1000000 ;
-                tv.tv_usec = diffus%1000000 ;
-                adjtime(&tv, &rem);	
-            }
+            tv.tv_sec = diffs ;
+            tv.tv_usec = 0 ;
+            adjtime(&tv, &rem);	
         }
         return 1 ;
     }

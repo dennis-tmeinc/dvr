@@ -276,6 +276,9 @@ class dvrfile {
     int isencrypt() {
         return m_fileencrypt ;
     }
+    int isframeencrypt() {
+        return (m_fileencrypt && (!m_autodecrypt) );
+    }
     void autodecrypt(int decrypt) {
         m_autodecrypt=decrypt ;
     }
@@ -740,7 +743,7 @@ class playback {
     public:
         playback( int channel, int decrypt=0 ) ;
         ~playback();
-        void seek( struct dvrtime * seekto );
+        int seek( struct dvrtime * seekto );
         void getstreamdata(void ** getbuf, int * getsize, int * frametype);
         void preread();
         int getstreamtime(dvrtime * dvrt) {

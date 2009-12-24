@@ -37,7 +37,7 @@ int playback::close()
     return 0;
 }
 
-void playback::seek( struct dvrtime * seekto )
+int playback::seek( struct dvrtime * seekto )
 {
     int bcdseekday ;
     m_streamtime=*seekto ;
@@ -51,7 +51,7 @@ void playback::seek( struct dvrtime * seekto )
  
     if( m_file.isopen() && m_file.seek( seekto ) ) {	// within current opened file?
         preread();
-        return ;
+        goto seek_end ;
     }
     close();
     
@@ -78,7 +78,7 @@ void playback::seek( struct dvrtime * seekto )
                 }
                 m_file.seek(seekto);	// don't need to care if its success
                 preread();
-                return ;				// done!
+                goto seek_end ;				// done!
             }
         }
     }
@@ -86,6 +86,14 @@ void playback::seek( struct dvrtime * seekto )
     // seek beyond the day
     opennextfile();
     preread();
+
+seek_end:
+    if( m_file.isopen() && m_file.isframeencrypt() ) {
+        return 1 ;
+    }
+    else {
+        return 0 ;
+    }    
 } 
 
 // open next file on list, return 0 on no more file

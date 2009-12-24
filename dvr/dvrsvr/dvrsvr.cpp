@@ -1087,9 +1087,8 @@ void dvrsvr::ReqStreamSeek()
     {
         ans.anscode = ANSOK;
         ans.anssize = 0;
-        ans.data = 0;
+        ans.data = m_playback->seek((struct dvrtime *) m_recvbuf);
         Send( &ans, sizeof(ans));
-        m_playback->seek((struct dvrtime *) m_recvbuf);
         
 #ifdef NETDBG
         printf("Stream seek, %04d-%02d-%02d %02d:%02d:%02d\n", 

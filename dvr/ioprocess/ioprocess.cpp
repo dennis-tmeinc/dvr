@@ -986,42 +986,25 @@ int mcu_pwii_version(char * version)
     return 0 ;
 }
 
-static int mcu_mic_st = 0 ;
-// turn on mic
-void mcu_mic_on()
-{
-    if( mcu_mic_st==0 ) {
-        mcu_cmd(0x21) ;
-        mcu_mic_st=1;
-    }
-}
-
-// turn off mic
-void mcu_mic_off()
-{
-    if( mcu_mic_st ) {
-        mcu_cmd(0x22);
-        mcu_mic_st=0 ;
-    }
-}
-
-// Set C1/C2 LED
+// Set C1/C2 LED and set external mic
 void mcu_pwii_setc1c2() 
 {
    // C1 LED (front)
-   if( p_dio_mmap->camera_status[pwii_front_ch] & 2 ) {         // front camera recording?
-       p_dio_mmap->pwii_output |= 1 ;
-       if( (p_dio_mmap->pwii_output & 4)==0 ) {             // mic is off, turn it on
-           mcu_mic_on ();
-       }
-   }
-    else {
-       p_dio_mmap->pwii_output &= (~1) ;
-       if( (p_dio_mmap->pwii_output & 4)!=0 ) {             // mic is on, turn it off
-           mcu_mic_off ();
-       }
+    if( p_dio_mmap->camera_status[pwii_front_ch] & 2 ) {         // front ca
+        if( (p_dio_mmap->pwii_output & 1) == 0 ) {
+            p_dio_mmap->pwii_output |= 1 ;
+            // turn on mic
+            mcu_cmd(0x21) ;
+        }
     }
-
+    else {
+        if( (p_dio_mmap->pwii_output & 1) != 0 ) {
+            p_dio_mmap->pwii_output &= (~1) ;
+            // turn off mic
+            mcu_cmd(0x22);
+        }
+    }
+    
    // C2 LED
    if( p_dio_mmap->camera_status[pwii_rear_ch] & 2 ) {         // rear camera recording?
        p_dio_mmap->pwii_output |= 2 ;
@@ -2956,6 +2939,9 @@ int main(int argc, char * argv[])
                 appinit();
                 app_mode = APPMODE_RUN ;
             }
+            else if( app_mode==APPMODE_QUIT ) {
+                break ;
+            }
             else {
                 // no good, enter undefined mode 
                 dvr_log("Error! Enter undefined mode %d.", app_mode );
@@ -2995,7 +2981,7 @@ int main(int argc, char * argv[])
                 static int nodatawatchdog = 0;
                 if( (p_dio_mmap->dvrstatus & DVR_RUN) && 
                    (p_dio_mmap->dvrstatus & DVR_NODATA ) &&     // some camera not data in
-                   app_mode==1 )
+                   app_mode==APPMODE_RUN )
                 {
                     if( ++nodatawatchdog > 20 ) {   // 1 minute
                         buzzer( 10, 250, 250 );
