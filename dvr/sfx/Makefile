@@ -7,31 +7,28 @@ include ../arm_tool
 CC=$(CROSS_COMPILE_PREFIX)gcc
 STRIP=$(CROSS_COMPILE_PREFIX)strip
 
-SOURCES=sfx.c lzmadec.c ../lzmasdk/LzmaDec.c
-
 HEADERS=
 
 OBJS = $(patsubst %.c, %.o, $(SOURCES))
 
-#LDFLAGS= -lstdc++ -L./eagle32 -lsdk -ldadsp ./eagle32/dsplink.lib
 LDFLAGS= 
-CCFLAGS=
+CCFLAGS=-Os
 
-all: sfx mksfx sfx86 extractsfx
+all: sfx mksfx extractsfx
 
-sfx : $(SOURCES)
-	$(CC) $(CCFLAGS) -o $@ $(SOURCES) $(LDFLAGS)
+sfx : sfx.c lzmasfx.c lzmadec.c ../lzmasdk/LzmaDec.c
+	$(CC) $(CCFLAGS) -o $@ sfx.c lzmasfx.c lzmadec.c ../lzmasdk/LzmaDec.c $(LDFLAGS)
 	$(STRIP) sfx
 
-sfx86 : $(SOURCES)
-	gcc -o $@ $(SOURCES) $(LDFLAGS)
+sfx86 : sfx.c lzmadec.c lzmasfx.c ../lzmasdk/LzmaDec.c 
+	gcc -o $@ sfx.c lzmadec.c lzmasfx.c ../lzmasdk/LzmaDec.c
 	strip sfx86
 
-mksfx : mksfx.c
-	gcc -o mksfx mksfx.c lzmaenc.c ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c
+mksfx : mksfx.c lzmaenc.c ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c
+	gcc -o $@ mksfx.c lzmaenc.c ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c
 
-extractsfx : extractsfx.c
-	gcc -o extractsfx extractsfx.c lzmadec.c ../lzmasdk/LzmaDec.c
+extractsfx : extractsfx.c lzmasfx.c lzmadec.c ../lzmasdk/LzmaDec.c
+	gcc -o $@ -g extractsfx.c lzmasfx.c lzmadec.c ../lzmasdk/LzmaDec.c
 
 clean :
 	rm -f mksfx

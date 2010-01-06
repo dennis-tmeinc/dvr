@@ -9,17 +9,18 @@
 #define uint unsigned int
 #endif
 
-const uint extract_tag = 0xed3abd05 ;
+#define MAXCHUNKSIZE    (8000000)
+#define MINCHUNKSIZE    (1000000)
 
-#define MAX_FILENAME	(1024)
+#define CHUNK_FLAT ('F')
+#define CHUNK_LZMA ('Z')
+#define CHUNK_SFX  ('S')
+#define CHUNK_END  (CHUNK_SFX)
 
-struct file_head {
-    uint tag ;
-    uint filesize ;
-    uint filemode ;
-    uint namesize ;
-    uint compsize ;
-} ;
+#define FILEMODE_REG    (1)
+#define FILEMODE_EXEC   (2)
+#define FILEMODE_DIR    (4)
+#define FILEMODE_SYMLINK    (8)
 
 char * sfxfile ="sfx" ;
 char * sfxlistfile = "sfxlist";
@@ -28,17 +29,21 @@ char * cmptmpfile = "/tmp/sfxtmpfile_eagle" ;
 
 int main(int argc, char * argv[])
 {
+    FILE * fsfx ;
+    FILE * fout ;
+    FILE * flist ;
     int executesize ;
-    FILE * selfext ;
-    FILE * listfile ;
-//    FILE * compressedfile ;
-    struct file_head fhd ;
+    char * chunk_buf ;
+    char   chunk_tag ;
+    int    chunk_size ;
+    
     struct stat filestat ;
+    int fsize ;
     char * buf ;
     int bufsize ;
-    char line[MAX_FILENAME] ;
-    char ifilename[MAX_FILENAME] ;
-    char ofilename[MAX_FILENAME] ;
+    char line[256] ;
+    char ifilename[256] ;
+    char ofilename[256] ;
     int  r ;
     
     if( argc>1 ) {
@@ -61,148 +66,175 @@ int main(int argc, char * argv[])
     if( argc>=4 ) {
         outfile = argv[3] ;
     }
-    
-    buf = NULL ;
-    bufsize=0 ;
-    selfext = fopen( sfxfile, "r" );
-    executesize = 0 ;
-    if( selfext ) {
-        fseek( selfext, 0, SEEK_END );
-        executesize = ftell( selfext );
-        fseek( selfext, 0, SEEK_SET );
-        
-        if( executesize>0 ) {
-            buf = malloc( executesize );
-            bufsize = fread( buf, 1, executesize, selfext ) ;
-            if( bufsize!=executesize ) {
-                printf("Error: sfx file read.");
-                free( buf );
-                fclose( selfext );
-                return 1;
-            }
-        }
-        fclose( selfext );
-    }
-    
-    selfext = fopen( outfile, "w" );
-    if( selfext == NULL ) {
+ 
+    fout = fopen( outfile, "w" );
+    if( fout == NULL ) {
         printf("Can't create output file!\n");
         return 2;
     }
-    
-    if( executesize>0 && buf ) {
-        fwrite( buf, 1, executesize, selfext );
-        free( buf );
+
+    executesize = 0 ;
+    fsfx = fopen( sfxfile, "r" );
+    if( fsfx ) {
+        fseek( fsfx, 0, SEEK_END );
+        executesize = ftell( fsfx );
+        fseek( fsfx, 0, SEEK_SET );
+        
+        if( executesize>0 && executesize<100000 ) {
+            buf = malloc( executesize );
+            bufsize = fread( buf, 1, executesize, fsfx ) ;
+            if( bufsize!=executesize ) {
+                printf("Error: read sfx file.");
+                fclose( fsfx );
+                fclose( fout );
+                free( buf );
+                return 1;
+            }
+            fwrite( buf, 1, executesize, fout );
+            free( buf );
+//            while(executesize & 3 ) {     // make executesize uint aligned
+//                fwrite("", 1, 1, fout);
+//                executesize++ ;
+//            }
+        }
+        else {
+            executesize=0 ;
+        }
+        fclose( fsfx );
     }
-    else {
-        printf("No sfx file.\n");
-        executesize=0;
+     
+    if( executesize == 0 ) {
+        printf("Compress with no sfx file.\n");
     }
     
-    listfile = fopen( sfxlistfile, "r" );
-    if( listfile == NULL ) {
+    flist = fopen( sfxlistfile, "r" );
+    if( flist == NULL ) {
         printf("Can't open sfxlist.\n");
         return 1;
     }
-    
-    while( fgets( line, sizeof(line), listfile ) ) {
-        r = sscanf(line, "%s %s", ifilename, ofilename ) ;
-        if( r < 1 ) {
-            continue ;
-        }
-        else if( r<2 ) {
-            strcpy( ofilename, ifilename );
-        }
-        
-        if( strcmp(ifilename, ".")==0 ) {		// current directory
-            continue ;
-        }
-        
-        if( stat( ifilename, &filestat ) != 0 ) {
-            printf("File error : %s\n", ifilename);
-            continue ;
-        }
-        
-        fhd.tag=extract_tag ;
-        fhd.filesize = (uint) filestat.st_size ;
-        fhd.filemode = (uint) filestat.st_mode ;
-        fhd.namesize = strlen( ofilename );
-        if(  S_ISDIR(filestat.st_mode) ) {
-            fhd.compsize=0 ;
-            fwrite( &fhd, 1, sizeof(fhd), selfext );
-            fwrite( ofilename, 1, fhd.namesize, selfext );
-            printf("dir  : %s\n", ofilename );
-        }
-        else if( S_ISREG(filestat.st_mode) ) {
-/*            
-            sprintf( line, "lzma -z -c -k -f %s > %s ", ifilename, cmptmpfile );
-            system(line);
-            compressedfile = fopen(cmptmpfile, "r" );
-            if( compressedfile ) {
-                fseek( compressedfile, 0, SEEK_END );
-                fhd.compsize = (uint) ftell( compressedfile );
-                if( fhd.compsize>=fhd.filesize || fhd.compsize<=0 ) {
-                    fclose( compressedfile );
-                    fhd.compsize = fhd.filesize ;
-                    compressedfile = fopen( ifilename, "r" );
-                }
-                
-                buf = (char *)malloc( fhd.compsize );
-                fseek( compressedfile, 0, SEEK_SET );
-                if( fread( buf, 1, fhd.compsize, compressedfile) == fhd.compsize ) {
-                    fwrite( &fhd, 1, sizeof(fhd), selfext );	// file header
-                    fwrite( ofilename, 1, fhd.namesize, selfext);	// file name
-                    fwrite( buf, 1, fhd.compsize, selfext );
-                    printf("file : %s\t\tsize: %d->%d\n", ofilename, fhd.filesize, fhd.compsize );
-                }
-                free(buf);
-                fclose( compressedfile );
-            }
-            unlink(cmptmpfile);
-*/
-            int lzmaenc( unsigned char * lzmabuf, int lzmasize, unsigned char * src, int srcsize );
 
-            FILE * srcfile ;
-            char * lzmabuf ;
-            int    lzmabufsize ;
-            srcfile = fopen( ifilename, "r" );
-            if( srcfile ) {
-                lzmabufsize = fhd.filesize+16 ;
-                buf = (unsigned char *)malloc( lzmabufsize );
-                fread( buf, 1, fhd.filesize, srcfile );
-                fclose( srcfile );
-                lzmabuf = (unsigned char *)malloc( lzmabufsize );
-                fhd.compsize = lzmaenc( lzmabuf, lzmabufsize, buf, fhd.filesize );
-                if( fhd.compsize >= fhd.filesize || fhd.compsize<=0 ) {
-                    // write original file data
-                    fhd.compsize = fhd.filesize ;
-                    fwrite( &fhd, 1, sizeof(fhd), selfext );	// file header
-                    fwrite( ofilename, 1, fhd.namesize, selfext);	// file name
-                    fwrite( buf, 1, fhd.compsize, selfext );
-                    printf("file : %s\t\tsize: %d->%d\n", ofilename, fhd.filesize, fhd.compsize );
+    chunk_buf = (char *)malloc( MAXCHUNKSIZE );
+    buf = (char *)malloc( MAXCHUNKSIZE );
+    if( chunk_buf==NULL || buf==NULL ) {
+        printf("No enough memory!\n");
+        if( chunk_buf ) free( chunk_buf );
+        if( buf ) free(buf);
+        return 1;
+    }
+    
+    while( 1 ) {
+        char * cp = chunk_buf ;
+        while( fgets( line, sizeof(line), flist ) ) {
+            r = sscanf(line, "%s %s", ifilename, ofilename ) ;
+            if( r < 1 ) {
+                continue ;
+            }
+            else if( r<2 ) {
+                if( ifilename[0] == '.' && ifilename[1] == '/' ) {
+                    strcpy( ofilename, &ifilename[2] );
                 }
                 else {
-                    // write compressed data
-                    fwrite( &fhd, 1, sizeof(fhd), selfext );	// file header
-                    fwrite( ofilename, 1, fhd.namesize, selfext);	// file name
-                    fwrite( lzmabuf, 1, fhd.compsize, selfext );
-                    printf("file : %s\t\tsize: %d->%d\n", ofilename, fhd.filesize, fhd.compsize );
+                    strcpy( ofilename, ifilename );
                 }
-                free( lzmabuf );
-                free( buf );
+            }
+
+            if( strcmp(ifilename, ".")==0 ) {		// current directory
+                continue ;
+            }
+
+            if( stat( ifilename, &filestat ) != 0 ) {
+                printf("File error : %s\n", ifilename);
+                continue ;
+            }
+
+            if(  S_ISDIR(filestat.st_mode) ) {
+                * cp++ = FILEMODE_DIR ;     // fmode DIR
+                strcpy(cp, ofilename) ;
+                cp+=strlen( cp )+1;
+                printf( "DIR : %s -> %s\n", ifilename, ofilename);
+            }
+            else if( S_ISREG(filestat.st_mode) ) {
+                if( filestat.st_mode & S_IXUSR ) {
+                    * cp++ = FILEMODE_REG|FILEMODE_EXEC ; 
+                }
+                else {
+                    * cp++ = FILEMODE_REG ;     
+
+                }
+                strcpy(cp, ofilename) ;
+                cp+=strlen( cp )+1;
+                fsfx = fopen( ifilename, "rb");
+                fsize=0 ;
+                if( fsfx ) {
+                    fsize = fread( cp+4, 1, filestat.st_size, fsfx );
+                    fclose( fsfx );
+                }
+                * cp++ = fsize & 0xff ;
+                * cp++ = (fsize>>8) & 0xff ;
+                * cp++ = (fsize>>16) & 0xff ;
+                * cp++ = (fsize>>24) & 0xff ;
+                cp+=fsize ;
+                printf( "FILE: %s -> %s size: %d\n", ifilename, ofilename, fsize);
+            }
+            else if( S_ISLNK(filestat.st_mode) ) {
+                * cp++ = FILEMODE_SYMLINK ;     
+                strcpy(cp, ofilename) ;
+                cp+=strlen( cp )+1;
+                fsize = readlink( ifilename, cp+4, 256 )+1;
+                * cp++ = fsize & 0xff ;
+                * cp++ = (fsize>>8) & 0xff ;
+                * cp++ = (fsize>>16) & 0xff ;
+                * cp++ = (fsize>>24) & 0xff ;
+                cp+=fsize ;
+                *(cp-1)=0 ;                                 // make it null terminated
+                printf( "LINK: %s -> %s (%s)\n", ifilename, ofilename, cp-fsize);
             }
             else {
-                printf( "Error open file : %s\n", ifilename );
-                fhd.compsize=0 ;
-                fhd.filesize=0 ;
-                fwrite( &fhd, 1, sizeof(fhd), selfext );
-                fwrite( ofilename, 1, fhd.namesize, selfext );
+                printf("Unsupported file :%s!\n", ifilename );
+            }
+
+            if( (cp-chunk_buf) > MINCHUNKSIZE ) {
+                break ;
             }
         }
+
+        if( cp!=chunk_buf ) {
+            fsize = (cp-chunk_buf) ;
+            chunk_size = lzmaenc( buf, MAXCHUNKSIZE, chunk_buf, fsize );
+            if( chunk_size <=0 || chunk_size >= fsize ) {
+                chunk_tag = CHUNK_FLAT ;
+                fwrite( &chunk_tag, 1, 1, fout);
+                fwrite( &fsize, 1, 4, fout);
+                fwrite( chunk_buf, 1, fsize , fout );
+                printf( "Flat : %d\n", fsize );
+            }
+            else {
+                chunk_tag = CHUNK_LZMA ;
+                fwrite( &chunk_tag, 1, 1, fout);
+                fwrite( &chunk_size, 1, 4, fout);
+                fwrite( buf, 1, chunk_size , fout );
+                printf( "Lzma : %d -> %d\n", fsize, chunk_size );
+            }
+        }
+        else {
+            break ;
+        }
     }
-    fprintf( selfext, "\n%16d\n", (int)executesize );
-    fclose( listfile );
-    fclose( selfext );
+
+    fclose( flist );
+
+    chunk_tag = CHUNK_END ;
+    chunk_size = executesize ;
+    fwrite( &chunk_tag, 1, 1, fout);
+    fwrite( &chunk_size, 1, 4, fout);
+
+    printf("SFX size: %d\n", (int)ftell( fout ));
+    
+    fclose( fout );
+    free( buf );
+    free( chunk_buf );
+
     printf("Done!\n");
+
     return 0;
 }

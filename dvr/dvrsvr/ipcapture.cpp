@@ -45,7 +45,7 @@ void ipeagle32_capture::streamthread()
     int  subframes ;                    // number of sub frames
     int i;
     int frametype ;
-    int timeout ;
+    int timeout=0 ;
     
     capframe.channel=m_channel ;
     m_streamfd=0 ;

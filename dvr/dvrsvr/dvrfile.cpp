@@ -685,8 +685,8 @@ int dvrfile::repair()
     struct hd_frame frame;
     int filepos, filelength;
     int framecount;
-    DWORD starttimestamp ;
-    DWORD endtimestamp ;
+    DWORD starttimestamp=0 ;
+    DWORD endtimestamp=0 ;
     char newfilename[512] ;
     char * rn ;
     char * tail ;
