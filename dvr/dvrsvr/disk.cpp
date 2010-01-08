@@ -24,6 +24,7 @@ struct disk_info {
 static array <disk_info> disk_disklist ;   // recording disk list
 static string disk_base;                // recording disk base dir
 static string disk_play;                // playback disk base dir. ("/var/dvr")
+static string disk_arch;                // archiving disk base dir, ("/var/dvr/arch")
 static string disk_curdiskfile;         // record current disk
 
 class dir_find {
@@ -237,6 +238,18 @@ int f264locklength(const char *filename)
         }
     }
     return 0 ;
+}
+
+// get channel number of .264 file
+int f264channel(const char *filename)
+{
+    int ch ;
+    if( sscanf( F264CHANNEL(filename), "%02d", &ch )==1 ) {
+        return ch;
+    }
+    else {
+        return -1 ;
+    }
 }
 
 // return free disk space in Megabytes
@@ -457,6 +470,30 @@ void disk_listday(array <f264name> & flist, struct dvrtime * day, int channel)
     flist.empty();
     disk_listday_help(disk_play.getstring(), flist, day->year * 10000 + day->month*100 + day->day, channel );
     flist.sort();
+    
+    // remove duplicated files
+    int i ;
+    struct dvrtime t1, t2 ;
+    int l1, l2 ;
+    int ch1, ch2 ;
+    f264time(  flist[0].getstring(), &t1 );
+    l1 = f264length(  flist[0].getstring() );
+    ch1 = f264channel( flist[0].getstring() );
+    for( i=1; i<flist.size();  ) {
+        f264time(  flist[i].getstring(), &t2 );
+        l2 = f264length(  flist[i].getstring() );
+        ch2 = f264channel( flist[i].getstring() );
+        if( t1==t2 && l1==l2 && ch1==ch2 ) {
+            flist.remove(i);
+        }
+        else {
+            t1 = t2 ;
+            l1 = l2 ;
+            ch1 = ch2 ;
+            i++ ;
+        }
+    }
+    flist.compact();
 }
 
 static void disk_getdaylist_help( char * dir, array <int> & daylist, int ch )
@@ -927,6 +964,39 @@ void disk_check()
         }
 }
 
+struct archive_param {
+    char source[256] ;
+    char dest[256] ;
+} ;
+
+void * disk_archive_thread(void * param)
+{
+    struct archive_param * p = (struct archive_param * )param ;
+
+    
+
+    
+    delete p ;
+    return NULL ;
+}
+
+
+int disk_archive( char * source, char * dest )
+{
+    pthread_t arch_thid ;
+    struct archive_param * p ;
+    p = new struct archive_param  ;
+    strncpy( p->source, source, 256 );
+    strncpy( p->dest, dest, 256 );
+    if( pthread_create(&arch_thid, NULL, disk_archive_thread, (void *)p)==0 ) {
+        pthread_detach(arch_thid) ;
+    }
+    else {
+        delete p ;
+    }
+    return 0 ;
+}
+
 /*
 void disk_logdir(char * logfilename)
 {
@@ -968,6 +1038,8 @@ void disk_init()
     if (disk_play.length() == 0) {
         disk_play = disk_base ;
     }
+    disk_arch = dvrconfig.getvalue("system", "archivedir");
+
     pcfg = dvrconfig.getvalue("system", "mindiskspace");
     l = pcfg.length();
     if (sscanf(pcfg.getstring(), "%d", &disk_minfreespace)) {

@@ -503,18 +503,14 @@ int print_cfgreport()
         printf("Shutdown delay timer : %s\n", value.getstring() );
     }
 
-    // EventMarker
-    ivalue = dvrconfig.getvalueint("eventmarker", "eventmarker" );
-    printf( "EventMarker : %s\n", sensornames[ivalue-1].getstring() ) ;
-    
    // pre_lock_time
-   value = dvrconfig.getvalue("eventmarker", "prelock");
+   value = dvrconfig.getvalue("system", "prelock");
    if( value.length()>0 ) {
        printf("Event marker pre-lock time : %s\n", value.getstring() );
    }
 
     // post_lock_time
-    value = dvrconfig.getvalue("eventmarker", "postlock");
+    value = dvrconfig.getvalue("system", "postlock");
     if( value.length()>0 ) {
         printf("Event marker post-lock time : %s\n", value.getstring() );
     }

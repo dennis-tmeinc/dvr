@@ -200,13 +200,13 @@ int main()
         }
         
         // pre_lock_time
-        value = dvrconfig.getvalue("eventmarker", "prelock");
+        value = dvrconfig.getvalue("system", "prelock");
         if( value.length()>0 ) {
             fprintf(fvalue, "\"pre_lock_time\":\"%s\",", value.getstring() );
         }
         
         // post_lock_time
-        value = dvrconfig.getvalue("eventmarker", "postlock");
+        value = dvrconfig.getvalue("system", "postlock");
         if( value.length()>0 ) {
             fprintf(fvalue, "\"post_lock_time\":\"%s\",", value.getstring() );
         }

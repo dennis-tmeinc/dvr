@@ -288,13 +288,13 @@ int main()
         // pre lock time
         v = getsetvalue ("pre_lock_time");
         if( v ) {
-            dvrconfig.setvalue( "eventmarker", "prelock", v );
+            dvrconfig.setvalue( "system", "prelock", v );
         }
         
         // post lock time
         v = getsetvalue ("post_lock_time");
         if( v ) {
-            dvrconfig.setvalue( "eventmarker", "postlock", v );
+            dvrconfig.setvalue( "system", "postlock", v );
         }
 
         v = getsetvalue( "norecplayback" );

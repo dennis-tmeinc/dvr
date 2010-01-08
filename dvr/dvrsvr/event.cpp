@@ -45,7 +45,7 @@ int sensor_t::check()
     v=dio_input(m_inputpin);
     if( m_inverted )
         v=!v ;
-    if( v ) {
+    if( v && m_eventmarker ) {
         event_marker = 1 ;      // set event_marker
     }
     if( v!=m_value ) {
