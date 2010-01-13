@@ -818,7 +818,7 @@ int main()
 {
     FILE * f ;
     char id[10] ;
-    f=fopen( "/var/dvr/tvsconnectid", "r" ) ;
+    f=fopen( "/var/dvr/connectid", "r" ) ;
     if( f==NULL ) {
         return 0;
     }

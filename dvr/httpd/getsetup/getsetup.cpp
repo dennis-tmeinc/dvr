@@ -56,7 +56,7 @@ int main()
        // write TVS mf id
     value = dvrconfig.getvalue("system", "tvsmfid" );
     if( value.length()>0 ) {
-        fvalue = fopen("tvs_manufacture_id", "w");
+        fvalue = fopen("manufacture_id", "w");
         if( fvalue ) {
             fprintf(fvalue, "%s", value.getstring() );
             fclose( fvalue );
@@ -76,11 +76,13 @@ int main()
         // JSON head
         fprintf(fvalue, "{" );
 
+#ifdef MDVR_APP
         // dvr_server_name 
-//        value = dvrconfig.getvalue("system","hostname");
-//        if( value.length()>0 ) {
-//            fprintf(fvalue, "\"dvr_server_name\":\"%s\",", value.getstring() );
-//        }
+        value = dvrconfig.getvalue("system","hostname");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"dvr_server_name\":\"%s\",", value.getstring() );
+        }
+#endif        
         
         // pwii
 #ifdef PWII_APP
@@ -101,6 +103,7 @@ int main()
 #endif
 
 #ifdef TVS_APP
+        value = dvrconfig.getvalue("system","tvs_licenseplate");
         if( value.length()>0 ) {
             fprintf(fvalue, "\"tvs_licenseplate\":\"%s\",", value.getstring() );
         }
@@ -491,28 +494,13 @@ int main()
             // speed_display
             value = dvrconfig.getvalue(section, "gpsunit");
             fprintf(fvalue, "\"speed_display\":\"%s\",", value.getstring() );
-    
+
+#ifdef PWII_APP                
             ivalue = dvrconfig.getvalueint(section, "showgpslocation");
             if( ivalue>0 ) {
                 fprintf(fvalue, "\"show_gps_coordinate\":\"on\"," );
             }  
-  
-            ivalue = dvrconfig.getvalueint(section, "show_medallion");
-            if( ivalue>0 ) {
-                fprintf(fvalue, "\"show_medallion\":\"on\"," );
-            }  
-            ivalue = dvrconfig.getvalueint(section, "show_licenseplate");
-            if( ivalue>0 ) {
-                fprintf(fvalue, "\"show_licenseplate\":\"on\"," );
-            }  
-            ivalue = dvrconfig.getvalueint(section, "show_ivcs");
-            if( ivalue>0 ) {
-                fprintf(fvalue, "\"show_ivcs\":\"on\"," );
-            }  
-            ivalue = dvrconfig.getvalueint(section, "show_cameraserial");
-            if( ivalue>0 ) {
-                fprintf(fvalue, "\"show_cameraserial\":\"on\"," );
-            }  
+#endif            
             
              // record_alarm_mode
             value = dvrconfig.getvalue( section, "recordalarmpattern" );

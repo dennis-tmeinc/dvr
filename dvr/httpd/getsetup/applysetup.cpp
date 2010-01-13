@@ -641,7 +641,8 @@ int main()
             if( v ) {
                 dvrconfig.setvalue(section,"gpsunit",v);
             }
-                
+
+#ifdef PWII_APP                
             // show_gps_coordinate
             v=getsetvalue( "show_gps_coordinate" );
             if( v ) {
@@ -650,44 +651,10 @@ int main()
             else {
                 dvrconfig.setvalueint(section,"showgpslocation",0);
             }
+#endif            
             
-            // show_medallion
-            v=getsetvalue( "show_medallion" );
-            if( v ) {
-                dvrconfig.setvalueint(section,"show_medallion",1);
-            }
-            else {
-                dvrconfig.setvalueint(section,"show_medallion",0);
-            }
-            
-            // show_licenseplate
-            v=getsetvalue( "show_licenseplate" );
-            if( v ) {
-                dvrconfig.setvalueint(section,"show_licenseplate",1);
-            }
-            else {
-                dvrconfig.setvalueint(section,"show_licenseplate",0);
-            }
-            
-            // show_ivcs
-            v=getsetvalue( "show_ivcs" );
-            if( v ) {
-                dvrconfig.setvalueint(section,"show_ivcs",1);
-            }
-            else {
-                dvrconfig.setvalueint(section,"show_ivcs",0);
-            }
-            
-            // show_cameraserial
-            v=getsetvalue( "show_cameraserial" );
-            if( v ) {
-                dvrconfig.setvalueint(section,"show_cameraserial",1);
-            }
-            else {
-                dvrconfig.setvalueint(section,"show_cameraserial",0);
-            }
-            
-             // record_alarm_mode
+
+            // record_alarm_mode
             v = getsetvalue( "record_alarm_mode" );
             if( v ) {
                 dvrconfig.setvalue( section, "recordalarmen", v);

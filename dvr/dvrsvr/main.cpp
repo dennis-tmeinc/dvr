@@ -195,21 +195,15 @@ int dvr_log(char *fmt, ...)
 }
 
 static string keylogfile ;
-int g_keyactive ;
 char g_usbid[32] ;
+static int keylogsettings ;
 
-void dvr_logkey( int op, struct key_data * key ) 
+static FILE * dvr_logkey_file()
 {
-    static char TVSchecksum[16] ;
     static char logfilename[512] ;
-    char lbuf[512];
-    FILE *flog=NULL;
-    time_t ti;
-    int l;
+    FILE * flog ;
 
-    if( op==0 && g_keyactive==0 ) return ;      // not connected yet,
-
-	flog = fopen(logfilename, "a");
+    flog = fopen(logfilename, "a");
     if ( flog==NULL ) {
         if (rec_basedir.length() > 0) {
             sprintf(logfilename, "%s/%s", rec_basedir.getstring(), keylogfile.getstring());
@@ -220,110 +214,139 @@ void dvr_logkey( int op, struct key_data * key )
         fclose( flog );
     }
 
-    flog = fopen(logfilename, "a");
+    return fopen(logfilename, "a");
 
-    if (flog) {
+}
 
-        // get time string
-        ti = time(NULL);
-        ctime_r(&ti, lbuf);
-        l = strlen(lbuf);
-        if (lbuf[l - 1] == '\n')
-            lbuf[l - 1] = '\0';
-
-        if( op==0 || key==NULL  ) {       // close connection
-            fprintf(flog, "%s:TVS connection closed.\n", lbuf );
-            fclose(flog);
-            memset( TVSchecksum, 0, sizeof( TVSchecksum ) );
-            g_keyactive = 0 ;
-            // unlink tvs connection id file
-            unlink("/var/dvr/connectid");
-//            unlink("/var/dvr/tvslogfile" );
-            return ;
-        }
-		else if( op==2 && g_keyactive ) {			// to log current setting
-			if( g_usbid[0] == 'I' && g_usbid[1] == 'N' ) {		// installer 
-			//			write down some settings changes
-				string v ;
-				config dvrconfig(dvrconfigfile);
+static void dvr_logkey_settings()
+{
+    FILE * flog = dvr_logkey_file() ;
+    if( flog==NULL ) {
+        return ;
+    }
+    if( g_usbid[0] == 'I' && g_usbid[1] == 'N' ) {		// log installer only 
+        //			write down some settings changes
+        string v ;
+        config dvrconfig(dvrconfigfile);
+        
 #ifdef TVS_APP
-				fprintf(flog, "\nTVS settings\n" );
-				fprintf(flog, "\tMedallion #: %s\n", dvrconfig.getvalue("system", "tvs_medallion").getstring() );
-				fprintf(flog, "\tController serial #: %s\n", dvrconfig.getvalue("system", "tvs_ivcs_serial").getstring() );
-				fprintf(flog, "\tLicense plate #: %s\n", dvrconfig.getvalue("system", "tvs_licenseplate").getstring() );
+        fprintf(flog, "\nTVS settings\n" );
+        fprintf(flog, "\tMedallion #: %s\n", dvrconfig.getvalue("system", "tvs_medallion").getstring() );
+        fprintf(flog, "\tController serial #: %s\n", dvrconfig.getvalue("system", "tvs_ivcs_serial").getstring() );
+        fprintf(flog, "\tLicense plate #: %s\n", dvrconfig.getvalue("system", "tvs_licenseplate").getstring() );
 #endif // TVS_APP
+
 #ifdef PWII_APP
-				fprintf(flog, "\nPWII settings\n" );
-				fprintf(flog, "\tVehicle ID: %s\n", dvrconfig.getvalue("system", "id1").getstring() );
-				fprintf(flog, "\tDistrict : %s\n", dvrconfig.getvalue("system", "id2").getstring() );
-				fprintf(flog, "\tUnit #: %s\n", dvrconfig.getvalue("system", "serial").getstring() );
+        fprintf(flog, "\nPWII settings\n" );
+        fprintf(flog, "\tVehicle ID: %s\n", dvrconfig.getvalue("system", "id1").getstring() );
+        fprintf(flog, "\tDistrict : %s\n", dvrconfig.getvalue("system", "id2").getstring() );
+        fprintf(flog, "\tUnit #: %s\n", dvrconfig.getvalue("system", "serial").getstring() );
 #endif					
-				fprintf(flog, "\tTime Zone : %s\n", dvrconfig.getvalue("system", "timezone").getstring() );
-				for( int camera=1; camera<=2 ; camera++ ) {
-					char cameraid[10] ;
-					sprintf( cameraid, "camera%d", camera );
-					fprintf(flog, "Camera %d settings\n", camera);
-					if( dvrconfig.getvalueint(cameraid, "enable")) {
-						fprintf(flog, "\tEnabled\n");
-						fprintf(flog, "\tSerial #: %s\n", dvrconfig.getvalue(cameraid, "name").getstring() );
-						for( int s=1; s<=6; s++) {
-							char sen[10] ;
-							sprintf(sen, "sensor%d", s);
-							fprintf(flog, "\tSensor (%s) trigger : ", dvrconfig.getvalue(sen, "name").getstring() );
-							sprintf(sen, "trigger%d", s);
-							int t = dvrconfig.getvalueint(cameraid, sen);
-							if( t&1 ) {
-								fprintf(flog, "On\n");
-							}
-							else if( t&2 ) {
-								fprintf(flog, "Off\n");
-							}
-							else if( (t&12)==12 ) {
-								fprintf(flog, "Turn On/Turn Off\n");
-							}
-							else if( t&4 ) {
-								fprintf(flog, "Turn On\n");
-							}
-							else if( t&8 ) {
-								fprintf(flog, "Turn Off\n");
-							}
-							else {
-								fprintf(flog, "None\n");					
-							}
-						}
 
-					}
-					else{
-						fprintf(flog, "\tDisabled\n");
-					}
-				}
-			}
-			return ;
-		}
+        fprintf(flog, "\tTime Zone : %s\n", dvrconfig.getvalue("system", "timezone").getstring() );
+        for( int camera=1; camera<=2 ; camera++ ) {
+            char cameraid[10] ;
+            sprintf( cameraid, "camera%d", camera );
+            fprintf(flog, "Camera %d settings\n", camera);
+            if( dvrconfig.getvalueint(cameraid, "enable")) {
+                fprintf(flog, "\tEnabled\n");
+                fprintf(flog, "\tSerial #: %s\n", dvrconfig.getvalue(cameraid, "name").getstring() );
+                for( int s=1; s<=6; s++) {
+                    char sen[10] ;
+                    sprintf(sen, "sensor%d", s);
+                    fprintf(flog, "\tSensor (%s) trigger : ", dvrconfig.getvalue(sen, "name").getstring() );
+                    sprintf(sen, "trigger%d", s);
+                    int t = dvrconfig.getvalueint(cameraid, sen);
+                    if( t&1 ) {
+                        fprintf(flog, "On\n");
+                    }
+                    else if( t&2 ) {
+                        fprintf(flog, "Off\n");
+                    }
+                    else if( (t&12)==12 ) {
+                        fprintf(flog, "Turn On/Turn Off\n");
+                    }
+                    else if( t&4 ) {
+                        fprintf(flog, "Turn On\n");
+                    }
+                    else if( t&8 ) {
+                        fprintf(flog, "Turn Off\n");
+                    }
+                    else {
+                        fprintf(flog, "None\n");					
+                    }
+                }
 
+            }
+            else{
+                fprintf(flog, "\tDisabled\n");
+            }
+        }
+        keylogsettings = 0 ;
+    }
+    fclose( flog );
+    return ;
+}
 
-		if( memcmp( TVSchecksum, key->checksum, sizeof( TVSchecksum ) )==0 ) {
-			fclose( flog );
-			return;
-		}
-		memcpy( TVSchecksum, key->checksum, sizeof( TVSchecksum ) );
-		g_keyactive =  1 ;
-		strcpy( g_usbid, key->usbid );
-		fprintf(flog, "\n%s:TVS connected, USB key ID: %s\n%s", 
-		    lbuf, key->usbid, ((char *)&(key->size))+key->keyinfo_start );
-		l = ftell(flog) ;
-		if( l>logfilesize ) {
-			dvr_cleanlog( flog );
-		}
-		fclose( flog );
+void dvr_logkey( int op, struct key_data * key ) 
+{
+    static char TVSchecksum[16] ;
+    char lbuf[512];
+    FILE *flog ;
+    time_t ti;
+    int l;
 
-		flog = fopen("/var/dvr/connectid", "w" ) ;
-		if( flog ) {
-			fprintf( flog, "%s", key->usbid );
-			fclose( flog );
+    // get time string
+    ti = time(NULL);
+    ctime_r(&ti, lbuf);
+    l = strlen(lbuf);
+    if (lbuf[l - 1] == '\n')
+        lbuf[l - 1] = '\0';
+
+    if( op==0  ) {     // disconnect
+        if( g_usbid[0] ) {
+            g_usbid[0]=0 ;
+            unlink( "/var/dvr/connectid" );
+            if( keylogsettings ) {
+                dvr_logkey_settings();
+            }
+            flog = dvr_logkey_file();
+            if( flog ) {
+                fprintf(flog, "%s:Viewer connection closed, key ID: %s\n", lbuf, g_usbid );
+                fclose( flog );
+            }
         }
     }
-    return  ;
+    else if( op == 1 && key!=NULL ) {    // connecting
+        if( strcmp( g_usbid, key->usbid )!=0 ||
+            memcmp( TVSchecksum, key->checksum, sizeof( TVSchecksum ) )!=0 ) {
+            memcpy( TVSchecksum, key->checksum, sizeof( TVSchecksum ) );
+            strcpy( g_usbid, key->usbid );
+            flog = fopen("/var/dvr/connectid", "w" ) ;
+            if( flog ) {
+                fprintf( flog, "%s", g_usbid );
+                fclose( flog );
+            }
+            flog = dvr_logkey_file();
+            if( flog ) {
+                fprintf(flog, "\n%s:Viewer connected, key ID: %s\n%s", 
+                    lbuf, key->usbid, ((char *)&(key->size))+key->keyinfo_start );
+                l = ftell(flog) ;
+                if( l>logfilesize ) {
+                    dvr_cleanlog( flog );
+                }
+                fclose( flog );
+            }
+        }
+        if( keylogsettings ) {
+            dvr_logkey_settings();
+        }
+    }
+    else if( op == 2 ) {
+        keylogsettings = 1 ;
+    }
+
+    return ;
 }
 
 int dvr_getsystemsetup(struct system_stru * psys)
@@ -335,14 +358,16 @@ int dvr_getsystemsetup(struct system_stru * psys)
     string v ;
     config dvrconfig(dvrconfigfile);
 
-    //    strcpy( psys->IOMod, "DIOTME");
-    // for PWII, this field will be used to store pwii info
+#ifdef MDVR_APP    
+    strcpy(  psys->productid, "DIOTME");
+#endif    
 
 #ifdef TVS_APP    
     strcpy(  psys->productid, "TVS" );
 #endif    
    
 #ifdef PWII_APP
+    // for PWII, this field will be used to store pwii info
     strcpy(  psys->productid, "PWII" );
 #endif
     
@@ -668,8 +693,8 @@ void app_init()
             setenv("TZ", tz.getstring(), 1);
         }
     }
-    
-/*   
+
+#ifdef MDVR_APP   
     hostname=dvrconfig.getvalue("system", "hostname" );
     if( hostname.length()>0 ){
         // setup hostname
@@ -678,7 +703,7 @@ void app_init()
         gethostname( g_hostname, 128 );
         dvr_log("Setup hostname: %s", g_hostname);
     }
-*/
+#endif
     
 #ifdef TVS_APP    
     // TVS related

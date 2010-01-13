@@ -1240,6 +1240,7 @@ int dio_check() ;
 int dio_setstate( int status ) ;
 int dio_clearstate( int status ) ;
 void dio_setchstat( int channel, int ch_state );
+int dio_iobusy();
 
 #ifdef PWII_APP
 // return pwii media key event, 0=no key event, 1=key event

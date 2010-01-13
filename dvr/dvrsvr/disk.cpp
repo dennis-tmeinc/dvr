@@ -1018,46 +1018,55 @@ int disk_archive_deloldfile(char * archdir)
 
 static char disk_archive_tmpfile[]=".DVRARCH" ;
 
-void disk_archive_copyfile( char * srcfile, char * destfile )
+// return 1: success, 0: fail, -1: to quit
+int disk_archive_copyfile( char * srcfile, char * destfile )
 {
     FILE * fsrc ;
     FILE * fdest ;
     char * filebuf ;
     int r ;
+    int res ;
     
     fsrc = fopen( srcfile, "rb" );
     fdest = fopen( destfile, "wb" );
     if( fsrc==NULL || fdest==NULL ) {
         if( fsrc ) fclose( fsrc );
         if( fdest ) fclose( fdest );
-        return ;
+        return 0 ;
     }
     filebuf=(char *)malloc( 4096 ) ;
     if( filebuf==NULL ) {
         fclose( fsrc );
         fclose( fdest );
-        return ;
+        return 0 ;
     }        
 
+    res = 1 ;
     while( (r=fread( filebuf, 1, 4096, fsrc ))>0 ) {
         fwrite( filebuf, 1, r, fdest ) ;
         while( disk_busy ) {
             usleep( 200 );
         }
+        if( dio_iobusy() ) {
+            res = 0 ;
+            break; 
+        }
     }
     fclose( fsrc );
     fclose( fdest ) ;
     free( filebuf );
+    return res ;
 
 }
 
-// archiving locked files
-void disk_archive_arch( char * filename, char * srcdir, char * destdir )
+// archiving files
+int disk_archive_arch( char * filename, char * srcdir, char * destdir )
 {
     int retry ;
     struct stat fst ;
     char * p ;
     int l1, l ;
+    int res=0 ;
 
     char arch_filename[256] ;
     char arch_tmpfile[256] ;
@@ -1072,21 +1081,21 @@ void disk_archive_arch( char * filename, char * srcdir, char * destdir )
     }
     if( retry>=100 ) {
         // can't free more disk space
-        return ;
+        return 0;
     }
 
     if( stat( filename, &fst )!=0 ) {
-        return ;
+        return 0;
     }
 
     l1 = strlen(filename);
     l = strlen(srcdir) ;
     if( l1<=l ) {               // filename error!
-        return ;
+        return 0;
     }
 
     if( strncmp( filename, srcdir, l )!=0 ) {      // source file name error!
-        return ;
+        return 0;
     }
 
     strcpy( arch_filename, destdir );
@@ -1095,7 +1104,7 @@ void disk_archive_arch( char * filename, char * srcdir, char * destdir )
 
     if( stat( arch_filename, &fst )==0 ) {
         if( S_ISREG( fst.st_mode ) ) {          // destination file already exist
-            return ;
+            return 0;
         }
     }
 
@@ -1109,25 +1118,24 @@ void disk_archive_arch( char * filename, char * srcdir, char * destdir )
 
     // copy file to a temperary file in arching dir
     sprintf(arch_tmpfile, "%s/%s.264", destdir, disk_archive_tmpfile );
-    disk_archive_copyfile( filename, arch_tmpfile );
+    res = disk_archive_copyfile( filename, arch_tmpfile );
+    if( res ) {
+        // move file to final archive file
+        rename( arch_tmpfile, arch_filename );
 
-    // move file to final archive file
-    rename( arch_tmpfile, arch_filename );
-
-    // copy .k file if available
-    strcpy( arch_tmpfile, filename ) ;
-    l = strlen( arch_tmpfile ) ;
-    if( strcmp( &arch_tmpfile[l-4], ".264")==0 ) {
-        arch_tmpfile[l-3] = 'k' ;
-        arch_tmpfile[l-2] = 0 ;
-        l = strlen( arch_filename );
-        arch_filename[l-3] = 'k' ;
-        arch_filename[l-2] = 0 ;
-        disk_archive_copyfile( arch_tmpfile, arch_filename );
+        // copy .k file if available
+        strcpy( arch_tmpfile, filename ) ;
+        l = strlen( arch_tmpfile ) ;
+        if( strcmp( &arch_tmpfile[l-4], ".264")==0 ) {
+            arch_tmpfile[l-3] = 'k' ;
+            arch_tmpfile[l-2] = 0 ;
+            l = strlen( arch_filename );
+            arch_filename[l-3] = 'k' ;
+            arch_filename[l-2] = 0 ;
+            disk_archive_copyfile( arch_tmpfile, arch_filename );
+        }
     }
-
-    // unlock origin dvrfile
-//    dvrfile::unlock( filename ) ;
+    return res ;
 }
 
 static void disk_archive_round(char * srcdir, char * destdir)
@@ -1179,7 +1187,9 @@ static void disk_archive_round(char * srcdir, char * destdir)
 			if( lockl==0 || lockl==l ) {
                 disk_archive_arch( flist[i].getstring(), srcdir, destdir );
 			}
+            if( dio_iobusy() ) break ;
         }
+        if( dio_iobusy() ) break ;
     }
     return ;
 }

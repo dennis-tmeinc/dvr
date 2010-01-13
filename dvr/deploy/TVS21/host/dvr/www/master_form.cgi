@@ -1,6 +1,6 @@
 #!/bin/sh
 
-if [ -f /var/dvr/tvsconnectid ] ; then
+if [ -r /var/dvr/connectid ] ; then
 
     connectid=`cat /var/dvr/connectid`
     connecttype=${connectid%%[0-9]*}

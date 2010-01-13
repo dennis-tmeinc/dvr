@@ -475,9 +475,7 @@ void *net_thread(void *param)
                 }
                 if( dvrsvr::head() == NULL ) {
                     net_active = 0 ;
-                    if( g_keyactive ) {
-                        dvr_logkey( 0, NULL );
-                    }
+                    dvr_logkey( 0, NULL );
                 }
             }
         }

@@ -162,6 +162,17 @@ int dio_clearstate( int status )
     return 0 ;
 }
 
+
+// check if IO process busy (doing smartftp)
+int dio_iobusy()
+{
+    if( p_dio_mmap ){
+        return p_dio_mmap->iobusy ;
+    }
+    return 0 ;
+}
+
+
 // set video channel status
 // parameter :  channel = camera channle
 //              ch_state = channel status ,  bit 0: signal, bit 1: recording, bit 2: motion, 3: video data

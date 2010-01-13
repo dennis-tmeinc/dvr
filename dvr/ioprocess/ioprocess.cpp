@@ -2163,7 +2163,7 @@ void smartftp_start()
 //    smartftp_log( "Smartftp started." );
 }
 
-void smartftp_wait()
+int smartftp_wait()
 {
     int smartftp_status=0 ;
     pid_t id ;
@@ -2190,6 +2190,7 @@ void smartftp_wait()
             }
         }
     }
+    return pid_smartftp ;
 }
 
 // Kill smartftp in case standby timeout or power turn on
@@ -2763,6 +2764,7 @@ int main(int argc, char * argv[])
                         }
                         modeendtime = runtime + 120000 ;
                         app_mode=APPMODE_NORECORD ;                    // start standby mode
+                        p_dio_mmap->iobusy = 1 ;
                         dvr_log("Shutdown delay timeout, to stop recording (mode %d).", app_mode);
                     }
                 }
@@ -2848,7 +2850,9 @@ int main(int argc, char * argv[])
 
                 // continue wait for smartftp
                 if( pid_smartftp > 0 ) {
-                    smartftp_wait();
+                    if( smartftp_wait()==0 ) {
+                        p_dio_mmap->iobusy = 0 ;
+                    }
                 }
                 
                 if( p_dio_mmap->poweroff ) {         // ignition off
@@ -2866,6 +2870,7 @@ int main(int argc, char * argv[])
                         p_dio_mmap->devicepower=0 ;    // turn off all devices power
                         modeendtime = runtime+90000 ;
                         app_mode=APPMODE_SHUTDOWN ;    // turn off mode
+                        p_dio_mmap->iobusy = 1 ;
                         dvr_log("Standby timeout, system shutdown. (mode %d).", app_mode );
                         buzzer( 5, 250, 250 );
                         if( p_dio_mmap->dvrpid > 0 ) {
@@ -2894,6 +2899,7 @@ int main(int argc, char * argv[])
                     
                     p_dio_mmap->devicepower=0xffff ;    // turn on all devices power
                     app_mode=APPMODE_RUN ;                        // back to normal
+                    p_dio_mmap->iobusy = 0 ;
                     dvr_log("Power on switch, set to running mode. (mode %d)", app_mode);
                     if( pid_smartftp > 0 ) {
                         smartftp_kill();
@@ -2938,6 +2944,7 @@ int main(int argc, char * argv[])
                 appfinish();
                 appinit();
                 app_mode = APPMODE_RUN ;
+                p_dio_mmap->iobusy = 0 ;
             }
             else if( app_mode==APPMODE_QUIT ) {
                 break ;
