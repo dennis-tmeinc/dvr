@@ -218,6 +218,7 @@ class dvrfile {
 
 	string m_filename ;
 	int    m_openmode ;			// 0: read, 1: write
+    DWORD  m_hdflag ;           // file header flag when reading
 
     struct dvrtime m_filetime ;	// file start time
     int   m_filesize ;
@@ -276,8 +277,8 @@ class dvrfile {
     int isencrypt() {
         return m_fileencrypt ;
     }
-    int isframeencrypt() {
-        return (m_fileencrypt && (!m_autodecrypt) );
+    int gethdflag() {               // get file header flag.
+        return (int)m_hdflag ;
     }
     void autodecrypt(int decrypt) {
         m_autodecrypt=decrypt ;
@@ -287,6 +288,9 @@ class dvrfile {
 
 	static int rename(const char * oldfilename, const char * newfilename); // rename .264 filename as well .k file
 	static int remove(const char * filename);		// remove .264 file as well .k file
+    static int chrecmod(string & filename, char oldmod, char newmode);
+    static int unlock(const char * filename) ; 		// unlock this .264 file
+    static int lock(const char * filename) ;		// lock this .264 file 
 };
 
 void file_sync();

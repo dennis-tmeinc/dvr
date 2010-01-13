@@ -71,7 +71,7 @@
 ./dadsp.bin
 ./dosfsck
 ./dsplinkk.ko
-./sfxrun
+sfxrun.dep sfxrun
 ./ID
 ./ID/APPID
 ./ID/BOARDID

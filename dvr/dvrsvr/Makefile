@@ -40,15 +40,17 @@ OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 # LIBRARY=libdio.so
 
 CCFLAGS= -Wall -g
-LDFLAGS= -lpthread -lstdc++ -L./eagle32 -lsdk -ldadsp  ./eagle32/dsplink.lib libfbdraw.so -Wl,-rpath,.
+LDFLAGS= -lpthread -lstdc++ -L./eagle32 -lsdk -ldadsp  ./eagle32/dsplink.lib -Wl,-rpath,.
 
 all : dvrsvr
 
 # dvrsvr : $(OBJS) $(LIBRARY)
-dvrsvr : $(OBJS)
-	$(CC)  $(CCFLAGS) -o $@  $(OBJS) $(LDFLAGS)
+dvrsvr : $(OBJS) ../fb/libfbdraw.so
+	$(CC)  $(CCFLAGS) -o $@  $(OBJS) ../fb/libfbdraw.so $(LDFLAGS)
 	cp dvrsvr  $(debug_folder)
-	$(CROSS_COMPILE_PREFIX)strip dvrsvr
+
+../fb/libfbdraw.so : 
+	cd ../fb ; make
 
 eagleinit : eagleinit.cpp
 	$(CC) $(CCFLAGS) -o $@ eagleinit.cpp $(LDFLAGS)

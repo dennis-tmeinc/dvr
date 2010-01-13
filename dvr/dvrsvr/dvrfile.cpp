@@ -99,29 +99,27 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
             close();	
             return 0 ;
         }
-        m_fileencrypt=-1 ;
+
         read(&h264hd, sizeof(h264hd) );
+        m_hdflag = h264hd.flag ;
+        
         if( h264hd.flag == 0x484b4834 ) {
             m_fileencrypt=0 ;								// no encrypted
         }
         else {
-            if( file_encrypt ) {
-                RC4_block_crypt( (unsigned char*)&h264hd, sizeof(h264hd), 0, file_encrypt_RC4_table, 1024);
-                if( h264hd.flag == 0x484b4834 ) {
-                    m_fileencrypt=1 ;
-                    if( file_nodecrypt ) {
-                        m_autodecrypt=0 ;
-                    }
-                    else {
-                        m_autodecrypt=1 ;
-                    }
+            m_fileencrypt = 1 ;
+            RC4_block_crypt( (unsigned char*)&h264hd, sizeof(h264hd), 0, file_encrypt_RC4_table, 1024);
+            if( h264hd.flag == 0x484b4834 ) {
+                if( file_nodecrypt ) {
+                    m_autodecrypt=0 ;
+                }
+                else {
+                    m_autodecrypt=1 ;
+                    m_hdflag = h264hd.flag ;            // auto decrypted header
                 }
             }
         }
-        if( m_fileencrypt<0 ) {
-            close();		
-            return 0;
-        }
+
         readkey();											// read key frame index
         if( m_keyarray.size()>0 ) {
             seek( m_keyarray[0].koffset );
@@ -901,7 +899,7 @@ int dvrfile::repairpartiallock()
     return 1 ;
 }
    
-// rename .264 file as well .idx file
+// rename .264 file as well .k file
 int dvrfile::rename(const char * oldfilename, const char * newfilename)
 {
     int res ;
@@ -935,6 +933,33 @@ int dvrfile::remove(const char * filename)
         ::remove( kfile );
     }
     return res ;
+}
+
+int dvrfile::chrecmod(string & filename, char oldmode, char newmode)
+{
+    static char rmod[] = "_M_" ;
+    char oldname[512];
+    char * p ;
+    strcpy( oldname, filename.getstring() );
+    rmod[1]=oldmode ;
+    p = strstr(basefilename(filename.getstring()), rmod);
+    if( p ) {
+        p[1]=newmode ;
+        return dvrfile::rename( oldname, filename.getstring());
+    }
+    return 0 ;
+}
+
+int dvrfile::unlock(const char * filename)
+{		
+	string f(filename);
+	return chrecmod( f, 'L', 'N' );
+}
+
+int dvrfile::lock(const char * filename)
+{		
+	string f(filename);
+	return chrecmod( f, 'N', 'L' );
 }
 
 void file_sync()

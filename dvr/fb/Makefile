@@ -6,29 +6,23 @@ include ../arm_tool
 
 CC=$(CROSS_COMPILE_PREFIX)gcc
 
-SOURCES=fb.cpp
-
 HEADERS=
 
-OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
-
-LDFLAGS= -lstdc++ 
-CFLAGS= -g
+CFLAGS=
 
 default: libfbdraw.so
 
-fb : $(OBJS) $(SOURCES_C) libfbdraw.so 
-	$(CC) $(CFLAGS) -o $@ $(LDFLAGS) $(OBJS) libfbdraw.so -Wl,-rpath,.
+fb : $(OBJS) fb.cpp libfbdraw.so 
+	$(CC) $(CFLAGS) -o $@ fb.cpp libfbdraw.so -Wl,-rpath,. -lstdc++
 	cp fb ~/nfsroot/
 	cp libfbdraw.so  $(debug_folder)
 
-%.o : %.cpp $(HEADERS)
-	$(CC) $(CCFLAGS) -Wall -c $< -o $@
-
-libfbdraw.so : fbdraw.c ../sfx/lzmadec.c ../lzmasdk/LzmaDec.c
-	$(CC) $(CCFLAGS) -fPIC -c -Wall fbdraw.c ../sfx/lzmadec.c ../lzmasdk/LzmaDec.c
-	$(CC) $(CCFLAGS) -shared -Wl,-soname,libfbdraw.so -o $@ fbdraw.o lzmadec.o LzmaDec.o
-	cp libfbdraw.so ../dvrsvr/	
+libfbdraw.so : fbdraw.c ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c
+	$(CC) $(CFLAGS) -fPIC -c -Wall fbdraw.c
+	$(CC) $(CFLAGS) -fPIC -c -Wall ../lzmasdk/dec.c
+	$(CC) $(CFLAGS) -fPIC -c -Wall ../lzmasdk/LzmaDec.c
+	$(CC) $(CFLAGS) -shared -Wl,-soname,libfbdraw.so -o $@ fbdraw.o dec.o LzmaDec.o
+	cp libfbdraw.so ~/nfsroot/	
 
 clean :
 	rm -f *.o

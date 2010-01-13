@@ -88,8 +88,8 @@ int playback::seek( struct dvrtime * seekto )
     preread();
 
 seek_end:
-    if( m_file.isopen() && m_file.isframeencrypt() ) {
-        return 1 ;
+    if( m_file.isopen() ) {
+        return m_file.gethdflag();
     }
     else {
         return 0 ;

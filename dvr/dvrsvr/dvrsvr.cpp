@@ -1087,16 +1087,7 @@ void dvrsvr::ReqStreamSeek()
     {
         ans.anscode = ANSOK;
         ans.anssize = 0;
-        if( m_playback->seek((struct dvrtime *) m_recvbuf) ) {
-            // put first 4 bytes into ans.data
-            ans.data = (unsigned int)g_filekey[0] 
-                    +  ((unsigned int)g_filekey[1] << 8 )
-                    +  ((unsigned int)g_filekey[2] << 16 )
-                    +  ((unsigned int)g_filekey[3] << 24 ) ;
-        }
-        else {
-            ans.data = 0 ;
-        }
+        ans.data = m_playback->seek((struct dvrtime *) m_recvbuf) ;
         Send( &ans, sizeof(ans));
         
 #ifdef NETDBG

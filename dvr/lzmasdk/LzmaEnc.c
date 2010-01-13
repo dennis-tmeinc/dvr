@@ -47,7 +47,7 @@ static int ttt = 0;
 
 void LzmaEncProps_Init(CLzmaEncProps *p)
 {
-  p->level = 5;
+  p->level = 7;
   p->dictSize = p->mc = 0;
   p->lc = p->lp = p->pb = p->algo = p->fb = p->btMode = p->numHashBytes = p->numThreads = -1;
   p->writeEndMark = 0;

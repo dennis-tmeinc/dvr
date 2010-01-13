@@ -123,3 +123,6 @@ clean:
 	cd deploy/PWII ; ./mkdeploy clean 0
 
 	cd deploy/TVS21 ; ./mkdeploy clean 0
+
+	find -name *~ -delete
+	

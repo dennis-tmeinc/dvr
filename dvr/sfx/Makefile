@@ -16,19 +16,19 @@ CCFLAGS=-Os
 
 all: sfx mksfx extractsfx
 
-sfx : sfx.c lzmasfx.c lzmadec.c ../lzmasdk/LzmaDec.c
-	$(CC) $(CCFLAGS) -o $@ sfx.c lzmasfx.c lzmadec.c ../lzmasdk/LzmaDec.c $(LDFLAGS)
+sfx : sfx.c lzmasfx.c ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c
+	$(CC) $(CCFLAGS) -o $@ sfx.c lzmasfx.c ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c $(LDFLAGS)
 	$(STRIP) sfx
 
-sfx86 : sfx.c lzmadec.c lzmasfx.c ../lzmasdk/LzmaDec.c 
-	gcc -o $@ sfx.c lzmadec.c lzmasfx.c ../lzmasdk/LzmaDec.c
+sfx86 : sfx.c lzmasfx.c ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c 
+	gcc -o $@ sfx.c lzmasfx.c ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c
 	strip sfx86
 
-mksfx : mksfx.c lzmaenc.c ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c
-	gcc -o $@ mksfx.c lzmaenc.c ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c
+mksfx : mksfx.c ../lzmasdk/enc.c ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c
+	gcc -g -o $@ mksfx.c ../lzmasdk/enc.c ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c
 
-extractsfx : extractsfx.c lzmasfx.c lzmadec.c ../lzmasdk/LzmaDec.c
-	gcc -o $@ -g extractsfx.c lzmasfx.c lzmadec.c ../lzmasdk/LzmaDec.c
+extractsfx : extractsfx.c lzmasfx.c ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c
+	gcc -o $@ -g extractsfx.c lzmasfx.c ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c
 
 clean :
 	rm -f mksfx

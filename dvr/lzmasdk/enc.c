@@ -1,7 +1,7 @@
 
 #include <stdlib.h>
 
-#include "../lzmasdk/LzmaEnc.h"
+#include "LzmaEnc.h"
 
 static void *SzAlloc(void *p, size_t size) { p = p; return malloc(size); }
 static void SzFree(void *p, void *address) { p = p; free(address); }

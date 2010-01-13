@@ -434,15 +434,7 @@ void cfgupload_page()
     }
 }
 
-struct file_head {
-    uint tag ;
-    uint filesize ;
-    uint filemode ;
-    uint namesize ;
-    uint compsize ;
-} ;
-
-const uint extract_tag = 0xed3abd05 ;
+#define SFX_TAG (0xed3abd05)
 
 // firware uploading page
 void firmwareupload_page()
@@ -461,26 +453,29 @@ void firmwareupload_page()
         fseek( firmwarefile, -16, SEEK_END );
         if( fscanf( firmwarefile, "%d", &executesize )==1 ) {
             if( executesize<(int)ftell(firmwarefile) && executesize>0 ) {
-                struct file_head fhd ;
+                struct file_head {
+                    uint tag ;
+                    uint filesize ;
+                    uint filemode ;
+                    uint namesize ;
+                    uint compsize ;
+                } fhd ;
                 char filename[256] ;
 
                 fseek( firmwarefile, executesize, SEEK_SET );
                 while( fread( &fhd, 1, sizeof( fhd), firmwarefile ) == sizeof( fhd ) ) {
-                    if( fhd.tag !=extract_tag ) {
-                        break;
-                    }
-                    if( fhd.namesize<=0 || fhd.namesize>=sizeof(filename) ) {
+                    if( fhd.tag != SFX_TAG || fhd.namesize<=0 || fhd.namesize>=sizeof(filename) ) {
                         break;
                     }
                     fread( filename, 1, fhd.namesize, firmwarefile);
-                    filename[fhd.namesize]=0;
-                    fseek(firmwarefile, fhd.compsize, SEEK_CUR );
                     if( S_ISREG(fhd.filemode) ) {
+                        filename[fhd.namesize]=0;
                         if( strstr( filename, "firmwareid" ) ) {
                             firmwareok=1 ;
                             break;
                         }
                     }
+                    fseek(firmwarefile, fhd.compsize, SEEK_CUR );
                 }
             }
         } 
@@ -500,11 +495,8 @@ void firmwareupload_page()
 
     if( firmwareok ) {
         // install the firmware
-        char cmd[256] ;
-        mkdir( "firmware_x", 0777 );
-        sprintf( cmd, "cp %s firmware_x/fw", firmwarefilename );
+        link( firmwarefilename, "firmware_x" );
         fflush(stdout);
-        system( cmd );
         if( fork()==0 ) {
             // disable stdin , stdout
             int fd = open("/dev/null", O_RDWR );
@@ -526,8 +518,8 @@ void firmwareupload_page()
             }
 
             // update firmware
-            chmod( "firmware_x/fw", 0755 );
-            system( "mkdir upfirmware; cd upfirmware; ../firmware_x/fw ; sync ; sleep 1 ; reboot ;" );
+            chmod( "firmware_x", 0755 );
+            system( "mkdir updfw; cd updfw; ../firmware_x; sync; sleep 1; reboot;" );
             exit(0);
         }
     }

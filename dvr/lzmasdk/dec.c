@@ -1,7 +1,11 @@
 
 #include <stdlib.h>
 
-#include "../lzmasdk/LzmaDec.h"
+#include "LzmaDec.h"
+
+static void *SzAlloc(void *p, size_t size) { p = p; return malloc(size); }
+static void SzFree(void *p, void *address) { p = p; free(address); }
+static ISzAlloc g_Alloc = { SzAlloc, SzFree } ;
 
 int lzmadecsize( unsigned char * lzmabuf )
 {
@@ -20,10 +24,6 @@ int lzmadecsize( unsigned char * lzmabuf )
     }
 }
 
-static void *SzAlloc(void *p, size_t size) { p = p; return malloc(size); }
-static void SzFree(void *p, void *address) { p = p; free(address); }
-static ISzAlloc g_Alloc = { SzAlloc, SzFree } ;
-        
 int lzmadec( unsigned char * lzmabuf, int lzmasize, unsigned char * lzmaoutbuf, int lzmaoutsize )
 {
     SRes res ;

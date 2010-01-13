@@ -114,7 +114,7 @@ echo Building Host deploy firmware.
 cd ${DEPROOT}/host/dvr
 echo copy dvr host files
 cp -v ${APPROOT}/dvrsvr/dvrsvr .
-cp -v ${APPROOT}/dvrsvr/libfbdraw.so .
+cp -v ${APPROOT}/fb/libfbdraw.so .
 cp -v ${APPROOT}/dvrtime/dvrtime .
 cp -v ${APPROOT}/eaglehost/eaglehost .
 cp -v ${APPROOT}/glog/glog .

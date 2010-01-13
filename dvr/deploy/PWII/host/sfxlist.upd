@@ -62,5 +62,5 @@
 ./dadsp.bin
 ./dosfsck
 ./dsplinkk.ko
-./sfxrun
+sfxrun.upd sfxrun
 
