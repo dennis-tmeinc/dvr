@@ -54,7 +54,10 @@
 <tr>
 <td class="col1"><label for="id_enable_camera">Enable
 Camera :</label> </td>
-<td><input name="enable_camera" id="id_enable_camera" value="on" type="checkbox" /></td>
+<td>
+<input name="enable_camera" id="id_enable_camera" value="on" type="checkbox" />
+<input name="bool_enable_camera" value="on" type="hidden" />
+</td>
 </tr>
 
 <tr>
@@ -157,6 +160,9 @@ for( i=1; i<=num_sensor; i++ ) {
 }
 </script>
 </table>
+
+<input name="bool_sensor_trigger_sel" value="on" type="hidden" />
+<input name="bool_sensor_osd" value="on" type="hidden" />
 
 </td>
 </tr>

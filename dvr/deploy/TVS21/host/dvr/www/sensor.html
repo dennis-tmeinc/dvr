@@ -41,6 +41,7 @@
 <tr>
 <td class="col1">Sensor 1</td>
 <td> Name: <input name="sensor1_name" value="Panic" readonly="readonly" />
+<input name="bool_sensor1_inverted" type="hidden" value="on" />
 <input name="sensor1_inverted" type="radio" value="on" />
  HI 
 <input name="sensor1_inverted" type="radio" value="off" />
@@ -54,6 +55,7 @@ document.write(
 "<tr>",
 "<td class=\"col1\">Sensor "+i+"</td>",
 "<td> Name: <input name=\"sensor"+i+"_name\" value=\"Sensor "+i+"\" />",
+" <input name=\"bool_sensor"+i+"_inverted\" type=\"hidden\" value=\"on\" />",
 " <input name=\"sensor"+i+"_inverted\" type=\"radio\" value=\"on\" />",
 " HI ",
 " <input name=\"sensor"+i+"_inverted\" type=\"radio\" value=\"off\" />",

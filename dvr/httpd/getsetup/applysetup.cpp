@@ -297,48 +297,54 @@ int main()
             dvrconfig.setvalue( "system", "postlock", v );
         }
 
-        v = getsetvalue( "norecplayback" );
-        if( v ) {
-            dvrconfig.setvalueint( "system", "norecplayback", 1 );
-        }
-        else {
-            dvrconfig.setvalueint( "system", "norecplayback", 0 );
-        }
-        
-        v = getsetvalue( "noreclive" );
-        if( v ) {
-            dvrconfig.setvalueint( "system", "noreclive", 1 );
-        }
-        else {
-            dvrconfig.setvalueint( "system", "noreclive", 0 );
-        }
-
-#ifdef	MDVR_APP
-        v = getsetvalue ("en_file_encryption");
-        if( v ) {
-            dvrconfig.setvalueint( "system", "fileencrypt", 1 );
-            v = getsetvalue( "file_password" ) ;
+        if( getsetvalue( "bool_norecplayback" )!=NULL ) {
+            v = getsetvalue( "norecplayback" );
             if( v ) {
-                if( strcmp( v, "********" )!=0 ) {      // password changed!
-                    // do set password
-                    char filec64key[400] ;
-                    fileenckey( v, filec64key );
-                    dvrconfig.setvalue("system", "filepassword", filec64key);	// save password to config file
-                }
+                dvrconfig.setvalueint( "system", "norecplayback", 1 );
+            }
+            else {
+                dvrconfig.setvalueint( "system", "norecplayback", 0 );
             }
         }
-        else {
-            dvrconfig.setvalueint( "system", "fileencrypt", 0 );
+
+        if( getsetvalue( "bool_noreclive" )!=NULL ) {
+            v = getsetvalue( "noreclive" );
+            if( v ) {
+                dvrconfig.setvalueint( "system", "noreclive", 1 );
+            }
+            else {
+                dvrconfig.setvalueint( "system", "noreclive", 0 );
+            }
         }
-#endif
+        
+        if( getsetvalue( "bool_en_file_encryption" )!=NULL ) {
+            v = getsetvalue ("en_file_encryption");
+            if( v ) {
+                dvrconfig.setvalueint( "system", "fileencrypt", 1 );
+                v = getsetvalue( "file_password" ) ;
+                if( v ) {
+                    if( strcmp( v, "********" )!=0 ) {      // password changed!
+                        // do set password
+                        char filec64key[400] ;
+                        fileenckey( v, filec64key );
+                        dvrconfig.setvalue("system", "filepassword", filec64key);	// save password to config file
+                    }
+                }
+            }
+            else {
+                dvrconfig.setvalueint( "system", "fileencrypt", 0 );
+            }
+        }
 
         // gpslog enable
-        v = getsetvalue ("en_gpslog");
-        if( v ) {
-            dvrconfig.setvalueint( "glog", "gpsdisable", 0 );
-        }
-        else {
-            dvrconfig.setvalueint( "glog", "gpsdisable", 1 );
+        if( getsetvalue( "bool_en_gpslog" )!=NULL ) {
+            v = getsetvalue ("en_gpslog");
+            if( v ) {
+                dvrconfig.setvalueint( "glog", "gpsdisable", 0 );
+            }
+            else {
+                dvrconfig.setvalueint( "glog", "gpsdisable", 1 );
+            }
         }
         
         // gps port
@@ -390,11 +396,9 @@ int main()
 
         // Video output selection
         v = getsetvalue( "videoout" );
-        ivalue = 0 ;
         if( v ) {
-            sscanf(v, "%d", &ivalue );
+            dvrconfig.setvalue(  "VideoOut", "startchannel", v );
         }
-        dvrconfig.setvalueint(  "VideoOut", "startchannel", ivalue );
     }
     
     // write sensor_value
@@ -423,23 +427,30 @@ int main()
                 dvrconfig.setvalue(section, "name", v );
             }
 
-            sprintf( sensorkey, "sensor%d_inverted", i );
-            v = getsetvalue(sensorkey);
-            if( v && strcmp( v, "on" )==0 ) {
-                dvrconfig.setvalueint(section, "inverted", 1 );
-            }
-            else {
-                dvrconfig.setvalueint(section, "inverted", 0 );
+            sprintf( sensorkey, "bool_sensor%d_inverted", i );
+            if( getsetvalue(sensorkey)!=NULL ) {
+                sprintf( sensorkey, "sensor%d_inverted", i );
+                v = getsetvalue(sensorkey);
+                if( v && strcmp( v, "on" )==0 ) {
+                    dvrconfig.setvalueint(section, "inverted", 1 );
+                }
+                else {
+                    dvrconfig.setvalueint(section, "inverted", 0 );
+                }
             }
 
-            sprintf( sensorkey, "sensor%d_eventmarker", i );
-            v = getsetvalue(sensorkey);
-            if( v && strcmp( v, "on" )==0 ) {
-                dvrconfig.setvalueint(section, "eventmarker", 1 );
+            sprintf( sensorkey, "bool_sensor%d_eventmarker", i );
+            if( getsetvalue(sensorkey)!=NULL ) {
+                sprintf( sensorkey, "sensor%d_eventmarker", i );
+                v = getsetvalue(sensorkey);
+                if( v && strcmp( v, "on" )==0 ) {
+                    dvrconfig.setvalueint(section, "eventmarker", 1 );
+                }
+                else {
+                    dvrconfig.setvalueint(section, "eventmarker", 0 );
+                }
             }
-            else {
-                dvrconfig.setvalueint(section, "eventmarker", 0 );
-            }
+            
         }
     }
 
@@ -460,12 +471,14 @@ int main()
             sprintf(section, "camera%d", i);
 
             // enable_camera
-            v=getsetvalue( "enable_camera" );
-            if( v ) {
-                dvrconfig.setvalueint(section,"enable",1);
-            }
-            else {
-                dvrconfig.setvalueint(section,"enable",0);
+            if(getsetvalue( "bool_enable_camera" )!=NULL ) {
+                v=getsetvalue( "enable_camera" );
+                if( v ) {
+                    dvrconfig.setvalueint(section,"enable",1);
+                }
+                else {
+                    dvrconfig.setvalueint(section,"enable",0);
+                }
             }
 
             // camera_name
@@ -565,53 +578,68 @@ int main()
                 sprintf(osd, "sensorosd%d", ivalue);
 
                 // osd
-                sprintf(sensor, "sensor%d_osd", ivalue );
-                v=getsetvalue( sensor ) ;
-                if( v ) {
-                    dvrconfig.setvalueint(section, osd, 1);                    
-                }
-                else {
-                    dvrconfig.setvalueint(section, osd, 0);
+                if( getsetvalue( "bool_sensor_osd" )!=NULL ) {
+                    sprintf(sensor, "sensor%d_osd", ivalue );
+                    v=getsetvalue( sensor ) ;
+                    if( v ) {
+                        dvrconfig.setvalueint(section, osd, 1);                    
+                    }
+                    else {
+                        dvrconfig.setvalueint(section, osd, 0);
+                    }
                 }
 
-                // trigger
-                tr=0 ;
-                sprintf(sensor, "sensor%d_trigger_on", ivalue );
-                v=getsetvalue( sensor ) ;
-                if( v ) {
-                    tr|=1 ;
+                // trigger (MDVR)
+                if( getsetvalue( "bool_sensor_trigger" )!=NULL ) {
+                    sprintf(sensor, "sensor%d_trigger", ivalue );
+                    if( getsetvalue( sensor )!=NULL ) {
+                        dvrconfig.setvalueint(section, trigger, 1);    
+                    }
+                    else {
+                        dvrconfig.setvalueint(section, trigger, 0);    
+                    }
                 }
-                sprintf(sensor, "sensor%d_trigger_off", ivalue );
-                v=getsetvalue( sensor ) ;
-                if( v ) {
-                    tr|=2 ;
-                }
-                sprintf(sensor, "sensor%d_trigger_turnon", ivalue );
-                v=getsetvalue( sensor ) ;
-                if( v ) {
-                    tr|=4 ;
-                }
-                sprintf(sensor, "sensor%d_trigger_turnoff", ivalue );
-                v=getsetvalue( sensor ) ;
-                if( v ) {
-                    tr|=8 ;
-                }
+
+                // trigger selections (PWII / TVS )
+                if( getsetvalue( "bool_sensor_trigger_sel" )!=NULL ) {
+                    tr=0 ;
+                    sprintf(sensor, "sensor%d_trigger_on", ivalue );
+                    v=getsetvalue( sensor ) ;
+                    if( v ) {
+                        tr|=1 ;
+                    }
+                    sprintf(sensor, "sensor%d_trigger_off", ivalue );
+                    v=getsetvalue( sensor ) ;
+                    if( v ) {
+                        tr|=2 ;
+                    }
+                    sprintf(sensor, "sensor%d_trigger_turnon", ivalue );
+                    v=getsetvalue( sensor ) ;
+                    if( v ) {
+                        tr|=4 ;
+                    }
+                    sprintf(sensor, "sensor%d_trigger_turnoff", ivalue );
+                    v=getsetvalue( sensor ) ;
+                    if( v ) {
+                        tr|=8 ;
+                    }
+
+                    dvrconfig.setvalueint(section, trigger, tr);    
                 
-                dvrconfig.setvalueint(section, trigger, tr);       
-                
-/*                sprintf(sensor, "trigger%d_prerec", ivalue );
-                v=getsetvalue( sensor ) ;
-                if( v ) {
-                    dvrconfig.setvalue(section, sensor, v);       
+                    /* 
+                     sprintf(sensor, "trigger%d_prerec", ivalue );
+                     v=getsetvalue( sensor ) ;
+                     if( v ) {
+                         dvrconfig.setvalue(section, sensor, v);       
+                     }
+
+                     sprintf(sensor, "trigger%d_postrec", ivalue );
+                     v=getsetvalue( sensor ) ;
+                     if( v ) {
+                         dvrconfig.setvalue(section, sensor, v);       
+                     }
+                     */
                 }
-                
-                sprintf(sensor, "trigger%d_postrec", ivalue );
-                v=getsetvalue( sensor ) ;
-                if( v ) {
-                    dvrconfig.setvalue(section, sensor, v);       
-                }
-*/
-                
             }
 
             // pre_recording_time
@@ -627,12 +655,14 @@ int main()
             }
             
             // show_gps
-            v=getsetvalue( "show_gps" );
-            if( v ) {
-                dvrconfig.setvalueint(section,"showgps",1);
-            }
-            else {
-                dvrconfig.setvalueint(section,"showgps",0);
+            if( getsetvalue( "bool_show_gps" )!=NULL ) {
+                v=getsetvalue( "show_gps" );
+                if( v ) {
+                    dvrconfig.setvalueint(section,"showgps",1);
+                }
+                else {
+                    dvrconfig.setvalueint(section,"showgps",0);
+                }
             }
             
             // gpsunit
@@ -642,17 +672,16 @@ int main()
                 dvrconfig.setvalue(section,"gpsunit",v);
             }
 
-#ifdef PWII_APP                
             // show_gps_coordinate
-            v=getsetvalue( "show_gps_coordinate" );
-            if( v ) {
-                dvrconfig.setvalueint(section,"showgpslocation",1);
+            if( getsetvalue( "bool_show_gps_coordinate" )!=NULL ) {
+                v=getsetvalue( "show_gps_coordinate" );
+                if( v ) {
+                    dvrconfig.setvalueint(section,"showgpslocation",1);
+                }
+                else {
+                    dvrconfig.setvalueint(section,"showgpslocation",0);
+                }
             }
-            else {
-                dvrconfig.setvalueint(section,"showgpslocation",0);
-            }
-#endif            
-            
 
             // record_alarm_mode
             v = getsetvalue( "record_alarm_mode" );
@@ -712,12 +741,14 @@ int main()
             }
             
             // disableaudio
-            v = getsetvalue( "disableaudio" );
-            if( v ) {
-                dvrconfig.setvalueint( section, "disableaudio", 1);
-            }
-            else {
-                dvrconfig.setvalueint( section, "disableaudio", 0);
+            if( getsetvalue( "bool_disableaudio" )!=NULL ) {
+                v = getsetvalue( "disableaudio" );
+                if( v ) {
+                    dvrconfig.setvalueint( section, "disableaudio", 1);
+                }
+                else {
+                    dvrconfig.setvalueint( section, "disableaudio", 0);
+                }
             }
         }
     }
@@ -836,9 +867,10 @@ int main()
         fclose(fvalue);
 
         // cycletest
-        v=getsetvalue("cycletest");
-        dvrconfig.setvalueint( "debug", "cycletest", (v!=NULL));
-
+        if( getsetvalue( "bool_cycletest" ) {
+            v=getsetvalue("cycletest");
+            dvrconfig.setvalueint( "debug", "cycletest", (v!=NULL));
+        }
         // cyclefile
         v = getsetvalue ("cyclefile");
         if( v ) {
@@ -852,8 +884,10 @@ int main()
         }
         
         // norecord
-        v=getsetvalue("norecord");
-        dvrconfig.setvalueint( "system", "norecord", (v!=NULL));
+        if( getsetvalue( "bool_norecord" ) {
+            v=getsetvalue("norecord");
+            dvrconfig.setvalueint( "system", "norecord", (v!=NULL));
+        }
     }
 #endif
     

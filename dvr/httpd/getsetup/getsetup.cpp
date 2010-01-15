@@ -217,12 +217,14 @@ int main()
         // no rec playback
         ivalue = dvrconfig.getvalueint("system", "norecplayback");
         if( ivalue>0 ) {
+            fprintf(fvalue, "\"bool_norecplayback\":\"on\"," );
             fprintf(fvalue, "\"norecplayback\":\"on\"," );
         }
 
         // no rec liveview
         ivalue = dvrconfig.getvalueint("system", "noreclive");
         if( ivalue>0 ) {
+            fprintf(fvalue, "\"bool_noreclive\":\"on\"," );
             fprintf(fvalue, "\"noreclive\":\"on\"," );
         }
 
@@ -230,6 +232,7 @@ int main()
         // en_file_encryption
         int file_encrypt = dvrconfig.getvalueint("system", "fileencrypt");
         if( file_encrypt>0 ) {
+            fprintf(fvalue, "\"bool_en_file_encryption\":\"on\"," );
             fprintf(fvalue, "\"en_file_encryption\":\"on\"," );
         }
         
@@ -239,6 +242,7 @@ int main()
         // gpslog enable
         ivalue = dvrconfig.getvalueint("glog", "gpsdisable");
         if( ivalue == 0 ) {
+            fprintf(fvalue, "\"bool_en_gpslog\":\"on\",");
             fprintf(fvalue, "\"en_gpslog\":\"on\",");
         }
         
@@ -305,11 +309,11 @@ int main()
             fprintf( fvalue, "\"gforce_available\":\"0\",");
         }
 
-#ifdef	PWII_APP
         // Video output selection
-        ivalue = dvrconfig.getvalueint("VideoOut", "startchannel");
-        fprintf( fvalue, "\"videoout\":\"%d\",", ivalue);
-#endif
+        value = dvrconfig.getvalue("VideoOut", "startchannel");
+        if( value.length()>0) {
+            fprintf( fvalue, "\"videoout\":\"%s\",", value.getstring());
+        }
 
         fprintf( fvalue, "\"objname\":\"system_value\" }");
         
@@ -343,6 +347,7 @@ int main()
             sprintf(section, "camera%d", i);
             // enable_camera
             if( dvrconfig.getvalueint(section, "enable") ) {
+                fprintf(fvalue, "\"bool_enable_camera\":\"on\"," );
                 fprintf(fvalue, "\"enable_camera\":\"on\"," );
             }
             
@@ -431,6 +436,12 @@ int main()
             }         
                 
             // trigger and osd
+#ifdef MDVR_APP                    
+            fprintf(fvalue, "\"bool_sensor_trigger\":\"on\",");
+#else
+            fprintf(fvalue, "\"bool_sensor_trigger_sel\":\"on\"," );
+#endif
+            fprintf(fvalue, "\"bool_sensor_osd\":\"on\"," );
             for( ivalue=1; ivalue<=sensor_number; ivalue++ ) {
                 char trigger[30], osd[30] ;
                 int  itrig, iosd ;
@@ -442,7 +453,9 @@ int main()
                     fprintf(fvalue, "\"sensor%d_osd\":\"on\",", ivalue );
                 }
                 if( itrig>0 ) {
+#ifdef MDVR_APP                    
                     fprintf(fvalue, "\"sensor%d_trigger\":\"on\",", ivalue );
+#else
                     if( itrig & 1 ) {
                         fprintf(fvalue, "\"sensor%d_trigger_on\":\"on\",", ivalue );
                     }
@@ -450,11 +463,12 @@ int main()
                         fprintf(fvalue, "\"sensor%d_trigger_off\":\"on\",", ivalue );
                     }
                     if( itrig & 4 ) {
-                        fprintf(fvalue, "\"sensor%d_trigger_turnon\":\"on\",", ivalue );
+                        fprintf(fvalue, "\"sensor%d_trigger_turnon\":\"on\",", ivalue );                        
                     }
                     if( itrig & 8 ) {
                         fprintf(fvalue, "\"sensor%d_trigger_turnoff\":\"on\",", ivalue );
                     }
+#endif                    
                 }
 
 /*                
@@ -487,6 +501,7 @@ int main()
             // show_gps
             ivalue = dvrconfig.getvalueint(section, "showgps");
             if( ivalue>0 ) {
+                fprintf(fvalue, "\"bool_show_gps\":\"on\"," );
                 fprintf(fvalue, "\"show_gps\":\"on\"," );
             }  
             
@@ -495,12 +510,11 @@ int main()
             value = dvrconfig.getvalue(section, "gpsunit");
             fprintf(fvalue, "\"speed_display\":\"%s\",", value.getstring() );
 
-#ifdef PWII_APP                
             ivalue = dvrconfig.getvalueint(section, "showgpslocation");
             if( ivalue>0 ) {
+                fprintf(fvalue, "\"bool_show_gps_coordinate\":\"on\"," );
                 fprintf(fvalue, "\"show_gps_coordinate\":\"on\"," );
             }  
-#endif            
             
              // record_alarm_mode
             value = dvrconfig.getvalue( section, "recordalarmpattern" );
@@ -541,6 +555,7 @@ int main()
             // disableaudio
             ivalue = dvrconfig.getvalueint( section, "disableaudio" );
             if( ivalue ) {
+                fprintf(fvalue, "\"bool_disableaudio\":\"%s\",", "on" );
                 fprintf(fvalue, "\"disableaudio\":\"%s\",", "on" );
             }  
 
@@ -592,6 +607,7 @@ int main()
             }
 
             // inverted value
+            fprintf( fvalue, "\"bool_%s_inverted\":\"on\",", section );
             if( dvrconfig.getvalueint(section, "inverted") ) {
                 fprintf( fvalue, "\"%s_inverted\":\"on\",", section );
             }
@@ -601,10 +617,8 @@ int main()
 
             // event marker
             if( dvrconfig.getvalueint(section, "eventmarker") ) {
+                fprintf( fvalue, "\"bool_%s_eventmarker\":\"on\",", section );
                 fprintf( fvalue, "\"%s_eventmarker\":\"on\",", section );
-            }
-            else {
-                fprintf( fvalue, "\"%s_eventmarker\":\"off\",", section );
             }
 
         }
@@ -613,7 +627,6 @@ int main()
         fclose( fvalue );
     }
     
-#ifndef TVS_APP    
     // write network_value
     fvalue = fopen("network_value", "w");
     if( fvalue ) {
@@ -744,7 +757,6 @@ int main()
         fprintf(fvalue, "\"objname\":\"network_value\" }" );
         fclose( fvalue );
     }
-#endif	// ! TVS_APP    
 
 #ifdef POWERCYCLETEST    
     // write cycletest_value
@@ -758,6 +770,7 @@ int main()
         // cycletest
         ivalue = dvrconfig.getvalueint("debug", "cycletest");
         if( ivalue>0 ) {
+            fprintf(fvalue, "\"bool_cycletest\":\"on\"," );
             fprintf(fvalue, "\"cycletest\":\"on\"," );
         }  
         
@@ -776,6 +789,7 @@ int main()
         // norecord
         ivalue = dvrconfig.getvalueint("system", "norecord");
         if( ivalue>0 ) {
+            fprintf(fvalue, "\"bool_norecord\":\"on\"," );
             fprintf(fvalue, "\"norecord\":\"on\"," );
         }  
         
