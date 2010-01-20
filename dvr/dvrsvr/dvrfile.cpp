@@ -43,7 +43,7 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
     struct stat dvrfilestat ;
     close();
     m_initialsize = 0;
-    m_handle = fopen(filename, mode);
+    m_handle = file_open(filename, mode);
     if (m_handle == NULL) {
         return 0;
     }
@@ -144,14 +144,14 @@ void dvrfile::close()
                 writekey();
             }
 //            file_syncreq = 1;
-            if( fclose(m_handle)!=0 ) {
+            if( file_close(m_handle)!=0 ) {
                 dvr_log("Close file failed : %s",m_filename.getstring());
                 rec_basedir="" ;
             }
 //            sync();
         }
         else {
-            fclose(m_handle);
+            file_close(m_handle);
         }
         m_handle = NULL;
         if( m_filebuf!=NULL  ) {
@@ -168,7 +168,7 @@ void dvrfile::close()
 int dvrfile::read(void *buffer, size_t buffersize)
 {
     if( isopen() ) {
-        return fread(buffer, 1, buffersize, m_handle);
+        return file_read(buffer, buffersize, m_handle);
     }
     else {
         return 0 ;
@@ -183,7 +183,7 @@ int dvrfile::write(void *buffer, size_t buffersize)
 //            fdatasync( fileno(m_handle) );
 //            m_syncsize=0 ;
 //        }
-        return fwrite(buffer, 1, buffersize, m_handle);
+        return file_write(buffer, buffersize, m_handle);
     }
     else {
         return 0;
@@ -213,9 +213,9 @@ int dvrfile::seek(int pos, int from)
 int dvrfile::truncate( int tsize )
 {
     int res ;
-    fflush(m_handle);
+    file_flush(m_handle);
     res=ftruncate(fileno(m_handle), tsize);
-    fflush(m_handle);
+    file_flush(m_handle);
     return res ;
 }
 
@@ -570,18 +570,20 @@ void dvrfile::readkey()
     char * pk = keyfilename.getstring() ;
     int l=strlen(pk);
     FILE * keyfile = NULL;
+    dvr_lock();
     m_keyarray.empty();
     if( strcmp( &pk[l-4], ".264")==0 ) {
         strcpy(&pk[l-4],".k");
-        keyfile=fopen( pk, "r" );
+        keyfile=file_open( pk, "r" );
         if( keyfile ) {
             struct dvr_key_t key;
             while(fscanf(keyfile,"%d,%d\n", &(key.ktime), &(key.koffset))==2){
                 m_keyarray.add(key);
             }
-            fclose(keyfile);
+            file_close(keyfile);
         }
     }
+    dvr_unlock();
 }
 
 void dvrfile::writekey()
@@ -594,18 +596,20 @@ void dvrfile::writekey()
     if( m_keyarray.size()==0 ) {
         return;
     }
+    dvr_lock();
     if( strcmp( &pk[l-4], ".264")==0 ) {
         strcpy(&pk[l-4],".k");
-        keyfile=fopen( pk, "w" );
+        keyfile=file_open( pk, "w" );
         if( keyfile ) {
             for( i=0;i<m_keyarray.size();i++) {
                 struct dvr_key_t * pkey ;
                 pkey = m_keyarray.at(i);
                 fprintf(keyfile,"%d,%d\n", pkey->ktime, pkey->koffset);
             }
-            fclose(keyfile);
+            file_close(keyfile);
         }
     }
+    dvr_unlock();
 }
 
 // return 1: seek success, 0: out of range
@@ -905,6 +909,7 @@ int dvrfile::rename(const char * oldfilename, const char * newfilename)
     int res ;
     char oldkfile[512], newkfile[512] ;
     int  lo, ln ;
+    dvr_lock();
     res = ::rename( oldfilename, newfilename );
     strcpy( oldkfile, oldfilename );
     strcpy( newkfile, newfilename );
@@ -916,6 +921,7 @@ int dvrfile::rename(const char * oldfilename, const char * newfilename)
            strcpy( &newkfile[ln-4], ".k" );
            ::rename( oldkfile, newkfile );
        }
+    dvr_unlock();
     return res;
 }
 
@@ -925,6 +931,7 @@ int dvrfile::remove(const char * filename)
     int res ;
     char kfile[256] ;
     int l ;
+    dvr_lock();
     res = ::remove( filename );
     strcpy( kfile, filename );
     l = strlen( kfile );
@@ -932,6 +939,7 @@ int dvrfile::remove(const char * filename)
         strcpy( &kfile[l-4], ".k" ) ;
         ::remove( kfile );
     }
+    dvr_unlock();
     return res ;
 }
 
@@ -962,6 +970,52 @@ int dvrfile::lock(const char * filename)
 	return chrecmod( f, 'N', 'L' );
 }
 
+FILE * file_open(const char *path, const char *mode)
+{
+    FILE * f ;
+    dvr_lock();
+    f = fopen(path, mode);
+    dvr_unlock();
+    return f ;
+}
+
+int file_read(void *ptr, int size, FILE *stream)
+{
+    int r ;
+    dvr_lock();
+    r = (int)fread( ptr, 1, (size_t)size, stream );
+    dvr_unlock();
+    return r ;
+}
+
+int file_write(const void *ptr, int size, FILE *stream)
+{
+    int r ;
+    dvr_lock();
+    r = (int)fwrite( ptr, 1, (size_t)size, stream );
+    dvr_unlock();
+    return r ;
+}
+
+int file_close(FILE *fp)
+{
+    int r ;
+    dvr_lock();
+    r = fclose( fp );
+    dvr_unlock();
+    return r ;
+}
+
+int file_flush(FILE *stream)
+{
+    int r ;
+    dvr_lock();
+    r = fflush( stream );
+    dvr_unlock();
+    return r ;
+}
+
+
 void file_sync()
 {
 //    if (file_syncreq) {
@@ -969,6 +1023,7 @@ void file_sync()
 //        sync();
 //    }
 //	  sync();
+    disk_sync();
 }
 
 void file_init()

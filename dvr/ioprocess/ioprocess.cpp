@@ -703,7 +703,7 @@ int mcu_recv_enteracommand()
     return res ;
 }
 
-// help function for sending command to pwii
+// help function for sending command to mcu
 static char * mcu_cmd(int cmd, int datalen=0, ...)
 {
     static char responds[RECVBUFSIZE] ;
@@ -2798,6 +2798,11 @@ int main(int argc, char * argv[])
                 
                 if( runtime>=modeendtime ) {
                     app_mode = APPMODE_STANDBY ;
+#ifdef PWII_APP                    
+                    // standby pwii
+                    p_dio_mmap->pwii_output &= ~0x800 ;         // LCD off
+                    p_dio_mmap->pwii_output |= 0x1000 ;         // STANDBY mode
+#endif                    
                     modeendtime = runtime+getstandbytime()*1000 ;
                     if( smartftp_disable==0 ) {
                         
@@ -2900,6 +2905,11 @@ int main(int argc, char * argv[])
                     p_dio_mmap->devicepower=0xffff ;    // turn on all devices power
                     app_mode=APPMODE_RUN ;                        // back to normal
                     p_dio_mmap->iobusy = 0 ;
+#ifdef PWII_APP
+                    // pwii jump out of standby
+                    p_dio_mmap->pwii_output |= 0x800 ;      // LCD on                   
+                    p_dio_mmap->pwii_output &= ~0x1000 ;    // standby off
+#endif                    
                     dvr_log("Power on switch, set to running mode. (mode %d)", app_mode);
                     if( pid_smartftp > 0 ) {
                         smartftp_kill();

@@ -427,92 +427,6 @@ struct dvrtime operator + ( struct dvrtime & t, int seconds ) ;
 struct dvrtime operator + ( struct dvrtime & t, double seconds ) ;
 double operator - ( struct dvrtime &t1, struct dvrtime &t2 ) ;
 
-// recording service
-#define DEFMAXFILESIZE (100000000)
-#define DEFMAXFILETIME (24*60*60)
-
-extern string rec_basedir;
-extern int rec_busy ;
-extern int rec_pause;           // pause recording temperary
-extern int rec_watchdog ;      // recording watchdog
-void rec_init();
-void rec_uninit();
-void rec_onframe(struct cap_frame *pframe);
-void rec_record(int channel);
-void rec_prerecord(int channel);
-void rec_postrecord(int channel);
-void rec_lockstart(int channel);
-void rec_lockstop(int channel);
-int  rec_state(int channel);
-void rec_lock(time_t locktime);
-void rec_unlock();
-void rec_break();
-void rec_update();
-void rec_alarm();
-void rec_start();
-void rec_stop();
-struct nfileinfo {
-    int channel;
-    struct dvrtime filetime ;
-    int filelength ;
-    char extension[4] ;                         // ".k" or ".264"
-    int  filesize ;                             // option, can be 0
-} ;
-FILE * rec_opennfile(int channel, struct nfileinfo * nfi);
-
-// disk and .264 file directories
-// get .264 file list by day and channel
-extern struct dvrtime disk_earliesttime ;
-int f264length(const char *filename);				// get file length from file name
-int f264locklength(const char *filename);			// get file lock length from file name
-int f264time(const char *filename, struct dvrtime *dvrt);
-char *basefilename(const char *fullpath);
-
-class f264name : public string {
-public:
-        int operator < ( f264name & s2 ) {
-            struct dvrtime t1, t2 ;
-            f264time( getstring(), &t1 );
-            f264time( s2.getstring(), &t2 );
-            return t1<t2 ;
-        }
-        f264name & operator =(const char *str) {
-            setstring(str);
-            return *this;
-        }
-};
-
-void disk_listday(array <f264name> & list, struct dvrtime * day, int channel);
-void disk_getdaylist(array <int> & daylist);
-int disk_unlockfile( dvrtime * begin, dvrtime * end );
-void disk_check();
-int disk_renew(char * newfilename);
-void disk_init();
-void disk_uninit();
-
-
-// live video service
-struct net_fifo {
-    struct net_fifo *next;
-    char *buf;
-    int bufsize;
-    int loc;
-};
-
-class live {
-    protected:
-        int m_channel;
-        net_fifo * m_fifo ;
-        void * m_framebuf ;
-        int    m_framesize;
-        
-    public:
-        live( int channel );
-        ~live();
-        void getstreamdata(void ** getbuf, int * getsize, int * frametype);
-        void onframe(cap_frame * pframe);
-};
-
 // network service
 
 #define DVRPORT 15111
@@ -525,7 +439,6 @@ class live {
 #define DVRMSG		0x774f9a31
 #define REQMCMSG	0x4351de75
 #define ANSMCMSG	0x43518967
-
 
 struct sockad {
     struct sockaddr addr;
@@ -564,10 +477,6 @@ struct dvr_ans {
     int anscode;
     int data;
     int anssize;
-};
-
-struct channel_fifo {
-    int channel;
 };
 
 enum reqcode_type { REQOK =	1, 
@@ -653,7 +562,6 @@ enum anscode_type { ANSERROR =1, ANSOK,
     ANSMAX
 };
 
-
 enum conn_type { CONN_NORMAL = 0, CONN_REALTIME };
 
 #define closesocket(s) close(s)
@@ -663,11 +571,7 @@ class dvrsvr {
         static dvrsvr *m_head;
         dvrsvr *m_next;				// dvr list
         int m_sockfd;				// socket
-        struct net_fifo *m_fifo;
-        int m_fifosize ;			// size of fifo
         int m_active;               // active streaming socket
-        
-        live	 * m_live ;
         
         // dvr related struct
         int m_conntype;				// 0: normal, 1: realtime video stream, 2: answering
@@ -689,14 +593,13 @@ class dvrsvr {
             return m_next;
         }
         int isfifo() {
-            return m_fifo != NULL;
+            return 0 ;
         }
         int socket() {
             return m_sockfd;
         }
         int  read();
         int  write();
-        void send_fifo(char *buf, int bufsize);
 		virtual void Send(void *buf, int bufsize);
         void close();
         int isclose();
@@ -706,37 +609,15 @@ class dvrsvr {
         void onrequest();
         void DefaultReq();
         
-
         virtual void ReqOK();
         virtual void ReqRealTime();
-        virtual void ChannelInfo();
         virtual void DvrServerName();
         virtual void GetChannelSetup();
         virtual void SetChannelSetup();
         virtual void HostName();
         virtual void GetChannelState();
-        virtual void SetDVRSystemTime();
-        virtual void GetDVRSystemTime();
-        virtual void SetDVRLocalTime();
-        virtual void GetDVRLocalTime();
-        virtual void SetDVRTimeZone();
-        virtual void GetDVRTimeZone();
-        virtual void GetDVRTZIEntry();
         virtual void GetVersion();
         virtual void ReqEcho();
-        virtual void ReqPTZ();
-        virtual void ReqAuth();
-        virtual void ReqKey();
-        virtual void ReqDisconnect();
-        virtual void ReqCheckId();
-        virtual void ReqListId();
-        virtual void ReqDeleteId();
-        virtual void ReqAddId();
-        virtual void ReqSharePasswd();
-        virtual void ReqStreamOpenLive();
-        virtual void ReqStreamClose();
-        virtual void ReqStreamGetData();
-        virtual void ReqStreamTime();
         virtual void Req2SetLocalTime();
         virtual void Req2GetLocalTime();
         virtual void Req2SetSystemTime();
@@ -750,54 +631,6 @@ class dvrsvr {
         virtual void ReqGetData();
 };
 
-// received UDP message
-#define MAXMSGSIZE (32000)
-int msg_onmsg(void *msgbuf, int msgsize, struct sockad *from);
-void msg_clean();
-void msg_init();
-void msg_uninit();
-
-extern int msgfd;
-
-// system setup
-struct system_stru {
-//	char IOMod[80]  ;
-    char productid[8] ;     // "TVS" or "MDVR" or "PWII"
-    // for TVS system , 72 bytes 
-    char productserial[24] ;
-    char medallion[24] ;
-    char licenseplate[24] ;
-    
-	char ServerName[80] ;
-	int cameranum ;
-	int alarmnum ;
-	int sensornum ;
-	int breakMode ;
-	int breakTime ;
-	int breakSize ;
-	int minDiskSpace ;
-	int shutdowndelay ;
-	char autodisk[32] ;
-	char sensorname[16][32];
-	int sensorinverted[16];
-	int eventmarker_enable ;
-	int eventmarker ;
-	int eventmarker_prelock ;
-	int eventmarker_postlock ;
-	char ptz_en ;
-	char ptz_port ;			// COM1: 0
-	char ptz_baudrate ;		// times of 1200
-	char ptz_protocol ;		// 0: PELCO "D"   1: PELCO "P"
-	int  videoencrpt_en ;	// enable video encryption
-	char videopassword[32] ;
-	int  rebootonnoharddrive ; // seconds to reboot if no harddrive detected!
-	char res[84] ;
-};
-
-// return true for ok
-int dvr_getsystemsetup(struct system_stru * psys);
-// return true for ok
-int dvr_setsystemsetup(struct system_stru * psys);
 // return true for ok
 int dvr_getchannelsetup(int ch, struct DvrChannel_attr * pchannel, int attrsize);
 // return true for ok

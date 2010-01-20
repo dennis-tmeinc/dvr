@@ -1,6 +1,6 @@
 
-#include "dvr.h"
-
+#include "genclass.h"
+#include "cfg.h"
 
 config::config(char *configfilename)
 {

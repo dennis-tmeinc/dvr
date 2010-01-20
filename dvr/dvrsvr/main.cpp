@@ -106,10 +106,10 @@ void dvr_cleanlog(FILE * flog)
         // skip one line
         fgets( fbuf, 4096, flog );	// skip this line.
         pos2 = 0 ;
-        while( (rsize=fread(fbuf, 1, 32*1024, flog))>0 ) {
+        while( (rsize=file_read(fbuf, 32*1024, flog))>0 ) {
             pos1 = ftell(flog) ;
             fseek( flog, pos2, SEEK_SET );
-            fwrite( fbuf, 1, rsize, flog );
+            file_write( fbuf, rsize, flog );
             pos2 = ftell(flog) ;
             if( rsize<32*1024 ) {
                 break;
@@ -118,7 +118,7 @@ void dvr_cleanlog(FILE * flog)
         }
         mem_free( fbuf );
         fseek( flog, pos2, SEEK_SET );
-        fflush( flog );
+        file_flush( flog );
         ftruncate( fileno(flog), pos2 );
     }
 }
@@ -146,22 +146,24 @@ int dvr_log(char *fmt, ...)
         }
     }
     
-    flog = fopen(logfilename, "a");
+    flog = file_open(logfilename, "a");
     if (flog) {
-        ftmplog = fopen(tmplogfile.getstring(), "r");	// copy temperary log to logfile
+        ftmplog = file_open(tmplogfile.getstring(), "r");	// copy temperary log to logfile
         if (ftmplog) {
+            dvr_lock();
             fputs("\n", flog);
             while (fgets(lbuf, 512, ftmplog)) {
                 fputs(lbuf, flog);
             }
             fputs("\n", flog);
-            fclose(ftmplog);
+            dvr_unlock();
+            file_close(ftmplog);
             unlink(tmplogfile.getstring());
         }
         res=1 ;
     } else {
         logfilename[0]=0 ;
-        flog = fopen(tmplogfile.getstring(), "a");
+        flog = file_open(tmplogfile.getstring(), "a");
         rectemp=1 ;
     }
 
@@ -175,6 +177,7 @@ int dvr_log(char *fmt, ...)
     vprintf(fmt, ap );
     printf("\n");
     if (flog) {
+        dvr_lock();
         fprintf(flog, "%s:", lbuf);
         vfprintf(flog, fmt, ap );
         if( rectemp ) {
@@ -183,10 +186,11 @@ int dvr_log(char *fmt, ...)
         else {
             fprintf(flog, "\n");		
         }
+        dvr_unlock();
         if( ftell(flog) > logfilesize ) {		// log file oversize ?
             dvr_cleanlog( flog );
         }
-        if( fclose(flog)!=0 ) {
+        if( file_close(flog)!=0 ) {
             res = 0 ;
         }
     }
@@ -203,7 +207,7 @@ static FILE * dvr_logkey_file()
     static char logfilename[512] ;
     FILE * flog ;
 
-    flog = fopen(logfilename, "a");
+    flog = file_open(logfilename, "a");
     if ( flog==NULL ) {
         if (rec_basedir.length() > 0) {
             sprintf(logfilename, "%s/%s", rec_basedir.getstring(), keylogfile.getstring());
@@ -211,10 +215,10 @@ static FILE * dvr_logkey_file()
         }
     }
     else {
-        fclose( flog );
+        file_close( flog );
     }
 
-    return fopen(logfilename, "a");
+    return file_open(logfilename, "a");
 
 }
 
@@ -224,6 +228,7 @@ static void dvr_logkey_settings()
     if( flog==NULL ) {
         return ;
     }
+    dvr_lock();
     if( g_usbid[0] == 'I' && g_usbid[1] == 'N' ) {		// log installer only 
         //			write down some settings changes
         string v ;
@@ -284,7 +289,8 @@ static void dvr_logkey_settings()
         }
         keylogsettings = 0 ;
     }
-    fclose( flog );
+    dvr_unlock();
+    file_close( flog );
     return ;
 }
 
@@ -312,8 +318,10 @@ void dvr_logkey( int op, struct key_data * key )
             }
             flog = dvr_logkey_file();
             if( flog ) {
+                dvr_lock();
                 fprintf(flog, "%s:Viewer connection closed, key ID: %s\n", lbuf, g_usbid );
-                fclose( flog );
+                dvr_unlock();
+                file_close( flog );
             }
         }
     }
@@ -329,13 +337,15 @@ void dvr_logkey( int op, struct key_data * key )
             }
             flog = dvr_logkey_file();
             if( flog ) {
+                dvr_lock();
                 fprintf(flog, "\n%s:Viewer connected, key ID: %s\n%s", 
                     lbuf, key->usbid, ((char *)&(key->size))+key->keyinfo_start );
+                dvr_unlock();
                 l = ftell(flog) ;
                 if( l>logfilesize ) {
                     dvr_cleanlog( flog );
                 }
-                fclose( flog );
+                file_close( flog );
             }
         }
         if( keylogsettings ) {
@@ -804,16 +814,13 @@ void app_init()
 
 void app_exit()
 {
-    sync();
     unlink( pidfile.getstring() );
     dvr_log("Quit DVR.\n");
 }
 
 void do_init()
 {
-    // initial mutex
-    memcpy( &dvr_mutex, &mutex_init, sizeof(mutex_init));
-    
+   
     dvr_log("Start initializing.");
 
     app_init();
@@ -851,7 +858,6 @@ void do_uninit()
     event_uninit();
     time_uninit();
 
-    pthread_mutex_destroy(&dvr_mutex);
 }
 
 // dvr exit code
@@ -866,6 +872,9 @@ int main()
     unsigned int serial=0;
     int app_ostate;				// application status. ( APPUP, APPDOWN )
 
+    // initial mutex
+    memcpy( &dvr_mutex, &mutex_init, sizeof(mutex_init));
+    
     mem_init();
     
     app_ostate = APPDOWN ;
@@ -920,7 +929,9 @@ int main()
     
     app_exit();
     mem_uninit ();
-    
+
+    pthread_mutex_destroy(&dvr_mutex);
+
     if (system_shutdown) {              // requested system shutdown
         // dvr_log("Reboot system.");
         return EXIT_REBOOT ;

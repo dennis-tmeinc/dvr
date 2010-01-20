@@ -60,22 +60,25 @@ capture::capture( int channel )
     m_remoteosd = 0 ;	// local OSD by default
     m_signal_standard = 1 ;
     m_started = 0 ;
-    loadconfig();
-}
-
-void capture::loadconfig()
-{
-    // loading osd bitmaps ;
-    m_sensorosd=0 ;
+    m_sensorosd = 1 ;
 
     memset( &m_attr, 0, sizeof(m_attr));
     m_attr.structsize = sizeof(m_attr);
     m_attr.Enable = 1;
-    
     m_attr.FrameRate=1;
-   
-    // osd sensor
-    m_sensorosd = 0 ;
+    m_attr.Resolution=3;
+    m_attr.PictureQuality=5;
+    m_attr.MotionAlarmEn=1 ;
+    m_attr.MotionSensitivity=3 ;
+    m_attr.BitrateEn=1 ;
+    m_attr.BitMode=0 ;
+    m_attr.Bitrate=1000000;
+    m_attr.structsize=sizeof(m_attr);
+    m_attr.brightness=5;
+    m_attr.contrast=5;   
+    m_attr.saturation=5; 
+    m_attr.hue=5; 
+
 }
 
 extern int screen_onframe( cap_frame * capframe );

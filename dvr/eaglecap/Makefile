@@ -12,8 +12,7 @@ SOURCES=main.cpp \
 		capture.cpp \
 		eaglecapture.cpp \
 		memory.cpp \
-		string.cpp \
-		live.cpp
+		string.cpp 
 
 HEADERS=dvr.h genclass.h
 
@@ -21,7 +20,7 @@ OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
 # LIBRARY=libdio.so
 
-LDFLAGS= -lpthread -lstdc++ -L./eagle32 -lsdk -ldadsp  ./eagle32/dsplink.lib -Wl,-rpath,.
+LDFLAGS= -lpthread -lstdc++ -L../dvrsvr/eagle32 -lsdk -ldadsp  ../dvrsvr/eagle32/dsplink.lib -Wl,-rpath,.
 
 # dvrsvr : $(OBJS) $(LIBRARY)
 eaglecap : $(OBJS)

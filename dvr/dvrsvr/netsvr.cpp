@@ -380,7 +380,8 @@ void *net_thread(void *param)
     int flag ;
     dvrsvr *pconn;
     dvrsvr *pconn1;
-    
+
+    dvr_lock();
     while (net_run == 1) {		// running?
         
         msg_clean();			// clearn dvr_msg
@@ -390,7 +391,6 @@ void *net_thread(void *param)
         FD_ZERO(&writefds);
         FD_ZERO(&exceptfds);
         
-        dvr_lock();
         fifos = 0;
         pconn = dvrsvr::head();
         while (pconn != NULL) {
@@ -408,7 +408,6 @@ void *net_thread(void *param)
             pconn = pconn1;
         }
         net_fifos = fifos;
-        dvr_unlock();
 
         FD_SET(serverfd, &readfds);
         FD_SET(msgfd, &readfds);
@@ -416,7 +415,9 @@ void *net_thread(void *param)
         timeout.tv_sec = 3;		// 3 second time out
         timeout.tv_usec = 0 ;
 
+        dvr_unlock();
         sres = select(FD_SETSIZE, &readfds, &writefds, &exceptfds, &timeout) ;
+        dvr_lock();
         if (sres > 0) {
             net_active=1 ;
             net_activetime = g_timetick ;
@@ -431,9 +432,7 @@ void *net_thread(void *param)
                     flag = 1 ;
                     // turn on TCP_NODELAY, to increase performance
                     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
-                    dvr_lock();
                     pconn =	new dvrsvr(fd);
-                    dvr_unlock();
                     continue ;
                 }
             }
@@ -450,14 +449,10 @@ void *net_thread(void *param)
                     }
                     else {
                         if (FD_ISSET(fd, &readfds)) {
-                            dvr_lock();
                             while( pconn->read() ) ;
-                            dvr_unlock ();
                         }
                         if (pconn->isfifo()) {
-                            dvr_lock();
                             while( pconn->write() ) ;
-                            dvr_unlock ();
                         }
                     }
                 }
@@ -468,10 +463,9 @@ void *net_thread(void *param)
             // time out
             if( net_active ) {
                 if( (g_timetick-net_activetime)>(15*60*1000) ) {            // 15 minutes time out for network activity
-                    dvr_lock();
-                    while (dvrsvr::head() != NULL)
+                    while (dvrsvr::head() != NULL) {
                         delete dvrsvr::head();
-                    dvr_unlock ();
+                    }
                 }
                 if( dvrsvr::head() == NULL ) {
                     net_active = 0 ;
@@ -481,9 +475,11 @@ void *net_thread(void *param)
         }
     }
     net_active = 0 ;
-    while (dvrsvr::head() != NULL)
+    while (dvrsvr::head() != NULL) {
         delete dvrsvr::head();
- 
+    }
+
+    dvr_unlock();
     return NULL;
 }
 

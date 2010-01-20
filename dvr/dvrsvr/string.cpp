@@ -1,11 +1,13 @@
 
-#include "dvr.h"
+#include <stdio.h>
+
+#include "genclass.h"
 
 void str_trimtail(char *line)
 {
 	int len;
 	len = strlen(line);
-        while(len>0) {
+    while(len>0) {
 		if( line[len-1] <= ' ' && line[len-1]>0  ) {
 			len-- ;
 		}

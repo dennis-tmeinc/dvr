@@ -63,16 +63,6 @@ int dvr_log( char * fmt, ...)
     return 0 ;
 }
 
-int dvr_getsystemsetup(struct system_stru * psys)
-{
-    return 0 ;
-}
-
-int dvr_setsystemsetup(struct system_stru * psys)
-{
-    return 0 ;
-}
-
 int app_restart;
 unsigned long app_signalmap=0;
 int app_signal_ex=0;

@@ -26,7 +26,7 @@ void rec_index::savefile(char *filename)
     int onoff;
     int i;
     
-    idxfile = fopen(filename, "w");
+    idxfile = file_open(filename, "w");
     if (idxfile == NULL) {
         dvr_log("Can not write index file.");
         return;
@@ -46,6 +46,7 @@ void rec_index::savefile(char *filename)
             break;
         }
         dvrt = filetime + pidx->onofftime;
+        dvr_lock();
         fprintf(idxfile, "%c%04d%02d%02d%02d%02d%02d\n", onoff,
                 dvrt.year,
                 dvrt.month,
@@ -53,9 +54,10 @@ void rec_index::savefile(char *filename)
                 dvrt.hour,
                 dvrt.minute,
                 dvrt.second );
+        dvr_unlock();
     }
     
-    fclose(idxfile);
+    file_close(idxfile);
     empty();
 }
 
@@ -70,7 +72,7 @@ void rec_index::readfile(char *filename)
     struct dvrtime filetime ;
     
     empty();
-    idxfile = fopen(filename, "r");
+    idxfile = file_open(filename, "r");
     if (idxfile == NULL) {
         return;
     }
@@ -81,6 +83,7 @@ void rec_index::readfile(char *filename)
     state = 0 ;
     while (!feof(idxfile)) {
         memset( &dvrt, 0, sizeof(dvrt));
+        dvr_lock();
         i = fscanf(idxfile, "%c%04d%02d%02d%02d%02d%02d\n", 
                    &onoff,
                    &(dvrt.year),
@@ -89,6 +92,7 @@ void rec_index::readfile(char *filename)
                    &(dvrt.hour),
                    &(dvrt.minute),
                    &(dvrt.second) );
+        dvr_unlock();
         if (i < 7)
             break;
         t=(int)(dvrt-filetime) ;
@@ -108,5 +112,5 @@ void rec_index::readfile(char *filename)
             break;
     }
     
-    fclose(idxfile);
+    file_close(idxfile);
 }

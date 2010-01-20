@@ -413,30 +413,30 @@ void *rec_filecopy(void *param)
     int  rdsize ;
     int totalsize ;
     dvrtime starttime, endtime ;
-    source = fopen( fc->sourcename, "r" ) ;
+    source = file_open( fc->sourcename, "r" ) ;
     if( source==NULL ) {
         fc->start=1 ;
         return NULL ; 
     }
     time_now(&starttime);
     dvr_log("filecopy: source-%s", fc->sourcename );
-    dest = fopen( fc->destname, "w" ) ;
+    dest = file_open( fc->destname, "w" ) ;
     if( dest==NULL ) {
         fc->start=1 ;
-        fclose( source );
+        file_close( source );
         return NULL ;
     }
     dvr_log("filecopy: dest-%s", fc->destname );
     fc->start=1;
     totalsize = 0 ;
     buf = (char *)mem_alloc(1024) ;
-    while( (rdsize=fread(buf, 1, 1024, source))>0 ) {
-        totalsize+=fwrite(buf, 1, rdsize, dest);
+    while( (rdsize=file_read(buf, 1024, source))>0 ) {
+        totalsize+=file_write(buf, rdsize, dest);
         sleep(1);
     }
     mem_free( buf );
-    fclose( source );
-    fclose( dest );
+    file_close( source );
+    file_close( dest );
     time_now(&endtime);
     dvr_log("filecopy: size=%dk : time=%ds.", totalsize/1024, endtime-starttime );
     return NULL ;
@@ -614,7 +614,7 @@ int rec_channel::recorddata(rec_fifo * data)
         sprintf(newfilename, "%s/_%s_", 
                 rec_basedir.getstring(), g_hostname );
         if( stat(newfilename, &dstat)!=0 ) {
-            mkdir( newfilename, S_IFDIR | S_IRWXU | S_IRGRP | S_IROTH );
+            mkdir( newfilename, S_IFDIR | 0777 );
         }
         
         // make date directory
@@ -624,14 +624,14 @@ int rec_channel::recorddata(rec_fifo * data)
                 data->time.month,
                 data->time.day );
         if( stat(newfilename, &dstat)!=0 ) {
-            mkdir( newfilename, S_IFDIR | S_IRWXU | S_IRGRP | S_IROTH );
+            mkdir( newfilename, S_IFDIR | 0777 );
         }
         
         // make channel directory
         l = strlen(newfilename);
         sprintf(newfilename + l, "/CH%02d", m_channel);
         if( stat(newfilename, &dstat)!=0 ) {
-            mkdir( newfilename, S_IFDIR | S_IRWXU | S_IRGRP | S_IROTH );
+            mkdir( newfilename, S_IFDIR | 0777 );
         }
         
         // make new file name
@@ -791,7 +791,7 @@ void *rec_thread(void *param)
         
         wframes = 0 ;
         for( ch = 0 ; ch <rec_channels ; ch++ ) {
-            for( i=0; i<10 ; i++ ) {
+            for( i=0; i<50 ; i++ ) {
                 if(recchannel[ch]->dorecord()) {
                     wframes++;
                 }
@@ -815,6 +815,7 @@ void *rec_thread(void *param)
         else {
 			norec=0 ;
 		}
+        file_sync();
     }        
     for (ch = 0; ch < rec_channels; ch++) {
         recchannel[ch]->closefile();

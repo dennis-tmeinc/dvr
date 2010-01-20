@@ -281,7 +281,7 @@ int net_listen(int port, int socktype)
 
 void *net_thread(void *param)
 {
-    struct timeval timeout = { 0, 0 };
+    struct timeval timeout;
     fd_set readfds;
     fd_set writefds;
     fd_set exceptfds;
@@ -290,9 +290,6 @@ void *net_thread(void *param)
     int flag ;
     dvrsvr *pconn;
     dvrsvr *pconn1;
-    
-    time_t t1, t2 ;
-    int tdiff ;
     
     while (net_run == 1) {		// running?
         
@@ -332,8 +329,8 @@ void *net_thread(void *param)
             if (FD_ISSET(serverfd, &readfds)) {
                 fd = accept(serverfd, NULL, NULL);
                 if (fd > 0) {
-                    flag=fcntl(fd, F_GETFL, NULL);
-                    fcntl(fd, F_SETFL, flag|O_NONBLOCK);		// work on non-block mode
+//                    flag=fcntl(fd, F_GETFL, NULL);
+//                    fcntl(fd, F_SETFL, flag|O_NONBLOCK);		// work on non-block mode
                     flag = 1 ;
                     // turn on TCP_NODELAY, to increase performance
                     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
@@ -344,9 +341,6 @@ void *net_thread(void *param)
                 }
             }
             net_active=5 ;
-
-            t1=time(NULL);
-            
             pconn = dvrsvr::head();
             while ( pconn != NULL ) {
                 fd = pconn->socket();
@@ -357,36 +351,12 @@ void *net_thread(void *param)
                     else {
                         if (FD_ISSET(fd, &readfds)) {
                             dvr_lock();
-
-                    // turn on TCP_NODELAY, to increase performance
-//                            flag=1 ;
-//                    setsockopt(fd, IPPROTO_TCP, TCP_CORK, (char *) &flag, sizeof(int));
-
                             while( pconn->read() ) ;
-
-//                            flag=0 ;
-//                    setsockopt(fd, IPPROTO_TCP, TCP_CORK, (char *) &flag, sizeof(int));
-
-//                            flag=1 ;
-                            // turn on TCP_NODELAY, to increase performance
-//                    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
-                            
-                            dvr_unlock ();
-                        }
-                        if (pconn->isfifo()) {
-                            dvr_lock();
-                            while( pconn->write() ) ;
                             dvr_unlock ();
                         }
                     }
                 }
                 pconn = pconn->next();
-            }
-            
-            t2=time(NULL);
-            tdiff=(int)t2-(int)t1 ;
-            if( tdiff>1 ) {
-                tdiff=0 ;
             }
         }
     }

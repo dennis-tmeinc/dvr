@@ -7,7 +7,6 @@
 
 int disk_busy ;
 
-static pthread_mutex_t disk_mutex;
 static int disk_minfreespace;              // minimum free space for current disk, in Magabytes
 static int disk_lockfile_percentage ;      // how many percentage locked file can occupy.
 
@@ -42,7 +41,9 @@ class dir_find {
         // close dir handle
         void close() {
             if( m_pdir ) {
+                dvr_lock();
                 closedir( m_pdir );
+                dvr_unlock();
                 m_pdir=NULL ;
             }
         }
@@ -58,7 +59,9 @@ class dir_find {
                     m_pathname[m_dirlen]='\0';
                 }
             }
+            dvr_lock();
             m_pdir = opendir(m_pathname);
+            dvr_unlock();
         }
         ~dir_find() {
             close();
@@ -74,6 +77,8 @@ class dir_find {
         // return 1: success
         //        0: end of file. (or error)
         int find() {
+            int r=0 ;
+            dvr_lock();
             if( m_pdir ) {
                 while( (m_pent=readdir(m_pdir))!=NULL  ) {
                     // skip . and .. directory
@@ -94,13 +99,17 @@ class dir_find {
                             }
                         }
                     }
-                    return 1 ;
+                    r=1 ;
+                    break ;
                 }
             }
-            return 0 ;
+            dvr_unlock();
+            return r ;
         }
 
         int find(char * pattern) {
+            int r=0 ;
+            dvr_lock();
             if( m_pdir ) {
                 while( (m_pent=readdir(m_pdir))!=NULL  ) {
                     if( fnmatch(pattern, m_pent->d_name, 0 )==0 ) {
@@ -116,11 +125,13 @@ class dir_find {
                                 }
                             }
                         }
-                        return 1 ;
+                        r=1 ;
+                        break ;
                     }
                 }
             }
-            return 0 ;
+            dvr_unlock();
+            return r ;
         }
         
         char * pathname()  {
@@ -152,16 +163,6 @@ class dir_find {
         }
 };
 
-
-inline void disk_lock()
-{
-    pthread_mutex_lock(&disk_mutex);
-}
-
-inline void disk_unlock()
-{
-    pthread_mutex_unlock(&disk_mutex);
-}
 
 char *basefilename(const char *fullpath)
 {
@@ -275,11 +276,15 @@ void disk_rmdir(const char *dir)
             disk_rmdir( pathname );
         }
         else {
+            dvr_lock();
             unlink(pathname);
+            dvr_unlock();
         }
     }
     dfind.close();
+    dvr_lock();
     rmdir(dir);
+    dvr_unlock();
 }
 
 // remove empty directories
@@ -300,7 +305,9 @@ int disk_rmemptydir(char *dir)
     }
     dfind.close();
     if( files==0 ) {
+        dvr_lock();
         rmdir(dir);
+        dvr_unlock();
     }
     return files ;
 }
@@ -317,10 +324,12 @@ static void disk_removefile( const char * file264 )
     }
     extension=strstr( f264.getstring(), ".264" );
     if( extension ) {
+        dvr_lock();
         strcpy( extension, ".k");
         unlink( f264.getstring() );
         strcpy( extension, ".idx" );
         unlink( f264.getstring() );
+        dvr_unlock();
     }
 }
 
@@ -625,15 +634,12 @@ int disk_deloldfile( int lock )
     static array <f264name> oldfilelist ;
     static array <f264name> oldnfilelist ;
 
-    disk_lock();            // use disk_lock() because static field is used
-
     if( lock ) {
         if( oldfilelist.size()>0 ) {
             if( dvrfile::remove( oldfilelist[0].getstring() )==0 ) {
                 disk_renew( oldfilelist[0].getstring(), 0 );
             }
             oldfilelist.remove(0);
-            disk_unlock();
             return 1 ;
         }
     }
@@ -644,7 +650,6 @@ int disk_deloldfile( int lock )
                     disk_renew( oldfilelist[i].getstring(), 0 );
                 }
                 oldfilelist.remove(i);
-                disk_unlock();
                 return 1 ;
             }
         }
@@ -653,7 +658,6 @@ int disk_deloldfile( int lock )
                 disk_renew( oldnfilelist[0].getstring(), 0 );
             }
             oldnfilelist.remove(0);
-            disk_unlock();
             return 1 ;
         }
     }
@@ -710,7 +714,6 @@ int disk_deloldfile( int lock )
         }
     }
 
-    disk_unlock();
     return 0 ;
 }
 
@@ -721,6 +724,7 @@ int disk_renew( char * filename, int add )
 //    int l ;
 //    char * base ;
 
+    dvr_lock();
     if( add ) {
         disk_tlen += f264length(filename);
         disk_llen += f264locklength(filename);
@@ -735,6 +739,7 @@ int disk_renew( char * filename, int add )
             disk_llen=0;
         }
     }
+    dvr_unlock();
 /*    
     disk_lock();
     
@@ -774,10 +779,10 @@ int disk_testwritable( char * dir )
 
     sprintf( testfilename, "%s/dvrdisktestfile", dir );
 
-    FILE * ftest = fopen( testfilename, "w" );
+    FILE * ftest = file_open( testfilename, "w" );
     if( ftest!=NULL ) {
-        fwrite( &t1, 1, sizeof(t1), ftest );
-        if( fclose( ftest )!= 0 ) {
+        file_write( &t1, sizeof(t1), ftest );
+        if( file_close( ftest )!= 0 ) {
 			return 0 ;
 		}
     }
@@ -785,10 +790,10 @@ int disk_testwritable( char * dir )
 		return 0 ;
 	}
 
-    ftest = fopen( testfilename, "r" );
+    ftest = file_open( testfilename, "r" );
     if( ftest!=NULL ) {
-        fread( &t2, 1, sizeof(t2), ftest );
-		if( fclose( ftest )!= 0 ) {
+        file_read( &t2, sizeof(t2), ftest );
+		if( file_close( ftest )!= 0 ) {
 			return 0 ;
 		}
     }
@@ -816,7 +821,6 @@ int disk_findrecdisk()
     }
     
     for( loop=0; loop<50; loop++ ) {
-        
         // find a disk with available space
         for( i=0; i<disk_disklist.size(); i++ ) {
             if( disk_freespace( disk_disklist[i].basedir.getstring()) > disk_minfreespace ) {
@@ -826,16 +830,12 @@ int disk_findrecdisk()
             }
         }
 
-        disk_lock();
-
         // ok, none of the disks has space
         
         // first, let see what kind of file to delete, _L_ or _N_
         if( disk_tlen<=0 && disk_llen<=0 )        // no video files at all !!!
             return -1 ;
 
-        disk_lock();
-        
         if( disk_llen > disk_tlen*disk_lockfile_percentage/100 ) //  locked lengh > 30%
         {
             disk_deloldfile(1);
@@ -843,8 +843,6 @@ int disk_findrecdisk()
         else {
             disk_deloldfile(0);
         }
-
-        disk_unlock();
     }    
     return -1;    
 }
@@ -904,7 +902,6 @@ int disk_scanalldisk()
         return 0;
     }
     
-    disk_lock(); 
     for( i=0; i<disk_disklist.size(); i++ ) {
         disk_disklist[i].mark=0 ;
     }
@@ -951,29 +948,21 @@ int disk_scanalldisk()
         }
     }
 
-    disk_unlock();
     return disk_disklist.size();
 }
 
 int disk_maxdirty ;
-static int disk_sync_state = 0 ;    // 0: no sync thread, 1: sync running, 2: restart sync
 
-void * disk_sync(void * param)
+void disk_sync()
 {
-    while( disk_sync_state==1 ) {
-        if( g_memdirty > disk_maxdirty ) {
-            disk_busy = 1 ;
-            sync();
-            usleep(10000);
-        }
-        else {
-            disk_busy = 0 ;
-            sleep(1);
-        }
+    if( g_memdirty > disk_maxdirty ) {
+        disk_busy = 1 ;
+        sync();
     }
-    disk_busy = 0 ;
-    disk_sync_state = 0 ;
-    return NULL ;
+    else {
+        disk_busy = 0 ;
+    }
+    return ;
 }
 
 static int disk_archive_status = 0 ;
@@ -988,7 +977,6 @@ int disk_archive_deloldfile(char * archdir)
     if( oldfilelist.size()>0 ) {
         dvrfile::remove( oldfilelist[0].getstring() );
         oldfilelist.remove(0);
-        disk_unlock();
         return 1 ;
     }
     
@@ -1027,23 +1015,23 @@ int disk_archive_copyfile( char * srcfile, char * destfile )
     int r ;
     int res ;
     
-    fsrc = fopen( srcfile, "rb" );
-    fdest = fopen( destfile, "wb" );
+    fsrc = file_open( srcfile, "rb" );
+    fdest = file_open( destfile, "wb" );
     if( fsrc==NULL || fdest==NULL ) {
-        if( fsrc ) fclose( fsrc );
-        if( fdest ) fclose( fdest );
+        if( fsrc ) file_close( fsrc );
+        if( fdest ) file_close( fdest );
         return 0 ;
     }
     filebuf=(char *)malloc( 4096 ) ;
     if( filebuf==NULL ) {
-        fclose( fsrc );
-        fclose( fdest );
+        file_close( fsrc );
+        file_close( fdest );
         return 0 ;
     }        
 
     res = 1 ;
-    while( (r=fread( filebuf, 1, 4096, fsrc ))>0 ) {
-        fwrite( filebuf, 1, r, fdest ) ;
+    while( (r=file_read( filebuf, 4096, fsrc ))>0 ) {
+        file_write( filebuf, r, fdest ) ;
         while( disk_busy ) {
             usleep( 200 );
         }
@@ -1052,8 +1040,8 @@ int disk_archive_copyfile( char * srcfile, char * destfile )
             break; 
         }
     }
-    fclose( fsrc );
-    fclose( fdest ) ;
+    file_close( fsrc );
+    file_close( fdest ) ;
     free( filebuf );
     return res ;
 
@@ -1244,15 +1232,6 @@ void disk_check()
     int i;
     pthread_t thid ;
 
-    // check sync()
-    if( disk_sync_state == 0 ) {
-       // start sync thread ;
-        disk_sync_state = 1 ;
-        if( pthread_create(&thid, NULL, disk_sync, NULL)==0 ) {
-            pthread_detach(thid) ;
-        }
-    }
-
     // start archive thread
     if( disk_archive_status == 0 && disk_arch.length()>0 ) {
         disk_archive_status = 1 ;
@@ -1334,9 +1313,6 @@ void disk_init()
 
     config dvrconfig(dvrconfigfile);
 
-    // initial mutex
-    disk_mutex = mutex_init ;
-    
     rec_basedir = "";
     disk_base = dvrconfig.getvalue("system", "mountdir");
     if (disk_base.length() == 0) {
@@ -1385,6 +1361,7 @@ void disk_init()
     disk_disklist.empty();
     disk_llen = 0 ;
     disk_tlen = 0 ;
+    disk_busy = 0 ;
 
     dvr_log("Disk initialized.");
 
@@ -1394,23 +1371,16 @@ void disk_init()
 void disk_uninit()
 {
 
-    disk_sync_state = 2 ;
-    
-    disk_lock();
-    
     if( rec_basedir.length()>0 ) {
         ;
     }
     rec_basedir="";
     disk_base="";
     disk_disklist.empty();
+    disk_busy=0 ;
     
     // un-mark current disk
     unlink( disk_curdiskfile.getstring() );
-    
-    disk_unlock();
-    
-    pthread_mutex_destroy(&disk_mutex);
 
     dvr_log("Disk uninitialized.");
 

@@ -1,6 +1,6 @@
 
 #include "dvr.h"
-#include "eagle32/davinci_sdk.h"
+#include "../dvrsvr/eagle32/davinci_sdk.h"
 
 int    eagle32_channels = 0 ;
 static WORD eagle32_tsadjust = 0 ;
@@ -121,12 +121,13 @@ void eagle_capture::streamcallback(
     capframe.framesize = size ;
     capframe.frametype = xframetype ;
     
-    capframe.framedata = (char *) mem_alloc( capframe.framesize );
-    if( capframe.framedata == NULL ) {
-        return ;
-    }
-    mem_cpy32(capframe.framedata, buf, size ) ;
-//    memcpy( capframe.framedata, buf, size ) ;
+//    capframe.framedata = (char *) mem_alloc( capframe.framesize );
+//    if( capframe.framedata == NULL ) {
+//        return ;
+//    }
+//    mem_cpy32(capframe.framedata, buf, size ) ;
+
+    capframe.framedata = (char *) buf ;
     
     // replace hik time stamp.
     pframe = (struct hd_frame *) capframe.framedata ;
@@ -139,7 +140,7 @@ void eagle_capture::streamcallback(
     
     // send frame
     onframe(&capframe);
-    mem_free(capframe.framedata);
+//    mem_free(capframe.framedata);
 
 }
 void eagle_capture::start()
@@ -345,13 +346,6 @@ int eagle32_init()
             printf("Board init failed!\n");
             return 0;
         }
-        
-        //		// ********************************** testing, mount CF card
-        //		EnableATA ();
-        //		//	EnableFLASH ();
-        //		mkdir("/dvrdisks/CF", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-        //		mount("/dev/hda1", "/dvrdisks/CF", "vfat", 0, NULL);
-        
         sysinit=1 ;
     }
     res = GetBoardInfo(&binfo);

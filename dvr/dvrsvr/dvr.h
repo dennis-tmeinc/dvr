@@ -293,6 +293,13 @@ class dvrfile {
     static int lock(const char * filename) ;		// lock this .264 file 
 };
 
+// sychronized file op
+FILE * file_open(const char *path, const char *mode);
+int file_read(void *ptr, int size, FILE *stream);
+int file_write(const void *ptr, int size, FILE *stream);
+int file_close(FILE *fp);
+int file_flush(FILE *stream);
+
 void file_sync();
 void file_init();
 void file_uninit();
@@ -688,6 +695,7 @@ void disk_listday(array <f264name> & list, struct dvrtime * day, int channel);
 void disk_getdaylist(array <int> & daylist, int channel);
 int disk_unlockfile( dvrtime * begin, dvrtime * end );
 void disk_check();
+void disk_sync();
 int disk_renew(char * newfilename, int add=1);
 void disk_init();
 void disk_uninit();
