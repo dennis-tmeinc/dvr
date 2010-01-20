@@ -1,6 +1,6 @@
 #!/bin/sh
 
-cd /davinci
+# cd /davinci
 
 # reconfigure wifi
 # ifconfig rausb0 down 

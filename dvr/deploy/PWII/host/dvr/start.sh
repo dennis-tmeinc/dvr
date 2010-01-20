@@ -128,7 +128,7 @@ sleep 1
 sleep 3
 
 # wifi driver
-insmod /davinci/rt73.ko
+# /davinci/dvr/wifi_up
 
 # install web server
 cd /home

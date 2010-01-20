@@ -28,6 +28,8 @@
 ./dvr/gateway_1
 ./dvr/inetd.conf
 ./dvr/setnetwork
+./dvr/wifi_up
+./dvr/wifi_down
 ./dvr/httpd.sfx
 ./dvr/tmefile
 ./dvr/smartftp

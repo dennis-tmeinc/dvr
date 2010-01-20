@@ -168,6 +168,8 @@ int app_mode = APPMODE_QUIT ;
 unsigned int panelled=0 ;
 unsigned int devicepower=0xffff;
 
+int wifi_on = 0 ;
+
 pid_t   pid_smartftp = 0 ;
 
 void sig_handler(int signum)
@@ -2025,6 +2027,22 @@ void setnetwork()
     }
 }
 
+// bring up wifi adaptor
+void wifi_up()
+{
+    static char wifi_up_script[]="/davinci/dvr/wifi_up" ;
+    system( wifi_up_script );
+    printf("\nWifi up\n");
+}
+
+// bring down wifi adaptor
+void wifi_down()
+{
+    static char wifi_down_script[]="/davinci/dvr/wifi_down" ;
+    system( wifi_down_script );
+    printf("\nWifi down\n");
+}
+
 // Buzzer functions
 static int buzzer_timer ;
 static int buzzer_count ;
@@ -2135,7 +2153,9 @@ void smartftp_start()
             exit(102);                  // no disk mounted. quit!
         }
 */        
-        system("/davinci/dvr/setnetwork");  // reset network, this would restart wifi adaptor
+
+//        system("/davinci/dvr/setnetwork");  // reset network, this would restart wifi adaptor
+        wifi_up();                          // bring up wifi adaptor
         
         execl( "/davinci/dvr/smartftp", "/davinci/dvr/smartftp",
               "rausb0",
@@ -2172,6 +2192,11 @@ int smartftp_wait()
         id=waitpid( pid_smartftp, &smartftp_status, WNOHANG  );
         if( id==pid_smartftp ) {
             pid_smartftp=0 ;
+#ifdef PWII_APP
+            if( wifi_on == 0 ) {
+                wifi_down();            // bring down wifi adaptor
+            }
+#endif            
             if( WIFEXITED( smartftp_status ) ) {
                 exitcode = WEXITSTATUS( smartftp_status ) ;
                 dvr_log( "\"smartftp\" exit. (code:%d)", exitcode );
@@ -2200,6 +2225,11 @@ void smartftp_kill()
         kill( pid_smartftp, SIGTERM );
         dvr_log( "Kill \"smartftp\"." );
         pid_smartftp=0 ;
+#ifdef PWII_APP
+        if( wifi_on == 0 ) {
+            wifi_down();            // bring down wifi adaptor
+        }
+#endif            
     }
 }    
 
@@ -2346,7 +2376,13 @@ int appinit()
 
     // smartftp variable
     smartftp_disable = dvrconfig.getvalueint("system", "smartftp_disable");
-   
+
+    // turn on wifi ?
+    wifi_on = dvrconfig.getvalueint("system", "wifi_on" );
+    if( wifi_on ) {
+        wifi_up();
+    }
+        
     // initialize mcu (power processor)
     if( mcu_bootupready () ) {
         printf("MCU UP!\n");
@@ -3165,7 +3201,7 @@ int main(int argc, char * argv[])
                 devicepower = p_dio_mmap->devicepower ;
                 
                 // reset network interface, some how network interface dead after device power changes
-                setnetwork();
+//                setnetwork();
             }
         }
         
