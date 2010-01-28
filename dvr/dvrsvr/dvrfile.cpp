@@ -2,11 +2,9 @@
 
 #include "dvr.h"
 
-// #define FILESYNCSIZE (0x200000)
 #define FILETRUNCATINGSIZE (2*1024*1024)
 
 static int file_bufsize;								// file buffer size
-//static int file_syncreq;
 static int file_encrypt ;
 static int file_nodecrypt;                              // do not decrypt file when read
 static unsigned char file_encrypt_RC4_table[1024] ;		// RC4 encryption table

@@ -1,0 +1,8 @@
+#!/bin/sh
+
+# reconfigure wifi
+if [ -d /sys/class/net/rausb0 ] ; then 
+    /bin/ifconfig rausb0 down 
+    /bin/rmmod rt73
+fi
+/bin/insmod /davinci/rt73.ko
