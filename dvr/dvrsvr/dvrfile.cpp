@@ -614,22 +614,31 @@ void dvrfile::writekey()
 int dvrfile::seek( dvrtime * seekto )
 {
     int i;
-    int seekms ;					// seek in milliseconds frome time of file
+    int seeks ;					// seek in seconds from begin of file
+    int seekms ;
     if( !isopen() ) {
         return 0;
     }
+    
     if( *seekto < m_filetime ) {
         seek(m_filestart, SEEK_SET );
         return 0;
     }
-    seekms = time_dvrtime_diffms( seekto, &m_filetime );
-    if( seekms/1000 >= m_filelen ) {
+
+    seeks = time_dvrtime_diff( seekto, &m_filetime );
+    if( seeks >= m_filelen ) {
         seek(0, SEEK_END );
         return 0 ;
     }
+    else if( seeks<3 ) {
+        seek(m_filestart, SEEK_SET );
+        return 1;
+    }
+
+    seekms = seeks*1000 ;
     if( m_keyarray.size()>0 ) {                         // key frame index available
         for( i=m_keyarray.size()-1; i>=0; i-- ) {
-            if( m_keyarray[i].ktime<= seekms ) {
+            if( m_keyarray[i].ktime <= seekms ) {
                 break;
             }
         }
@@ -642,7 +651,7 @@ int dvrfile::seek( dvrtime * seekto )
     seek(0, SEEK_END);
     int filesize = tell();
     
-    int pos = (filesize/m_filelen) * (seekms/1000) ;
+    int pos = (filesize/m_filelen) * seeks ;
     pos &= ~3; 
     seek(pos, SEEK_SET );
     

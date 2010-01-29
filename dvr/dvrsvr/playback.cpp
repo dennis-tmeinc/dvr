@@ -8,15 +8,15 @@ static int norecplayback = 1 ;
 playback::playback( int channel, int decrypt )
 {
     m_channel=channel ;
-    disk_getdaylist(m_daylist, channel);         // get data available days
-    m_day=-1 ;                          // invalid day
+    disk_getdaylist(m_daylist, channel);    // get data available days
+    m_day=-1 ;                              // invalid day
     m_curfile=0 ;
     time_dvrtime_init(&m_streamtime, 2000);
     m_framebuf=NULL ;
     m_framesize=0 ;
     m_frametype=FRAMETYPE_UNKNOWN ;
     m_autodecrypt = decrypt ;
-    opennextfile() ;                    // actually open the first file
+    opennextfile() ;                        // actually open the first file
 }
 
 playback::~playback()
