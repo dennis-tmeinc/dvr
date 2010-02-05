@@ -43,6 +43,9 @@ char * document_root="/home/www" ;
 
 char linebuf[8192] ;
 
+#define KEEP_ALIVE_TIMEOUT  (10)
+int keep_alive ;
+
 // check if data ready to read
 int recvok(int fd, int usdelay)
 {
@@ -58,6 +61,7 @@ int recvok(int fd, int usdelay)
         return 0;
     }
 }
+
 
 char * get_mime_type( char* name )
 {
@@ -205,6 +209,11 @@ void http_header( int status, char * title, char * mime_type, int length)
     }
     if ( length > 0 ) {
         printf( "Content-Length: %ld\r\n", (long) length );
+        keep_alive = 1 ;
+    }
+    else {
+        printf( "Connection: close\r\n" );
+        keep_alive = 0 ;
     }
 }
 
@@ -925,7 +934,6 @@ int unsethttpenv()
 
 int http()
 {
-    int res=0 ;
     char * method ;	// request method
     char * uri ;	// request URI
     char * query ;	// request query string
@@ -938,8 +946,10 @@ int http()
     FILE* fp;
     int i;
     struct stat sb;
+
+    keep_alive = 0 ;
+    if( recvok(0, KEEP_ALIVE_TIMEOUT*1000000)<=0 ) return 0;
     
-    //    setvbuf( stdin, NULL, _IONBF, 0);	// unbuffered mode
     linebuf[0]=0 ;
     if ( fgets( linebuf, sizeof(linebuf), stdin ) == NULL )
     {
@@ -1106,8 +1116,8 @@ int http()
     fclose( fp );
     
 http_done:
-    printf("\r\n"); 
-    return res ;
+    fflush(stdout);
+    return keep_alive ;
 }
 
 int main(int argc, char * argv[])
