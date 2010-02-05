@@ -276,7 +276,7 @@ int dvrfile::writeframe(void *buffer, size_t size, int keyframe, dvrtime * frame
             else {
                 esize=pframe->framesize ;
             }
-            memcpy( encbuf, wbuf, esize );
+            mem_cpy32( encbuf, wbuf, esize );
             RC4_block_crypt( (unsigned char *)encbuf, esize, 0, file_encrypt_RC4_table, 1024);
             if( write( encbuf, esize)!=esize ) {
                 return 0 ;

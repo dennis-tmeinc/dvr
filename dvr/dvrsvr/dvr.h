@@ -94,10 +94,6 @@ void dvr_logkey( int op, struct key_data * key ) ;
 void dvr_lock();
 void dvr_unlock();
 
-// lock variable
-void dvr_lock( void * lockvar, int delayus=10000 ) ;
-void dvr_unlock( void * lockvar );
-
 unsigned dvr_random();
 
 // recording support
@@ -399,7 +395,10 @@ class capture {
     int m_show_ivcs ;
     int m_show_cameraserial ;
 #endif
-        
+
+    int m_headerlen ;
+  	char m_header[256] ;
+
   public:
 	capture(int channel) ;
     virtual ~capture(){};
@@ -458,6 +457,8 @@ class capture {
     }
     virtual int getsignal(){return m_signal;}	// get signal available status, 1:ok,0:signal lost
     virtual int getmotion(){return m_motion;}	// get motion detection status
+    int getheaderlen(){return m_headerlen;}
+    char * getheader(){return m_header;}
 };
 
 extern capture ** cap_channel;
@@ -473,8 +474,6 @@ class eagle_capture : public capture {
 	int m_chantype ;
 	int m_dspdatecounter ;  
 
-	int m_headerlen ;
-  	char m_header[256] ;
 	char m_motiondata[256] ;
 	int m_motionupd;				// motion status changed ;
 
@@ -508,7 +507,6 @@ protected:
 	string m_ip ;		//  remote camera ip address
 	int m_port ;		//  remote camera port
 	int m_ipchannel ; 	//  remote camera channel
-	struct hd_file m_hd264 ;	// .264 file header
 	pthread_t m_streamthreadid ;	// streaming thread id
 	int m_state;		//  thread running state, 0: stop, 1: running, 2: started but not connected.
 	int m_updcounter ;
@@ -862,7 +860,7 @@ enum reqcode_type { REQOK =	1,
     REQSTREAMSEEK, REQSTREAMGETDATA, REQSTREAMTIME,
     REQSTREAMNEXTFRAME, REQSTREAMNEXTKEYFRAME, REQSTREAMPREVKEYFRAME,
     REQSTREAMDAYINFO, REQSTREAMMONTHINFO, REQLOCKINFO, REQUNLOCKFILE, REQSTREAMDAYLIST,
-    REQ2RES2,                                          // reserved, don't use
+    REQOPENLIVE,
     REQ2ADJTIME,
     REQ2SETLOCALTIME, REQ2GETLOCALTIME, REQ2SETSYSTEMTIME, REQ2GETSYSTEMTIME,
     REQ2GETZONEINFO, REQ2SETTIMEZONE, REQ2GETTIMEZONE,
@@ -914,7 +912,7 @@ enum anscode_type { ANSERROR =1, ANSOK,
 };
 
 
-enum conn_type { CONN_NORMAL = 0, CONN_REALTIME };
+enum conn_type { CONN_NORMAL = 0, CONN_REALTIME, CONN_LIVESTREAM };
 
 #define closesocket(s) close(s)
 
@@ -938,7 +936,9 @@ class dvrsvr {
         dvrsvr *m_next;				// dvr list
         int m_sockfd;				// socket
         struct net_fifo *m_fifo;
+        struct net_fifo *m_fifotail;
         int m_fifosize ;			// size of fifo
+        int m_fifodrop ;            // drop fifo
         
         playback * m_playback ;
         live	 * m_live ;
@@ -1031,6 +1031,7 @@ class dvrsvr {
         virtual void ReqSharePasswd();
         virtual void ReqStreamOpen();
         virtual void ReqStreamOpenLive();
+        virtual void ReqOpenLive();
         virtual void ReqStreamClose();
         virtual void ReqStreamSeek();
         virtual void ReqNextFrame();
@@ -1069,7 +1070,7 @@ class dvrsvr {
 // DVR client side support
 
 // open live stream from remote dvr
-int dvr_openlive(int sockfd, int channel, struct hd_file * hd264);
+int dvr_openlive(int sockfd, int channel);
 
 // get remote dvr system setup
 // return 1:success

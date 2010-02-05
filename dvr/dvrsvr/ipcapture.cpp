@@ -37,6 +37,7 @@ ipeagle32_capture::~ipeagle32_capture()
     stop();
 }
 
+/*
 void ipeagle32_capture::streamthread()
 {
     struct cap_frame capframe ;
@@ -91,8 +92,7 @@ void ipeagle32_capture::streamthread()
 
                     capframe.framesize=sizeof(struct hd_frame)+hdframe.framesize ;
                     capframe.framedata=(char *)mem_alloc (capframe.framesize) ;
-                    mem_cpy32( capframe.framedata, &hdframe, sizeof(struct hd_frame) );
-//                    memcpy( capframe.framedata, &hdframe, sizeof(struct hd_frame) );
+                    memcpy( capframe.framedata, &hdframe, sizeof(struct hd_frame) );
                     if( net_recv( m_streamfd, capframe.framedata + sizeof(struct hd_frame), hdframe.framesize )<=0 ) {
                         break;
                     }
@@ -107,8 +107,7 @@ void ipeagle32_capture::streamthread()
                             if( subframe.framesize>0 && subframe.framesize<500000 ) {
                                 capframe.framesize = sizeof( struct hd_subframe ) + subframe.framesize ;
                                 capframe.framedata = (char *) mem_alloc (capframe.framesize) ;
-                                mem_cpy32( capframe.framedata, &subframe, sizeof(subframe) );
-//                                memcpy( capframe.framedata, &subframe, sizeof(subframe) );
+                                memcpy( capframe.framedata, &subframe, sizeof(subframe) );
                                 net_recv( m_streamfd, capframe.framedata+sizeof(subframe), subframe.framesize );
                                 onframe(&capframe);
                                 mem_free( capframe.framedata );
@@ -124,6 +123,71 @@ void ipeagle32_capture::streamthread()
             }
             else {
                 break;                                                          // error or shutdown
+            }
+        }
+        else {
+            if( ++timeout> 20 ) {
+                closesocket( m_streamfd );
+                m_streamfd = 0 ;
+            }
+        }
+    }
+    if( m_streamfd>0 ) {
+        closesocket(m_streamfd);
+        m_streamfd = 0 ;
+    }
+}
+*/
+
+void ipeagle32_capture::streamthread()
+{
+    struct cap_frame capframe ;
+    int i;
+    int timeout=0 ;
+    
+    capframe.channel=m_channel ;
+    m_streamfd=0 ;
+    while( m_state ) {
+
+        if( m_streamfd<=0 ) {
+            m_streamfd = net_connect (m_ip.getstring(), m_port) ;
+            if( m_streamfd > 0 ) {
+                if( dvr_openlive (m_streamfd, m_ipchannel)<=0 ) {
+                    closesocket( m_streamfd ) ;
+                    m_streamfd=0 ;
+                }
+            }
+        }
+        if( m_streamfd<=0 ) {
+            sleep(1);
+            continue ;
+        }
+
+        // recevie frames
+        i = net_recvok(m_streamfd, 100000) ;
+        if( i<0 ) {
+            break; 
+        }
+        else if ( i>0 ) {        
+            struct dvr_ans ans ;
+            if( net_recv (m_streamfd, &ans, sizeof(struct dvr_ans))>0 ) {
+                if( ans.anscode == ANSSTREAMDATA ) {
+                    capframe.framesize = ans.anssize ;
+                    capframe.frametype = ans.data ;
+                    capframe.framedata=(char *)mem_alloc (capframe.framesize) ;
+                    if( net_recv( m_streamfd, capframe.framedata, capframe.framesize )>0 ) {
+                        onframe(&capframe);
+                    }
+                    else {
+                        net_clean(m_streamfd);
+                    }
+                    mem_free(capframe.framedata);
+                    timeout=0 ;
+                }
+            }
+            else {
+                closesocket( m_streamfd );
+                m_streamfd = 0 ;
             }
         }
         else {

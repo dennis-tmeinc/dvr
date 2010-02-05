@@ -1098,13 +1098,11 @@ int screen_io(int usdelay)
 
 int screen_onframe( cap_frame * capframe )
 {
-    dvr_lock();
     if( screen_liveview_handle>0 && 
        capframe->channel==screen_liveview_channel) 
     {
         InputAvData( screen_liveview_handle, capframe->framedata, capframe->framesize );		
     }
-    dvr_unlock();
     return 0;
 }
 

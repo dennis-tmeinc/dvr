@@ -7,16 +7,6 @@
 
 #define DVRPORT 15111
 
-char Dvr264Header[40] = 
-{
-    '\x34', '\x48', '\x4B', '\x48', '\xFE', '\xB3', '\xD0', '\xD6',
-    '\x08', '\x03', '\x04', '\x20', '\x00', '\x00', '\x00', '\x00',
-    '\x03', '\x10', '\x02', '\x10', '\x01', '\x10', '\x10', '\x00',
-    '\x80', '\x3E', '\x00', '\x00', '\x10', '\x02', '\x40', '\x01',
-    '\x11', '\x10', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00'
-};
-
-
 dvrsvr *dvrsvr::m_head = NULL;
 
 // KEY support
@@ -177,60 +167,52 @@ int dvrsvr::read()
     return 0 ;                      // don't continue
 }
 
+// send out data from fifo
+// return 0: no more data
+//        1: more data in fifo
+//       -1: error
 int dvrsvr::write()
 {
 	int n;
-	int res = 0 ;
     net_fifo * nfifo ;
     if( m_sockfd <= 0 ){
-        return res ;
+        return 0 ;
     }
-    if (m_fifo == NULL) {
-		m_fifosize = 0 ;
-        return res ;
+    while( m_fifo ) {
+        if (m_fifo->buf == NULL) {
+            nfifo=m_fifo->next ;
+            mem_free(m_fifo);
+            m_fifo = nfifo;
+            continue;
+        }
+        if (m_fifo->loc >= m_fifo->bufsize) {
+            nfifo=m_fifo->next ;
+            mem_free(m_fifo->buf);
+            mem_free(m_fifo);
+            m_fifo = nfifo;
+            continue;
+        }
+        n =::send(m_sockfd,
+            &(m_fifo->buf[m_fifo->loc]),
+            m_fifo->bufsize - m_fifo->loc, 0);
+        if( n<0 ) {
+            if(errno == EWOULDBLOCK ) {
+                return 1 ;
+            }
+            else {
+                close();
+                return -1 ;      // other error!
+            }
+        }
+        m_fifosize -= n ;
+        m_fifo->loc += n;
     }
-    if (m_fifo->buf == NULL) {
-        nfifo=m_fifo->next ;
-        mem_free(m_fifo);
-        m_fifo = nfifo;
-        return write();
-    }
-    if (m_fifo->loc >= m_fifo->bufsize) {
-        nfifo=m_fifo->next ;
-        mem_free(m_fifo->buf);
-        mem_free(m_fifo);
-        m_fifo = nfifo;
-        return write();
-    }
-    n =::send(m_sockfd,
-              &(m_fifo->buf[m_fifo->loc]),
-              m_fifo->bufsize - m_fifo->loc, 0);
-	if( n<0 ) {
-		if( errno != EWOULDBLOCK ) {
-			close();
-		}
-        return res ;
-	}
-	m_fifosize -= n ;
-    m_fifo->loc += n;
-    if (m_fifo->loc >= m_fifo->bufsize) {
-		nfifo=m_fifo->next ;
-		mem_free(m_fifo->buf);
-		mem_free(m_fifo);
-		m_fifo = nfifo;
-		if( m_fifo == NULL ) {
-			m_fifosize=0;
-		}
-		else {
-			res = 1 ;
-		}
-    }
-    return res ;
+    m_fifosize=0;
+    return 0 ;
 }
 
 void dvrsvr::send_fifo(char *buf, int bufsize)
 {
-    net_fifo *pfifo;
     net_fifo *nfifo;
     
     if( isclose() ) {
@@ -242,7 +224,6 @@ void dvrsvr::send_fifo(char *buf, int bufsize)
         nfifo->buf = (char *) mem_addref(buf);
     } else {
         nfifo->buf = (char *) mem_alloc(bufsize);
-//        memcpy(nfifo->buf, buf, bufsize);
         mem_cpy32(nfifo->buf, buf, bufsize);
     }
     nfifo->next = NULL;
@@ -250,14 +231,12 @@ void dvrsvr::send_fifo(char *buf, int bufsize)
     nfifo->loc = 0;
     
     if (m_fifo == NULL) {
-        m_fifo = nfifo;
+        m_fifo = m_fifotail = nfifo;
 		m_fifosize = bufsize ;
         net_trigger();				// trigger sending
     } else {
-        pfifo = m_fifo;
-        while (pfifo->next != NULL)
-            pfifo = pfifo->next;
-        pfifo->next = nfifo;
+        m_fifotail->next = nfifo ;
+        m_fifotail = nfifo ;
 		m_fifosize += bufsize ;
     }
 }
@@ -266,33 +245,12 @@ void dvrsvr::Send(void *buf, int bufsize)
 {
     int n ;
     char * cbuf = (char *)buf; 
-    int cbufsize = bufsize ;
-    while(cbufsize>0) {
-        n = ::send(m_sockfd, cbuf, cbufsize, 0);
-        if( n<0 ) {
-            if( errno==EWOULDBLOCK ) {
-                usleep(1000);
-            }
-            else {
-                close();							// net work error!
-                return ;
-            }
-        }
-        else {
-            cbufsize-=n ;
-            cbuf+=n ;
-        }
+    if( m_fifo ) {
+        write();
     }
-//    send_fifo((char *)buf, bufsize);
-/*
-    char * cbuf = (char *)buf;
-    //int n;
-    if( isclose() ) {
-        return ;
-    }
-    
     if ( m_fifo || mem_check (buf)) {
         send_fifo(cbuf, bufsize);
+        write();
     }
     else {
         while( bufsize>0 ) {
@@ -309,8 +267,7 @@ void dvrsvr::Send(void *buf, int bufsize)
             cbuf+=n ;
             bufsize-=n ;
         }
-    } 
-*/
+    }
 }
 
 int dvrsvr::isclose()
@@ -341,7 +298,28 @@ int dvrsvr::onframe(cap_frame * pframe)
                 }
             }
         }
-        send_fifo(pframe->framedata, pframe->framesize);
+        Send(pframe->framedata, pframe->framesize);
+        return 1;
+    }
+    else if (m_conntype == CONN_LIVESTREAM && m_connchannel == pframe->channel) {
+        if (pframe->frametype == FRAMETYPE_KEYVIDEO ) {	// for keyframes
+            if( pframe->framesize > net_livefifosize ) {
+                net_livefifosize = pframe->framesize+10000 ;
+            }
+            m_fifodrop=0;
+        }
+        if( m_fifosize > net_livefifosize ) {
+            m_fifodrop=1;
+        }
+        if( m_fifodrop ) {
+            return 0 ;
+        }
+        struct dvr_ans ans ;
+        ans.anscode = ANSSTREAMDATA ;
+        ans.anssize = pframe->framesize ;
+        ans.data = pframe->frametype ;
+        Send(&ans, sizeof(struct dvr_ans));
+        Send(pframe->framedata, pframe->framesize);
         return 1;
     }
     //	else if( m_live ) {
@@ -499,6 +477,9 @@ void dvrsvr::onrequest()
             break;
         case REQSTREAMOPENLIVE:
             ReqStreamOpenLive();
+            break;
+        case REQOPENLIVE:
+            ReqOpenLive();
             break;
         case REQSTREAMCLOSE:
             ReqStreamClose();
@@ -1023,7 +1004,15 @@ void dvrsvr::ReqStreamOpen()
 //  m_req.data is stream channel
 void dvrsvr::ReqStreamOpenLive()
 {
+    DefaultReq();
+}
+
+// Open live stream (2nd vesion)
+//  m_req.data is stream channel
+void dvrsvr::ReqOpenLive()
+{
     struct dvr_ans ans ;
+    int hlen ;
 
     if( g_keycheck && m_keycheck==0 ) {
         DefaultReq();
@@ -1031,17 +1020,21 @@ void dvrsvr::ReqStreamOpenLive()
     }
 
     if( m_req.data>=0 && m_req.data<cap_channels ) {
-        if( m_live!=NULL ) {
-            delete m_live ;
-        }
-        m_live=new live( m_req.data ) ;
-        if( m_live ) {
-            ans.anscode = ANSSTREAMOPEN;
-            ans.anssize = 0;
-            ans.data = DVRSTREAMHANDLE(m_live) ;
+        ans.anscode = ANSSTREAMOPEN;
+        ans.anssize = 0;
+        ans.data = 0 ;
+        Send( &ans, sizeof(ans) );
+        hlen = cap_channel[m_req.data]->getheaderlen();
+        if( hlen>0 ) {
+            ans.anscode = ANSSTREAMDATA;
+            ans.anssize = sizeof(struct hd_file) ;
+            ans.data = FRAMETYPE_264FILEHEADER ;
             Send( &ans, sizeof(ans));
-            return ;
+            Send( cap_channel[m_req.data]->getheader(), hlen );
         }
+        m_conntype = CONN_LIVESTREAM;
+        m_connchannel = m_req.data;
+        return ;
     }
     DefaultReq();
 }
@@ -1064,11 +1057,12 @@ void dvrsvr::ReqStreamClose()
         }
         return ;
     }
-    else if( m_req.data == DVRSTREAMHANDLE(m_live) ) {
+    else if( m_conntype == CONN_LIVESTREAM ) {
         ans.anscode = ANSOK;
         ans.anssize = 0;
         ans.data = 0;
         Send( &ans, sizeof(ans) );
+        m_conntype = CONN_NORMAL ;
         if( m_live ) {
             delete m_live ;
             m_live=NULL ;
@@ -1834,6 +1828,28 @@ void dvrsvr::DefaultReq()
 
 
 // open live stream from remote dvr
+int dvr_openlive(int sockfd, int channel)
+{
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    
+    req.reqcode=REQOPENLIVE ;
+    req.data=channel ;
+    req.reqsize=0;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSSTREAMOPEN ) {
+            if( ans.anssize>0 ) {
+                char * buf = new char [ans.anssize] ;
+                net_recv(sockfd, buf, ans.anssize );
+            }
+            return 1 ;
+        }
+    }
+    return 0 ;
+}
+/*
 int dvr_openlive(int sockfd, int channel, struct hd_file * hd264)
 {
     struct dvr_req req ;
@@ -1853,6 +1869,7 @@ int dvr_openlive(int sockfd, int channel, struct hd_file * hd264)
     }
     return 0 ;
 }
+*/
 
 // get remote dvr system setup
 // return 1:success

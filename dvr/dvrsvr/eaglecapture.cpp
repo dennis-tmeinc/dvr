@@ -99,12 +99,10 @@ void eagle_capture::streamcallback(
         return ;
     }
     else if( frame_type==FRAME_TYPE_HEADER || frame_type==FRAME_TYPE_SUB_HEADER ) {
-        m_headerlen = size ;
-        memcpy( m_header, buf, size );
         if( frame_type==FRAME_TYPE_HEADER ) {
             memcpy( Dvr264Header, buf, size );
         }
-        return ;
+        xframetype = FRAMETYPE_264FILEHEADER ;
     }
     else if( frame_type==FRAME_TYPE_MD_RESULT ) {
         // analyze motion data
@@ -126,17 +124,20 @@ void eagle_capture::streamcallback(
         return ;
     }
     mem_cpy32(capframe.framedata, buf, size ) ;
-//    memcpy( capframe.framedata, buf, size ) ;
-    
-    // replace hik time stamp.
-    pframe = (struct hd_frame *) capframe.framedata ;
-    if( eagle32_tsadjust ==0 ) {
-        struct timeval tv ;
-        gettimeofday(&tv, NULL);
-        eagle32_tsadjust = (tv.tv_sec%86400)*64 + tv.tv_usec * 64 / 1000000 - pframe->timestamp ;
+
+    if( xframetype == FRAMETYPE_AUDIO ||
+        xframetype == FRAMETYPE_KEYVIDEO ||
+        xframetype == FRAMETYPE_VIDEO ) 
+    {
+        // replace hik time stamp.
+        pframe = (struct hd_frame *) capframe.framedata ;
+        if( eagle32_tsadjust ==0 ) {
+            struct timeval tv ;
+            gettimeofday(&tv, NULL);
+            eagle32_tsadjust = (tv.tv_sec%86400)*64 + tv.tv_usec * 64 / 1000000 - pframe->timestamp ;
+        }
+        pframe->timestamp += eagle32_tsadjust ;
     }
-    pframe->timestamp += eagle32_tsadjust ;
-    
     // send frame
     onframe(&capframe);
     mem_free(capframe.framedata);

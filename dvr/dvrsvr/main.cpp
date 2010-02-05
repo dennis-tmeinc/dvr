@@ -35,26 +35,6 @@ void dvr_unlock()
     pthread_mutex_unlock(&dvr_mutex);
 }
 
-// lock with lock variable
-void dvr_lock( void * lockvar, int delayus )
-{
-    dvr_lock();
-    while (*(int *)lockvar) {
-        dvr_unlock();
-        usleep( delayus );
-        dvr_lock();
-    }
-    (*(int *)lockvar)++ ;
-    dvr_unlock();
-}
-
-void dvr_unlock( void * lockvar )
-{
-    dvr_lock();
-    (*(int *)lockvar)-- ;
-    dvr_unlock();
-}
-
 // get a random number 
 unsigned dvr_random()
 {

@@ -8,6 +8,17 @@ static int g_memused = 0 ;
 
 #define MEMTAG	0x462021dc
 
+static pthread_mutex_t mem_mutex;
+static void mem_lock()
+{
+    pthread_mutex_lock(&mem_mutex);
+}
+
+static void mem_unlock()
+{
+    pthread_mutex_unlock(&mem_mutex);
+}
+
 // Parse /proc/meminfo
 static int MemTotal, MemFree, Cached, Buffers, SwapTotal, SwapFree;
 static int ParseMeminfo()
@@ -85,25 +96,23 @@ void mem_free(void *pmem)
     int *pmemblk;
     if (pmem == NULL)
         return;
-    
-    dvr_lock();
+
+    mem_lock();
     pmemblk = (int *)pmem ;
     pmemblk-=3 ;
-    if( pmemblk[2]!=MEMTAG ) {
-        dvr_unlock();
-        return ;			 // not an allocated memory block
-    }
-    if( --(pmemblk[1]) <=0 ) {	// reference counter = 0
-        g_memused--;
-        pmemblk[2]=0;		// clear memory tag
-        if( pmemblk[0] >= MEM_ALLOC_MMAP_SIZE ) {
-        	munmap( (void *)pmemblk, pmemblk[0] );
-        }
-        else {
-            free( (void *)pmemblk );
+    if( pmemblk[2]==MEMTAG ) {
+        if( --(pmemblk[1]) <=0 ) {	// reference counter = 0
+            g_memused--;
+            pmemblk[2]=0;		// clear memory tag
+            if( pmemblk[0] >= MEM_ALLOC_MMAP_SIZE ) {
+                munmap( (void *)pmemblk, pmemblk[0] );
+            }
+            else {
+                free( (void *)pmemblk );
+            }
         }
     }
-    dvr_unlock();
+    mem_unlock();
 }
 
 // return memory block size
@@ -128,14 +137,14 @@ void *mem_addref(void *pmem)
         return NULL;
     }
     
-    dvr_lock();
+    mem_lock();
     pmemblk = (int *) pmem;
     if (*--pmemblk != MEMTAG){
-        dvr_unlock();
+        mem_unlock();
         return NULL;			// not an allocated memory block
     }
     (*--pmemblk)++;
-    dvr_unlock();
+    mem_unlock();
     return pmem;
 }
 
@@ -182,11 +191,14 @@ void mem_cpy32(void *dest, const void *src, size_t count)
 
 void mem_init()
 {
+    // initial mutex
+    memcpy( &mem_mutex, &mutex_init, sizeof(mutex_init));
     return;
 }
 
 void mem_uninit()
 {
+    pthread_mutex_destroy(&mem_mutex);
     return ;
 }
 

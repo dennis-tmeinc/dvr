@@ -1,5 +1,4 @@
 #include "dvr.h"
-#include "../ioprocess/diomap.h"
 
 string rec_basedir;
 
@@ -72,7 +71,14 @@ class rec_channel {
         struct rec_fifo *m_fifohead;
         struct rec_fifo *m_fifotail;
         int	   m_fifosize ;
-
+        pthread_mutex_t m_fifo_mutex;
+        void    fifo_lock() {
+            pthread_mutex_lock(&m_fifo_mutex);
+        }
+        void    fifo_unlock() {
+            pthread_mutex_unlock(&m_fifo_mutex);
+        }
+        
         int m_state_starttime ;	        // record state start time
 
         // pre-record variables
@@ -96,7 +102,6 @@ class rec_channel {
         dvrtime m_fileendtime;
         int m_fileday;						// day of opened file, used for breaking file across midnight
         DWORD m_lastkeytimestamp ;
-        DWORD m_lasttimestamp ;
         
         int m_reqbreak;				// reqested for file break
 
@@ -130,7 +135,6 @@ class rec_channel {
         struct rec_fifo *getfifo();
         void putfifo(rec_fifo * fifo);
         int  clearfifo();
-        void addfifo(cap_frame * pframe);
         
         void onframe(cap_frame * pframe);
         int dorecord();
@@ -171,7 +175,10 @@ rec_channel::rec_channel(int channel)
     char buf[64];
     config dvrconfig(dvrconfigfile);
     char cameraname[80] ;
-   
+
+    // initialize fifo lock
+    memcpy( &m_fifo_mutex, &mutex_init, sizeof(mutex_init));
+    
     m_channel = channel;
     sprintf(cameraname, "camera%d", m_channel+1 );
 
@@ -254,6 +261,7 @@ rec_channel::~rec_channel()
 	m_recstate = REC_STOP;
 	closefile();
 	clearfifo();
+    pthread_mutex_destroy(&m_fifo_mutex);
 }
 
 // start record
@@ -277,7 +285,7 @@ void rec_channel::stop()
     m_recstate = REC_STOP;
 }
 
-void rec_channel::addfifo(cap_frame * pframe)
+void rec_channel::onframe(cap_frame * pframe)
 {
     int s ;
     struct rec_fifo *nfifo;
@@ -299,13 +307,11 @@ void rec_channel::addfifo(cap_frame * pframe)
         return ;								// if stop recording.
     }
 
-    // check memory or fifo size.
-    if (pframe->frametype == FRAMETYPE_KEYVIDEO ) {
-        if( m_fifosize>rec_fifo_size ) {			// fifo maximum size 4Mb per channel
-            s=clearfifo();
-            m_reqbreak = 1 ;
-            dvr_log("Recording fifo too big, frames dropped! (CH%02d)-(%d)", m_channel, s ); 
-        }
+    // check fifo size.
+    if(  pframe->frametype == FRAMETYPE_KEYVIDEO && m_fifosize>rec_fifo_size ) {			// fifo maximum size 4Mb per channel
+        s=clearfifo();
+        m_reqbreak = 1 ;
+        dvr_log("Recording fifo too big, frames dropped! (CH%02d)-(%d)", m_channel, s ); 
     }
     
     // build new fifo frame
@@ -315,14 +321,12 @@ void rec_channel::addfifo(cap_frame * pframe)
         nfifo->buf = (char *) mem_addref(pframe->framedata);
     } else {
         nfifo->buf = (char *) mem_alloc(nfifo->bufsize);
-//        memcpy(nfifo->buf, pframe->framedata, nfifo->bufsize);
         mem_cpy32(nfifo->buf, pframe->framedata, nfifo->bufsize);
     }
     nfifo->bufsize = pframe->framesize;
     
     if( pframe->frametype == FRAMETYPE_KEYVIDEO )   {           // this is a keyframe ?
         nfifo->key=1 ;
-        time_now(&nfifo->time);                                 // only keyframe have fifo time
     }
     else {
         nfifo->key=0 ;
@@ -330,7 +334,7 @@ void rec_channel::addfifo(cap_frame * pframe)
     
     // set frame recording type
     nfifo->rectype = m_recstate ;
-   
+    time_now(&nfifo->time);
     putfifo( nfifo );
 
 }
@@ -338,34 +342,30 @@ void rec_channel::addfifo(cap_frame * pframe)
 // add fifo into fifo queue
 void rec_channel::putfifo(rec_fifo * fifo)
 {
-    if( fifo==NULL )
-        return ;
-    dvr_lock();
-    if (m_fifotail == NULL) {
-        m_fifotail = m_fifohead = fifo;
-        m_fifosize = fifo->bufsize ;
-    } else {
-        m_fifotail->next = fifo;
-        m_fifotail = fifo;
-        m_fifosize+=fifo->bufsize ;
+    fifo_lock();
+    if( fifo!=NULL ){
+        if (m_fifohead == NULL) {
+            m_fifotail = m_fifohead = fifo;
+            m_fifosize = fifo->bufsize ;
+        } else {
+            m_fifotail->next = fifo;
+            m_fifotail = fifo;
+            m_fifosize+=fifo->bufsize ;
+        }
+        fifo->next = NULL ;
     }
-    fifo->next = NULL ;
-    dvr_unlock();
+    fifo_unlock();
 }
 
 struct rec_fifo *rec_channel::getfifo()
 {
     struct rec_fifo *head;
-    dvr_lock();
-    head = m_fifohead;
-    if (head != NULL) {
+    fifo_lock();
+    if ( (head = m_fifohead) != NULL) {
         m_fifohead = head->next;
-        if (m_fifohead == NULL){
-            m_fifotail = NULL;
-        }
-        m_fifosize-=head->bufsize ;
+        m_fifosize-= head->bufsize ;
     }
-    dvr_unlock();
+    fifo_unlock();
     return head;
 }
 
@@ -374,27 +374,24 @@ int rec_channel::clearfifo()
 {
     int c=0;
     struct rec_fifo * head ;
-    dvr_lock();
-    while (m_fifohead) {
-        head = m_fifohead ;
-        m_fifohead = head->next ;
+    struct rec_fifo * n ;
+
+    fifo_lock();
+    head = m_fifohead ;
+    m_fifohead=NULL ;
+    m_fifosize=0 ;
+    fifo_unlock();
+    
+    while (head) {
+        n = head->next ;
         if( head->buf ) {
             mem_free(head->buf);
         }
         mem_free(head);
         c++ ;
+        head = n ;
     }
-    m_fifotail=NULL ;
-    m_fifosize=0 ;
-    dvr_unlock();
     return c ;
-}
-
-void rec_channel::onframe(cap_frame * pframe)
-{
-    if (pframe->channel == m_channel ) {
-        addfifo(pframe);
-    }
 }
 
 struct file_copy_struct {
@@ -572,71 +569,74 @@ int rec_channel::recorddata(rec_fifo * data)
 {
     char newfilename[512];
     int l;
-    DWORD timestamp ;
     
     if( data->bufsize<=0 || data->buf==NULL ) {
         closefile();
         return 0;
     }
     
-    timestamp = ((struct hd_frame *)(data->buf))->timestamp ;
-	
     // check if file need to be broken
-    if ( (m_file.isopen() && data->key) ) {	// must be a key frame
-		m_fileendtime=data->time ;    
-        if( m_reqbreak ||
-			data->rectype != m_filerecstate ||
-			timestamp < m_lastkeytimestamp || 
-			(timestamp-m_lastkeytimestamp)>1000 ||
-			m_file.tell() > m_maxfilesize ||
-			data->time.day != m_fileday ||
-			time_dvrtime_diff( &m_fileendtime, &m_filebegintime ) > m_maxfiletime ||
-			( m_filerecstate == REC_PRERECORD  && time_dvrtime_diff(&m_fileendtime, &m_filebegintime) > m_prerecord_time )
-			)
-        {
-            closefile(data->rectype);
-            m_reqbreak=0;
-        }
-        m_lastkeytimestamp = timestamp ;
-    }
-    
-    // create new dvr file
-    if ( (!m_file.isopen()) && data->key ) {	// need to open a new file
-        // create new record file
-        if (rec_basedir.length() <= 0) {	// no base dir, no recording disk available
-            // frame data is discarded
-            return 0;
-        }
+    if( data->key ) {           // close or open file on key frame
+        DWORD timestamp ;
+        timestamp = ((struct hd_frame *)(data->buf))->timestamp ;
 
-        struct stat dstat ;
-        
-        // make host directory
-        sprintf(newfilename, "%s/_%s_", 
-                rec_basedir.getstring(), g_hostname );
-        if( stat(newfilename, &dstat)!=0 ) {
-            mkdir( newfilename, S_IFDIR | 0777 );
+        if ( m_file.isopen() ) {	
+            if( m_reqbreak ||
+                data->rectype != m_filerecstate ||
+                timestamp < m_lastkeytimestamp || 
+                (timestamp-m_lastkeytimestamp)>1000 ||
+                m_file.tell() > m_maxfilesize ||
+                data->time.day != m_fileday ||
+                time_dvrtime_diff( &m_fileendtime, &m_filebegintime ) > m_maxfiletime ||
+                ( m_filerecstate == REC_PRERECORD  && time_dvrtime_diff(&m_fileendtime, &m_filebegintime) > m_prerecord_time )
+                )
+            {
+                if( time_dvrtime_diff( &(data->time), &m_fileendtime) < 5 ) {
+                    m_fileendtime=data->time ;    
+                }
+                closefile(data->rectype);
+                m_reqbreak=0;
+            }
+            m_lastkeytimestamp = timestamp ;
         }
         
-        // make date directory
-        l = strlen(newfilename);
-        sprintf(newfilename+l, "/%04d%02d%02d", 
+        // create new dvr file
+        if ( !m_file.isopen()  ) {	            // open a new file
+            // create new record file
+            if (rec_basedir.length() <= 0) {	// no base dir, no recording disk available
+                // frame data is discarded
+                return 0;
+            }
+
+            struct stat dstat ;
+
+            // make host directory
+            sprintf(newfilename, "%s/_%s_", 
+                rec_basedir.getstring(), g_hostname );
+            if( stat(newfilename, &dstat)!=0 ) {
+                mkdir( newfilename, S_IFDIR | 0777 );
+            }
+
+            // make date directory
+            l = strlen(newfilename);
+            sprintf(newfilename+l, "/%04d%02d%02d", 
                 data->time.year,
                 data->time.month,
                 data->time.day );
-        if( stat(newfilename, &dstat)!=0 ) {
-            mkdir( newfilename, S_IFDIR | 0777 );
-        }
-        
-        // make channel directory
-        l = strlen(newfilename);
-        sprintf(newfilename + l, "/CH%02d", m_channel);
-        if( stat(newfilename, &dstat)!=0 ) {
-            mkdir( newfilename, S_IFDIR | 0777 );
-        }
-        
-        // make new file name
-        l = strlen(newfilename);
-        sprintf(newfilename + l,
+            if( stat(newfilename, &dstat)!=0 ) {
+                mkdir( newfilename, S_IFDIR | 0777 );
+            }
+
+            // make channel directory
+            l = strlen(newfilename);
+            sprintf(newfilename + l, "/CH%02d", m_channel);
+            if( stat(newfilename, &dstat)!=0 ) {
+                mkdir( newfilename, S_IFDIR | 0777 );
+            }
+
+            // make new file name
+            l = strlen(newfilename);
+            sprintf(newfilename + l,
                 "/CH%02d_%04d%02d%02d%02d%02d%02d_0_%c_%s.264", 
                 m_channel,
                 data->time.year,
@@ -647,23 +647,26 @@ int rec_channel::recorddata(rec_fifo * data)
                 data->time.second,
                 rec_stname( data->rectype ),
                 g_hostname);
-        m_fileday = data->time.day ;
-        if (m_file.open(newfilename, "wb")) {
-            m_filename = newfilename;
-            m_filebegintime = data->time;
-            m_filebegintime.milliseconds=0 ;
-            m_lastkeytimestamp = timestamp ;
-            m_filerecstate = data->rectype ;
-            //			dvr_log("Start recording file: %s", newfilename);
-        } else {
-            dvr_log("File open error:%s", newfilename);
-            rec_basedir="";
+            m_fileday = data->time.day ;
+            if (m_file.open(newfilename, "wb")) {
+                m_filename = newfilename;
+                m_filebegintime = data->time;
+                m_fileendtime = data->time;
+                m_filebegintime.milliseconds=0 ;
+                m_lastkeytimestamp = timestamp ;
+                m_filerecstate = data->rectype ;
+                //			dvr_log("Start recording file: %s", newfilename);
+            } else {
+                dvr_log("File open error:%s", newfilename);
+                rec_basedir="";
+            }
         }
     }
     
     // record frame
     if( m_file.isopen() ) {
         if( m_file.writeframe(data->buf, data->bufsize, data->key, &(data->time) )>0 ) {
+            m_fileendtime=data->time ;    
             return 1 ;
         }
         dvr_log("record:write file error.");
@@ -679,8 +682,15 @@ static int rec_prelock_lock = 0 ;
 void * rec_prelock_thread(void * param)
 {
     sleep(1);                                   // let recording thread 
-    
-    dvr_lock(&rec_prelock_lock, 1000000);       // only one prelock thread allowed
+
+    dvr_lock() ;
+    while( rec_prelock_lock ) {
+        dvr_unlock();
+        sleep(1);
+        dvr_lock();
+    }
+    rec_prelock_lock = 1 ;
+    dvr_unlock() ;
     
     dvrfile prelockfile ;
     
@@ -690,8 +700,11 @@ void * rec_prelock_thread(void * param)
     }
     
     mem_free( param );
-    
-    dvr_unlock(&rec_prelock_lock);
+
+    dvr_lock() ;
+    rec_prelock_lock = 0 ;
+    dvr_unlock() ;
+
     return NULL ;
 }
 
@@ -743,7 +756,6 @@ void rec_channel::prelock(string & lockfilename, struct dvrtime * locktime)
 int rec_channel::dorecord()
 {
     rec_fifo *fifo;
-    
     fifo = getfifo();
     if (fifo == NULL)	{	// no fifos pending
 		if( m_recording && (g_timetick-m_activetime)>5000 ) {  // inactive for 5 seconds
@@ -782,16 +794,17 @@ void *rec_thread(void *param)
 
     while (rec_run) {
 
+        file_sync();
+        
         // check disk space every 3 seconds, moved from main thread, so main thread can be more responsive to IO input.
         if( (g_timetick-rtick)>3000 ) {
-            file_sync();
             disk_check();
             rtick = g_timetick ;
         }
         
         wframes = 0 ;
         for( ch = 0 ; ch <rec_channels ; ch++ ) {
-            for( i=0; i<50 ; i++ ) {
+            for( i=0; i<100 ; i++ ) {
                 if(recchannel[ch]->dorecord()) {
                     wframes++;
                 }
@@ -815,7 +828,6 @@ void *rec_thread(void *param)
         else {
 			norec=0 ;
 		}
-        file_sync();
     }        
     for (ch = 0; ch < rec_channels; ch++) {
         recchannel[ch]->closefile();
@@ -1093,8 +1105,9 @@ int  rec_state(int channel)
 void rec_break()
 {
     int i;
-    for (i = 0; i < rec_channels; i++)
+    for (i = 0; i < rec_channels; i++) {
         recchannel[i]->breakfile();
+    }
 }
 
 // update recording status

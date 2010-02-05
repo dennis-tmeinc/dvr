@@ -20,6 +20,15 @@
 int cap_channels;
 capture ** cap_channel;
 
+char Dvr264Header[40] = 
+{
+    '\x34', '\x48', '\x4B', '\x48', '\xFE', '\xB3', '\xD0', '\xD6',
+    '\x08', '\x03', '\x04', '\x20', '\x00', '\x00', '\x00', '\x00',
+    '\x03', '\x10', '\x02', '\x10', '\x01', '\x10', '\x10', '\x00',
+    '\x80', '\x3E', '\x00', '\x00', '\x10', '\x02', '\x40', '\x01',
+    '\x11', '\x10', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00'
+};
+
 // return true for ok
 int dvr_getchannelsetup(int ch, struct DvrChannel_attr * pchannel,  int attrsize)
 {
@@ -61,6 +70,9 @@ capture::capture( int channel )
     m_signal_standard = 1 ;
     m_started = 0 ;
     loadconfig();
+
+    m_headerlen = 40 ;
+    mem_cpy32( m_header, Dvr264Header, 40 );
 }
 
 void capture::loadconfig()
@@ -244,10 +256,16 @@ void capture::onframe(cap_frame * pcapframe)
 //    if( pcapframe->frametype == FRAMETYPE_KEYVIDEO ) {
 //        time_now(&(pcapframe->frametime));
 //    }
+
     m_working=10;
     m_streambytes+=pcapframe->framesize ;               // for bitrate calculation
-    net_onframe(pcapframe);
+    if( pcapframe->frametype == FRAMETYPE_264FILEHEADER ) {
+        m_headerlen = pcapframe->framesize ;
+        mem_cpy32( m_header, pcapframe->framedata, m_headerlen );
+        return ;
+    }
     rec_onframe(pcapframe);
+    net_onframe(pcapframe);
     screen_onframe(pcapframe); 
 }
 

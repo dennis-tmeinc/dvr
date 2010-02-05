@@ -134,12 +134,6 @@ int playback::opennextfile()
     return 1;
 }
 
-
-#define FRAMETYPE_UNKNOWN	(0)
-#define FRAMETYPE_KEYVIDEO	(1)
-#define FRAMETYPE_VIDEO		(2)
-#define FRAMETYPE_AUDIO		(3)
-
 void playback::readframe()
 {
     if( m_framebuf ) {
