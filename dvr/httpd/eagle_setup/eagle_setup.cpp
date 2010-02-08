@@ -409,9 +409,10 @@ void cfgupload_page()
     FILE * cfgfile ;
     FILE * fp ;
     char filename[256] ;
+    int nvfile = 0;
     cfgfilename = getenv( "POST_FILE_cfgupload_file" );
     if( cfgfilename==NULL )
-        return ;
+        goto upcfgreport ;
     cfgfile = fopen( cfgfilename, "r" ) ;
     if( cfgfile ) {
         while( fread(&chd, 1, sizeof(chd), cfgfile )==sizeof(chd) ) {
@@ -426,12 +427,27 @@ void cfgupload_page()
                         fputc(d, fp);
                     }
                     fclose( fp );
+                    nvfile++;
                 }
             }
             else 
                 break;
         }
+        fclose( cfgfile );
     }
+
+upcfgreport:    
+    fp = fopen( "upcfg_msg.hi", "w" ) ;
+    if( fp ) {
+        if( nvfile>0 ) {
+            fprintf(fp, "Configuration uploaded!" );
+        }
+        else {
+            fprintf(fp, "Configuration uploading failed!" );
+        }
+        fclose( fp );
+    }
+
 }
 
 #define SFX_TAG (0xed3abd05)
@@ -644,7 +660,14 @@ void mfid_page()
             if( checktvskey( usbid, key, keysize ) ) {
                 if( key->usbid[0] == 'M' && key->usbid[1] == 'F' ) {
                     config dvrconfig(dvrconfigfile);    
+#ifdef TVS_APP		                    
+                    dvrconfig.setvalue( "system", "tvsmfid", key->usbid );
+#endif // TVS_APP                    
+
+#ifdef PWII_APP		                    
                     dvrconfig.setvalue( "system", "mfid", key->usbid );
+#endif // PWII_APP                    
+
                     bin2c64((unsigned char *)(key->videokey), 256, usbid);		// convert to c64
                     dvrconfig.setvalue("system", "filepassword", usbid);	// save password to config file
                     dvrconfig.save();
@@ -669,7 +692,9 @@ void mfid_page()
             // failed
             fprintf( id_file, "TVS Manufacturer ID file upload failed!" );
         }
-#else
+#endif  // TVS_APP
+
+#ifdef  PWII_APP
         if( res ) {
             // success
             fprintf( id_file, "Manufacturer ID file upload success!" );
@@ -678,7 +703,7 @@ void mfid_page()
             // failed
             fprintf( id_file, "Manufacturer ID file upload failed!" );
         }
-#endif
+#endif  //PWII_APP
         fclose( id_file );
     }
     if( res ) {

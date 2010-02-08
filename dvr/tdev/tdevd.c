@@ -62,6 +62,9 @@ int main(int argc, char *argv[])
 		fclose(pidf);
 	}
 
+    // Auto kill zombies
+    signal(SIGCHLD, SIG_IGN);
+    
 	while (1) {
 		static char buffer[HOTPLUG_BUFFER_SIZE];
 		char *action;
@@ -107,10 +110,7 @@ int main(int argc, char *argv[])
 			execle( argv[1], argv[1], action, devpath, NULL, envp );	// will not return
 			exit(1) ;		
 		}
-		else {
-//			waitpid(childid, NULL, 0);
-            while ( waitpid(-1, NULL, WNOHANG) > 0 ) ;
-		}
+
 	}
 
 	// delete pid file
