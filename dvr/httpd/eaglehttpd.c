@@ -40,7 +40,6 @@ static char * mime_type[][2] =
 } ;
 
 char * document_root="/home/www" ;
-
 char linebuf[8192] ;
 
 #define KEEP_ALIVE_TIMEOUT  (10)
@@ -149,6 +148,21 @@ char * getquery( const char * qname )
             query+=x+1;
         }
     }
+    // see if it is multipart value
+    sprintf(qvalue, "POST_FILE_%s", qname);
+    query = getenv(qvalue);
+    if( query ) {
+        FILE * fquery = fopen( query, "r" );
+        if( fquery ) {
+            x = fread(fquery, 1, sizeof(qvalue)-1, fquery );
+            fclose( fquery );
+            if( x>0 ) {
+                qvalue[x]=0 ;
+                return qvalue ;
+            }
+        }
+    }
+    
     return NULL ;
 }
 
@@ -573,7 +587,7 @@ int checkloginpassword()
     return res ;
 }
 
-void savepostfile(char * postfiledir )
+void savepostfile()
 {
     char postfilename[1024] ;
     FILE * postfile ;
@@ -620,8 +634,6 @@ void savepostfile(char * postfiledir )
         strncmp( &linebuf[2], boundary, lbdy )!=0 ) 
         return ;
 
-    mkdir(postfiledir, 0755);
-
     while(1) {
         char part_name[128] ;
         char part_filename[256] ;
@@ -661,7 +673,7 @@ void savepostfile(char * postfiledir )
         if( strlen(part_name)<=0 ) 
             break ;
         
-        sprintf(postfilename, "%s/post_file_%s", postfiledir, part_name );
+        sprintf(postfilename, "%s/post_file_%d_%s", document_root, (int)getpid(), part_name );
         postfile = fopen(postfilename, "w");
         if( postfile ) {
             // set POST_FILE_* env
@@ -752,19 +764,13 @@ int check_exceptionpage()
     return 0 ;
 }
 
-
 void smallssi_run( char * ssipath )
 {
-    int r ;
     char * p ;          // generic pointer
     FILE * fp ;
-    char * request_method = NULL ;
-    int    content_length = 0 ;
-    char * content_type = NULL ;
-    char * post_string = NULL ;
     char ssidir[512] ;
-    char * postfiledir = NULL ;
     char * ssid ;
+
     strncpy( ssidir, ssipath, 511);
     ssidir[511]=0 ;
     ssid=strrchr(ssidir, '/' );
@@ -773,47 +779,7 @@ void smallssi_run( char * ssipath )
         ssid++;
         chdir(ssidir);
     }
-    else {
-        chdir(document_root);
-    }
-    
-    // check input
-    request_method = getenv("REQUEST_METHOD") ;
-    if( getenv("CONTENT_LENGTH") ) {
-        content_length=atoi( getenv("CONTENT_LENGTH") );
-    }
-    else {
-        content_length=0;
-    }
-    content_type = getenv("CONTENT_TYPE");
-    if( content_length>0 && content_length< 20000000 ) {         // maximum content 20 MB 
-        if( strcmp( request_method, "POST" )==0 &&
-               content_type &&
-               content_length<5000 &&
-               strncasecmp( content_type, "application/x-www-form-urlencoded", 32)==0 ) {
-            post_string = malloc( content_length + 1 );
-            if( post_string ) {
-                r = fread( post_string, 1, content_length, stdin );
-                if( r>0 ) {
-                    post_string[r]=0;
-                    setenv( "POST_STRING", post_string, 1 );
-                }
-                free( post_string );
-            }
-            else {
-                http_error( 500, "Internal Server Error.");
-                return ;
-            }
-        }
-        else if( strcmp( request_method, "POST" )==0 &&
-                   content_length > 0 &&
-                   content_type &&
-                   strncasecmp( content_type, "multipart/form-data", 19 )==0 ) {
-            postfiledir="post_file_001" ;
-            savepostfile( postfiledir );
-        }
-    }
-
+   
     fp = fopen( ssipath, "r" );
     if ( fp == NULL ) {
         http_error( 403, "Forbidden" );
@@ -871,11 +837,6 @@ void smallssi_run( char * ssipath )
     printf("\r\n");                                 // empty line.
     smallssi_include_file( ssidir );
 
-    // remove all posted files
-    if( postfiledir ) {
-        sprintf( ssidir, "rm -r %s", postfiledir );
-        system( ssidir );
-    }
 }
 
 // set http headers as environment variable. 
@@ -908,31 +869,85 @@ void sethttpenv(char * headerline)
 }
 
 // un-set http headers as environment variable. 
-// return 0 : no more HTTP_* environment, 1: 1 HTTP_* environment removed
-int unsethttpenv()
+void unsethttpenv()
 {
     int i ;
+    int l ;
+    char * eq ;
     char envname[105] ;
     extern char **environ ;
-    for(i=0; i<200; i++) {
+    for(i=0; i<200; ) {
         if( environ[i]==NULL || environ[i][0]==0 ) {
             break;
         }
-        if( strncmp( environ[i], "HTTP_", 5 )==0 ) {
-            char * eq = strchr( environ[i], '=' ) ;
+        if ( strncmp( environ[i], "POST_FILE_", 10 )==0 )
+        {
+            eq = strchr( environ[i], '=' ) ;
             if( eq ) {
-                int l = eq-environ[i] ;
+                // remove post file
+                unlink(eq+1);
+            }
+        }
+        if( strncmp( environ[i], "HTTP_", 5 )==0 ||
+            strncmp( environ[i], "POST_", 5 )==0 )
+        {
+            eq = strchr( environ[i], '=' ) ;
+            if( eq ) {
+                l = eq-environ[i] ;
                 strncpy( envname, environ[i], l);
                 envname[l]=0 ;
                 unsetenv( envname );
-                return 1 ;
+                continue ;
             }
         }
+        i++ ;
     }
-    return 0 ;
+
+    return  ;
 }
 
-int http()
+void savepost()
+{
+    char * request_method ;
+    int    content_length ;
+    char * content_type ;
+    char * post_string;
+    int  r ;
+    
+    // check input
+    request_method = getenv("REQUEST_METHOD") ;
+    if( getenv("CONTENT_LENGTH") ) {
+        content_length=atoi( getenv("CONTENT_LENGTH") );
+    }
+    else {
+        content_length=0;
+    }
+    content_type = getenv("CONTENT_TYPE");
+    if( content_length>0 && 
+        content_length< 20000000 &&    // maximum content 20 MB 
+        strcmp( request_method, "POST" )==0 &&
+        content_type ) 
+    {
+        if( content_length<10000 &&
+            strncasecmp( content_type, "application/x-www-form-urlencoded", 32)==0 ) 
+        {
+            post_string = (char *)malloc( content_length + 1 );
+            if( post_string ) {
+                r = fread( post_string, 1, content_length, stdin );
+                if( r>0 ) {
+                    post_string[r]=0;
+                    setenv( "POST_STRING", post_string, 1 );
+                }
+                free( post_string );
+            }
+        }
+        else if( strncasecmp( content_type, "multipart/form-data", 19 )==0 ) {
+            savepostfile();
+        }
+    }
+}
+
+void http()
 {
     char * method ;	// request method
     char * uri ;	// request URI
@@ -947,28 +962,28 @@ int http()
     int i;
     struct stat sb;
 
-    keep_alive = 0 ;
-    if( recvok(0, KEEP_ALIVE_TIMEOUT*1000000)<=0 ) return 0;
+    keep_alive=0 ;
+    if( recvok(0, KEEP_ALIVE_TIMEOUT*1000000)<=0 ) {
+        return ;
+    }
     
     linebuf[0]=0 ;
     if ( fgets( linebuf, sizeof(linebuf), stdin ) == NULL )
     {
-//        http_error(400, "Bad Request" );
-        goto http_done ;
+        return ;
     }
     
     method = cleanstring(linebuf);
     uri = strchr(method, ' ');
     if( uri==NULL ) {
-//        http_error(400, "Bad Request" );
-        goto http_done ;
+        return ;
     }
     *uri=0;
     uri=cleanstring(uri+1);
-    
-    // remove all HTTP_* environment
-    while( unsethttpenv() ) ;
-    
+
+    setenv( "DOCUMENT_ROOT", document_root, 1);
+    chdir(document_root);
+
     // set request method, support POST and GET only
     if( strcasecmp(method, "POST")==0 ) {
         setenv( "REQUEST_METHOD", "POST", 1 );
@@ -1021,8 +1036,6 @@ int http()
     else {
         setenv( "REQUEST_URI", uri, 1 );
     }
-    setenv( "DOCUMENT_ROOT", document_root, 1);
-    chdir(document_root);
 
     // Not using these variables, but put them there for compatible.
     setenv("PATH_INFO", "", 1 );
@@ -1057,6 +1070,9 @@ int http()
             sethttpenv(linebuf);
         }
     }
+    // save post data
+    savepost();
+    // all inputs processed!
     
     // use linebuf to store document name.
     sprintf(linebuf, "%s%s", document_root, getenv("REQUEST_URI") );
@@ -1071,7 +1087,8 @@ int http()
         }
         else if( strcasecmp(ext, ".cgi")==0 ) {
             // execute cgi.
-            return cgi_run(linebuf);
+            cgi_run(linebuf);
+            goto http_done ;
         }
     }
 
@@ -1117,7 +1134,11 @@ int http()
     
 http_done:
     fflush(stdout);
-    return keep_alive ;
+
+    // remove all HTTP_* environment
+    unsethttpenv() ;
+
+    return ;
 }
 
 int main(int argc, char * argv[])
@@ -1125,7 +1146,9 @@ int main(int argc, char * argv[])
     if( argc>1 ) {
         document_root=argv[1] ;
     }
-    while( http() ) ;
+    keep_alive=1 ;
+    while( keep_alive ) 
+        http();
     return 0 ;
 }
 

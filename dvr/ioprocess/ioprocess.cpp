@@ -21,6 +21,7 @@
 // options
 int standbyhdoff = 0 ;
 int usewatchdog = 0 ;
+int hd_timeout = 60 ;       // hard drive ready timeout
 
 // HARD DRIVE LED and STATUS
 #define HDLED	(0x10)
@@ -211,7 +212,7 @@ int dvr_log(char *fmt, ...)
         }
         fclose(flog);
     }
-        
+
     ti = time(NULL);
     ctime_r(&ti, lbuf);
     l = strlen(lbuf);
@@ -1027,19 +1028,45 @@ void mcu_pwii_output()
     mcu_pwii_setc1c2()  ;       // check c1 c2 led.
     
     xouts = pwii_outs ^ p_dio_mmap->pwii_output ;
+
     if( xouts ) {
         pwii_outs ^= xouts ;
 
-        if( xouts & 1 ) {           // C1 LED 
+        if( xouts & 0x1000 ) {         // BIT 12: standby mode, 1: standby, 0: running
+            if( (pwii_outs&0x1000)!=0 ) {
+                // clear LEDs
+                // C1 LED 
+                mcu_pwii_cmd( 0x12, 1, 0 );
+                // C2 LED
+                mcu_pwii_cmd( 0x13, 1, 0 );
+                // bit 2: MIC LED
+                mcu_pwii_cmd( 0xf, 1, 0 );
+                // BIT 11: LCD power
+                mcu_pwii_cmd( 0x16, 1, 0 );
+                // standby
+                mcu_pwii_cmd( 0x15, 1, 1 );
+                // turn off POWER LED
+                mcu_pwii_cmd( 0x14, 1, 0 );
+            }
+            else {
+                p_dio_mmap->pwii_output |= 0x800 ;  // LCD turned on when get out of standby
+                pwii_outs |= 0x800 ;
+                mcu_pwii_cmd( 0x15, 1, 0 );
+            }
+            xouts |= 0x17 ;                   // refresh LEDs
+        }
+
+        if( (pwii_outs&0x1000)==0 ) {       // not in standby mode
+            // BIT 4: POWER LED
+            mcu_pwii_cmd( 0x14, 1, ((pwii_outs&0x10)!=0) );
+            // C1 LED 
             mcu_pwii_cmd( 0x12, 1, ((pwii_outs&1)!=0) );
-        }
-
-        if( xouts & 2 ) {           // C2 LED
+            // C2 LED
             mcu_pwii_cmd( 0x13, 1, ((pwii_outs&2)!=0) );
-        }
-
-        if( xouts & 4 ) {           // bit 2: MIC LED
+            // bit 2: MIC LED
             mcu_pwii_cmd( 0xf, 1, ((pwii_outs&4)!=0) );
+            // BIT 11: LCD power
+            mcu_pwii_cmd( 0x16, 1, ((pwii_outs&0x800)!=0) );
         }
 
         if( xouts & 8 ) {           // bit 3: ERROR LED
@@ -1056,10 +1083,6 @@ void mcu_pwii_output()
             }
         }
 
-        if( xouts & 0x10 ) {           // BIT 4: POWER LED
-            mcu_pwii_cmd( 0x14, 1, ((pwii_outs&0x10)!=0) );
-        }
-
         if( xouts & 0x100 ) {          // BIT 8: GPS antenna power
             mcu_pwii_cmd( 0x0e, 1, ((pwii_outs&0x100)!=0) );
         }
@@ -1072,20 +1095,10 @@ void mcu_pwii_output()
             mcu_pwii_cmd( 0x0c, 1, ((pwii_outs&0x400)!=0) );
         }
 
-        if( xouts & 0x800 ) {          // BIT 11: LCD power
-            mcu_pwii_cmd( 0x16, 1, ((pwii_outs&0x800)!=0) );
+        if( xouts & 0x2000 ) {          // BIT 13: WIFI power
+            mcu_pwii_cmd( 0x19, 1, ((pwii_outs&0x2000)!=0) );
         }
 
-        if( xouts & 0x1000 ) {         // BIT 12: standby mode, 1: standby, 0: running
-            if( (pwii_outs&0x1000)!=0 ) {
-                mcu_pwii_cmd( 0x15, 1, 1 );
-            }
-            else {
-                p_dio_mmap->pwii_output |= 0x800 ;  // LCD turned on when get out of standby
-                pwii_outs |= 0x800 ;
-                mcu_pwii_cmd( 0x15, 1, 0 );
-            }
-        }
     }
 }
 
@@ -1257,12 +1270,14 @@ int mcu_checkinputbuf(char * ibuf)
        switch( ibuf[3] ) {
        case '\x05' :                   // Front Camera (REC) button
            p_dio_mmap->pwii_buttons |= 0x100 ;      // bit 8: front camera
-           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&1)!=0) );  // bit 0: c1 led
+//           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&1)!=0) );  // bit 0: c1 led
+           mcu_response( ibuf, 1, 0 );                                  // bit 0: c1 led
            break;
 
        case '\x06' :                   // Back Seat Camera (C2) Starts/Stops Recording
            p_dio_mmap->pwii_buttons |= 0x200 ;      // bit 9: back camera
-           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&2)!=0) );  // bit 1: c2 led
+//           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&2)!=0) );  // bit 1: c2 led
+           mcu_response( ibuf, 1, 0 );                                  // bit 1: c2 led
            break;
 
        case '\x07' :                   // TM Button
@@ -1297,12 +1312,17 @@ int mcu_checkinputbuf(char * ibuf)
            mcu_response( ibuf );
            break;
            
-       case '\x09' :                   // Video play Control
+       case '\x09' :                        // Video play Control
            p_dio_mmap->pwii_buttons &= (~0x3f) ;
            p_dio_mmap->pwii_buttons |= ((unsigned char)ibuf[5])^0x3f ;
            mcu_response( ibuf );
            break;
-           
+
+       case '\x18' :                        // CDC ask for boot up ready
+           mcu_response( ibuf, 1, 1  );     // possitive response
+           pwii_outs = ~p_dio_mmap->pwii_output ;   // force re-fresh LED outputs
+           break;
+
        default :
 #ifdef MCU_DEBUG
             printf("Unknown message from PWII MCU.\n");
@@ -2497,6 +2517,11 @@ int appinit()
     if( watchdogtimeout>200 )
         watchdogtimeout=200 ;
 
+    hd_timeout = dvrconfig.getvalueint("io", "hdtimeout");
+    if( hd_timeout<=0 || hd_timeout>3000 ) {
+        hd_timeout=60 ;             // default timeout 60 seconds
+    }
+
     pidf = fopen( pidfile, "w" );
     if( pidf ) {
         fprintf(pidf, "%d", (int)getpid() );
@@ -3070,7 +3095,7 @@ int main(int argc, char * argv[])
                 {
                     p_dio_mmap->outputmap ^= HDLED ;
                     
-                    if( ++hdpower>100 )                // 50 seconds
+                    if( ++hdpower>hd_timeout*2 )                // 50 seconds
                     {
                         dvr_log("Hard drive failed, system reset!");
                         buzzer( 10, 250, 250 );

@@ -1224,6 +1224,7 @@ enum e_keycode {
     // pwii definition
     VK_EM   = 0xE0 ,  // EVEMT
     VK_LP,             // LP
+    VK_POWER,
 	VK_SILENCE
 } ;
 
@@ -1318,6 +1319,7 @@ extern int event_marker ;
 void screen_init();
 void screen_uninit();
 int screen_io(int usdelay);
+int screen_setliveview( int channel );
 
 // get cpu_usage between calls
 float cpu_usage();

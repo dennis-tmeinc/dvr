@@ -8,6 +8,9 @@ static int rec_run = 0 ;           // 0: quit record thread, 1: recording
 int    rec_pause = 0 ;             // 1: to pause recording, while network playback
 static int rec_fifo_size = 4000000 ;
 int    rec_lock_all = 0 ;			// all files save as locked file
+struct dvrtime  rec_cliptime ;      // clip starting time. (pre-recording mode only)
+int    rec_on ;                     // recording on
+
 
 enum REC_STATE {
     REC_STOP,           // no recording
@@ -267,6 +270,7 @@ rec_channel::~rec_channel()
 // start record
 void rec_channel::start()
 {
+    time_now( &rec_cliptime ) ;
     if( m_recordmode == 0 ) {			// continue recording mode
         m_recstate = REC_RECORD ;
     }
@@ -449,7 +453,7 @@ void rec_channel::closefile(enum REC_STATE newrecst)
     if (m_file.isopen()) {
         m_file.close();
         filelength=(int)(m_fileendtime - m_filebegintime) ;
-        if( filelength<3 || filelength>30000 ) {
+        if( filelength<1 || filelength>=86400 ) {
             m_file.remove(m_filename.getstring());
             m_filename="";
             return ;
@@ -851,10 +855,12 @@ void rec_channel::update()
         if( m_forcerecording == 1 ) {
             if( (g_timetick-m_state_starttime )/1000 > m_forcerecordontime ) {     // force recording timeout
                 m_forcerecording = 0 ;
+                m_recstate = REC_PRERECORD ;
             }
-            if( m_recstate == REC_PRERECORD ) {
-                m_recstate = REC_RECORD ;
-            }
+//            if( m_recstate == REC_PRERECORD ) {
+//                m_recstate = REC_RECORD ;
+//            }
+            m_recstate = REC_LOCK ;             // REC button make locked file
         }
         else if( m_forcerecording==2 ) {
             if( (g_timetick-m_state_starttime )/1000 > m_forcerecordofftime ) {     // force recording off timeout
@@ -1014,7 +1020,7 @@ void rec_init()
     }
 
 	rec_lock_all = dvrconfig.getvalueint("system", "lock_all");
-	
+    rec_on=0 ;
 }
 
 void rec_uninit()
@@ -1051,6 +1057,7 @@ void rec_uninit()
         recchannel=NULL ;
         dvr_log("Record uninitialized.");
     }
+    rec_on=0 ;
 }
 
 void rec_onframe(cap_frame * pframe)
@@ -1095,10 +1102,25 @@ int  rec_state(int channel)
         int i;
         for( i=0; i<rec_channels; i++ ) {
             if( recchannel[i]->recstate() ) {
+                if( rec_on == 0 ) {
+                    rec_on = 1 ;
+                    time_now(&rec_cliptime) ;
+                    dvr_log( "Recording started. ID: %s_%02d%02d%02d%02d%02d", g_hostname,
+                        rec_cliptime.year%100,
+                        rec_cliptime.month,
+                        rec_cliptime.day,
+                        rec_cliptime.hour,
+                        rec_cliptime.minute
+                        );
+                }
                 return 1;
             }
         }
     }    
+    if( rec_on ) {
+        rec_on=0;
+        dvr_log( "Recording stopped." );
+    }
     return rec_prelock_lock ;       // if pre-lock thread running, also consider busy
 }
 
@@ -1145,6 +1167,7 @@ extern int pwii_rear_ch ;          // pwii real camera channel
 void rec_pwii_toggle_rec_front()
 {
     if( rec_channels > 1 ) {
+        screen_setliveview(pwii_front_ch);                              // start live view front camera
         int state1 = recchannel[pwii_front_ch]->getforcerecording() ;
         if( state1 == 0 ) {
             state1 = recchannel[pwii_front_ch]->recstate();
@@ -1169,6 +1192,7 @@ void rec_pwii_toggle_rec_front()
 void rec_pwii_toggle_rec_rear() 
 {
     if( rec_channels > 1 ) {
+        screen_setliveview(pwii_rear_ch);                              // start live view rear camera
         int state1 = recchannel[pwii_rear_ch]->getforcerecording() ;
         if( state1 == 0 ) {
             state1 = recchannel[pwii_rear_ch]->recstate();

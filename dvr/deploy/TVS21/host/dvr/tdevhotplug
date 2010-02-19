@@ -1,14 +1,16 @@
 #!/bin/sh
 # Hot-plug script for Eagle32 project
 
-# a bit of sync
-for lock in 1 2 3 4 5 6 7 8 9 10 
-do
-  if [ -f /var/dvr/hotpluglock ] ; then
-    sleep 1
-  fi
+lockfile=/var/dvr/lock_$1
+devname=$2
+while [ ! -z $devname ]; do
+    lockfile=${lockfile}_${devname##*/}
+    devname=${devname%/*}
 done
-echo 1 > /var/dvr/hotpluglock
+if [ -f ${lockfile} ]; then
+    exit
+fi
+echo 1 > ${lockfile}
 
 #  dvrsvr information?
 dvrpidfile=/var/dvr/dvrsvr.pid
@@ -62,7 +64,7 @@ case $1 in
                 echo  ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
                 mkdir -p ${xmountdir}/${devname}
 
-                if mount /dev/${devname} ${xmountdir}/${devname} -t ext3 -o noatime ; then
+                if mount /dev/${devname} ${xmountdir}/${devname} -t ext3 -o noatime,data=ordered ; then
                     if [ -f ${xmountdir}/${devname}/archive ] ; then
                         d_mount=${dvrarchdir}/d_${devname}
                     else
@@ -72,7 +74,7 @@ case $1 in
                     if umount ${xmountdir}/${devname} ; then
                         rm -r ${xmountdir}/${devname}
                         mkdir -p ${d_mount}
-                        if mount /dev/${devname} ${d_mount} -t ext3 -o noatime ; then
+                        if mount /dev/${devname} ${d_mount} -t ext3 -o noatime,data=ordered ; then
                             # mark mounted disk
                             echo  ${d_mount} > ${xmountdir}/mount_${devname}
                         else
@@ -338,4 +340,4 @@ case $1 in
 esac 
 
 # unlock hotplug
-rm /var/dvr/hotpluglock
+rm ${lockfile}

@@ -242,6 +242,7 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
             * keycode = (int) VK_EM ;
             pwii_event_marker = * keydown = ((pwiikey&0x400)==0 );
             pwiikey ^= 0x400 ;
+            dvr_log("TraceMark %s (%d).", pwii_event_marker==1?"pressed":"released", pwii_event_marker );
             return 1 ;
         }
         if( xkey & 0x800 ) {                            // bit 11: lp
@@ -251,8 +252,7 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
             return 1 ;
         }
         if( xkey & 0x1000 ) {        // bit 12: blackout
-            // dark out Now Means silence out
-			* keycode = (int) VK_SILENCE ;
+			* keycode = (int) VK_POWER ;
             * keydown = ((pwiikey&0x1000)==0 );
 			pwiikey ^= 0x1000 ;
 			return 1 ;
@@ -261,10 +261,12 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
         if( xkey & 0x100 ) {        // bit 8: front camera rec
             p_dio_mmap->pwii_buttons &= ~0x100 ;		// auto clear
             rec_pwii_toggle_rec_front() ;
+            dvr_log("REC pressed!");
         }
         if( xkey & 0x200 ) {        // bit 9: back camera rec
             p_dio_mmap->pwii_buttons &= ~0x200 ;		// auto clear
             rec_pwii_toggle_rec_rear() ;
+            dvr_log("C2 pressed!");
         }
 
         pwiikey = p_dio_mmap->pwii_buttons ;            // save key pad status

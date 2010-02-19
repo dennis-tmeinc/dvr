@@ -123,6 +123,7 @@ void event_check()
     int sensor_toggle=0;
     double gpsspeed ;
     int videolost, videodata, diskready ;
+    int em ;
     static int timer_1s ;
 
     event_tstamp = time_hiktimestamp() ;
@@ -131,6 +132,7 @@ void event_check()
         timer_1s = g_timetick ;
 
         // check sensors
+        em = event_marker ;
         event_marker=0 ;                        // reset event marker
         for(i=0; i<num_sensors; i++ ) {
             sensor_toggle+=sensors[i]->check();
@@ -141,6 +143,12 @@ void event_check()
         if( pwii_event_marker ) {
             event_marker = 1 ;
         }
+
+        extern int pwii_front_ch ;         // pwii front camera channel
+        if( event_marker && em==0 ) {
+            screen_setliveview( pwii_front_ch ) ;
+        }
+        
 #endif
         
         gpsspeed = gps_speed() ;
@@ -201,8 +209,8 @@ void event_check()
                 if( cap_channel[i]->getmotion() ) {
                     ch_state |= 4 ;
                 }
-                dio_setchstat( i, ch_state );
 			}
+            dio_setchstat( i, ch_state );
 	    }
 		// set video lost led
         if( videolost ) {

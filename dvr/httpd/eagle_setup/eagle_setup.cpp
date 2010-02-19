@@ -80,6 +80,21 @@ char * getquery( const char * qname )
             query+=x+1;
         }
     }
+    // see if it is multipart value
+    sprintf(qvalue, "POST_FILE_%s", qname);
+    query = getenv(qvalue);
+    if( query ) {
+        FILE * fquery = fopen( query, "r" );
+        if( fquery ) {
+            x = fread(fquery, 1, sizeof(qvalue)-1, fquery );
+            fclose( fquery );
+            if( x>0 ) {
+                qvalue[x]=0 ;
+                return qvalue ;
+            }
+        }
+    }
+
     return NULL ;
 }
 

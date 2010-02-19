@@ -147,10 +147,21 @@ class video_status : public window {
 #define DECODE_MODE_PRIOR   (7)
 #define DECODE_MODE_NEXT    (8)
 
-#define VIDEO_MODE_LIVE (0)
-#define VIDEO_MODE_PLAYBACK (1)
-#define VIDEO_MODE_LCDOFF (2)
-#define VIDEO_MODE_STANDBY (3)
+// decode speed, 0=fastest, 3=fast, 4=normal, 5=slow, 6=slowest, >=7 error
+#define DECODE_SPEED_FASTEST    (0)
+#define DECODE_SPEED_FAST       (3)
+#define DECODE_SPEED_NORMAL     (4)
+#define DECODE_SPEED_SLOW       (5)
+#define DECODE_SPEED_SLOWEST    (6)
+
+#define VIDEO_MODE_NONE     (0)
+#define VIDEO_MODE_LIVE     (1)
+#define VIDEO_MODE_MENU     (2)
+#define VIDEO_MODE_PLAYBACK (3)
+#define VIDEO_MODE_LCDOFF   (4)
+#define VIDEO_MODE_STANDBY  (5)
+
+#define VIDEO_SCREEN_ID (1001)
 
 #ifdef PWII_APP
 void dio_pwii_lcd( int lcdon );
@@ -182,23 +193,19 @@ class video_screen : public window {
 
 
     public:
-    video_screen( window * parent, int channel, int x, int y, int w, int h ) :
-        window( parent, channel, x, y, w, h ) {
+    video_screen( window * parent, int id, int x, int y, int w, int h ) :
+        window( parent, id, x, y, w, h ) {
             // initial channel number, 
-            m_playchannel = channel ;
+            m_playchannel = 0 ;
             m_select = 0 ;
             // create recording light
 
-            m_videomode=VIDEO_MODE_LIVE ; // live video mode
+            m_videomode=VIDEO_MODE_NONE ;
             m_decode_handle = 0 ;
             time_dvrtime_init(&m_streamtime, 2000);
             time_dvrtime_init(&m_playbacktime, 2000);
             m_statuswin = new video_status(this, 1, 30, 60, 200, 50 );
             m_icon = new video_icon(this, 2, (m_pos.w-75)/2, (m_pos.h-75)/2, 75, 75 );
-
-            startliveview();    // start on live view mode
-
-            updatestatus();
 
         }
         
@@ -213,12 +220,18 @@ class video_screen : public window {
             delete m_icon ;
         }
 
+        void liveview( int channel ) {
+            if( m_videomode <= VIDEO_MODE_PLAYBACK ) {
+                startliveview(channel);
+            }
+        }
+        
         // select audio 
         void select(int s) {
             if( m_select != s ) {
                 m_select = s ;
                 if( m_videomode == VIDEO_MODE_LIVE ) {     // live view
-                    startliveview();
+                    startliveview(m_playchannel);
                 }
                 else {
                     ;   // support only one channel playback now.
@@ -248,11 +261,25 @@ class video_screen : public window {
             if( (buttons & 0x11)==0x11 ){       // click
                 select(1);
             }
-        }			
+        }
 
-        void startliveview()    {
-            m_videomode = VIDEO_MODE_LIVE ;
-            if( m_playchannel < eagle32_channels ) {
+        void startliveview(int channel)    {
+            if( m_videomode == VIDEO_MODE_LIVE &&
+                m_playchannel == channel ) 
+            {
+                if( m_select ) {
+                    SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_audio);
+                }
+                else {
+                    SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,0);
+                }
+                return ;
+            }
+            stopdecode();
+            stopliveview();
+
+            if( channel < eagle32_channels ) {
+                m_playchannel = channel ;
                 SetPreviewScreen(MAIN_OUTPUT,m_playchannel+1,1);
                 if( m_select ) {
                     SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_audio);
@@ -260,25 +287,29 @@ class video_screen : public window {
                 else {
                     SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,0);
                 }
+                m_videomode = VIDEO_MODE_LIVE ;
             }
+            updatestatus();
         }
 
         void stopliveview() {
-            if( m_playchannel < eagle32_channels ) {
+            if( m_videomode == VIDEO_MODE_LIVE ) 
+            {
                 SetPreviewScreen(MAIN_OUTPUT,m_playchannel+1,0);
                 SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,0);
+                m_videomode = VIDEO_MODE_NONE ; 
             }
         }
-
+        
         void restartdecoder() {
             StopDecode( m_decode_handle );
             m_decode_handle = StartDecode(MAIN_OUTPUT, m_playchannel+1, 1,  Dvr264Header);
             if( m_decode_runmode == DECODE_MODE_PLAY ) {
-                m_decode_speed = 4 ;  // make decoder run a bit faster, so I can take care the player speed
+                m_decode_speed = DECODE_SPEED_NORMAL ; 
                 SetDecodeSpeed(m_decode_handle, m_decode_speed);
             }
             else {
-                m_decode_speed = 0 ;  // make decoder run super faster, so I can take care the player speed
+                m_decode_speed = DECODE_SPEED_FASTEST ;  // make decoder run super faster, so I can take care the player speed
                 SetDecodeSpeed(m_decode_handle, m_decode_speed);
             }
             updatestatus();
@@ -308,7 +339,6 @@ class video_screen : public window {
             else if( m_videomode == VIDEO_MODE_STANDBY ) {      // live mode
                m_statuswin->setstatus( "OFF" );
             }
-
         }
 
         void playback_thread()  {
@@ -326,8 +356,7 @@ class video_screen : public window {
             playback * ply = new playback( m_playchannel, 1 ) ;
 
             m_decode_handle = StartDecode(MAIN_OUTPUT, m_playchannel+1, 1,  Dvr264Header);
-            // decode speed, 0=fastest,3=fast, 4=normal, 5=slow, 6=slowest, >7 error
-            m_decode_speed = 4 ;  // make decoder run a bit faster, so I can take care the player speed
+            m_decode_speed = DECODE_SPEED_NORMAL ;
             res = SetDecodeSpeed(m_decode_handle, m_decode_speed);
 
             time_now( &streamtime );
@@ -392,8 +421,18 @@ class video_screen : public window {
                 }
                 else if( m_decode_runmode == DECODE_MODE_PAUSE ) {
                     res = DecodeNextFrame(m_decode_handle);
+                    int getdata=0 ;
                     while( m_decode_runmode == DECODE_MODE_PAUSE ) {
                         usleep(10000);
+                        struct dec_statistics stat ;
+                        res = GetDecodeStatistics( m_decode_handle, &stat );
+                        if( getdata ) {
+                            ply->getstreamdata(&buf, &bufsize, &frametype );
+                            if( bufsize>0 && buf){
+                                res =InputAvData(m_decode_handle, buf, bufsize );
+                            }              
+                            getdata=0 ;
+                        }
                     }
                 }
                 else if( m_decode_runmode == DECODE_MODE_PLAY_FASTFORWARD ) {
@@ -516,8 +555,8 @@ class video_screen : public window {
 
             if( m_decode_handle > 0 ) {
                 StopDecode(m_decode_handle) ;
+                m_decode_handle = 0 ;
             }
-            m_decode_handle = 0 ;
             delete ply ;
             m_streamtime = streamtime ;
             time_now( &m_playbacktime );
@@ -530,17 +569,18 @@ class video_screen : public window {
         }
 
 
-        void startdecode()  {
+        void startdecode(int channel)  {
             int res ;
-            if( m_decode_handle>0 ) {
-                stopdecode();
-            }
+            stopliveview();
+            stopdecode();
 
-            if( m_playchannel < eagle32_channels ) {
+            if( channel < eagle32_channels ) {
                 cap_stop();       // stop live codec, so decoder has full DSP power
+                m_playchannel = channel ;
                 res = SetDecodeScreen(MAIN_OUTPUT, m_playchannel+1, 1);
 				res = SetDecodeAudio(MAIN_OUTPUT, m_playchannel+1, screen_audio);
 
+                m_videomode = VIDEO_MODE_PLAYBACK ; 
                 m_decode_runmode = DECODE_MODE_PLAY ;
                 pthread_create(&m_decodethreadid, NULL, s_playback_thread, (void *)(this));
             }
@@ -548,7 +588,7 @@ class video_screen : public window {
 
         void stopdecode()  {
             int res ;
-            if( m_decode_handle == 0 ) 
+            if( m_videomode != VIDEO_MODE_PLAYBACK ) 
                 return ;
 
             m_decode_runmode = DECODE_MODE_QUIT ;
@@ -562,12 +602,14 @@ class video_screen : public window {
                 }
             }
             pthread_join(m_decodethreadid, NULL);
+            m_decodethreadid = 0 ;
 
             // stop decode screen
             res = SetDecodeScreen(MAIN_OUTPUT, m_playchannel+1, 0);
             res = SetDecodeAudio(MAIN_OUTPUT, m_playchannel+1, 0);
 
-            cap_start();       // start live capture.
+            m_videomode = VIDEO_MODE_NONE ; 
+            cap_start();       // start video capture.
 
         }
 
@@ -584,13 +626,20 @@ class video_screen : public window {
 #endif
                 return 0 ;
             }
-
-            if( m_keypad_state == VK_MEDIA_PREV_TRACK ) {     // play backward
+            else if( id == VK_POWER ) {
+                m_videomode=VIDEO_MODE_STANDBY ;
+#ifdef	PWII_APP
+                dio_pwii_standby(1);
+#endif
+                return 0 ;
+            }
+                
+            if( m_keypad_state == VK_MEDIA_PREV_TRACK ) {           // play backward
 //                m_decode_runmode = DECODE_MODE_PLAY_FASTBACKWARD ;
                 m_decode_runmode = DECODE_MODE_BACKWARD ;
                 settimer(id, 2000);
             }
-            else if( m_keypad_state == VK_MEDIA_NEXT_TRACK ) {     // play forward
+            else if( m_keypad_state == VK_MEDIA_NEXT_TRACK ) {      // play forward
 //                m_decode_runmode = DECODE_MODE_PLAY_FASTFORWARD ;
                 m_decode_runmode = DECODE_MODE_FORWARD ;
                 settimer(id, 2000);
@@ -642,60 +691,62 @@ class video_screen : public window {
                 }
                 else if( keycode == VK_MEDIA_PLAY_PAUSE ) { //  in live mode, jump to playback mode, in playback mode, switch between pause and play
                     if( m_videomode == VIDEO_MODE_LIVE ) { // live mode, set to playback mode.
-                        // stop live view 
-                        stopliveview();
-                        startdecode();
+                        startdecode(m_playchannel);
                         m_videomode = VIDEO_MODE_PLAYBACK ;
                     }
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
-                        // switch between pause and play
+                        // switch between play -> slow -> pause
                         if( m_decode_runmode == DECODE_MODE_PLAY ) {
                             m_decode_runmode = DECODE_MODE_PAUSE ;
                             m_icon->seticon( "pause.pic" );
+                        }
+                        else if( m_decode_runmode == DECODE_MODE_PLAY ) {
+                        }
+                        else if( m_decode_runmode == DECODE_MODE_PLAY ) {
                         }
                         else {
                             m_decode_runmode = DECODE_MODE_PLAY ;
                             m_icon->seticon( "play.pic" );
                         }
                     }
+                    else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
+                        startliveview( m_playchannel );
+                    }
                 }
                 else if( keycode == VK_MEDIA_STOP ) {      // stop playback if in playback mode, swith channel if in live mode
                     if( m_videomode ==  VIDEO_MODE_LIVE ) {
 #ifdef	PWII_APP
-                        m_videomode = VIDEO_MODE_LCDOFF ;
                         stopliveview();
                         dio_pwii_lcd(0);
+                        m_videomode = VIDEO_MODE_LCDOFF ;
+                        settimer( 5000, keycode );
 #endif
                     }
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
                         m_icon->seticon( "stop.pic" );   
-                        stopdecode();
-                        m_videomode = VIDEO_MODE_LIVE ;
-                        startliveview();
+                        startliveview(m_playchannel);
+                        settimer( 5000, keycode );
                     }
                     else if( m_videomode == VIDEO_MODE_LCDOFF ) {   // lcd off
 #ifdef	PWII_APP
                         dio_pwii_lcd( 1 ) ;           // turn lcd on
 #endif
-                        m_videomode = VIDEO_MODE_LIVE ;
-                        startliveview();
+                        startliveview(m_playchannel);
+                        settimer( 5000, keycode );
                     }
                     else if( m_videomode == VIDEO_MODE_STANDBY ) {   // playback
 #ifdef	PWII_APP
                         dio_pwii_standby( 0 );          // jump out of standby
 #endif
-                        m_videomode = VIDEO_MODE_LIVE ;
-                        startliveview();
+                        startliveview(m_playchannel);
                     }
-                    settimer( 5000, keycode );
                 }
                 else if( keycode == VK_PRIOR ) { //  previous video clip
                     if( m_videomode==VIDEO_MODE_LIVE ) {   // live, black LCD
                         // switch live view channel
-                        stopliveview();
-                        m_playchannel-- ;
-                        if( m_playchannel<0 ) m_playchannel = 1 ;
-                        startliveview();
+                        int ch = m_playchannel-1 ;
+                        if( ch<0 ) ch=1 ;
+                        startliveview(ch);
                     }
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
                         m_decode_runmode = DECODE_MODE_PRIOR ;
@@ -705,10 +756,9 @@ class video_screen : public window {
                 else if( keycode == VK_NEXT ) { //  jump forward.
                     if( m_videomode==VIDEO_MODE_LIVE ) {   // live, black LCD
                         // switch live view channel
-                        stopliveview();
-                        m_playchannel++ ;
-                        if( m_playchannel>=2 ) m_playchannel = 0 ;
-                        startliveview();
+                        int ch = m_playchannel+1 ;
+                        if( ch>=2 ) ch = 0 ;
+                        startliveview(ch);
                     }
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
                         m_decode_runmode = DECODE_MODE_NEXT ;
@@ -717,6 +767,30 @@ class video_screen : public window {
                 }
                 else if( keycode == VK_EM ) { //  event marker key
                     m_icon->seticon( "tm.pic" );
+                }
+                else if( keycode == VK_POWER ) {
+                    if( m_videomode <= VIDEO_MODE_PLAYBACK ) {   // playback
+                        stopliveview();
+                        stopdecode();
+#ifdef	PWII_APP
+                        dio_pwii_lcd(0);
+                        m_videomode = VIDEO_MODE_LCDOFF ;
+#endif
+                        settimer( 5000, keycode );
+                    }
+                    else if( m_videomode == VIDEO_MODE_LCDOFF ) {   // lcd off
+#ifdef	PWII_APP
+                        dio_pwii_lcd( 1 ) ;           // turn lcd on
+#endif
+                        startliveview(m_playchannel);
+                    }
+                    else if( m_videomode == VIDEO_MODE_STANDBY ) {   // playback
+#ifdef	PWII_APP
+                        dio_pwii_standby( 0 );        // jump out of standby
+                        dio_pwii_lcd( 1 ) ;           // turn lcd on
+#endif
+                        startliveview(m_playchannel);
+                    }
                 }
 				else if( keycode == VK_SILENCE ) { //  switch audio on <--> off 
 					screen_audio = !screen_audio ;
@@ -877,21 +951,28 @@ class mainwin : public window {
 
         if( ScreenNum==1 ) {
             startchannel = dvrconfig.getvalueint("VideoOut", "startchannel" );
-            vs = new video_screen( this, startchannel, ScreenMarginX, ScreenMarginY, m_pos.w-ScreenMarginX*2, m_pos.h-ScreenMarginY*2 );
+            vs = new video_screen( this, VIDEO_SCREEN_ID, ScreenMarginX, ScreenMarginY, m_pos.w-ScreenMarginX*2, m_pos.h-ScreenMarginY*2 );
+            vs->liveview( startchannel ) ;
             vs->select(1);
         }
         else if( ScreenNum==2 ) {
-            vs = new video_screen( this, 0, ScreenMarginX, m_pos.h/4, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs = new video_screen( this, VIDEO_SCREEN_ID, ScreenMarginX, m_pos.h/4, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs->liveview( 0 ) ;
             vs->select(1);
-            vs = new video_screen( this, 1,     m_pos.w/2, m_pos.h/4, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs = new video_screen( this, VIDEO_SCREEN_ID+1,     m_pos.w/2, m_pos.h/4, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs->liveview( 1 ) ;
         }
         else {         // ScreenNum==4
             ScreenNum = 4 ;
-            vs = new video_screen( this, 0, ScreenMarginX, ScreenMarginY, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs = new video_screen( this, VIDEO_SCREEN_ID, ScreenMarginX, ScreenMarginY, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs->liveview( 0 ) ;
             vs->select(1);
-            vs = new video_screen( this, 1,     m_pos.w/2, ScreenMarginY, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
-            vs = new video_screen( this, 2, ScreenMarginX,     m_pos.h/2, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
-            vs = new video_screen( this, 3,     m_pos.w/2,     m_pos.h/2, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs = new video_screen( this, VIDEO_SCREEN_ID+1,     m_pos.w/2, ScreenMarginY, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs->liveview( 1 ) ;
+            vs = new video_screen( this, VIDEO_SCREEN_ID+2, ScreenMarginX,     m_pos.h/2, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs->liveview( 2 ) ;
+            vs = new video_screen( this, VIDEO_SCREEN_ID+3,     m_pos.w/2,     m_pos.h/2, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs->liveview( 3 ) ;
         }
 
         string control ;
@@ -927,6 +1008,20 @@ class mainwin : public window {
         }
 
 };
+
+int screen_setliveview( int channel )
+{
+    video_screen * vs ;
+    if( topwindow!=NULL ) {
+        vs = (video_screen *) topwindow->findwindow( VIDEO_SCREEN_ID ) ;
+        if( vs ) {
+            vs->liveview( channel );
+            return 1 ;
+        }
+    }
+    return 0;
+}
+
 
 int screen_mouseevent(int x, int y, int buttons)
 {
