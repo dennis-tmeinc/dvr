@@ -1293,11 +1293,11 @@ int mcu_checkinputbuf(char * ibuf)
        case '\x08' :                   // LP button
            mcu_response( ibuf );
            if( ibuf[5] ) {
-//               p_dio_mmap->pwii_buttons |= 0x800 ;      // bit 11: LP button
+                p_dio_mmap->pwii_buttons |= 0x800 ;      // bit 11: LP button
                 mcu_camera_zoom( 1 );
            }
            else {
-//               p_dio_mmap->pwii_buttons &= (~0x800) ;   // bit 11: LP button
+                p_dio_mmap->pwii_buttons &= (~0x800) ;   // bit 11: LP button
                 mcu_camera_zoom( 0 );
            }
            break;

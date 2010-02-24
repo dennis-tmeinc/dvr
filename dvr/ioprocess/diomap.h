@@ -76,7 +76,7 @@ struct dio_mmap {
                                         //  BIT 9: back camera button,  1: pressed, auto release
                                         //  BIT 10:  tm, 1: pressed, 0: released
                                         //  BIT 11:  lp, 1: pressed, 0: released
-                                        //  BIT 12:  blackout, 1: pressed, 0: released, auto release
+                                        //  BIT 12:  blackout, 1: pressed, 0: released
     
     unsigned int pwii_output ;          // LEDs and device power (outputs)
                                         // BIT 0: C1 LED

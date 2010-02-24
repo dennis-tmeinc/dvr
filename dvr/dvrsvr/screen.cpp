@@ -168,6 +168,44 @@ void dio_pwii_lcd( int lcdon );
 void dio_pwii_standby( int standby );
 #endif
 
+
+// status window on video screen
+class pwii_menu : public window {
+        int m_level ;           // 0: top level, 1: Enter Officer ID, 2: Enter classification number
+    
+    public:
+        pwii_menu( window * parent, int id, int x, int y, int w, int h )
+        :window( parent, id, x, y, w, h ) {
+            m_level = 0 ;
+            redraw();
+        }
+
+        virtual ~pwii_menu() {
+        }
+
+        void enter() {
+            
+        }
+
+        void cancel() {
+        }
+
+        void next() {
+        }
+
+        void prev() {
+        }
+
+        	// event handler
+    protected:
+        virtual void paint() {						// paint window
+            if( m_level==0 ) {
+            }
+        }
+
+};
+
+
 class video_screen : public window {
 
     protected:
@@ -332,6 +370,9 @@ class video_screen : public window {
                 else {                      // DECODE_MODE_PLAY
                     m_statuswin->setstatus( "PLAY" );
                 }                    
+            }
+            else if( m_videomode == VIDEO_MODE_MENU ) {     // menu mode
+                m_statuswin->setstatus( "MENU" );
             }
             else if( m_videomode == VIDEO_MODE_LCDOFF ) {      // live mode
                m_statuswin->setstatus( "LCDOFF" );
@@ -700,10 +741,6 @@ class video_screen : public window {
                             m_decode_runmode = DECODE_MODE_PAUSE ;
                             m_icon->seticon( "pause.pic" );
                         }
-                        else if( m_decode_runmode == DECODE_MODE_PLAY ) {
-                        }
-                        else if( m_decode_runmode == DECODE_MODE_PLAY ) {
-                        }
                         else {
                             m_decode_runmode = DECODE_MODE_PLAY ;
                             m_icon->seticon( "play.pic" );
@@ -715,24 +752,27 @@ class video_screen : public window {
                 }
                 else if( keycode == VK_MEDIA_STOP ) {      // stop playback if in playback mode, swith channel if in live mode
                     if( m_videomode ==  VIDEO_MODE_LIVE ) {
+/*                        
 #ifdef	PWII_APP
                         stopliveview();
                         dio_pwii_lcd(0);
                         m_videomode = VIDEO_MODE_LCDOFF ;
                         settimer( 5000, keycode );
 #endif
+*/                         
+                        settimer( 5000, keycode );          // black out still works
                     }
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
                         m_icon->seticon( "stop.pic" );   
                         startliveview(m_playchannel);
-                        settimer( 5000, keycode );
+//                        settimer( 5000, keycode );
                     }
                     else if( m_videomode == VIDEO_MODE_LCDOFF ) {   // lcd off
 #ifdef	PWII_APP
                         dio_pwii_lcd( 1 ) ;           // turn lcd on
 #endif
                         startliveview(m_playchannel);
-                        settimer( 5000, keycode );
+//                        settimer( 5000, keycode );
                     }
                     else if( m_videomode == VIDEO_MODE_STANDBY ) {   // playback
 #ifdef	PWII_APP
@@ -768,8 +808,8 @@ class video_screen : public window {
                 else if( keycode == VK_EM ) { //  event marker key
                     m_icon->seticon( "tm.pic" );
                 }
-                else if( keycode == VK_POWER ) {
-                    if( m_videomode <= VIDEO_MODE_PLAYBACK ) {   // playback
+                else if( keycode == VK_POWER ) {                //  LCD power on/off and blackout
+                    if( m_videomode <= VIDEO_MODE_PLAYBACK ) {  // playback
                         stopliveview();
                         stopdecode();
 #ifdef	PWII_APP
@@ -802,7 +842,7 @@ class video_screen : public window {
 					}
 				}
             }
-            else {
+            else {                  // key up
 /*
                  if( m_keypad_state == keycode && m_playmode ) {
                     if( keycode == VK_MEDIA_PREV_TRACK ) { 
@@ -829,6 +869,13 @@ class video_screen : public window {
                 m_keypad_state = 0 ;
                 m_keypad_state_p = keycode ;
                 m_icon->seticon( NULL );
+
+                if( keycode == VK_MEDIA_STOP ) {      // stop playback if in playback mode, swith channel if in live mode
+                    if( m_videomode ==  VIDEO_MODE_LIVE ) {
+                        // to bring up menu mode
+                        m_videomode = VIDEO_MODE_MENU ;
+                    }
+                }
             }
             updatestatus();
             return 1 ;      // key been procesed.

@@ -1062,7 +1062,7 @@ int	sensor_log()
         }
 
         if( sv != sensor_value[i] && (btime-sensorbouncetime[i]) > 2.5 ) {
-            if( gps_logprintf( (sv)? (sensorid+i*2):(sensorid+i*2+1), "" ) )
+            if( gps_logprintf( (sv)? (20+i*2):(20+i*2+1), "" ) )
             {
                 sensor_value[i]=sv ;
             }
@@ -1093,7 +1093,30 @@ int	sensor_log()
             p_dio_mmap->gforce_log1=0;
         }
     }
-    
+
+    for( i=0; i<p_dio_mmap->inputnum; i++ ) {
+        int sv ;
+        
+        // sensor debouncing
+        sv = (( imap & (1<<i) )!=0) ;
+        if( sensor_invert[i] ) {
+            sv=!sv ;
+        }
+
+        if( sv != sensor_value[i] && (btime-sensorbouncetime[i]) > 2.5 ) {
+            if( gps_logprintf( (sv)? (sensorid+i*2):(sensorid+i*2+1), "" ) )
+            {
+                sensor_value[i]=sv ;
+            }
+        }
+        
+        if( sv != sensorbouncevalue[i] ) {  // sensor value bouncing
+            sensorbouncetime[i]=btime ;
+            sensorbouncevalue[i] = sv ;
+        }
+    }
+
+
 	return 1;
 }
 

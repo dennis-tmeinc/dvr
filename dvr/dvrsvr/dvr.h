@@ -1288,9 +1288,6 @@ class sensor_t {
     int toggle() {
         return m_toggle ;
     }
-    void toggle_clear() {
-        m_toggle = 0 ;
-    }
 } ;
 
 extern sensor_t ** sensors ;

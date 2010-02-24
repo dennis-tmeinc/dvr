@@ -1,15 +1,23 @@
 #!/bin/sh
 # Hot-plug script for Eagle32 project
 
-lockfile=/var/dvr/lock_$1
-devname=$2
-while [ ! -z $devname ]; do
-    lockfile=${lockfile}_${devname##*/}
-    devname=${devname%/*}
-done
+devpath=/sys$2
+devname=${devpath##*/}
+
+devclass=$2
+devclass=${devclass#/}
+devclass=${devclass%%/*}
+
+subsys=$2
+subsys=${subsys#/}
+subsys=${subsys#*/}
+subsys=${subsys%%/*}
+
+lockfile=/var/dvr/lock_${devclass}_${subsys}_${devname}_$1
 if [ -f ${lockfile} ]; then
     exit
-fi
+fi    
+
 echo 1 > ${lockfile}
 
 #  dvrsvr information?
@@ -35,13 +43,6 @@ fi
 # hotplug disk mounted here.
 xmountdir=/var/dvr/xdisk
 
-devpath=/sys$2
-devname=${devpath##*/}
-
-subsys=$2
-subsys=${subsys#/}
-subsys=${subsys%%/*}
-
 if [ -f /var/dvr/TZ ] ; then
   TZ=`cat /var/dvr/TZ`
   export TZ
@@ -51,12 +52,13 @@ case $1 in
     "add")
 
         # hotplug block device (USB disk)
-        if [ ${subsys} = "block" -a -r ${devpath}/dev  ] ; then
+        if [ ${devclass} = "block" -a -r ${devpath}/dev  ] ; then
             devnum=`cat ${devpath}/dev`
             # generate device if not exist
-            if [ ! -e /dev/${devname} ] ; then
-                mknod /dev/${devname} b ${devnum%%:*} ${devnum##*:}
+            if [ -e /dev/${devname} ] ; then
+                rm /dev/${devname}
             fi
+            mknod /dev/${devname} b ${devnum%%:*} ${devnum##*:}
 
             partition=${devname##*[a-z]}
             if [ ${partition:-0} -ge 1 -a ! -f ${xmountdir}/mount_${devname} ]; then
@@ -253,27 +255,19 @@ case $1 in
 
         fi	# block device 
 
-        # chec usb serial adapter
-        if [ -r ${devpath}/dev -a ${devname%[0-9]} = "ttyUSB" ]; then
+        # charactor device
+        if [ ${devclass} = "class" -a -r ${devpath}/dev  ] ; then
             devnum=`cat ${devpath}/dev`
+            # generate device if not exist
+            if [ -e /dev/${devname} ] ; then
+                rm /dev/${devname}
+            fi
             mknod /dev/${devname} c ${devnum%%:*} ${devnum##*:}
         fi
 
         # check usb wifi
-        if [ ${devname%[0-9]} = "rausb" ]; then	
-            cd /davinci/dvr
-
-            if [ -f /davinci/dvr/wifi_ip ]; then
-                ifconfig ${devname} `cat /davinci/dvr/wifi_ip`
-            fi
-
-            if [ -f /davinci/dvr/wifi_mask ]; then
-                ifconfig ${devname} netmask `cat /davinci/dvr/wifi_mask`
-            fi
-
-            if [ -f /davinci/dvr/wifi_id ]; then
-                /davinci/iwconfig ${devname} `cat /davinci/dvr/wifi_id`
-            fi
+        if [  ${devclass} = "class" -a ${subsys} = "net" -a -d ${devpath}/wireless ]; then
+            /bin/sleep 2
 
             if [ -f /davinci/dvr/wifi_ip ]; then
                 ifconfig ${devname} `cat /davinci/dvr/wifi_ip`
@@ -292,7 +286,8 @@ case $1 in
         ;;
 
     "remove")
-        if [ ${subsys} = "block" -a -r ${xmountdir}/mount_${devname} ]; then
+    
+        if [ ${devclass} = "block" -a -r ${xmountdir}/mount_${devname} ]; then
 
             mountdir=`cat ${xmountdir}/mount_${devname}`
             dvrsvrdown=0
@@ -336,6 +331,8 @@ case $1 in
             rm ${xmountdir}/mount_${devname}
 
         fi;
+               
+        
         ;;
 esac 
 

@@ -1,5 +1,4 @@
 
-#include <sys/types.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -8,16 +7,21 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
-#define SERVER_NAME "Eagle HTTP 0.1"
+#define SERVER_NAME "Eagle HTTP 0.2"
 #define PROTOCOL "HTTP/1.1"
 #define RFC1123FMT "%a, %d %b %Y %H:%M:%S GMT"
 
+// we need to excess environment
+extern char **environ ;
+
 static char * mime_type[][2] = 
 {
-    {"htm", "text/html; charset=UTF-8"},
     {"html", "text/html; charset=UTF-8"},
+    {"htm", "text/html; charset=UTF-8"},
     {"jpg", "image/jpeg"},
     {"jpeg", "image/jpeg"},
     {"gif", "image/gif"},
@@ -42,8 +46,10 @@ static char * mime_type[][2] =
 char * document_root="/home/www" ;
 char linebuf[8192] ;
 
-#define KEEP_ALIVE_TIMEOUT  (10)
+#define KEEP_ALIVE_TIMEOUT  (20)
 int keep_alive ;
+
+int dynamic_page ;      // if page is dynamic ?
 
 // check if data ready to read
 int recvok(int fd, int usdelay)
@@ -203,39 +209,93 @@ char * getcookie(char * key)
     return NULL;
 }
 
-void setcookie(char * key, char * value)
-{
-    printf("Set-Cookie: %s=%s\r\n", key, value );
-}
-
 void http_header( int status, char * title, char * mime_type, int length)
 {
     time_t now;
-    char timebuf[120];
+    char hbuf[120];
+    int i ;
+    char * resp ;
     
     printf( "%s %d %s\r\n", PROTOCOL, status, title );
     printf( "Server: %s\r\n", SERVER_NAME );
     now = time( (time_t*) NULL );
-    strftime( timebuf, sizeof(timebuf), RFC1123FMT, gmtime( &now ) );
-    printf( "Date: %s\r\n", timebuf );
+    strftime( hbuf, sizeof(hbuf), RFC1123FMT, gmtime( &now ) );
+    printf( "Date: %s\r\n", hbuf );
     if ( mime_type != NULL ) {
         printf( "Content-Type: %s\r\n", mime_type );
     }
+    else {
+        if( resp=getenv("HEADER_Content-Type") ) {
+            printf( "Content-Type: %s\r\n", resp );
+        }
+    }
+    unsetenv("HEADER_Content-Type" );
     if ( length > 0 ) {
         printf( "Content-Length: %ld\r\n", (long) length );
         keep_alive = 1 ;
     }
     else {
-        printf( "Connection: close\r\n" );
-        keep_alive = 0 ;
+        if( resp=getenv("HEADER_Content-Length") ) {
+            printf( "Content-Type: %s\r\n", resp );
+            keep_alive = 1 ;
+        }
     }
+    unsetenv("HEADER_Content-Length" );
+
+    if( resp=getenv("HEADER_Connection") ) {
+        printf( "Connection: %s\r\n", resp );
+    }
+    else {
+        if( keep_alive == 0 ) {
+            printf( "Connection: close\r\n" );
+        }
+    }
+    unsetenv("HEADER_Connection" );
+
+    for(i=0; i<200; ) {
+        if( environ[i]==NULL || environ[i][0]==0 ) {
+            break;
+        }
+        if( strncmp( environ[i], "HEADER_", 7 )==0 )
+        {
+            resp = strchr( environ[i], '=' ) ;
+            if( resp ) {
+                int l = resp-environ[i] ;
+                strncpy( hbuf, environ[i], l);
+                hbuf[l]=0 ;
+                printf( "%s: %s\r\n", &(hbuf[7]), resp+1 );
+                unsetenv( hbuf );
+                continue ;
+            }
+        }
+        i++ ;
+    }
+
+    // empty line, finish of header 
+    printf("\r\n");             
+}
+
+void http_setheader(char * header, char *header_txt)
+{
+    char hdenv[160] ;
+    sprintf( hdenv, "HEADER_%s", header );
+    setenv( hdenv, header_txt, 1 );
+}
+
+void setcookie(char * key, char * value)
+{
+    char cookie[200] ;
+    sprintf( cookie, "%s=%s", key, value );
+    http_setheader("Set-Cookie", cookie );
 }
 
 void http_error( int status, char * title )
 {
-    http_header( status, title, "text/html", -1);
-    printf("\r\n<html><head><title>%d %s</title></head>\n<body bgcolor=\"#66ffff\"><h4>%d %s</h4></body></html>\r\n",
+    char errtxt[800] ;
+    sprintf(errtxt, "<html><head><title>%d %s</title></head>\n<body bgcolor=\"#66ffff\"><h4>%d %s</h4></body></html>\r\n",
            status, title, status, title );
+    http_header( status, title, "text/html", strlen(errtxt));
+    fputs(errtxt, stdout);
 }
 
 void http_cache( int age, time_t mtime )
@@ -245,13 +305,14 @@ void http_cache( int age, time_t mtime )
     if( age<=0 ) {
         now = time( (time_t*) NULL );
         strftime( timebuf, sizeof(timebuf), RFC1123FMT, gmtime( &now ) );
-        printf( "Last-Modified: %s\r\n", timebuf );
-        printf( "Cache-Control: no-cache\r\n" );        // no cache on ssi html file
+        http_setheader( "Last-Modified", timebuf );
+        http_setheader( "Cache-Control", "no-cache" );
     }
     else {
         strftime( timebuf, sizeof(timebuf), RFC1123FMT, gmtime( &mtime ) );
-        printf( "Last-Modified: %s\r\n", timebuf );
-        printf( "Cache-Control: max-age=%d \r\n", age );
+        http_setheader( "Last-Modified", timebuf );
+        sprintf( timebuf, "max-age=%d", age );
+        http_setheader( "Cache-Control", timebuf );
     }
 }
 
@@ -299,8 +360,10 @@ void runapp( char * execfile, char * arg )
 int cgi_run(char * execfile )
 {
     pid_t childpid ;
+    int   status ;
     fflush(stdout);
     childpid=fork();
+
     if( childpid==0 ) {
         char execdir[512] ;
         char * d ;
@@ -313,10 +376,16 @@ int cgi_run(char * execfile )
         }
         execl( execfile, execfile, NULL );
         http_error( 403, "Forbidden" );
-        exit(1) ;
+        exit(0) ;
     }
     else if( childpid>0) {
-        waitpid(childpid, NULL, 0);
+        if( waitpid(childpid, &status, 0)==childpid ) {
+            if (WIFEXITED(status)) {
+                if( WEXITSTATUS(status)==0 ) {
+                    return 1 ;
+                }
+            } 
+        }
     }
     else {
         http_error( 403, "Forbidden" );
@@ -366,7 +435,10 @@ int smallssi_gettoken(FILE * fp, char * token, int bufsize)
                             }
                         }
                     }
-                }}}}
+                }
+            }
+        }
+    }
     token[r+1]=0;
     return r+1 ;
 }
@@ -455,12 +527,15 @@ void smallssi_include_file( char * ifilename )
         }
         else if( strncasecmp(linebuf, "<!--#include ", 13) == 0 ) {		// found ssi include command
             smallssi_include(linebuf);
+            dynamic_page = 1; 
         }
         else if( strncasecmp(linebuf, "<!--#echo ", 10) == 0 ) {		// found ssi echo command
             smallssi_echo(linebuf);
+            dynamic_page = 1; 
         }
         else if( strncasecmp(linebuf, "<!--#exec ", 10) == 0 ) {		// found ssi exec command
             smallssi_exec(linebuf);
+            dynamic_page = 1; 
         }
         else {
             fputs(linebuf, stdout);		// pass to client
@@ -468,13 +543,6 @@ void smallssi_include_file( char * ifilename )
     }
     
     fclose( fp );
-}
-
-
-void transfer( char * newpage )
-{
-    printf("Location: /%s\r\n", newpage);
-    printf("\r\n<html><body>Transfer to %s</body></html>\n", newpage);
 }
 
 char serfile[]="/tmp/wwwserialnofile" ;
@@ -787,8 +855,6 @@ void smallssi_run( char * ssipath )
     }
     fclose( fp );
 
-    http_header( 200, "OK", "text/html; charset=UTF-8", -1 );
-
 //  dvr specific extension
     p = getquery( "page" );
     if( ssid && strcmp( ssid, "login.html" )==0 ) {
@@ -826,16 +892,43 @@ void smallssi_run( char * ssipath )
             runapp("./eagle_setup", NULL );
             updateserialno(p);
             strncpy( ssidir, ssipath, sizeof(ssidir) );
-            http_cache(0, (time_t)0);
         }
         else {
             strcat( ssidir, "/denied.html");
         }
     }
-    
-    // generic ssi
-    printf("\r\n");                                 // empty line.
+
+    fflush(stdout);
+
+    // save old stdout
+    char ssifile[20] ;
+    int dupstdout = dup(1);
+    sprintf( ssifile, "/tmp/ssi%d", getpid() );
+    int hssifile = open(ssifile, O_RDWR|O_CREAT, S_IRWXU );
+    dup2( hssifile, 1 ) ;
+
     smallssi_include_file( ssidir );
+    
+    // restore stdout
+    fflush( stdout );
+    dup2( dupstdout, 1 );
+    close( dupstdout );
+
+    int len = lseek( hssifile, 0, SEEK_END ) ;
+
+    http_cache(0, (time_t)0);
+    http_header( 200, "OK", "text/html; charset=UTF-8", len );
+
+    lseek( hssifile, 0, SEEK_SET );
+    fp = fdopen( hssifile, "r" );
+
+    int ch, i ;
+    for( i=0; i<len && ch!=EOF ; i++ ) {
+        ch = fgetc( fp );
+        fputc( ch, stdout );
+    }
+    fclose( fp ) ;
+    unlink( ssifile );
 
 }
 
@@ -875,7 +968,14 @@ void unsethttpenv()
     int l ;
     char * eq ;
     char envname[105] ;
-    extern char **environ ;
+
+    // un-set regular HTTP env
+    unsetenv( "QUERY_STRING" );
+    unsetenv( "SERVER_PORT" );
+    unsetenv( "SERVER_NAME" );
+    unsetenv( "CONTENT_TYPE" );
+    unsetenv( "CONTENT_LENGTH" );
+    
     for(i=0; i<200; ) {
         if( environ[i]==NULL || environ[i][0]==0 ) {
             break;
@@ -963,6 +1063,8 @@ void http()
     struct stat sb;
 
     keep_alive=0 ;
+    dynamic_page = 0;           // assume it is static page
+
     if( recvok(0, KEEP_ALIVE_TIMEOUT*1000000)<=0 ) {
         return ;
     }
@@ -1025,9 +1127,6 @@ void http()
         *query=0;
         query++;
         setenv( "QUERY_STRING", query, 1);
-    }
-    else {
-        unsetenv( "QUERY_STRING" );
     }
 
     if( uri[1]=='\0' ) {        // default page ?
@@ -1120,10 +1219,13 @@ void http()
         goto http_done ;
     }
     
+    if( dynamic_page ) {
+        http_cache(0, (time_t)0);
+    }
+    else {
+        http_cache( 432000, sb.st_mtime );
+    }
     http_header( 200, "Ok", get_mime_type( linebuf ), len );
-    http_cache( 432000, sb.st_mtime );
-    
-    printf("\r\n");                                 // empty line.
    
     // output whole file 
     while ( ( ch = getc( fp ) ) != EOF ) {

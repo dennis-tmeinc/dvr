@@ -201,7 +201,6 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
     xkey=p_dio_mmap->pwii_buttons ^ pwiikey ;
 
     if( xkey ) {
-
         if( xkey & 1 ) {                    // bit 0: rew
             * keycode = (int) VK_MEDIA_PREV_TRACK ;
             * keydown = ((pwiikey&1)==0 );
@@ -246,7 +245,8 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
             return 1 ;
         }
         if( xkey & 0x800 ) {                            // bit 11: lp
-            * keycode = (int) VK_LP ;
+//            * keycode = (int) VK_LP ;
+            * keycode = (int) VK_POWER ;                // temperary use lp button to simulate power button 
             * keydown = ((pwiikey&0x800)==0 );
             pwiikey ^= 0x800 ;
             return 1 ;
@@ -383,15 +383,6 @@ void dio_devicepower(int onoffmaps)
     if( p_dio_mmap && p_dio_mmap->iopid ){
         p_dio_mmap->devicepower = onoffmaps ;
     }
-}
-
-double gps_speed()
-{
-    double speed = -1.0 ;
-    if( p_dio_mmap && p_dio_mmap->glogpid>0 && p_dio_mmap->gps_valid ) {
-        speed = p_dio_mmap->gps_speed ;
-    }
-    return speed ;
 }
 
 int gps_location( double * latitude, double * longitude, double * speed )

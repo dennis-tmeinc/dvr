@@ -391,7 +391,7 @@ void print_status()
     
 }
  
-
+// return 0: for keep alive
 int main()
 {
     // printf headers
@@ -400,5 +400,5 @@ int main()
     printf( "Cache-Control: no-cache\r\n" );        // no cache on cgi contents
     printf( "\r\n" );
     print_status();
-    return 0;
+    return 1;
 }

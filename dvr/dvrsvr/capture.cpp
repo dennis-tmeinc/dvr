@@ -269,7 +269,7 @@ void capture::onframe(cap_frame * pcapframe)
     screen_onframe(pcapframe); 
 }
 
-// periodic update procedure. (every 0.125 second)
+// periodic update procedure.
 void capture::update(int updosd)
 {
     if( updosd ) {

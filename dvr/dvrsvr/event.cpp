@@ -18,7 +18,6 @@ int num_alarms ;
 alarm_t ** alarms ;
 
 int alarm_suspend = 0 ;
-static DWORD event_tstamp ;
 int event_marker ;
 
 double g_gpsspeed ;
@@ -55,6 +54,7 @@ int sensor_t::check()
         return 1 ;
     }
     else {
+        m_toggle = 0 ;
         return 0 ;
     }
 }
@@ -97,7 +97,8 @@ void alarm_t::update()
         dio_output(m_outputpin, 1);
     }
     else if( m_value>1 ) {
-        dio_output(m_outputpin, event_tstamp&(1<<(m_value+2)) );
+        dio_output(m_outputpin, g_timetick&(1<<(m_value+6)) );
+//        dio_output(m_outputpin, event_tstamp&(1<<(m_value+2)) );
     }
     else {
         dio_output(m_outputpin, 0);
@@ -120,13 +121,9 @@ void setdio(int onoff)
 void event_check()
 {
     int i ;
-    int sensor_toggle=0;
-    double gpsspeed ;
     int videolost, videodata, diskready ;
     int em ;
     static int timer_1s ;
-
-    event_tstamp = time_hiktimestamp() ;
 
     if( dio_check() || g_timetick-timer_1s > 1000 ) {
         timer_1s = g_timetick ;
@@ -135,7 +132,7 @@ void event_check()
         em = event_marker ;
         event_marker=0 ;                        // reset event marker
         for(i=0; i<num_sensors; i++ ) {
-            sensor_toggle+=sensors[i]->check();
+            sensors[i]->check();
         }
 
 #ifdef    PWII_APP
@@ -151,27 +148,14 @@ void event_check()
         
 #endif
         
-        gpsspeed = gps_speed() ;
-        if( gpsspeed >-0.1 ) {
-            g_gpsspeed = gpsspeed ;
-        }
-        else {
-            g_gpsspeed = 0.0 ;
-        }
-        
         // update decoder screen (OSD)
         for(i=0; i<cap_channels; i++ ) {
-            cap_channel[i]->update(sensor_toggle || gpsspeed>-0.1);
+            cap_channel[i]->update(1);
         }
         
         // update recording status
         rec_update();		
 
-        if( sensor_toggle>0 )
-        for(i=0; i<num_sensors; i++ ) {
-            sensors[i]->toggle_clear();
-        }
-            
         // clear alarm value.
         for(i=0; i<num_alarms; i++) {
             alarms[i]->clear();

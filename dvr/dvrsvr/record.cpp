@@ -181,7 +181,11 @@ rec_channel::rec_channel(int channel)
 
     // initialize fifo lock
     memcpy( &m_fifo_mutex, &mutex_init, sizeof(mutex_init));
-    
+    fifo_lock();
+    m_fifohead = m_fifotail = NULL;
+    m_fifosize = 0 ;
+    fifo_unlock();
+
     m_channel = channel;
     sprintf(cameraname, "camera%d", m_channel+1 );
 
@@ -199,9 +203,6 @@ rec_channel::rec_channel(int channel)
     m_filerecstate=REC_STOP ;
 	m_prevfilerecstate=REC_STOP ;
     m_forcerecording = 0 ;
-    
-    m_fifohead = m_fifotail = NULL;
-    m_fifosize = 0 ;
     
     // initialize pre-record variables
     m_prerecord_time = dvrconfig.getvalueint(cameraname, "prerecordtime");
@@ -769,7 +770,7 @@ int rec_channel::dorecord()
 		return 0;
     }
 	m_activetime=g_timetick;
-    if(fifo->rectype == REC_STOP ) {
+    if(fifo->rectype == REC_STOP  || fifo->buf == NULL ) {
         m_fileendtime=fifo->time ;
         closefile();                       
         m_recording = 0 ;
