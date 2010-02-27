@@ -993,18 +993,23 @@ int mcu_pwii_version(char * version)
 void mcu_pwii_setc1c2() 
 {
    // C1 LED (front)
+    dio_lock();
     if( p_dio_mmap->camera_status[pwii_front_ch] & 2 ) {         // front ca
         if( (p_dio_mmap->pwii_output & 1) == 0 ) {
             p_dio_mmap->pwii_output |= 1 ;
             // turn on mic
+            dio_unlock();
             mcu_cmd(0x21) ;
+            dio_lock();
         }
     }
     else {
         if( (p_dio_mmap->pwii_output & 1) != 0 ) {
             p_dio_mmap->pwii_output &= (~1) ;
             // turn off mic
+            dio_unlock();
             mcu_cmd(0x22);
+            dio_lock();
         }
     }
     
@@ -1015,6 +1020,7 @@ void mcu_pwii_setc1c2()
     else {
        p_dio_mmap->pwii_output &= (~2) ;
     }
+    dio_unlock();
 }
 
 static unsigned int pwii_outs = 0 ;
@@ -1144,6 +1150,8 @@ static void mcu_dinput_help(char * ibuf)
 {
     unsigned int imap1, imap2 ;
     int i;
+
+    dio_lock();
     // get digital input map
     imap1 = (unsigned char)ibuf[5]+256*(unsigned int)(unsigned char)ibuf[6] ; ;
     imap2 = 0 ;
@@ -1164,6 +1172,8 @@ static void mcu_dinput_help(char * ibuf)
         p_dio_mmap->pwii_output |= 4 ;      // turn on bit2 , MIC LED
     }
 #endif      // PWII_APP
+
+    dio_unlock();
 }
 
 static void mcu_gforce_log( float gright, float gback, float gbuttom ) 
@@ -1199,6 +1209,7 @@ static void mcu_gforce_log( float gright, float gback, float gbuttom )
            gbusdown );
 #endif            
     // save to log
+    dio_lock();
     if( p_dio_mmap->gforce_log0==0 ) {
         p_dio_mmap->gforce_right_0 = gbusright ;
         p_dio_mmap->gforce_forward_0 = gbusforward ;
@@ -1214,7 +1225,8 @@ static void mcu_gforce_log( float gright, float gback, float gbuttom )
         if( gforce_log_enable ) {
             p_dio_mmap->gforce_log1 = 1 ;
         }
-    }                
+    }        
+    dio_unlock();
 
 }
 
@@ -1269,58 +1281,74 @@ int mcu_checkinputbuf(char * ibuf)
 #endif            
        switch( ibuf[3] ) {
        case '\x05' :                   // Front Camera (REC) button
+           dio_lock();
            p_dio_mmap->pwii_buttons |= 0x100 ;      // bit 8: front camera
+           dio_unlock();
 //           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&1)!=0) );  // bit 0: c1 led
            mcu_response( ibuf, 1, 0 );                                  // bit 0: c1 led
            break;
 
        case '\x06' :                   // Back Seat Camera (C2) Starts/Stops Recording
+           dio_lock();
            p_dio_mmap->pwii_buttons |= 0x200 ;      // bit 9: back camera
+           dio_unlock();
 //           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&2)!=0) );  // bit 1: c2 led
            mcu_response( ibuf, 1, 0 );                                  // bit 1: c2 led
            break;
 
        case '\x07' :                   // TM Button
            mcu_response( ibuf );
+           dio_lock();
            if( ibuf[5] ) {
                p_dio_mmap->pwii_buttons |= 0x400 ;      // bit 10: tm button
            }
            else {
                p_dio_mmap->pwii_buttons &= (~0x400) ;   // bit 10: tm button
            }
+           dio_unlock();
            break;
 
        case '\x08' :                   // LP button
            mcu_response( ibuf );
            if( ibuf[5] ) {
-                p_dio_mmap->pwii_buttons |= 0x800 ;      // bit 11: LP button
-                mcu_camera_zoom( 1 );
+               dio_lock();
+               p_dio_mmap->pwii_buttons |= 0x800 ;      // bit 11: LP button
+               dio_unlock();
+               mcu_camera_zoom( 1 );
            }
            else {
-                p_dio_mmap->pwii_buttons &= (~0x800) ;   // bit 11: LP button
-                mcu_camera_zoom( 0 );
+               dio_lock();
+               p_dio_mmap->pwii_buttons &= (~0x800) ;   // bit 11: LP button
+               dio_unlock();
+               mcu_camera_zoom( 0 );
            }
            break;
 
        case '\x0b' :                   // BIT 12:  blackout, 1: pressed, 0: released, auto release
+           dio_lock();
            if( ibuf[5] ) {
                 p_dio_mmap->pwii_buttons |= 0x1000 ;      // bit 12: blackout
            }
            else {
                 p_dio_mmap->pwii_buttons &= (~0x1000) ;      // bit 12: blackout
            }
+           dio_unlock();
            mcu_response( ibuf );
            break;
            
        case '\x09' :                        // Video play Control
+           dio_lock();
            p_dio_mmap->pwii_buttons &= (~0x3f) ;
            p_dio_mmap->pwii_buttons |= ((unsigned char)ibuf[5])^0x3f ;
+           dio_unlock();
            mcu_response( ibuf );
            break;
 
        case '\x18' :                        // CDC ask for boot up ready
            mcu_response( ibuf, 1, 1  );     // possitive response
+           dio_lock();
            pwii_outs = ~p_dio_mmap->pwii_output ;   // force re-fresh LED outputs
+           dio_unlock();
            break;
 
        default :
@@ -1708,6 +1736,7 @@ void mcu_readrtc()
     struct tm ttm ;
     t = mcu_r_rtc(&ttm) ;
     if( (int)t > 0 ) {
+        dio_lock();
         p_dio_mmap->rtc_year  = ttm.tm_year+1900 ;
         p_dio_mmap->rtc_month = ttm.tm_mon+1 ;
         p_dio_mmap->rtc_day   = ttm.tm_mday ;
@@ -1715,8 +1744,8 @@ void mcu_readrtc()
         p_dio_mmap->rtc_minute= ttm.tm_min ;
         p_dio_mmap->rtc_second= ttm.tm_sec ;
         p_dio_mmap->rtc_millisecond = 0 ;
-        
         p_dio_mmap->rtc_cmd   = 0 ;	// cmd finish
+        dio_unlock();
         return ;
     }
     p_dio_mmap->rtc_cmd   = -1 ;	// cmd error.
@@ -1914,15 +1943,24 @@ int mcu_w_rtc(time_t tt)
 
 void mcu_setrtc()
 {
-
+    int bsecond, bminute, bhour, bzero, bday, bmonth, byear ;
+    dio_lock();
+    bsecond = bcd( p_dio_mmap->rtc_second ) ;
+    bminute = bcd( p_dio_mmap->rtc_minute ) ;
+    bhour   = bcd( p_dio_mmap->rtc_hour ) ;
+    bzero   = bcd( 0 );
+    bday    = bcd( p_dio_mmap->rtc_day );
+    bmonth  = bcd( p_dio_mmap->rtc_month );
+    byear   = bcd( p_dio_mmap->rtc_year );
+    dio_unlock();
     if( mcu_cmd( 0x07, 7, 
-                bcd( p_dio_mmap->rtc_second ),
-                bcd( p_dio_mmap->rtc_minute ),
-                bcd( p_dio_mmap->rtc_hour ),
-                bcd( 0 ),
-                bcd( p_dio_mmap->rtc_day ),
-                bcd( p_dio_mmap->rtc_month ),
-                bcd( p_dio_mmap->rtc_year ) ) ) 
+                bsecond,
+                bminute,
+                bhour,
+                bzero,
+                bday,
+                bmonth,
+                byear ) ) 
     {
         p_dio_mmap->rtc_cmd   = 0 ;	// cmd finish
         return ;
@@ -1969,8 +2007,10 @@ void time_syncgps ()
     struct timeval tv ;
     int diff ;
     time_t gpstime ;
+    dio_lock();
     if( p_dio_mmap->gps_valid ) {
         gpstime = (time_t) p_dio_mmap->gps_gpstime ;
+        dio_unlock();
         gettimeofday(&tv, NULL);
         diff = (int)gpstime - (int)tv.tv_sec ;
         if( diff>5 || diff<-5 ) {
@@ -1988,6 +2028,9 @@ void time_syncgps ()
         mcu_w_rtc(gpstime) ;
         // also set onboard rtc
         rtc_set(gpstime);
+    }
+    else {
+        dio_unlock();
     }
 }
 
@@ -2084,6 +2127,7 @@ void buzzer(int times, int ontime, int offtime)
 // run buzzer, runtime: runtime in ms
 void buzzer_run( int runtime )
 {
+    dio_lock();
     if( buzzer_count>0 && (runtime - buzzer_timer)>=0 ) {
         if( buzzer_on ) {
             buzzer_count-- ;
@@ -2096,6 +2140,7 @@ void buzzer_run( int runtime )
         }
         buzzer_on=!buzzer_on ;
     }
+    dio_unlock();
 }    
 
 

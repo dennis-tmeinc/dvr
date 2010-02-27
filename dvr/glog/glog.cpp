@@ -283,26 +283,10 @@ int atomic_swap( int *m, int v)
     return result ;
 }
 
-/*
-void dio_lock()
-{
-    int i;
-    for( i=0; i<1000; i++ ) {
-        if( p_dio_mmap->lock>0 ) {
-            usleep(1);
-        }
-        else {
-            break ;
-        }
-    }
-    p_dio_mmap->lock=1;
-}
-*/
-
 void dio_lock()
 {
     while( atomic_swap( &(p_dio_mmap->lock), 1 ) ) {
-        sched_yield();      // or sleep(0)
+        sleep(0);      // or sched_yield()
     }
 }
 
@@ -321,9 +305,13 @@ void * buzzer_thread(void * p)
 {
     struct buzzer_t_type * pbuzzer = (struct buzzer_t_type *)p ;
     while( pbuzzer->times-- ) {
+        dio_lock();
         p_dio_mmap->outputmap |= 0x100 ;     // buzzer on
+        dio_unlock();
         usleep( pbuzzer->ontime*1000 ) ;
+        dio_lock();
         p_dio_mmap->outputmap &= (~0x100) ;     // buzzer off
+        dio_unlock();
         usleep( pbuzzer->offtime*1000 ) ;
     }
     delete pbuzzer ;
@@ -962,11 +950,14 @@ int gps_logprintf(int logid, char * fmt, ...)
                           validgpsdata.longitude<0.0000000 ? 'W' : 'E' ,
                           (float)(validgpsdata.speed * 1.852),      // in km/h.
                           (float)validgpsdata.direction ) ;
-    
-    va_start(ap, fmt);
-    vfprintf( logfile, fmt, ap );
+
+    if( fmt!=NULL && *fmt != 0 ) {
+        va_start(ap, fmt);
+        vfprintf( logfile, fmt, ap );
+        va_end(ap);
+    }
+
     fprintf(logfile, "\n");
-    va_end(ap);
 
     if( validgpsdata.speed < 1.0 ) {
         gps_logclose ();
@@ -1032,10 +1023,11 @@ int	sensor_log()
     if( validgpsdata.year < 1900 ) return 0 ;
 
     // log ignition changes
-    if( glog_poweroff != p_dio_mmap->poweroff ) {
-        if( gps_logprintf(2, ",%d", p_dio_mmap->poweroff?0:1 ) )
+    int spoweroff = p_dio_mmap->poweroff ;
+    if( glog_poweroff != spoweroff ) {
+        if( gps_logprintf(2, ",%d", spoweroff?0:1 ) )
         {
-            glog_poweroff = p_dio_mmap->poweroff ;
+            glog_poweroff = spoweroff ;
         }
         else {
             return 0 ;
@@ -1076,20 +1068,30 @@ int	sensor_log()
 
     // log g sensor value
     if( gforce_log_enable ) {
-        if( p_dio_mmap->gforce_log0 ) {
+        dio_lock();
+        int glog0 = p_dio_mmap->gforce_log0 ;
+        double gforward_0 = (double) p_dio_mmap->gforce_forward_0 ;
+        double gright_0 = (double) p_dio_mmap->gforce_right_0 ;
+        double gdown_0 = (double) p_dio_mmap->gforce_down_0 ;
+        int glog1 = p_dio_mmap->gforce_log1 ;
+        double gforward_1 = (double) p_dio_mmap->gforce_forward_1 ;
+        double gright_1 = (double) p_dio_mmap->gforce_right_1;
+        double gdown_1 = (double) p_dio_mmap->gforce_down_1 ;
+        dio_unlock();
+        if( glog0 ) {
             // we record forward/backward, right/left acceleration value, up/down as g-force value
             gps_logprintf(16, ",%.1f,%.1f,%.1f", 
-                          (double) - p_dio_mmap->gforce_forward_0,
-                          (double) - p_dio_mmap->gforce_right_0,
-                          (double) p_dio_mmap->gforce_down_0 );
+                          - gforward_0,
+                          - gright_0,
+                          gdown_0 );
             p_dio_mmap->gforce_log0=0;
         }
-        if( p_dio_mmap->gforce_log1 ) {
+        if( glog1 ) {
             // we record forward/backward, right/left acceleration value, up/down as g-force value
             gps_logprintf(16, ",%.1f,%.1f,%.1f", 
-                          (double) - p_dio_mmap->gforce_forward_1,
-                          (double) - p_dio_mmap->gforce_right_1,
-                          (double) p_dio_mmap->gforce_down_1 );
+                          - gforward_1,
+                          - gright_1,
+                          gdown_1 );
             p_dio_mmap->gforce_log1=0;
         }
     }
@@ -1116,6 +1118,40 @@ int	sensor_log()
         }
     }
 
+#ifdef PWII_APP   
+    static int dvrstatus = 0 ;
+    char pwii_VRI[128] ;
+    pwii_VRI[0]=0 ;
+    dio_lock();
+    if( dvrstatus != p_dio_mmap->dvrstatus ) {
+        dvrstatus = p_dio_mmap->dvrstatus ;
+        if( (dvrstatus&DVR_RECORD) ){
+            memcpy( pwii_VRI, p_dio_mmap->pwii_VRI, sizeof( pwii_VRI ) );
+        }
+    }
+    dio_unlock();
+    if( pwii_VRI[0] ) {
+        gps_logprintf( 18, ",%s", pwii_VRI ) ;
+    }
+
+    static unsigned int pwii_buttons = 0 ;
+    unsigned int pwii_xbuttons = p_dio_mmap->pwii_buttons ^ pwii_buttons ;
+    if( pwii_xbuttons ) {
+        pwii_buttons ^= pwii_xbuttons ;
+        if( pwii_xbuttons & 0x100 ) {   // REC
+            if( gps_logprintf( (pwii_buttons&0x100)? 20:21, "" ) );
+        }
+        if( pwii_xbuttons & 0x200 ) {   // C2
+            if( gps_logprintf( (pwii_buttons&0x200)? 22:23, "" ) );
+        }
+        if( pwii_xbuttons & 0x400 ) {   // tm
+            if( gps_logprintf( (pwii_buttons&0x400)? 24:25, "" ) );
+        }
+        if( pwii_xbuttons & 0x800 ) {   // lp
+            if( gps_logprintf( (pwii_buttons&0x800)? 26:27, "" ) );
+        }
+    }
+#endif    
 
 	return 1;
 }

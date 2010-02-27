@@ -200,6 +200,14 @@ class pwii_menu : public window {
     protected:
         virtual void paint() {						// paint window
             if( m_level==0 ) {
+                setcolor (COLOR(0,0,0,0)) ;	// full transparent
+                setpixelmode (DRAW_PIXELMODE_COPY);
+                fillrect ( 50, 100, 300, 150 );	
+                resource font("mono32b.font");
+                setcolor(COLOR(240,240,80,200));
+                char vristr[256] ;
+                sprintf( vristr, "VRI: %s", g_vri );
+                drawtext( 55, 110, vristr, font );
             }
         }
 
@@ -225,6 +233,7 @@ class video_screen : public window {
 
         video_status * m_statuswin ;        // status txt on top-left corner
         video_icon   * m_icon ;             // display a icon when button pressed
+        pwii_menu * m_menu ;                // menu
 
         int m_jumptime ;
         int m_keytime ;
@@ -244,16 +253,14 @@ class video_screen : public window {
             time_dvrtime_init(&m_playbacktime, 2000);
             m_statuswin = new video_status(this, 1, 30, 60, 200, 50 );
             m_icon = new video_icon(this, 2, (m_pos.w-75)/2, (m_pos.h-75)/2, 75, 75 );
-
+            m_menu=NULL ;
         }
         
         ~video_screen() {
             if( m_videomode== VIDEO_MODE_PLAYBACK ) {
                 stopdecode();
             }
-            else {
-                stopliveview();
-            }
+            stop();
             delete m_statuswin ;
             delete m_icon ;
         }
@@ -278,6 +285,13 @@ class video_screen : public window {
             }
         }
 
+        // stop every thing?
+        void stop() {
+            stopdecode();
+            stopliveview();
+            stopmenu();
+        }
+        
         // event handler
     protected:
 
@@ -313,8 +327,7 @@ class video_screen : public window {
                 }
                 return ;
             }
-            stopdecode();
-            stopliveview();
+            stop();
 
             if( channel < eagle32_channels ) {
                 m_playchannel = channel ;
@@ -336,6 +349,23 @@ class video_screen : public window {
                 SetPreviewScreen(MAIN_OUTPUT,m_playchannel+1,0);
                 SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,0);
                 m_videomode = VIDEO_MODE_NONE ; 
+            }
+        }
+
+        void startmenu() {
+            stop();
+            m_menu = new pwii_menu(this, 3, 0, 0, m_pos.w, m_pos.h);
+            m_videomode= VIDEO_MODE_MENU ;
+        }
+        
+        void stopmenu() {
+            if( m_videomode == VIDEO_MODE_MENU ) 
+            {
+                m_videomode = VIDEO_MODE_NONE ;
+                if( m_menu ) {
+                    delete m_menu ;
+                    m_menu=NULL ;
+                }
             }
         }
         
@@ -463,17 +493,21 @@ class video_screen : public window {
                 else if( m_decode_runmode == DECODE_MODE_PAUSE ) {
                     res = DecodeNextFrame(m_decode_handle);
                     int getdata=0 ;
+                    int dec=0 ;
+                    struct dec_statistics stat ;
                     while( m_decode_runmode == DECODE_MODE_PAUSE ) {
                         usleep(10000);
-                        struct dec_statistics stat ;
-                        res = GetDecodeStatistics( m_decode_handle, &stat );
                         if( getdata ) {
                             ply->getstreamdata(&buf, &bufsize, &frametype );
                             if( bufsize>0 && buf){
                                 res =InputAvData(m_decode_handle, buf, bufsize );
                             }              
-                            getdata=0 ;
                         }
+                        res = GetDecodeStatistics( m_decode_handle, &stat );
+                        if( dec ) {
+                            DecodeNextFrame(m_decode_handle) ;
+                        }
+                        res = GetDecodeStatistics( m_decode_handle, &stat );
                     }
                 }
                 else if( m_decode_runmode == DECODE_MODE_PLAY_FASTFORWARD ) {
@@ -612,8 +646,7 @@ class video_screen : public window {
 
         void startdecode(int channel)  {
             int res ;
-            stopliveview();
-            stopdecode();
+            stop();
 
             if( channel < eagle32_channels ) {
                 cap_stop();       // stop live codec, so decoder has full DSP power
@@ -810,8 +843,7 @@ class video_screen : public window {
                 }
                 else if( keycode == VK_POWER ) {                //  LCD power on/off and blackout
                     if( m_videomode <= VIDEO_MODE_PLAYBACK ) {  // playback
-                        stopliveview();
-                        stopdecode();
+                        stop();
 #ifdef	PWII_APP
                         dio_pwii_lcd(0);
                         m_videomode = VIDEO_MODE_LCDOFF ;
@@ -873,7 +905,7 @@ class video_screen : public window {
                 if( keycode == VK_MEDIA_STOP ) {      // stop playback if in playback mode, swith channel if in live mode
                     if( m_videomode ==  VIDEO_MODE_LIVE ) {
                         // to bring up menu mode
-                        m_videomode = VIDEO_MODE_MENU ;
+                        startmenu();
                     }
                 }
             }

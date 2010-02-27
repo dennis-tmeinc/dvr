@@ -25,6 +25,8 @@ int app_state;				// APPQUIT, APPUP, APPDOWN, APPRESTART
 
 int g_lowmemory ;
 
+char g_vri[128] ;           // VRI (video recording id) for PWII
+
 void dvr_lock()
 {
     pthread_mutex_lock(&dvr_mutex);

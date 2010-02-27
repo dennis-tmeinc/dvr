@@ -25,60 +25,58 @@ int atomic_swap( int *m, int v)
     return result ;
 }
 
-/*
 void dio_lock()
 {
-    int i;
-    for( i=0; i<1000; i++ ) {
-        if( p_dio_mmap->lock>0 ) {
-            usleep(1);
+    if( p_dio_mmap ) {
+        while( atomic_swap( &(p_dio_mmap->lock), 1 ) ) {
+            sleep(0);      // or sched_yield()
         }
-        else {
-            break ;
-        }
-    }
-    p_dio_mmap->lock=1;
-}
-*/
-
-void dio_lock()
-{
-    while( atomic_swap( &(p_dio_mmap->lock), 1 ) ) {
-        sched_yield();      // or sleep(0)
     }
 }
 
 void dio_unlock()
 {
-    p_dio_mmap->lock=0;
+    if( p_dio_mmap ) {
+        p_dio_mmap->lock=0;
+    }
 }
 
 int dio_inputnum()
 {
+    int inputnum=0 ;
+    dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ) {
-        return p_dio_mmap->inputnum ;
+        inputnum = p_dio_mmap->inputnum ;
     }
-    return 0 ;
+    dio_unlock();
+    return inputnum ;
 }
 
 int dio_outputnum()
 {
+    int outputnum = 0 ;
+    dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ) {
-        return p_dio_mmap->outputnum ;
+        outputnum = p_dio_mmap->outputnum ;
     }
-    return 0 ;
+    dio_unlock();
+    return outputnum ;
 }
 
 int dio_input( int no )
 {
+    int v = 0 ;
+    dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid && no>=0 && no<p_dio_mmap->inputnum ) {
-        return ((p_dio_mmap->inputmap)>>no)&1 ;
+        v = ((p_dio_mmap->inputmap)>>no)&1 ;
     }
-    return 0 ;
+    dio_unlock();
+    return v ;
 }
 
 void dio_output( int no, int v)
 {
+    dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid && no>=0 && no<p_dio_mmap->outputnum ) {
         if( v ) {
             p_dio_mmap->outputmap |= 1<<no ;
@@ -87,6 +85,7 @@ void dio_output( int no, int v)
             p_dio_mmap->outputmap &= ~(1<<no) ;
         }
     }
+    dio_unlock();
 }
 
 // return 1 for poweroff switch turned off
@@ -102,74 +101,132 @@ int dio_poweroff()
 
 int dio_lockpower()
 {
+    dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ){
         p_dio_mmap->lockpower = 1 ;
     }
+    dio_unlock();
     return (0);
 }
 
 int dio_unlockpower()
 {
+    dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ){
         p_dio_mmap->lockpower = 0;
     }
+    dio_unlock();
     return (0);
 }
 
 int dio_enablewatchdog()
 {
+    dio_lock();
     if( p_dio_mmap ){
         p_dio_mmap->dvrwatchdog = 0 ;
     }
+    dio_unlock();
     return (0);
 }
 
 int dio_disablewatchdog()
 {
+    dio_lock();
     if( p_dio_mmap ){
         p_dio_mmap->dvrwatchdog = -1 ;
     }
+    dio_unlock();
     return (0);
 }
 
 int dio_kickwatchdog()
 {
+    dio_lock();
     if( p_dio_mmap &&
        p_dio_mmap->dvrwatchdog>=0 )
     {
         p_dio_mmap->dvrwatchdog = 0 ;
     }
+    dio_unlock();
     return (0);
 }
 
 // set dvr status bits
 int dio_setstate( int status ) 
 {
+    int s = 0 ;
+    int rstart = 0 ;
+    dio_lock();
     if( p_dio_mmap ){
+#ifdef PWII_APP
+        if( status == DVR_RECORD ) {
+            if( (p_dio_mmap->dvrstatus & DVR_RECORD)==0 ) {
+                // start recording
+                struct dvrtime cliptime ;
+                time_now(&cliptime) ;
+                sprintf( g_vri, "%s_%02d%02d%02d%02d%02d", g_hostname,
+                    cliptime.year%100,
+                    cliptime.month,
+                    cliptime.day,
+                    cliptime.hour,
+                    cliptime.minute
+                    );
+                memcpy( p_dio_mmap->pwii_VRI, g_vri, sizeof(p_dio_mmap->pwii_VRI) );
+                rstart = 1 ;
+            }
+        }
+#endif    
        	p_dio_mmap->dvrstatus |= status ;
-        return p_dio_mmap->dvrstatus ;
+        s = p_dio_mmap->dvrstatus ;
     }
-    return 0 ;
+    dio_unlock();
+#ifdef PWII_APP    
+    if( rstart ) {
+        dvr_log( "Recording started, ID: %s", g_vri);
+    }
+#endif
+    return s ;
 }
 
 // clear dvr status
 int dio_clearstate( int status )
 {
+    int s = 0 ;
+    int rstart = 1 ;
+
+    dio_lock();
     if( p_dio_mmap ){
+#ifdef PWII_APP
+        if( status == DVR_RECORD ) {
+            if( (p_dio_mmap->dvrstatus & DVR_RECORD) ) {
+                // stop recording
+                rstart = 0 ;
+            }
+        }
+#endif    
        	p_dio_mmap->dvrstatus &= ~status ;
-        return p_dio_mmap->dvrstatus ;
+        s = p_dio_mmap->dvrstatus ;
     }
-    return 0 ;
+    dio_unlock();
+#ifdef PWII_APP
+    if( rstart==0 ) {
+        dvr_log( "Recording stopped, ID: %s", g_vri);
+    }
+#endif    
+    return s ;
 }
 
 
 // check if IO process busy (doing smartftp)
 int dio_iobusy()
 {
+    int busy=0 ;
+    dio_lock();
     if( p_dio_mmap ){
-        return p_dio_mmap->iobusy ;
+        busy = p_dio_mmap->iobusy ;
     }
-    return 0 ;
+    dio_unlock();
+    return busy ;
 }
 
 
@@ -179,7 +236,9 @@ int dio_iobusy()
 void dio_setchstat( int channel, int ch_state )
 {
     if( channel < 8 ) {
+        dio_lock();
         p_dio_mmap->camera_status[channel] = ch_state ;
+        dio_unlock();
     }
 }
 
@@ -196,11 +255,16 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
     void rec_pwii_toggle_rec_rear() ;
 
     static unsigned int pwiikey = 0 ;
+    static int key_timetick = 0 ;
     unsigned int xkey ;
 
+    dio_lock();
     xkey=p_dio_mmap->pwii_buttons ^ pwiikey ;
+    dio_unlock();
 
     if( xkey ) {
+        key_timetick = g_timetick ;
+        
         if( xkey & 1 ) {                    // bit 0: rew
             * keycode = (int) VK_MEDIA_PREV_TRACK ;
             * keydown = ((pwiikey&1)==0 );
@@ -259,18 +323,35 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
         }
 
         if( xkey & 0x100 ) {        // bit 8: front camera rec
-            p_dio_mmap->pwii_buttons &= ~0x100 ;		// auto clear
-            rec_pwii_toggle_rec_front() ;
-            dvr_log("REC pressed!");
+            if( (pwiikey & 0x100 )==0 ) {
+                rec_pwii_toggle_rec_front() ;
+                dvr_log("REC pressed!");
+            }
         }
         if( xkey & 0x200 ) {        // bit 9: back camera rec
-            p_dio_mmap->pwii_buttons &= ~0x200 ;		// auto clear
-            rec_pwii_toggle_rec_rear() ;
-            dvr_log("C2 pressed!");
+            if( (pwiikey & 0x200 )==0 ) {
+                rec_pwii_toggle_rec_rear() ;
+                dvr_log("C2 pressed!");
+            }
         }
-
+        dio_lock();
         pwiikey = p_dio_mmap->pwii_buttons ;            // save key pad status
-        
+        dio_unlock();
+    }
+    else {                                              // no key
+        // REC, C1 auto clear
+        if( pwiikey & 0x300 ) {
+            if( (g_timetick-key_timetick)>1200 || g_timetick<key_timetick ){
+                dio_lock();
+                if( p_dio_mmap->pwii_buttons & 0x100 ) {
+                    p_dio_mmap->pwii_buttons &= ~0x100 ;		// auto clear
+                }
+                if( p_dio_mmap->pwii_buttons & 0x200 ) {
+                    p_dio_mmap->pwii_buttons &= ~0x200 ;		// auto clear
+                }
+                dio_unlock();
+            }
+        }
     }
     return 0 ;
 }
@@ -278,24 +359,28 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
 void dio_pwii_lcd( int lcdon )
 {
     if( p_dio_mmap ) {
+        dio_lock();
         if( lcdon ) {
             p_dio_mmap->pwii_output |= (1<<11) ;
         }
         else {
             p_dio_mmap->pwii_output &= ~(1<<11) ;
         }
+        dio_unlock();
     }
 }
 
 void dio_pwii_standby( int standby )
 {
     if( p_dio_mmap ) {
+        dio_lock();
         if( standby ) {
             p_dio_mmap->pwii_output |= (1<<12) ;
         }
         else {
             p_dio_mmap->pwii_output &= ~(1<<12) ;
         }
+        dio_unlock();
     }
 }
 
@@ -305,8 +390,8 @@ void dio_pwii_standby( int standby )
 int dio_check()
 {
     int res=0 ;
+    dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ){
-        dio_lock();
         // dvrcmd :  1: restart(resume), 2: suspend, 3: stop record, 4: start record
         if( p_dio_mmap->dvrcmd == 1 ) {
             p_dio_mmap->dvrcmd = 0 ;
@@ -320,26 +405,31 @@ int dio_check()
         else if( p_dio_mmap->dvrcmd == 3 ) {
             p_dio_mmap->dvrcmd = 0 ;
             dio_standby_mode=1;
+            dio_unlock();
             rec_stop();
+            dio_lock();
         }
         else if( p_dio_mmap->dvrcmd == 4 ) {
             p_dio_mmap->dvrcmd = 0 ;
             dio_standby_mode=0;
+            dio_unlock();
             rec_start ();
+            dio_lock();
         }
         res = (dio_old_inputmap != p_dio_mmap->inputmap) ;
 #ifdef    PWII_APP
         res = res || pwii_event_marker ;
 #endif
         dio_old_inputmap = p_dio_mmap->inputmap ;
-        dio_unlock();
     }
+    dio_unlock();
     return res ;
 }
 
 // set usb (don't remove) led
 void dio_usb_led(int v)
 {
+    dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ){
 		if( v ) {
         	p_dio_mmap->panel_led |= 1 ;
@@ -348,11 +438,13 @@ void dio_usb_led(int v)
         	p_dio_mmap->panel_led &= ~1 ;
 		}
     }
+    dio_unlock();
 }
 
 // set error led
 void dio_error_led(int v)
 {
+    dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ){
 		if( v ) {
         	p_dio_mmap->panel_led |= 2 ;
@@ -361,11 +453,13 @@ void dio_error_led(int v)
         	p_dio_mmap->panel_led &= ~2 ;
 		}
     }
+    dio_unlock();
 }
 
 // set video lost led
 void dio_videolost_led(int v)
 {
+    dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ){
 		if( v ) {
         	p_dio_mmap->panel_led |= 4 ;
@@ -374,26 +468,32 @@ void dio_videolost_led(int v)
         	p_dio_mmap->panel_led &= ~4 ;
 		}
     }
+    dio_unlock();
 }
 
 // turn onoff all device power, (enter standby mode)
 // onoff, 0: turn device off, others:device poweron
 void dio_devicepower(int onoffmaps)
 {
+    dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ){
         p_dio_mmap->devicepower = onoffmaps ;
     }
+    dio_unlock();
 }
 
 int gps_location( double * latitude, double * longitude, double * speed )
 {
+    int v = 0 ;
+    dio_lock();
     if( p_dio_mmap && p_dio_mmap->glogpid>0 && p_dio_mmap->gps_valid ) {
         *latitude = p_dio_mmap->gps_latitude ;
         *longitude = p_dio_mmap->gps_longitud ;
         *speed = p_dio_mmap->gps_speed ;
-        return 1;
+        v = 1 ;
     }
-    return 0;
+    dio_unlock();
+    return v;
 }
 
 void rtc_settime()
@@ -420,7 +520,7 @@ int dio_syncrtc()
 {
     int res=0;
     int i ;
-    
+    dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ){
         // wait MCU ready
         for( i=0;i<100; i++ ) {
@@ -429,7 +529,9 @@ int dio_syncrtc()
                 p_dio_mmap->rtc_cmd=0;
                 break;
             }
+            dio_unlock();
             usleep(1000);
+            dio_lock();
         }
         p_dio_mmap->rtc_cmd = 3 ;
                 // wait MCU ready
@@ -442,9 +544,12 @@ int dio_syncrtc()
                 p_dio_mmap->rtc_cmd=0;
                 break;
             }
+            dio_unlock();
             usleep(1000);
+            dio_lock();
         }
     }
+    dio_unlock();
     if( res==0 ) {
         rtc_settime();                          // sync on board RTC
     }

@@ -892,7 +892,9 @@ int main()
 #endif
     
     // save setting
+    sync();
     dvrconfig.save();
+    sync();
     run( "./getsetup", NULL, 0 );
     
     // reset network settings

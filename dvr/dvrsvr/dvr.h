@@ -88,6 +88,8 @@ extern char g_serial[64] ;
 extern char g_id1[64] ;
 extern char g_id2[64] ;
 
+// PWII vri
+extern char g_vri[128];
 
 int  dvr_log(char *str, ...);
 void dvr_logkey( int op, struct key_data * key ) ;

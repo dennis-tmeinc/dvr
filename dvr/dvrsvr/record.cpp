@@ -9,7 +9,6 @@ int    rec_pause = 0 ;             // 1: to pause recording, while network playb
 static int rec_fifo_size = 4000000 ;
 int    rec_lock_all = 0 ;			// all files save as locked file
 struct dvrtime  rec_cliptime ;      // clip starting time. (pre-recording mode only)
-int    rec_on ;                     // recording on
 
 
 enum REC_STATE {
@@ -1021,7 +1020,6 @@ void rec_init()
     }
 
 	rec_lock_all = dvrconfig.getvalueint("system", "lock_all");
-    rec_on=0 ;
 }
 
 void rec_uninit()
@@ -1058,7 +1056,6 @@ void rec_uninit()
         recchannel=NULL ;
         dvr_log("Record uninitialized.");
     }
-    rec_on=0 ;
 }
 
 void rec_onframe(cap_frame * pframe)
@@ -1103,25 +1100,10 @@ int  rec_state(int channel)
         int i;
         for( i=0; i<rec_channels; i++ ) {
             if( recchannel[i]->recstate() ) {
-                if( rec_on == 0 ) {
-                    rec_on = 1 ;
-                    time_now(&rec_cliptime) ;
-                    dvr_log( "Recording started. ID: %s_%02d%02d%02d%02d%02d", g_hostname,
-                        rec_cliptime.year%100,
-                        rec_cliptime.month,
-                        rec_cliptime.day,
-                        rec_cliptime.hour,
-                        rec_cliptime.minute
-                        );
-                }
                 return 1;
             }
         }
     }    
-    if( rec_on ) {
-        rec_on=0;
-        dvr_log( "Recording stopped." );
-    }
     return rec_prelock_lock ;       // if pre-lock thread running, also consider busy
 }
 

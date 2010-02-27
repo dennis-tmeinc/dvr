@@ -91,6 +91,7 @@ struct dio_mmap {
                                         // BIT 12: standby mode, 1: standby, 0: running
                                         // BIT 13: WIFI power
     int     pwii_error_LED_flash_timer ; // LED flash timer (output),  0: stayon, others in 0.25 second step
+    char    pwii_VRI[128] ;             // current VRI(video recording Id)
 
 } ;
 
