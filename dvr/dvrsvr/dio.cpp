@@ -164,7 +164,7 @@ int dio_setstate( int status )
                 // start recording
                 struct dvrtime cliptime ;
                 time_now(&cliptime) ;
-                sprintf( g_vri, "%s_%02d%02d%02d%02d%02d", g_hostname,
+                sprintf( g_vri, "%s-%02d%02d%02d%02d%02d", g_hostname,
                     cliptime.year%100,
                     cliptime.month,
                     cliptime.day,
@@ -309,8 +309,7 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
             return 1 ;
         }
         if( xkey & 0x800 ) {                            // bit 11: lp
-//            * keycode = (int) VK_LP ;
-            * keycode = (int) VK_POWER ;                // temperary use lp button to simulate power button 
+            * keycode = (int) VK_LP ;
             * keydown = ((pwiikey&0x800)==0 );
             pwiikey ^= 0x800 ;
             return 1 ;
