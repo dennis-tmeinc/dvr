@@ -129,7 +129,7 @@ struct dio_mmap * p_dio_mmap=NULL ;
 
 #define SERIAL_DELAY	(100000)
 #define DEFSERIALBAUD	(115200)
-#define MCU_CMD_DELAY   (1000000)
+#define MCU_CMD_DELAY   (500000)
 
 char dvriomap[256] = "/var/dvr/dvriomap" ;
 char serial_dev[256] = "/dev/ttyS1" ;
@@ -466,7 +466,7 @@ void serial_clear(int usdelay=100 );
 void serial_clear(int usdelay)
 {
     int i;
-    char rbuf[100] ;
+    char rbuf[300] ;
 #ifdef MCU_DEBUG
     printf("clear: ");
 #endif     
@@ -631,9 +631,9 @@ int mcu_recvmsg( char * recv, int size )
             n=serial_read_withtimeout(recv+1, n-1, 100000)+1 ;
             if( n==recv[0] && 
                 recv[1]==0 && 
-//                recv[2]==1 &&
                 mcu_checksum( recv ) == 0 ) 
             {
+                mcu_recverror=0 ;
 #ifdef MCU_DEBUG
                 printf("\n");
 #endif
@@ -647,6 +647,11 @@ int mcu_recvmsg( char * recv, int size )
     printf(" - ERROR!\n");
 #endif
 
+    if( ++mcu_recverror>10 ) {
+        sleep(1);
+        serial_init();
+        mcu_recverror=0 ;
+    }
     serial_clear();
     return 0 ;
 }
@@ -654,15 +659,12 @@ int mcu_recvmsg( char * recv, int size )
 // receiving a respondes message from mcu
 int mcu_recv( char * recv, int size, int usdelay )
 {
-    int n;
     if( size<5 ) {				// minimum packge size?
         return 0 ;
     }
     
     while( serial_dataready(usdelay) ) {
-        n = mcu_recvmsg (recv, size) ;
-        if( n>4 ) {
-            mcu_recverror=0 ;
+        if( mcu_recvmsg (recv, size) ) {
             if( recv[4]=='\x02' ) {             // is it a input message ?
                 mcu_checkinputbuf(recv) ;
                 continue ;
@@ -674,20 +676,13 @@ int mcu_recv( char * recv, int size, int usdelay )
 #endif
                     continue ;
                 }
-                return n ;                      // it could be a respondes message
+                return *recv ;                  // it could be a respondes message
             }
         }
         else {
             break;
         }
     }
-
-    if( ++mcu_recverror>5 ) {
-        sleep(1);
-        serial_init();
-        mcu_recverror=0 ;
-    }
-
     return 0 ;
 }
 
@@ -726,14 +721,17 @@ static char * mcu_cmd(int cmd, int datalen=0, ...)
             cmd_mcu[5+i] = (char) va_arg( v, int );
         }
         va_end(v);
-        if(mcu_send(cmd_mcu)) {
-            while( mcu_recv( responds, RECVBUFSIZE, MCU_CMD_DELAY )>5 ) {     // received a responds
-                if( responds[1]==0 && 
-                   responds[2]==1 &&
-                   responds[3]==(char)cmd &&
-                   responds[4]==3 )                             // right responds
-                {
-                    return responds ;           
+        i=3 ;
+        while( i-->0 ) {
+            if(mcu_send(cmd_mcu)) {
+                while( mcu_recv( responds, RECVBUFSIZE, MCU_CMD_DELAY )>5 ) {     // received a responds
+                    if( responds[1]==0 && 
+                        responds[2]==1 &&
+                        responds[3]==(char)cmd &&
+                        responds[4]==3 )                             // right responds
+                    {
+                        return responds ;           
+                    }
                 }
             }
         }
@@ -907,7 +905,6 @@ static char direction_table[24][2] =
 
 #define DEFAULT_DIRECTION   (7)
 static int gsensor_direction = DEFAULT_DIRECTION ;
-int  g_sensor_available ;
 float g_sensor_trigger_forward ;
 float g_sensor_trigger_backward ;
 float g_sensor_trigger_right ;
@@ -923,7 +920,6 @@ static char * mcu_pwii_cmd(int cmd, int datalen=0, ...)
 {
     static char responds[RECVBUFSIZE] ;
     int i ;
-    int retry=5 ;
     char cmd_pwii[30] ;
     if( datalen >= 0  && datalen <20 ) {
         va_list v ;
@@ -939,7 +935,8 @@ static char * mcu_pwii_cmd(int cmd, int datalen=0, ...)
             cmd_pwii[5+i] = (char) va_arg( v, int );
         }
         va_end(v);
-        while( retry-- ) {
+        i=3 ;
+        while( i-->0 ) {
             if(mcu_send(cmd_pwii)) {
                 while( mcu_recv( responds, RECVBUFSIZE, MCU_CMD_DELAY )>5 ) {     // received a responds
                     if( responds[1]==0 && 
@@ -959,13 +956,9 @@ static char * mcu_pwii_cmd(int cmd, int datalen=0, ...)
 
 int mcu_pwii_bootupready()
 {
-    int retry=10;
-    while( --retry>0 ) {
-        serial_clear() ;
-        if( mcu_pwii_cmd(4)!=NULL ) {
-            return 1 ;
-        }
-        sleep(1);
+    serial_clear() ;
+    if( mcu_pwii_cmd(4)!=NULL ) {
+        return 1 ;
     }
     return 0 ;
 }
@@ -975,16 +968,12 @@ int mcu_pwii_bootupready()
 //       >0: size of version string (not include null char)
 int mcu_pwii_version(char * version)
 {
-    int retry ;
     char * v ;
-    
-    for( retry=0; retry<10; retry++ ) {
-        v = mcu_pwii_cmd(0x11) ;
-        if( v ) {
-              memcpy( version, &v[5], *v-6 );
-              version[*v-6]=0 ;
-              return *v-6 ;
-        }
+    v = mcu_pwii_cmd(0x11) ;
+    if( v ) {
+        memcpy( version, &v[5], *v-6 );
+        version[*v-6]=0 ;
+        return *v-6 ;
     }
     return 0 ;
 }
@@ -1403,13 +1392,9 @@ int mcu_input(int usdelay)
 
 int mcu_bootupready()
 {
-    int retry=10;
-    while( --retry>0 ) {
-        serial_clear() ;
-        if( mcu_cmd(0x11, 1, 0 )!=NULL ) {
-            return 1 ;
-        }
-        sleep(1);
+    serial_clear() ;
+    if( mcu_cmd(0x11, 1, 0 )!=NULL ) {
+        return 1 ;
     }
     return 0 ;
 }
@@ -1460,12 +1445,11 @@ int mcu_reboot()
 // return gsensor available
 int mcu_gsensorinit()
 {
-    static char cmd_gsensorinit[16]="\x0c\x01\x00\x34\x02\x01\x02\x03\x04\x05\x06\xcc" ;
-    char responds[RECVBUFSIZE] ;
-    int retry=10;
+    char * responds ;
     float trigger_back, trigger_front ;
     float trigger_right, trigger_left ;
     float trigger_bottom, trigger_top ;
+    char tr_rt, tr_lf, tr_bk, tr_fr, tr_bt, tr_tp ;
     
     if( !gforce_log_enable ) {
         return 0 ;
@@ -1483,7 +1467,6 @@ int mcu_gsensorinit()
         ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_trigger_forward + 
         ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_trigger_right + 
         ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_trigger_down ;
-    
     trigger_front = 
         ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_trigger_backward + 
         ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_trigger_left + 
@@ -1496,49 +1479,37 @@ int mcu_gsensorinit()
         ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_trigger_backward + 
         ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_trigger_left + 
         ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_trigger_up ;
-    
+
     if( trigger_right >= trigger_left ) {
-        cmd_gsensorinit[5]  = (signed char)(trigger_right*0xe) ;    // Right Trigger
-        cmd_gsensorinit[6]  = (signed char)(trigger_left*0xe) ;     // Left Trigger
+        tr_rt  = (signed char)(trigger_right*0xe) ;    // Right Trigger
+        tr_lf  = (signed char)(trigger_left*0xe) ;     // Left Trigger
     }
     else {
-        cmd_gsensorinit[5]  = (signed char)(trigger_left*0xe) ;     // Right Trigger
-        cmd_gsensorinit[6]  = (signed char)(trigger_right*0xe) ;    // Left Trigger
+        tr_rt  = (signed char)(trigger_left*0xe) ;     // Right Trigger
+        tr_lf  = (signed char)(trigger_right*0xe) ;    // Left Trigger
     }
-    
+
     if( trigger_back >= trigger_front ) {
-        cmd_gsensorinit[7]  = (signed char)(trigger_back*0xe) ;    // Back Trigger
-        cmd_gsensorinit[8]  = (signed char)(trigger_front*0xe) ;    // Front Trigger
+        tr_bk  = (signed char)(trigger_back*0xe) ;    // Back Trigger
+        tr_fr  = (signed char)(trigger_front*0xe) ;    // Front Trigger
     }
     else {
-        cmd_gsensorinit[7]  = (signed char)(trigger_front*0xe) ;    // Back Trigger
-        cmd_gsensorinit[8]  = (signed char)(trigger_back*0xe) ;    // Front Trigger
+        tr_bk  = (signed char)(trigger_front*0xe) ;    // Back Trigger
+        tr_fr  = (signed char)(trigger_back*0xe) ;    // Front Trigger
     }
-    
+
     if( trigger_bottom >= trigger_top ) {
-        cmd_gsensorinit[9]  = (signed char)(trigger_bottom*0xe) ;    // Bottom Trigger
-        cmd_gsensorinit[10] = (signed char)(trigger_top*0xe) ;    // Top Trigger
+        tr_bt = (signed char)(trigger_bottom*0xe) ;    // Bottom Trigger
+        tr_tp = (signed char)(trigger_top*0xe) ;    // Top Trigger
     }
     else {
-        cmd_gsensorinit[9]  = (signed char)(trigger_top*0xe) ;    // Bottom Trigger
-        cmd_gsensorinit[10] = (signed char)(trigger_bottom*0xe) ;    // Top Trigger
+        tr_bt = (signed char)(trigger_top*0xe) ;    // Bottom Trigger
+        tr_tp = (signed char)(trigger_bottom*0xe) ;    // Top Trigger
     }
     
-    g_sensor_available = 0 ;
-    while( --retry>0 ) {
-        serial_clear() ;
-        if(mcu_send(cmd_gsensorinit)) {
-            if( mcu_recv( responds, RECVBUFSIZE ) ) {
-                if( responds[3]=='\x34' &&
-                   responds[4]=='\x03'&&
-                   responds[0]>6 ) 
-                {
-                    g_sensor_available = responds[5] ;
-                    return g_sensor_available ;
-                }
-            }
-        }
-        sleep(1);
+    responds = mcu_cmd( 0x34, 6, tr_rt, tr_lf, tr_bk, tr_fr, tr_bt, tr_tp );
+    if( responds ) {
+        return responds[5] ;        // g_sensor_available
     }
     return 0 ;
 }
@@ -1548,15 +1519,12 @@ int mcu_gsensorinit()
 //       >0: size of version string (not include null char)
 int mcu_version(char * version)
 {
-    int retry ;
     char * v ;
-    for( retry=0; retry<10; retry++ ) {
-        v = mcu_cmd( 0x2d ) ;
-        if( v ) {
-            memcpy( version, &v[5], *v-6 );
-                    version[*v-6]=0 ;
-                    return *v-6 ;
-        }
+    v = mcu_cmd( 0x2d ) ;
+    if( v ) {
+        memcpy( version, &v[5], *v-6 );
+        version[*v-6]=0 ;
+        return *v-6 ;
     }
     return 0 ;
 }
@@ -1620,33 +1588,16 @@ void mcu_poweroffdelay()
 
 void mcu_watchdogenable()
 {
-    int retry ;
-
-    for( retry=0; retry<5; retry++) {
-        // set watchdog timeout
-        if( mcu_cmd( 0x19, 2, watchdogtimeout/256, watchdogtimeout%256 ) ) {
-            break;
-        }
-    }
-   
-    for( retry=0; retry<5; retry++) {
-        // enable watchdog
-        if( mcu_cmd( 0x1a ) ) {
-            break;
-        }
-    }
-    
+    // set watchdog timeout
+    mcu_cmd( 0x19, 2, watchdogtimeout/256, watchdogtimeout%256 ) ;
+    // enable watchdog
+    mcu_cmd( 0x1a );
     watchdogenabled = 1 ;
 }
 
 void mcu_watchdogdisable()
 {
-    int retry ;
-    for( retry=0; retry<5; retry++) {
-        if( mcu_cmd( 0x1b ) ) {
-            break ;
-        }
-    }
+    mcu_cmd( 0x1b );
     watchdogenabled = 0 ;
 }
 
@@ -1693,36 +1644,34 @@ void mcu_hdpoweroff()
 //             -1: failed
 time_t mcu_r_rtc( struct tm * ptm = NULL )
 {
-    int retry ;
     struct tm ttm ;
     time_t tt ;
     char * responds ;
-    for( retry=0; retry<5; retry++ ) {
-        responds = mcu_cmd( 0x06 ) ;
-        if( responds ) {
-            memset( &ttm, 0, sizeof(ttm) );
-            ttm.tm_year = getbcd(responds[11]) + 100 ;
-            ttm.tm_mon  = getbcd(responds[10]) - 1;
-            ttm.tm_mday = getbcd(responds[9]) ;
-            ttm.tm_hour = getbcd(responds[7]) ;
-            ttm.tm_min  = getbcd(responds[6]) ;
-            ttm.tm_sec  = getbcd(responds[5]) ;
-            ttm.tm_isdst= -1 ;
 
-            if( ttm.tm_year>105 && ttm.tm_year<135 &&
-               ttm.tm_mon>=0 && ttm.tm_mon<=11 &&
-               ttm.tm_mday>=1 && ttm.tm_mday<=31 &&
-               ttm.tm_hour>=0 && ttm.tm_hour<=24 &&
-               ttm.tm_min>=0 && ttm.tm_min<=60 &&
-               ttm.tm_sec>=0 && ttm.tm_sec<=60 ) 
-            {
-                tt = timegm( &ttm );
-                if( (int)tt > 0 ) {
-                    if(ptm) {
-                        *ptm = ttm ;
-                    }
-                    return tt ;
+    responds = mcu_cmd( 0x06 ) ;
+    if( responds ) {
+        memset( &ttm, 0, sizeof(ttm) );
+        ttm.tm_year = getbcd(responds[11]) + 100 ;
+        ttm.tm_mon  = getbcd(responds[10]) - 1;
+        ttm.tm_mday = getbcd(responds[9]) ;
+        ttm.tm_hour = getbcd(responds[7]) ;
+        ttm.tm_min  = getbcd(responds[6]) ;
+        ttm.tm_sec  = getbcd(responds[5]) ;
+        ttm.tm_isdst= -1 ;
+
+        if( ttm.tm_year>105 && ttm.tm_year<135 &&
+            ttm.tm_mon>=0 && ttm.tm_mon<=11 &&
+            ttm.tm_mday>=1 && ttm.tm_mday<=31 &&
+            ttm.tm_hour>=0 && ttm.tm_hour<=24 &&
+            ttm.tm_min>=0 && ttm.tm_min<=60 &&
+            ttm.tm_sec>=0 && ttm.tm_sec<=60 ) 
+        {
+            tt = timegm( &ttm );
+            if( (int)tt > 0 ) {
+                if(ptm) {
+                    *ptm = ttm ;
                 }
+                return tt ;
             }
         }
     }
@@ -1987,18 +1936,14 @@ void mcu_syncrtc()
 void mcu_rtctosys()
 {
     struct timeval tv ;
-    int retry ;
     time_t rtc ;
-    for( retry=0; retry<10; retry++ ) {
-        rtc=mcu_r_rtc();
-        if( (int)rtc>0 ) {
-            tv.tv_sec=rtc ;
-            tv.tv_usec=0;
-            settimeofday(&tv, NULL);
-            // also set onboard rtc
-            rtc_set((time_t)tv.tv_sec);
-            break;
-        }
+    rtc=mcu_r_rtc();
+    if( (int)rtc>0 ) {
+        tv.tv_sec=rtc ;
+        tv.tv_usec=0;
+        settimeofday(&tv, NULL);
+        // also set onboard rtc
+        rtc_set((time_t)tv.tv_sec);
     }
 }
 
@@ -2745,9 +2690,11 @@ int main(int argc, char * argv[])
         buzzer_run( runtime ) ;
         
         static unsigned int temperature_timer ;
-        if( (runtime - temperature_timer)> 10000 ) {    // 10 seconds to read temperature
+        if( (runtime - temperature_timer)> 10000 ) {    // 10 seconds to read temperature, and digital input refresh
             temperature_timer=runtime ;
 
+            mcu_dinput();
+            
             i=mcu_iotemperature();
 #ifdef MCU_DEBUG        
             printf("Temperature: io(%d)",i );

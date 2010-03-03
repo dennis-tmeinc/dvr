@@ -515,6 +515,12 @@ int main()
                 fprintf(fvalue, "\"bool_show_gps_coordinate\":\"on\"," );
                 fprintf(fvalue, "\"show_gps_coordinate\":\"on\"," );
             }  
+
+            ivalue = dvrconfig.getvalueint(section, "show_vri");
+            if( ivalue>0 ) {
+                fprintf(fvalue, "\"bool_show_vri\":\"on\"," );
+                fprintf(fvalue, "\"show_vri\":\"on\"," );
+            }  
             
              // record_alarm_mode
             value = dvrconfig.getvalue( section, "recordalarmpattern" );

@@ -200,17 +200,16 @@ class pwii_menu : public window {
     protected:
         virtual void paint() {						// paint window
             if( m_level==0 ) {
-                setcolor (COLOR(0,0,0,0)) ;	// full transparent
+                setcolor (COLOR(30, 71, 145, 190 )) ;	
                 setpixelmode (DRAW_PIXELMODE_COPY);
-                fillrect ( 50, 100, 300, 150 );	
+                fillrect ( 50, 120, m_pos.w-100, 50 );	
                 resource font("mono32b.font");
-                setcolor(COLOR(240,240,80,200));
+                setcolor(COLOR(240,240,80,255));
                 char vristr[256] ;
                 sprintf( vristr, "VRI: %s", g_vri );
-                drawtext( 55, 110, vristr, font );
+                drawtext( 55, 130, vristr, font );
             }
         }
-
 };
 
 
@@ -288,8 +287,8 @@ class video_screen : public window {
         // stop every thing?
         void stop() {
             stopdecode();
-            stopliveview();
             stopmenu();
+            stopliveview();
         }
         
         // event handler
@@ -353,7 +352,7 @@ class video_screen : public window {
         }
 
         void startmenu() {
-            stop();
+//            stop();
             m_menu = new pwii_menu(this, 3, 0, 0, m_pos.w, m_pos.h);
             m_videomode= VIDEO_MODE_MENU ;
         }
@@ -361,7 +360,7 @@ class video_screen : public window {
         void stopmenu() {
             if( m_videomode == VIDEO_MODE_MENU ) 
             {
-                m_videomode = VIDEO_MODE_NONE ;
+                m_videomode = VIDEO_MODE_LIVE ;
                 if( m_menu ) {
                     delete m_menu ;
                     m_menu=NULL ;
@@ -402,7 +401,7 @@ class video_screen : public window {
                 }                    
             }
             else if( m_videomode == VIDEO_MODE_MENU ) {     // menu mode
-                m_statuswin->setstatus( "MENU" );
+                m_statuswin->setstatus( "" );
             }
             else if( m_videomode == VIDEO_MODE_LCDOFF ) {      // live mode
                m_statuswin->setstatus( "LCDOFF" );
@@ -783,7 +782,7 @@ class video_screen : public window {
                         startliveview( m_playchannel );
                     }
                 }
-                else if( keycode == VK_MEDIA_STOP ) {      // stop playback if in playback mode, swith channel if in live mode
+                else if( keycode == VK_MEDIA_STOP ) {      // stop playback if in playback mode, enter menu mode if in live view mode
                     if( m_videomode ==  VIDEO_MODE_LIVE ) {
 /*                        
 #ifdef	PWII_APP
@@ -792,8 +791,12 @@ class video_screen : public window {
                         m_videomode = VIDEO_MODE_LCDOFF ;
                         settimer( 5000, keycode );
 #endif
-*/                         
-                        settimer( 5000, keycode );          // black out still works
+*/
+                        // bring up menu mode
+                        startmenu();
+                    }
+                    else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
+                        stopmenu();                                 // quit display VRI ( temperary before full menu available )
                     }
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
                         m_icon->seticon( "stop.pic" );   
@@ -805,11 +808,11 @@ class video_screen : public window {
                         dio_pwii_lcd( 1 ) ;           // turn lcd on
 #endif
                         startliveview(m_playchannel);
-//                        settimer( 5000, keycode );
                     }
                     else if( m_videomode == VIDEO_MODE_STANDBY ) {   // playback
 #ifdef	PWII_APP
                         dio_pwii_standby( 0 );          // jump out of standby
+                        dio_pwii_lcd( 1 ) ;           // turn lcd on
 #endif
                         startliveview(m_playchannel);
                     }
@@ -901,13 +904,6 @@ class video_screen : public window {
                 m_keypad_state = 0 ;
                 m_keypad_state_p = keycode ;
                 m_icon->seticon( NULL );
-
-                if( keycode == VK_MEDIA_STOP ) {      // stop playback if in playback mode, swith channel if in live mode
-                    if( m_videomode ==  VIDEO_MODE_LIVE ) {
-                        // to bring up menu mode
-                        startmenu();
-                    }
-                }
             }
             updatestatus();
             return 1 ;      // key been procesed.

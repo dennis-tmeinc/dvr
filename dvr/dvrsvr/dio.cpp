@@ -201,6 +201,7 @@ int dio_clearstate( int status )
             if( (p_dio_mmap->dvrstatus & DVR_RECORD) ) {
                 // stop recording
                 rstart = 0 ;
+                g_vri[0]=0 ;
             }
         }
 #endif    
@@ -210,7 +211,7 @@ int dio_clearstate( int status )
     dio_unlock();
 #ifdef PWII_APP
     if( rstart==0 ) {
-        dvr_log( "Recording stopped, ID: %s", g_vri);
+        dvr_log( "Recording stopped.");
     }
 #endif    
     return s ;

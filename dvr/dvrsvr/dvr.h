@@ -391,13 +391,18 @@ class capture {
     int m_signallostalarm_pattern ;
 
     int m_showgpslocation ;
+
 #ifdef  TVS_APP        
     int m_show_medallion ;
     int m_show_licenseplate ;
     int m_show_ivcs ;
     int m_show_cameraserial ;
 #endif
-
+        
+#ifdef PWII_APP
+    int m_show_vri;
+#endif        
+        
     int m_headerlen ;
   	char m_header[256] ;
 

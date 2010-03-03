@@ -683,6 +683,17 @@ int main()
                 }
             }
 
+            // show_vri
+            if( getsetvalue( "bool_show_vri" )!=NULL ) {
+                v=getsetvalue( "show_vri" );
+                if( v ) {
+                    dvrconfig.setvalueint(section,"show_vri",1);
+                }
+                else {
+                    dvrconfig.setvalueint(section,"show_vri",0);
+                }
+            }
+
             // record_alarm_mode
             v = getsetvalue( "record_alarm_mode" );
             if( v ) {

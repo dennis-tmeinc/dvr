@@ -177,6 +177,10 @@ void capture::loadconfig()
     m_show_cameraserial=dvrconfig.getvalueint( section, "show_cameraserial" );
 #endif
 
+#ifdef PWII_APP
+    m_show_vri=dvrconfig.getvalueint( section, "show_vri" );
+#endif        
+    
     // reset some attr for special 2 version ()
     int videotype = dvrconfig.getvalueint( section, "videotype" );
     if( videotype>0 ) {
@@ -674,8 +678,8 @@ void capture::updateOSD()
     osd.osdline[line][i++]=_OSD_SECOND ;          // Second
     osd.osdline[line][i++]=' ' ;         
     osd.osdline[line][i++]=' ' ;         
+    osd.osdline[line][i++]=0 ;
 
-    osd.osdline[line][i]=0 ;
     
     // prepare line 2, GPS
     line++ ;
@@ -744,7 +748,6 @@ void capture::updateOSD()
             }
         }
     }
-            
     osd.osdline[line][i] = 0;          // null terminate
 
     // prepare line 3, sensor
@@ -777,8 +780,9 @@ void capture::updateOSD()
     osd.osdline[line][i++]=8 ;              // x position
     osd.osdline[line][i++]=430 + pal_diff ; // y position
  
-    // show IVCS and/or camera serial no
-    sprintf( osdbuf, "%39s %c",
+    // show VRI and camera serial no
+    sprintf( osdbuf, "%19s %19s %c",
+            m_show_vri?g_vri:" ",           // optional VRI(video referrence id)
             m_attr.CameraName ,
             m_motion?'*':' ');
     
@@ -787,8 +791,8 @@ void capture::updateOSD()
         osd.osdline[line][i++] = * k++ ;
     }
     osd.osdline[line][i] = 0 ;
-
     line++;
+
     osd.lines = line ;
 
     setosd(&osd);
