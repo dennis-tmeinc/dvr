@@ -732,7 +732,7 @@ class video_screen : public window {
                     if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
 //                        settimer( 2000 );
                         if( keycode == m_keypad_state_p && // pressed same key, double the jump timer
-                           (window::timertick-m_keytime) < screen_play_doublejumptimer ) {
+                           (window::timertick-m_keytime)/1000 < screen_play_doublejumptimer ) {
                             if( m_jumptime < screen_play_maxjumptime ) {
                                 m_jumptime *= 2 ;
                             }
@@ -749,7 +749,7 @@ class video_screen : public window {
                     if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
 //                        settimer( 2000 );
                         if( keycode == m_keypad_state_p && // pressed same key, double the jump timer
-                           (window::timertick-m_keytime) < screen_play_doublejumptimer ) {
+                           (window::timertick-m_keytime)/1000 < screen_play_doublejumptimer ) {
                             if( m_jumptime < screen_play_maxjumptime ) {
                                 m_jumptime *= 2 ;
                             }

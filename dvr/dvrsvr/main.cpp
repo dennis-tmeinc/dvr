@@ -900,6 +900,12 @@ int main()
             }
             app_state = APPUP ;
             usleep( 100 );
+            if( g_memused > 100 ) {
+                dvr_log("Unsolved memory leak, restart system" );
+                sync();
+                system("/bin/reboot");
+                app_state = APPQUIT ;
+            }
         }
         sig_check();
     }

@@ -1107,6 +1107,8 @@ unsigned int mcu_pwii_ouputstatus()
         if( ibuf[6] & 4 ) outputmap|=4 ;        // MIC
         if( ibuf[6] & 0x18 ) outputmap|=8 ;     // Error
         if( ibuf[6] & 0x20 ) outputmap|=0x10 ;  // POWER LED
+        if( ibuf[6] & 0x40 ) outputmap|=0x20 ;  // BO_LED
+        if( ibuf[6] & 0x80 ) outputmap|=0x40 ;  // Backlight LED
         
         if( ibuf[5] & 1 ) outputmap|=0x800 ;    // LCD POWER
         if( ibuf[5] & 2 ) outputmap|=0x200 ;    // GPS POWER
@@ -1359,31 +1361,38 @@ int mcu_checkinputbuf(char * ibuf)
 //      usdelay - micro-seconds waiting
 // return 
 //		1: got something, digital input or power off input?
-//		0: nothing
+//		0: timeout
+//     -1: error
 int mcu_input(int usdelay)
 {
-    int res = 0 ;
+    int res = -1 ;
     int n ;
     int repeat ;
     char ibuf[RECVBUFSIZE] ;
     int udelay = usdelay ;
     
-    for(repeat=0; repeat<10; repeat++ ) {
+    for(repeat=0; repeat<5; repeat++ ) {
         if( serial_dataready(udelay) ) {
             n = mcu_recvmsg( ibuf, sizeof(ibuf) ) ;            // mcu_recv() will process mcu input messages
             if( n>4 ) {
                 udelay=10 ;
                 if( ibuf[3] != '\x1f' ) {                   // ignor error reports for now
-                    res=mcu_checkinputbuf(ibuf);
+                    mcu_checkinputbuf(ibuf);
                 }
 #ifdef MCU_DEBUG
                 else {
                     printf( "Error Report Detected!\n");
                 }
-#endif                
+#endif              
+                res = 1 ;
+            }
+            else {
+                res=-1 ;
+                break ;
             }
         }
         else {
+            res=0 ;
             break;
         }
     }
@@ -1588,6 +1597,9 @@ void mcu_poweroffdelay()
 
 void mcu_watchdogenable()
 {
+#ifdef MCU_DEBUG        
+    printf("mcu watchdog enable, timeout %d s.\n", watchdogtimeout );
+#endif                    
     // set watchdog timeout
     mcu_cmd( 0x19, 2, watchdogtimeout/256, watchdogtimeout%256 ) ;
     // enable watchdog
@@ -1597,6 +1609,9 @@ void mcu_watchdogenable()
 
 void mcu_watchdogdisable()
 {
+#ifdef MCU_DEBUG        
+    printf("mcu watchdog disable.\n" );
+#endif                    
     mcu_cmd( 0x1b );
     watchdogenabled = 0 ;
 }
@@ -1604,6 +1619,9 @@ void mcu_watchdogdisable()
 // return 0: error, >0 success
 int mcu_watchdogkick()
 {
+#ifdef MCU_DEBUG        
+    printf("mcu watchdog kick.\n" );
+#endif                    
     mcu_cmd(0x18);
     return 0;
 }
@@ -1956,23 +1974,25 @@ void time_syncgps ()
     if( p_dio_mmap->gps_valid ) {
         gpstime = (time_t) p_dio_mmap->gps_gpstime ;
         dio_unlock();
-        gettimeofday(&tv, NULL);
-        diff = (int)gpstime - (int)tv.tv_sec ;
-        if( diff>5 || diff<-5 ) {
-            tv.tv_sec=gpstime ;
-            tv.tv_usec= 0;
-            settimeofday( &tv, NULL );
-            dvr_log ( "Time sync use GPS time." );
+        if( (int)gpstime > 1262322000 ) {       // > year 2010
+            gettimeofday(&tv, NULL);
+            diff = (int)gpstime - (int)tv.tv_sec ;
+            if( diff>5 || diff<-5 ) {
+                tv.tv_sec=gpstime ;
+                tv.tv_usec= 0;
+                settimeofday( &tv, NULL );
+                dvr_log ( "Time sync use GPS time." );
+            }
+            else if( diff>1 || diff<-1 ) {
+                tv.tv_sec =(time_t)diff ;
+                tv.tv_usec = 0 ;
+                adjtime( &tv, NULL );
+            }
+            // set mcu time
+            mcu_w_rtc(gpstime) ;
+            // also set onboard rtc
+            rtc_set(gpstime);
         }
-        else if( diff>1 || diff<-1 ) {
-            tv.tv_sec =(time_t)diff ;
-            tv.tv_usec = 0 ;
-            adjtime( &tv, NULL );
-        }
-        // set mcu time
-        mcu_w_rtc(gpstime) ;
-        // also set onboard rtc
-        rtc_set(gpstime);
     }
     else {
         dio_unlock();
@@ -2040,6 +2060,10 @@ void wifi_up()
 {
     static char wifi_up_script[]="/davinci/dvr/wifi_up" ;
     system( wifi_up_script );
+    // turn on wifi power. mar 04-2010
+    dio_lock();
+    p_dio_mmap->pwii_output |= 0x2000 ;
+    dio_unlock();
     printf("\nWifi up\n");
 }
 
@@ -2048,6 +2072,10 @@ void wifi_down()
 {
     static char wifi_down_script[]="/davinci/dvr/wifi_down" ;
     system( wifi_down_script );
+    // turn off wifi power
+    dio_lock();
+    p_dio_mmap->pwii_output &= ~0x2000 ;
+    dio_unlock();
     printf("\nWifi down\n");
 }
 
@@ -2638,9 +2666,20 @@ int main(int argc, char * argv[])
     p_dio_mmap->devicepower = 0xffff;				// assume all device is power on
     
     while( app_mode ) {
+        unsigned int runtime=getruntime() ;
 
         // do input pin polling
-        mcu_input(5000);
+        static unsigned int mcu_input_timer ;
+        if( mcu_input(5000)>0 ) {
+            mcu_input_timer = runtime ;
+        }
+        else {
+            // no input message
+            if( (runtime - mcu_input_timer)> 5000 ) {    // 5 seconds to poll mcu input
+                mcu_input_timer = runtime ;
+                mcu_dinput();
+            }
+        }
 
         // do digital output
         mcu_doutput();
@@ -2649,8 +2688,6 @@ int main(int argc, char * argv[])
         // update PWII outputs
         mcu_pwii_output();
 #endif            
-
-        unsigned int runtime=getruntime() ;
         
         // rtc command check
         if( p_dio_mmap->rtc_cmd != 0 ) {
@@ -2692,8 +2729,6 @@ int main(int argc, char * argv[])
         static unsigned int temperature_timer ;
         if( (runtime - temperature_timer)> 10000 ) {    // 10 seconds to read temperature, and digital input refresh
             temperature_timer=runtime ;
-
-            mcu_dinput();
             
             i=mcu_iotemperature();
 #ifdef MCU_DEBUG        
@@ -2778,6 +2813,15 @@ int main(int argc, char * argv[])
         static unsigned int appmode_timer ;
         if( (runtime - appmode_timer)> 3000 ) {    // 3 seconds mode timer
             appmode_timer=runtime ;
+
+            // updating watch dog state
+            if( usewatchdog && watchdogenabled==0 ) {
+                mcu_watchdogenable();
+            }
+
+            // kick watchdog
+            if( watchdogenabled )
+                mcu_watchdogkick () ;
 
             // printf("mode %d\n", app_mode);
             // do power management mode switching
@@ -3017,15 +3061,6 @@ int main(int argc, char * argv[])
                 dvr_log("Error! Enter undefined mode %d.", app_mode );
                 app_mode = APPMODE_RUN ;              // we retry from mode 1
             }
-
-            // updating watch dog state
-            if( usewatchdog && watchdogenabled==0 ) {
-                mcu_watchdogenable();
-            }
-
-            // kick watchdog
-            if( watchdogenabled )
-                mcu_watchdogkick () ;
 
             // DVRSVR watchdog running?
             if( p_dio_mmap->dvrpid>0 && 

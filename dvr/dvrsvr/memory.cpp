@@ -4,7 +4,7 @@
 
 int g_memdirty = 0;
 
-static int g_memused = 0 ;
+int g_memused = 0 ;
 
 #define MEMTAG	0x462021dc
 

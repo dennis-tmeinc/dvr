@@ -84,6 +84,9 @@ struct dio_mmap {
                                         // BIT 2: MIC LED
                                         // BIT 3: ERROR LED
                                         // BIT 4: POWER LED
+                                        // BIT 5: BO_LED
+                                        // BIT 6: Backlight LED
+    
                                         // BIT 8: GPS antenna power
                                         // BIT 9: GPS POWER
                                         // BIT 10: RF900 POWER

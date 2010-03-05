@@ -75,6 +75,7 @@ extern int app_state;
 extern int system_shutdown;
 extern int g_lowmemory;
 extern int g_memdirty;
+extern int g_memused;
 extern char g_hostname[] ;
 extern int g_timetick ;            // global time tick ;
 extern int g_keyactive ;

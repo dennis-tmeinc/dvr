@@ -1020,7 +1020,7 @@ int	sensor_log()
 {
 	int i;
 
-    if( validgpsdata.year < 1900 ) return 0 ;
+//    if( validgpsdata.year < 1900 ) return 0 ;     // removed, don't wait for gps to record sensor log
 
     // log ignition changes
     int spoweroff = p_dio_mmap->poweroff ;
@@ -1054,7 +1054,7 @@ int	sensor_log()
         }
 
         if( sv != sensor_value[i] && (btime-sensorbouncetime[i]) > 2.5 ) {
-            if( gps_logprintf( (sv)? (20+i*2):(20+i*2+1), "" ) )
+            if( gps_logprintf( (sv)? (sensorid+i*2):(sensorid+i*2+1), "" ) )
             {
                 sensor_value[i]=sv ;
             }
@@ -1096,30 +1096,9 @@ int	sensor_log()
         }
     }
 
-    for( i=0; i<p_dio_mmap->inputnum; i++ ) {
-        int sv ;
-        
-        // sensor debouncing
-        sv = (( imap & (1<<i) )!=0) ;
-        if( sensor_invert[i] ) {
-            sv=!sv ;
-        }
-
-        if( sv != sensor_value[i] && (btime-sensorbouncetime[i]) > 2.5 ) {
-            if( gps_logprintf( (sv)? (sensorid+i*2):(sensorid+i*2+1), "" ) )
-            {
-                sensor_value[i]=sv ;
-            }
-        }
-        
-        if( sv != sensorbouncevalue[i] ) {  // sensor value bouncing
-            sensorbouncetime[i]=btime ;
-            sensorbouncevalue[i] = sv ;
-        }
-    }
-
 #ifdef PWII_APP   
     static int dvrstatus = 0 ;
+    static char st_pwii_VRI[128] ;
     char pwii_VRI[128] ;
     pwii_VRI[0]=0 ;
     dio_lock();
@@ -1130,7 +1109,8 @@ int	sensor_log()
         }
     }
     dio_unlock();
-    if( pwii_VRI[0] ) {
+    if( pwii_VRI[0] && strcmp(st_pwii_VRI, pwii_VRI)!=0 ) {
+        strcpy( st_pwii_VRI, pwii_VRI );
         gps_logprintf( 18, ",%s", pwii_VRI ) ;
     }
 
@@ -1162,7 +1142,7 @@ static void * sensorlog_thread(void *param)
         if( app_state==1 ) {
             sensor_log();
         }
-        usleep(20000);
+        usleep(10000);
     }
     return NULL ;
 }
@@ -1344,7 +1324,7 @@ void tab102b_log( int x, int y, int z)
            z, tab102b_z_0g, z_v );
 #endif
 
-    if( validgpsdata.year < 1900 ) return ;
+//    if( validgpsdata.year < 1900 ) return ;       // removed, don't wait for gps signal.
 
     // log tab102b g sensor value
     // we record forward/backward, right/left acceleration value, up/down as g-force value
@@ -1963,6 +1943,7 @@ int main()
 {
     int r ;
     int validgpsbell=0 ;
+    int validgpstimeout=0 ;
     struct gps_data gpsdata ;
 
     app_state=1 ;
@@ -2031,12 +2012,20 @@ int main()
                 if( gpsdata.valid ) {
                     validgpsdata = gpsdata ;
                     gps_log();
+                    validgpstimeout = 30 ;
+                }
+                else {
+                    if( validgpstimeout>=0 ) {
+                        if( --validgpstimeout<0 ) {
+                            memset( &validgpsdata, 0, sizeof(validgpsdata) );
+                        }
+                    }
                 }
             }
             else if( r==0 ) {
                 p_dio_mmap->gps_valid=0 ;
             }
-            
+
             // sound the bell
             if( gpsdata.valid ) {
                 if( validgpsbell==0 ) {
@@ -2046,8 +2035,8 @@ int main()
             }
             else {
                 if( validgpsbell==1 ) {
-                buzzer( 3, 300, 300 );
-                validgpsbell=0;
+                    buzzer( 3, 300, 300 );
+                    validgpsbell=0;
                 }
             }
         }
