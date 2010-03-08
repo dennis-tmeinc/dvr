@@ -31,6 +31,10 @@ static int ScreenStandard = STANDARD_NTSC ;
 static int ScreenMarginX = 5 ;
 static int ScreenMarginY = 0 ;
 
+#ifdef PWII_APP
+int screen_rearaudio ;
+#endif
+
 static window * topwindow ;
 char resource::resource_dir[128] ;
 
@@ -43,7 +47,7 @@ int window::timertick ;
 // to support video out liveview on ip camera
 int screen_liveview_channel ;
 int screen_liveview_handle ;
-static int screen_audio ;
+static int screen_liveaudio ;
 static int screen_play_jumptime ;
 static int screen_play_cliptime ;
 static int screen_play_maxjumptime ;
@@ -315,11 +319,20 @@ class video_screen : public window {
         }
 
         void startliveview(int channel)    {
+#ifdef PWII_APP
+            extern int pwii_rear_ch ;
+            if( channel==pwii_rear_ch ) {
+                screen_liveaudio=screen_rearaudio ;
+            }
+            else {
+                screen_liveaudio=1 ;
+            }
+#endif            
             if( m_videomode == VIDEO_MODE_LIVE &&
                 m_playchannel == channel ) 
             {
                 if( m_select ) {
-                    SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_audio);
+                    SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_liveaudio);
                 }
                 else {
                     SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,0);
@@ -332,7 +345,7 @@ class video_screen : public window {
                 m_playchannel = channel ;
                 SetPreviewScreen(MAIN_OUTPUT,m_playchannel+1,1);
                 if( m_select ) {
-                    SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_audio);
+                    SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_liveaudio);
                 }
                 else {
                     SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,0);
@@ -651,7 +664,7 @@ class video_screen : public window {
                 cap_stop();       // stop live codec, so decoder has full DSP power
                 m_playchannel = channel ;
                 res = SetDecodeScreen(MAIN_OUTPUT, m_playchannel+1, 1);
-				res = SetDecodeAudio(MAIN_OUTPUT, m_playchannel+1, screen_audio);
+				res = SetDecodeAudio(MAIN_OUTPUT, m_playchannel+1, 1);
 
                 m_videomode = VIDEO_MODE_PLAYBACK ; 
                 m_decode_runmode = DECODE_MODE_PLAY ;
@@ -760,6 +773,10 @@ class video_screen : public window {
                         m_decode_runmode = DECODE_MODE_FORWARD ;  //  jump backward.
                         m_icon->seticon( "fwd.pic" );   
                     }
+                    else if( m_videomode == VIDEO_MODE_LIVE ) { // live mode
+                        screen_liveaudio = !screen_liveaudio ;
+						SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_liveaudio);
+					}
                     //                    m_decode_runmode = DECODE_MODE_FORWARD ;
                 }
                 else if( keycode == VK_MEDIA_PLAY_PAUSE ) { //  in live mode, jump to playback mode, in playback mode, switch between pause and play
@@ -868,13 +885,13 @@ class video_screen : public window {
                     }
                 }
 				else if( keycode == VK_SILENCE ) { //  switch audio on <--> off 
-					screen_audio = !screen_audio ;
 					if( m_videomode == VIDEO_MODE_LIVE ) { // live mode
-						SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_audio);
+                        screen_liveaudio = !screen_liveaudio ;
+						SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_liveaudio);
 					}
-					else {
-						SetDecodeAudio(MAIN_OUTPUT, m_playchannel+1, screen_audio);
-					}
+//					else {
+//						SetDecodeAudio(MAIN_OUTPUT, m_playchannel+1, 1);
+//					}
 				}
             }
             else {                  // key up
@@ -1291,7 +1308,7 @@ void screen_init()
         ScreenStandard = STANDARD_NTSC ;
     }
 
-	screen_audio = 1;		// enable audio by default
+	screen_liveaudio = 1;		// enable audio by default
 	
     screen_play_jumptime = dvrconfig.getvalueint("VideoOut", "jumptime" );
     if( screen_play_jumptime < 5 ) screen_play_jumptime=5 ;
@@ -1312,6 +1329,10 @@ void screen_init()
         strncpy( resource::resource_dir, v.getstring(), 128 );
     }
 
+#ifdef PWII_APP    
+    screen_rearaudio = dvrconfig.getvalueint("VideoOut", "rearaudio" );
+#endif
+    
     // select Video output format to NTSC
     draw_init(ScreenStandard);
 
