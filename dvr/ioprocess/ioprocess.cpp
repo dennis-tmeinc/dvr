@@ -644,14 +644,8 @@ int mcu_recvmsg( char * recv, int size )
 
 #ifdef MCU_DEBUG
     // for debugging 
-    printf(" - ERROR!\n");
+    printf("** error! \n");
 #endif
-
-    if( ++mcu_recverror>10 ) {
-        sleep(1);
-        serial_init();
-        mcu_recverror=0 ;
-    }
     serial_clear();
     return 0 ;
 }
@@ -733,6 +727,14 @@ static char * mcu_cmd(int cmd, int datalen=0, ...)
                         return responds ;           
                     }
                 }
+            }
+#ifdef MCU_DEBUG
+            printf("Retry!!!\n" );
+#endif
+            if( ++mcu_recverror>10 ) {
+                sleep(1);
+                serial_init();
+                mcu_recverror=0 ;
             }
         }
     }

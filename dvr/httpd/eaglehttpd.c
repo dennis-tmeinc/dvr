@@ -46,7 +46,7 @@ static char * mime_type[][2] =
 char * document_root="/home/www" ;
 char linebuf[8192] ;
 
-#define KEEP_ALIVE_TIMEOUT  (20)
+#define KEEP_ALIVE_TIMEOUT  (2000)
 int keep_alive ;
 
 int dynamic_page ;      // if page is dynamic ?
@@ -67,6 +67,20 @@ int recvok(int fd, int usdelay)
     }
 }
 
+// remove white space on head and tail of string
+char * cleanstring( char * instr )
+{
+    int len ;
+    while( *instr>0 && *instr<=' ' ) {
+        instr++;
+    }
+    len=strlen(instr);
+    while( len>0 && instr[len-1]>0  && instr[len-1]<=' ') {
+        len--;
+    }
+    instr[len]=0;
+    return instr ;    
+}
 
 char * get_mime_type( char* name )
 {
@@ -221,36 +235,28 @@ void http_header( int status, char * title, char * mime_type, int length)
     now = time( (time_t*) NULL );
     strftime( hbuf, sizeof(hbuf), RFC1123FMT, gmtime( &now ) );
     printf( "Date: %s\r\n", hbuf );
-    if ( mime_type != NULL ) {
+    unsetenv("HEADER_Date");
+
+    if( (resp=getenv("HEADER_Content-Type"))!=NULL ) {
+        printf( "Content-Type: %s\r\n", resp );
+        unsetenv("HEADER_Content-Type" );
+    }
+    else if( mime_type != NULL ) {
         printf( "Content-Type: %s\r\n", mime_type );
     }
-    else {
-        if( resp=getenv("HEADER_Content-Type") ) {
-            printf( "Content-Type: %s\r\n", resp );
-        }
-    }
-    unsetenv("HEADER_Content-Type" );
-    if ( length > 0 ) {
-        printf( "Content-Length: %ld\r\n", (long) length );
-        keep_alive = 1 ;
-    }
-    else {
-        if( resp=getenv("HEADER_Content-Length") ) {
-            printf( "Content-Type: %s\r\n", resp );
-            keep_alive = 1 ;
-        }
-    }
-    unsetenv("HEADER_Content-Length" );
 
-    if( resp=getenv("HEADER_Connection") ) {
-        printf( "Connection: %s\r\n", resp );
+    if( resp=getenv("HEADER_Content-Length") ) {
+        printf( "Content-Length: %s\r\n", resp );
+        unsetenv("HEADER_Content-Length" );
+        keep_alive=1 ;
+    }
+    else if( length > 0 ) {
+        printf( "Content-Length: %ld\r\n", (long) length );
+        keep_alive=1 ;
     }
     else {
-        if( keep_alive == 0 ) {
-            printf( "Connection: close\r\n" );
-        }
+        keep_alive=0 ;
     }
-    unsetenv("HEADER_Connection" );
 
     for(i=0; i<200; ) {
         if( environ[i]==NULL || environ[i][0]==0 ) {
@@ -362,6 +368,15 @@ int cgi_run(char * execfile )
     pid_t childpid ;
     int   status ;
     fflush(stdout);
+
+    // save old stdout
+    char cgiout[20] ;
+    int dupstdout = dup(1);
+    sprintf( cgiout, "/tmp/cgi%d", getpid() );
+    setenv("POST_FILE_TMPCGI", cgiout, 1 );                 // set a POST_FILE_* env, so the file can be clean out
+    int hcgifile = open(cgiout, O_RDWR|O_CREAT, S_IRWXU );
+    dup2( hcgifile, 1 ) ;
+
     childpid=fork();
 
     if( childpid==0 ) {
@@ -379,33 +394,52 @@ int cgi_run(char * execfile )
         exit(0) ;
     }
     else if( childpid>0) {
-        if( waitpid(childpid, &status, 0)==childpid ) {
-            if (WIFEXITED(status)) {
-                if( WEXITSTATUS(status)==0 ) {
-                    return 1 ;
-                }
-            } 
+        waitpid(childpid, &status, 0);
+    }
+    
+    // restore stdout
+    fflush( stdout );
+    dup2( dupstdout, 1 );
+    close( dupstdout );
+
+    int len = lseek( hcgifile, 0, SEEK_END ) ;
+    if( len<=0 ) {
+        http_error( 403, "Forbidden" );
+        return 0;
+    }
+
+    lseek( hcgifile, 0, SEEK_SET );
+    FILE * fp = fdopen( hcgifile, "r" );
+
+    // parse cgi output header
+    char cgiheader[160];
+    char * p ;
+    while ( fgets( cgiheader, sizeof(cgiheader), fp )  )
+    {
+        if( cgiheader[0] == '\r' || cgiheader[0] == '\n' ) {
+            break;
+        }
+        else if( strncmp(cgiheader, "HTTP/", 5)==0 ) {
+            continue ;          // ignor HTTP responds
+        }
+        else if( p=strchr(cgiheader, ':' ) ) {
+            *p=0 ;
+            http_setheader(cleanstring(cgiheader), cleanstring(p+1)) ;
         }
     }
-    else {
-        http_error( 403, "Forbidden" );
-    }
-    return 0 ;
-}
+    
+    http_cache(0, (time_t)0);
+    http_header( 200, "OK", NULL, len-ftell(fp) );
 
-// remove white space on head and tail of string
-char * cleanstring( char * instr )
-{
-    int len ;
-    while( *instr>0 && *instr<=' ' ) {
-        instr++;
+    int ch ;
+    while( (ch = fgetc( fp ))!=EOF ) {
+        fputc( ch, stdout ) ;
     }
-    len=strlen(instr);
-    while( len>0 && instr[len-1]>0  && instr[len-1]<=' ') {
-        len--;
-    }
-    instr[len]=0;
-    return instr ;    
+    fclose( fp ) ;
+    unlink( cgiout );
+    unsetenv( "POST_FILE_TMPCGI" );
+
+    return 0 ;
 }
 
 int smallssi_gettoken(FILE * fp, char * token, int bufsize)
@@ -655,7 +689,8 @@ int checkloginpassword()
     return res ;
 }
 
-void savepostfile()
+// return 1: success, 0: failed to received all content
+int savepostfile()
 {
     char postfilename[1024] ;
     FILE * postfile ;
@@ -678,11 +713,11 @@ void savepostfile()
             lbdy = strlen(boundary);
         }
         else {
-            return;
+            return 0;
         }
     }
     else {
-        return ;
+        return 0;
     }
 
     content_length = 0 ;
@@ -691,7 +726,7 @@ void savepostfile()
         sscanf(p,"%d", &content_length);
     }
     if( content_length <= 2*lbdy ) {
-        return ;
+        return 0;
     }
 
     // get first boundary
@@ -700,7 +735,7 @@ void savepostfile()
     if( linebuf[0]!='-' ||
         linebuf[1]!='-' ||
         strncmp( &linebuf[2], boundary, lbdy )!=0 ) 
-        return ;
+        return 0;
 
     while(1) {
         char part_name[128] ;
@@ -805,11 +840,15 @@ void savepostfile()
             if( linebuf[0]=='\r' && linebuf[1]=='\n' ) {
                 continue ;
             }
+            else if( linebuf[0]=='-' && linebuf[1]=='-' ) {
+                return 1 ;
+            }
             else {
-                break;
+                break ;
             }
         }
     }
+    return 0 ;
 }
 
 #define EXCEPTPAGES 3
@@ -904,6 +943,7 @@ void smallssi_run( char * ssipath )
     char ssifile[20] ;
     int dupstdout = dup(1);
     sprintf( ssifile, "/tmp/ssi%d", getpid() );
+    setenv("POST_FILE_TMPSSI", ssifile, 1 );
     int hssifile = open(ssifile, O_RDWR|O_CREAT, S_IRWXU );
     dup2( hssifile, 1 ) ;
 
@@ -921,15 +961,13 @@ void smallssi_run( char * ssipath )
 
     lseek( hssifile, 0, SEEK_SET );
     fp = fdopen( hssifile, "r" );
-
-    int ch, i ;
-    for( i=0; i<len && ch!=EOF ; i++ ) {
-        ch = fgetc( fp );
+    int ch ;
+    while( (ch=fgetc(fp))!=EOF ) {
         fputc( ch, stdout );
     }
     fclose( fp ) ;
     unlink( ssifile );
-
+    unsetenv( "POST_FILE_TMPSSI" );
 }
 
 // set http headers as environment variable. 
@@ -1006,8 +1044,10 @@ void unsethttpenv()
     return  ;
 }
 
-void savepost()
+// return 1: success, 0: failed to received all content
+int savepost()
 {
+    int res = 0 ;
     char * request_method ;
     int    content_length ;
     char * content_type ;
@@ -1034,17 +1074,22 @@ void savepost()
             post_string = (char *)malloc( content_length + 1 );
             if( post_string ) {
                 r = fread( post_string, 1, content_length, stdin );
-                if( r>0 ) {
+                if( r == content_length ) {
                     post_string[r]=0;
                     setenv( "POST_STRING", post_string, 1 );
+                    res = 1 ;
                 }
                 free( post_string );
             }
         }
         else if( strncasecmp( content_type, "multipart/form-data", 19 )==0 ) {
-            savepostfile();
+            res = savepostfile();
         }
     }
+    else {
+        res=1 ;
+    }
+    return res ;
 }
 
 void http()
@@ -1170,7 +1215,9 @@ void http()
         }
     }
     // save post data
-    savepost();
+    if( savepost()==0 ) {
+        goto http_done ;
+    }
     // all inputs processed!
     
     // use linebuf to store document name.
@@ -1243,11 +1290,21 @@ http_done:
     return ;
 }
 
+void sigpipe(int sig)
+{
+    unsethttpenv() ;
+    _exit(0);
+}
+
 int main(int argc, char * argv[])
 {
     if( argc>1 ) {
         document_root=argv[1] ;
     }
+
+    // do some cleaning on SIGPIPE
+    signal(SIGPIPE,  sigpipe );
+
     keep_alive=1 ;
     while( keep_alive ) 
         http();

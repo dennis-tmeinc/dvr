@@ -2,11 +2,24 @@
  * eagle.js
  * eagle32 board setup program (java script for setup pages)
  */
+
+function formsubmit( fm )
+{
+    if( document.readyState ) {
+        if (document.readyState == 'complete' ) {
+            fm.submit();
+        }
+    }
+    else {
+        fm.submit();
+    }
+}
+
 function on_system_click() {
     var dvrform = document.getElementById("dvrsetup");
     if( dvrform != null ) {
         dvrform.action="system.html";
-        dvrform.submit();
+        formsubmit( dvrform );
     } 
 }
 
@@ -14,7 +27,7 @@ function on_camera_click() {
     var dvrform = document.getElementById("dvrsetup");
     if( dvrform != null ) {
         dvrform.action="camera.html";
-        dvrform.submit();
+        formsubmit( dvrform );
     } 
 }
 function on_camera_n_click( cameraid )
@@ -27,7 +40,7 @@ function on_sensor_click() {
     var dvrform = document.getElementById("dvrsetup");
     if( dvrform != null ) {
         dvrform.action="sensor.html";
-        dvrform.submit();
+        formsubmit( dvrform );
     } 
 }
 
@@ -35,7 +48,7 @@ function on_network_click() {
     var dvrform = document.getElementById("dvrsetup");
     if( dvrform != null ) {
         dvrform.action="network.html";
-        dvrform.submit();
+        formsubmit( dvrform );
     } 
 }
 
@@ -43,7 +56,7 @@ function on_status_click() {
     var dvrform = document.getElementById("dvrsetup");
     if( dvrform != null ) {
         dvrform.action="status.html";
-        dvrform.submit();
+        formsubmit( dvrform );
     } 
 }
 
@@ -51,7 +64,7 @@ function on_tools_click() {
     var dvrform = document.getElementById("dvrsetup");
     if( dvrform != null ) {
         dvrform.action="tools.html";
-        dvrform.submit();
+        formsubmit( dvrform );
     } 
 }
 
@@ -60,7 +73,7 @@ function on_sync_time() {
     document.getElementById("id_synctime").value = t.getTime() ;
     var dvrform = document.getElementById("dvrsetup");
     if( dvrform != null ) {
-        dvrform.submit();
+        formsubmit( dvrform );
     } 
 }
 
