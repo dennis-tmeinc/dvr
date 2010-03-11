@@ -50,6 +50,9 @@ applications:
 # tmefile
 	cd tmeft; make
 
+# usbid
+	cd usbid; make
+
 mdvr:
 	cp cfg.h.mdvr cfg.h
 	make applications
@@ -123,6 +126,8 @@ clean:
 	cd deploy/PWII ; ./mkdeploy clean 0
 
 	cd deploy/TVS21 ; ./mkdeploy clean 0
+
+	cd usbid; make clean
 
 	find -name *~ -delete
 	

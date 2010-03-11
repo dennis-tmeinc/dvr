@@ -92,7 +92,7 @@ int main(int argc, char * argv[])
         r++ ;
     }
 
-    printf( "USB id of %s : %s\n", argv[1], sysfilename );
+    printf( "%s", sysfilename );
     return 0 ;
 
 }

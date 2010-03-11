@@ -44,11 +44,10 @@ static char * mime_type[][2] =
 } ;
 
 char * document_root="/home/www" ;
-char linebuf[8192] ;
 
-#define KEEP_ALIVE_TIMEOUT  (2000)
+#define KEEP_ALIVE_TIMEOUT  (60)
+
 int keep_alive ;
-
 int dynamic_page ;      // if page is dynamic ?
 
 // check if data ready to read
@@ -248,11 +247,11 @@ void http_header( int status, char * title, char * mime_type, int length)
     if( resp=getenv("HEADER_Content-Length") ) {
         printf( "Content-Length: %s\r\n", resp );
         unsetenv("HEADER_Content-Length" );
-        keep_alive=1 ;
+        keep_alive=KEEP_ALIVE_TIMEOUT ;
     }
     else if( length > 0 ) {
         printf( "Content-Length: %ld\r\n", (long) length );
-        keep_alive=1 ;
+        keep_alive=KEEP_ALIVE_TIMEOUT ;
     }
     else {
         keep_alive=0 ;
@@ -461,7 +460,7 @@ int smallssi_gettoken(FILE * fp, char * token, int bufsize)
                     r++;
                     token[r] = getc(fp);
                     if( token[r] == '#' ) {
-                        while( r<bufsize-2 ) {
+                        while( r<bufsize-10 ) {
                             r++;
                             token[r]=fgetc(fp) ;
                             if( token[r]=='>' && token[r-1]=='-' && token[r-2]=='-' ) {
@@ -551,6 +550,7 @@ void smallssi_include_file( char * ifilename )
 {
     FILE * fp ;
     int r ;
+    char linebuf[1024] ;
     fp = fopen( ifilename, "r" ) ;
     if( fp==NULL ) {
         return ;
@@ -1098,6 +1098,7 @@ void http()
     char * uri ;	// request URI
     char * query ;	// request query string
     char * protocol ;	// request protocol
+    char linebuf[512] ;
 
     char * ext ;
     char * pc ;
@@ -1107,14 +1108,13 @@ void http()
     int i;
     struct stat sb;
 
-    keep_alive=0 ;
     dynamic_page = 0;           // assume it is static page
 
-    if( recvok(0, KEEP_ALIVE_TIMEOUT*1000000)<=0 ) {
+    if( recvok(0, keep_alive*1000000)<=0 ) {
         return ;
     }
+    keep_alive=0 ;
     
-    linebuf[0]=0 ;
     if ( fgets( linebuf, sizeof(linebuf), stdin ) == NULL )
     {
         return ;
