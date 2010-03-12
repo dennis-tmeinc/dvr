@@ -180,30 +180,51 @@ class pwii_menu : public window {
     public:
         pwii_menu( window * parent, int id, int x, int y, int w, int h )
         :window( parent, id, x, y, w, h ) {
-            m_level = 0 ;
+            m_level = 1 ;
             redraw();
         }
 
         virtual ~pwii_menu() {
         }
 
+        void level(int l) {
+            m_level = l ;
+            redraw();
+        }
+
+        int closed() {
+            return m_level<=0 ;
+        }
+        
         void enter() {
-            
+            if( m_level == 1 ){
+                m_level = 0 ;
+            }
+            else {
+                m_level *= 10 ;
+            }
+            redraw();
         }
 
         void cancel() {
+            m_level /= 10 ;
+            redraw();
         }
 
         void next() {
+            if( m_level<100 ) m_level++ ;
+            redraw();
         }
 
         void prev() {
+            if( m_level>1 ) m_level-- ;
+            redraw();
         }
 
         	// event handler
     protected:
         virtual void paint() {						// paint window
-            if( m_level==0 ) {
+            if( m_level==1 ) {
                 setcolor (COLOR(30, 71, 145, 190 )) ;	
                 setpixelmode (DRAW_PIXELMODE_COPY);
                 fillrect ( 50, 120, m_pos.w-100, 50 );	
@@ -211,6 +232,16 @@ class pwii_menu : public window {
                 setcolor(COLOR(240,240,80,255));
                 char vristr[256] ;
                 sprintf( vristr, "VRI: %s", g_vri );
+                drawtext( 55, 130, vristr, font );
+            }
+            else  {
+                setcolor (COLOR(30, 71, 145, 190 )) ;	
+                setpixelmode (DRAW_PIXELMODE_COPY);
+                fillrect ( 50, 120, m_pos.w-100, 50 );	
+                resource font("mono32b.font");
+                setcolor(COLOR(240,240,80,255));
+                char vristr[256] ;
+                sprintf( vristr, "level: %d", m_level );
                 drawtext( 55, 130, vristr, font );
             }
         }
@@ -796,7 +827,12 @@ class video_screen : public window {
                         }
                     }
                     else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
-                        startliveview( m_playchannel );
+                        if( m_menu ) {
+                            m_menu->cancel();
+                            if( m_menu->closed() ) {
+                                stopmenu();
+                            }
+                        }
                     }
                 }
                 else if( keycode == VK_MEDIA_STOP ) {      // stop playback if in playback mode, enter menu mode if in live view mode
@@ -813,7 +849,12 @@ class video_screen : public window {
                         startmenu();
                     }
                     else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
-                        stopmenu();                                 // quit display VRI ( temperary before full menu available )
+                        if( m_menu ) {
+                            m_menu->enter();
+                            if( m_menu->closed() ) {
+                                stopmenu();
+                            }
+                        }
                     }
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
                         m_icon->seticon( "stop.pic" );   
@@ -845,6 +886,11 @@ class video_screen : public window {
                         m_decode_runmode = DECODE_MODE_PRIOR ;
                         m_icon->seticon( "rwd.pic" );
                     }
+                    else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
+                        if( m_menu ) {
+                            m_menu->prev();
+                        }
+                    }
                 }
                 else if( keycode == VK_NEXT ) { //  jump forward.
                     if( m_videomode==VIDEO_MODE_LIVE ) {   // live, black LCD
@@ -856,6 +902,11 @@ class video_screen : public window {
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
                         m_decode_runmode = DECODE_MODE_NEXT ;
                         m_icon->seticon( "fwd.pic" );
+                    }
+                    else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
+                        if( m_menu ) {
+                            m_menu->next();
+                        }
                     }
                 }
                 else if( keycode == VK_EM ) { //  event marker key

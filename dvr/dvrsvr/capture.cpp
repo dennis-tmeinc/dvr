@@ -179,6 +179,7 @@ void capture::loadconfig()
 
 #ifdef PWII_APP
     m_show_vri=dvrconfig.getvalueint( section, "show_vri" );
+    m_show_policeid=dvrconfig.getvalueint( section, "show_policeid" );
 #endif        
     
     // reset some attr for special 2 version ()
@@ -677,13 +678,21 @@ void capture::updateOSD()
     osd.osdline[line][i++]=':' ;          
     osd.osdline[line][i++]=_OSD_SECOND ;          // Second
     osd.osdline[line][i++]=' ' ;         
-    osd.osdline[line][i++]=' ' ;         
-    osd.osdline[line][i++]=0 ;
+    osd.osdline[line][i++]=' ' ;
 
-    
+    // show Police ID
+    sprintf( osdbuf, "%20s",
+            m_show_policeid?g_policeid:"");           // optional Police ID
+    k=osdbuf ;
+    while( *k && i<50 ) {
+        osd.osdline[line][i++] = * k++ ;
+    }
+    osd.osdline[line][i] = 0 ;
+
+
     // prepare line 2, GPS
     line++ ;
-    i=0; 
+    i=0;
     osd.osdline[line][i++]=8 ;             // x position
     osd.osdline[line][i++]=382 + pal_diff; // y position
     

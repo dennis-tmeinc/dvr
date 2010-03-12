@@ -26,6 +26,7 @@ int app_state;				// APPQUIT, APPUP, APPDOWN, APPRESTART
 int g_lowmemory ;
 
 char g_vri[128] ;           // VRI (video recording id) for PWII
+char g_policeid[32];        // Police ID for PWII
 
 void dvr_lock()
 {

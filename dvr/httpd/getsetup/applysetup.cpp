@@ -694,6 +694,17 @@ int main()
                 }
             }
 
+            // show_policeid
+            if( getsetvalue( "bool_show_policeid" )!=NULL ) {
+                v=getsetvalue( "show_policeid" );
+                if( v ) {
+                    dvrconfig.setvalueint(section,"show_policeid",1);
+                }
+                else {
+                    dvrconfig.setvalueint(section,"show_policeid",0);
+                }
+            }
+            
             // record_alarm_mode
             v = getsetvalue( "record_alarm_mode" );
             if( v ) {

@@ -91,6 +91,7 @@ extern char g_id2[64] ;
 
 // PWII vri
 extern char g_vri[128];
+extern char g_policeid[32];
 
 int  dvr_log(char *str, ...);
 void dvr_logkey( int op, struct key_data * key ) ;
@@ -383,7 +384,7 @@ class capture {
     int m_started ;         // 0: stopped, 1: started
     int m_working ;             // channel is working
     int m_remoteosd ;           // get OSD from network
-        
+
     unsigned int m_sensorosd ;      // bit maps for sensor osd
         
     int m_motionalarm ;
@@ -402,6 +403,7 @@ class capture {
         
 #ifdef PWII_APP
     int m_show_vri;
+    int m_show_policeid ;
 #endif        
         
     int m_headerlen ;

@@ -522,6 +522,12 @@ int main()
                 fprintf(fvalue, "\"show_vri\":\"on\"," );
             }  
             
+            ivalue = dvrconfig.getvalueint(section, "show_policeid");
+            if( ivalue>0 ) {
+                fprintf(fvalue, "\"bool_show_policeid\":\"on\"," );
+                fprintf(fvalue, "\"show_policeid\":\"on\"," );
+            }  
+            
              // record_alarm_mode
             value = dvrconfig.getvalue( section, "recordalarmpattern" );
             if( value.length()>0 ) {
