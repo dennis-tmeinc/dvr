@@ -5,7 +5,7 @@
 include ../arm_tool
 
 CC=$(CROSS_COMPILE_PREFIX)gcc
-CFLAGS=-g
+CFLAGS=-g -Wall
 
 HEADERS=
 

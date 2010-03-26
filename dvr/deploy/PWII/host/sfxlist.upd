@@ -17,6 +17,7 @@
 ./dvr/usbcheck
 ./dvr/volumeid
 ./dvr/md5check
+./dvr/dvrsvr.conf ./dvr/dvrsvr.conf.def
 ./dvr/cfg
 ./dvr/inetd.conf
 ./dvr/setnetwork
@@ -42,6 +43,7 @@
 ./dvr/resource/rwd.pic
 ./dvr/resource/light.pic
 ./dvr/resource/tm.pic
+./dvr/resource/ball.pic
 ./initrun.sh
 ./iwconfig
 ./iwlist

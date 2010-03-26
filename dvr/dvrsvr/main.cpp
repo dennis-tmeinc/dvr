@@ -26,6 +26,7 @@ int app_state;				// APPQUIT, APPUP, APPDOWN, APPRESTART
 int g_lowmemory ;
 
 char g_vri[128] ;           // VRI (video recording id) for PWII
+string g_policeidlistfile ; // Police ID list filename
 char g_policeid[32];        // Police ID for PWII
 
 void dvr_lock()
@@ -772,6 +773,19 @@ void app_init()
 
     keylogfile = dvrconfig.getvalue("system","keylogfile");
 	dvr_logkey( 2, NULL );	// try logdown settings
+
+    // police id list file format:
+    //          first line : current police ID, empty line indicate NO current ID (bypass)
+    //          following lines: list of availabe police IDs, one ID perline, ID must start from first colume
+    g_policeidlistfile = dvrconfig.getvalue("system", "pwii_policeidlistfile");
+    g_policeid[0]=0;
+    fid=fopen(g_policeidlistfile.getstring(), "r");
+    if( fid ) {
+        fgets(g_policeid,sizeof(g_policeid),fid);
+        fclose(fid);
+        str_trimtail(g_policeid);
+    }
+
 #endif
     
     g_lowmemory=dvrconfig.getvalueint("system", "lowmemory" );

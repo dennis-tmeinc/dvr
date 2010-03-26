@@ -559,6 +559,9 @@ void dvrsvr::onrequest()
         case REQCHECKKEY:
             ReqCheckKey();
             break;
+        case REQUSBKEYPLUGIN:
+            ReqUsbkeyPlugin();
+            break;
         case REQNFILEOPEN:
             ReqNfileOpen();
             break;
@@ -1738,7 +1741,7 @@ void dvrsvr::ReqCheckKey()
 
         key = (struct key_data *)m_recvbuf ;
         // check key block ;
-        if( strcmp( g_mfid, key->manufacturered )==0 &&
+        if( strcmp( g_mfid, key->manufacturerid )==0 &&
             memcmp( g_filekey, key->videokey, 256 )==0 ) 
         {
             m_keycheck=1;
@@ -1754,6 +1757,241 @@ void dvrsvr::ReqCheckKey()
         }
     }
     DefaultReq();
+}
+
+#ifdef PWII_APP
+
+// Generate USB id string like: Ven_SanDisk&Prod_Cruzer_Mini&Rev_0.1\20041100531daa107a09
+
+// Ven   :  /sys/block/sda/device/vendor
+// Prod  :  /sys/block/sda/device/model
+// Rev   :  /sys/block/sda/device/rev
+// serial:  cd -P /sys/block/sda/device ; ../../../../serial
+//          /sys/block/sda/device/../../../../serial
+
+// return 0 : failed, >0: success
+int getUSBkeyserialid(char * device, char * serialid)
+{
+    char sysfilename[256] ;
+    FILE * sysfile ;
+    int r ;
+    char vendor[64] ;
+    char product[64] ;
+    char rev[64] ;
+    char serial[64] ;
+
+    // get vendor
+    vendor[0]=0 ;
+    sprintf( sysfilename, "/sys/block/%s/device/vendor", device );
+    sysfile = fopen( sysfilename, "r" );
+    if( sysfile ) {
+        fgets(vendor, 64, sysfile );
+        fclose( sysfile );
+    }
+    else {
+        return 0 ;
+    }
+    str_trimtail( vendor );
+    
+    // get product
+    product[0] = 0 ;
+    sprintf( sysfilename, "/sys/block/%s/device/model", device );
+    sysfile = fopen( sysfilename, "r" );
+    if( sysfile ) {
+        fgets(product, 64, sysfile );
+        fclose( sysfile );
+    }
+    else {
+        return 0 ;
+    }
+    str_trimtail( product );
+        
+    // get rev
+    rev[0] = 0 ;
+    sprintf( sysfilename, "/sys/block/%s/device/rev", device );
+    sysfile = fopen( sysfilename, "r" );
+    if( sysfile ) {
+        fgets(rev, 64, sysfile );
+        fclose( sysfile );
+    }
+    else {
+        return 0 ;
+    }
+    str_trimtail( rev );
+    
+    // get serial no
+    serial[0]=0 ;
+    sprintf( sysfilename, "/sys/block/%s/device/../../../../serial", device );
+    sysfile = fopen( sysfilename, "r" );
+    if( sysfile ) {
+        fgets(serial, 64, sysfile );
+        fclose( sysfile );
+    }
+    else {
+        return 0 ;
+    }
+    str_trimtail( serial );
+
+    sprintf( sysfilename, "Ven_%s&Prod_%s&Rev_%s\\%s", vendor, product, rev, serial ) ;
+
+    r = 0 ;
+    while( sysfilename[r] ) {
+        if( sysfilename[r]==' ' ) {
+            serialid[r] = '_' ;
+        }
+        else {
+            serialid[r] = sysfilename[r] ;
+        }
+        r++ ;
+    }
+    serialid[r]=0 ;
+    return r ;
+}
+
+static void strgetline( char * source, char * dest )
+{
+    char * d = dest ;
+    while( *source ) {
+        if( *source=='\r' || *source=='\n' ) break ;
+        if( *source<=' ' ) {
+            source++ ;
+            continue ;
+        }
+        *d++=*source++ ;
+    }
+    *d=0 ;
+    str_trimtail( dest );
+}
+
+// check police id key
+int PoliceIDCheck( char * iddata, int idsize, char * serialid )
+{
+    extern void md5_checksum( char * md5checksum, unsigned char * data, int datasize) ;
+    char md5checksum[16] ;
+    int checksize ;
+    struct RC4_seed rc4seed ;
+    unsigned char k256[256] ;
+    struct key_data * keydata ;
+
+    key_256( serialid, k256 ) ;
+    RC4_KSA( &rc4seed, k256 );
+    RC4_crypt( (unsigned char *)iddata, idsize, &rc4seed ) ;
+    keydata = (struct key_data *) iddata ;
+
+    checksize = keydata->size ;
+    if( checksize<0 || checksize>(idsize-(int)sizeof(keydata->checksum)) ) {
+        checksize=0;
+    }
+    md5_checksum( md5checksum, (unsigned char *)(&(keydata->size)), checksize );
+    if( memcmp( md5checksum, keydata->checksum, 16 )==0 &&
+        strcmp( keydata->usbkeyserialid, serialid )== 0 ) 
+    {
+        // key file data verified ok!
+
+        // is it a police key and has correct MF ID ?
+        if( strcmp( g_mfid, keydata->manufacturerid )==0 &&
+            keydata->usbid[0]=='P' &&
+            keydata->usbid[1]=='L' ) 
+        {
+            // search for "Office ID" or "Contact Name" from key info part
+            char * info ;
+            char * idstr ;
+            char officerid[128] ;
+            officerid[0]=0 ;
+            info = (char *)(&(keydata->size))+keydata->keyinfo_start ;
+            if( (idstr=strcasestr( info, "Officer ID:" )) ) {
+                strgetline(idstr+11, officerid);
+            }
+            else if( (idstr=strcasestr( info, "Contact Name:" )) ) {
+                strgetline(idstr+13, officerid);
+            }
+            if( officerid[0] ) {
+                // select a new offer ID.
+                strcpy( g_policeid, officerid ) ;
+
+                // generate new id list
+                array <string> idlist ;
+                FILE * fid ;
+                int ididx = 0 ;
+                idlist[ididx++] = g_policeid ;
+                fid=fopen(g_policeidlistfile.getstring(), "r");
+                if( fid ) {
+                    while( fgets(officerid, 100, fid) ) {
+                        str_trimtail(officerid);
+                        if( strlen(officerid)<=0 ) continue ;
+                        if( strcmp(officerid, g_policeid)==0 ) continue ;
+                        idlist[ididx++]=officerid ;
+                    }
+                    fclose(fid);
+                }
+
+                // writing new id list to file
+                fid=fopen(g_policeidlistfile.getstring(), "w");
+                if( fid ) {
+                    for( ididx=0; ididx<idlist.size(); ididx++) {
+                        fprintf(fid, "%s\n", idlist[ididx].getstring() );
+                    }
+                    fclose( fid ) ;
+                }
+
+                // let screen display new policeid
+                dvr_log( "New Police ID detected : %s", g_policeid );
+                screen_menu(1);
+                return 1 ;
+            }
+        }
+    }
+    return 0 ;
+}
+
+#endif      // PWII_APP
+
+struct usbkey_plugin_st {
+    char device[8] ;       // "sda", "sdb" etc.
+    char mountpoint[128] ;
+} ;
+
+void dvrsvr::ReqUsbkeyPlugin()
+{
+    int res = 0 ;
+    struct usbkey_plugin_st * usbkeyplugin ;
+    struct dvr_ans ans ;
+    if( m_recvbuf && m_recvlen>=(int)sizeof( struct usbkey_plugin_st ) ) {
+#ifdef PWII_APP        
+        // check pwii police ID key
+        usbkeyplugin = (struct usbkey_plugin_st *)m_recvbuf ;        
+        // get device serial ID
+        char serialid[256] ;
+        if( getUSBkeyserialid(usbkeyplugin->device, serialid) ) {
+            FILE * tvskeyfile ;
+            char tvskeyfilename[256] ;
+            sprintf( tvskeyfilename, "%s/tvs/tvskey.dat", usbkeyplugin->mountpoint );
+            tvskeyfile = fopen( tvskeyfilename, "rb" );
+            if( tvskeyfile ) {
+                fseek( tvskeyfile, 0, SEEK_END ) ;
+                int fsize = ftell( tvskeyfile );
+                char * keydata = new char [fsize+20] ;
+                if( keydata ) {
+                    fseek( tvskeyfile, 0, SEEK_SET ) ;
+                    fread( keydata, 1, fsize, tvskeyfile ) ;
+                    keydata[fsize]=0 ;
+                    if( PoliceIDCheck( keydata, fsize, serialid ) ) {
+                        ans.data = 0;
+                        ans.anssize=0;
+                        ans.anscode = ANSOK ;
+                        Send( &ans, sizeof(ans));
+                        res = 1 ;
+                    }
+                    delete keydata ;
+                }
+                fclose( tvskeyfile ) ;
+            }
+        }
+#endif        
+    }
+    if( res == 0 ) {
+        DefaultReq();
+    }
 }
 
 // on enter

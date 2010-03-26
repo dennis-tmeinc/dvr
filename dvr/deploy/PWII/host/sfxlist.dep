@@ -20,6 +20,7 @@
 ./dvr/cfg
 ./dvr/passwd
 ./dvr/dvrsvr.conf
+./dvr/dvrsvr.conf ./dvr/dvrsvr.conf.def
 ./dvr/eth_ip
 ./dvr/eth_mask
 ./dvr/wifi_ip
@@ -50,6 +51,7 @@
 ./dvr/resource/rwd.pic
 ./dvr/resource/light.pic
 ./dvr/resource/tm.pic
+./dvr/resource/ball.pic
 ./initrun.sh
 ./iwconfig
 ./iwlist

@@ -515,6 +515,10 @@ void rtc_settime()
     }
 }
 
+
+
+
+
 // sync system time to mcu(rtc)
 int dio_syncrtc()
 {
@@ -592,7 +596,7 @@ void dio_init()
     if( pwii_rear_ch == pwii_front_ch ) {
         pwii_rear_ch = pwii_front_ch+1 ;
     }
-#endif    
+#endif
     
     p=mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
     close( fd );                                // don't need fd to use memory map.

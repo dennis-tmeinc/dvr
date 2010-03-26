@@ -141,9 +141,9 @@ void event_check()
             event_marker = 1 ;
         }
 
-        extern int pwii_front_ch ;         // pwii front camera channel
+//        extern int pwii_front_ch ;         // pwii front camera channel
         if( event_marker && em==0 ) {
-            screen_setliveview( pwii_front_ch ) ;
+            screen_setliveview( -1 ) ;
         }
         
 #endif

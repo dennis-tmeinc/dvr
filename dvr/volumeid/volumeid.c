@@ -223,7 +223,7 @@ int checkUsbKey(char *device, char *mounted_dir)
   encode(volumeID, v);
 
   if (memcmp(v, vf, sizeof(v))) {
-    fprintf(stderr, "wrong volumeID:%08x %08x,%08x %08x\n",v[0],v[1],vf[1],vf[2]);
+    fprintf(stderr, "wrong volumeID:%08x %08x,%08x %08x\n",v[0],v[1],vf[0],vf[1]);
     return 1;
   }
 

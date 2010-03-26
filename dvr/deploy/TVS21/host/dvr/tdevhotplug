@@ -234,6 +234,7 @@ case $1 in
                             cd /
                             if umount ${xmountdir}/${devname} ; then
                                 rm -r ${xmountdir}/${devname}
+                                rm ${xmountdir}/mount_${devname}
                             fi
                            
                         fi
@@ -242,6 +243,7 @@ case $1 in
                     else
                         if umount ${xmountdir}/${devname} ; then
                             rm -r ${xmountdir}/${devname}
+                            rm ${xmountdir}/mount_${devname}
                         fi
                     fi
 

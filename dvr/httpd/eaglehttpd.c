@@ -244,7 +244,7 @@ void http_header( int status, char * title, char * mime_type, int length)
         printf( "Content-Type: %s\r\n", mime_type );
     }
 
-    if( resp=getenv("HEADER_Content-Length") ) {
+    if( (resp=getenv("HEADER_Content-Length")) ) {
         printf( "Content-Length: %s\r\n", resp );
         unsetenv("HEADER_Content-Length" );
         keep_alive=KEEP_ALIVE_TIMEOUT ;
@@ -421,7 +421,7 @@ int cgi_run(char * execfile )
         else if( strncmp(cgiheader, "HTTP/", 5)==0 ) {
             continue ;          // ignor HTTP responds
         }
-        else if( p=strchr(cgiheader, ':' ) ) {
+        else if( (p=strchr(cgiheader, ':' )) ) {
             *p=0 ;
             http_setheader(cleanstring(cgiheader), cleanstring(p+1)) ;
         }
@@ -483,8 +483,6 @@ void smallssi_include( char * ssicmd )
 {
     char * eq ;
     char * ifile ;
-    FILE * pifile ;
-    int r ;
     eq = strchr( ssicmd, '=' );
     if( eq ) {
         ifile=strchr(eq, '\"');
@@ -505,8 +503,6 @@ void smallssi_echo( char * ssicmd )
 {
     char * eq ;
     char * ifile ;
-    FILE * pifile ;
-    int r ;
     eq = strchr( ssicmd, '=' );
     if( eq ) {
         ifile=strchr(eq, '\"');
@@ -529,8 +525,6 @@ void smallssi_exec( char * ssicmd )
 {
     char * eq ;
     char * ifile ;
-    FILE * pifile ;
-    int r ;
     eq = strchr( ssicmd, '=' );
     if( eq ) {
         ifile=strchr(eq, '\"');
@@ -645,6 +639,7 @@ int updateserialno(char * serialno)
 int cleanserialno()
 {
     remove( serfile );
+    return 0 ;
 }
 
 extern char *crypt (__const char *__key, __const char *__salt) __THROW;
@@ -701,7 +696,6 @@ int savepostfile()
     int  i ;
     int  content_length ;
     int  d ;
-    int filesize=0 ;
     int lbdy ;          // boundary length ;
     int datatype = 1 ;      // 0: dataend, 1: data, 2: databoundary
 
@@ -731,7 +725,7 @@ int savepostfile()
 
     // get first boundary
     if( fgets( linebuf, sizeof(linebuf), stdin)== NULL )
-        return ;
+        return 0;
     if( linebuf[0]!='-' ||
         linebuf[1]!='-' ||
         strncmp( &linebuf[2], boundary, lbdy )!=0 ) 
@@ -1105,7 +1099,6 @@ void http()
     size_t len;
     int ch;
     FILE* fp;
-    int i;
     struct stat sb;
 
     dynamic_page = 0;           // assume it is static page

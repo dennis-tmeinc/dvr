@@ -98,6 +98,13 @@ class video_icon : public window {
 
         void seticon( char * iconfile )
     {
+        if( iconfile==NULL ) {
+            if( m_icon.valid() ) {
+                m_icon.close();
+                redraw();
+            }
+            return ;
+        }
         m_icon.open( iconfile );
         redraw();
     }
@@ -165,88 +172,226 @@ class video_status : public window {
 #define VIDEO_MODE_LCDOFF   (4)
 #define VIDEO_MODE_STANDBY  (5)
 
-#define VIDEO_SCREEN_ID (1001)
+#define ID_VIDEO_SCREEN (1001)
+#define ID_MENU_SCREEN (1101)
+
+
+// command send to video screen
+#define CMD_MENUOFF (2001)
 
 #ifdef PWII_APP
 void dio_pwii_lcd( int lcdon );
 void dio_pwii_standby( int standby );
 #endif
 
+#define MAXPOLICIDLISTLINE (6)
 
 // status window on video screen
 class pwii_menu : public window {
         int m_level ;           // 0: top level, 1: Enter Officer ID, 2: Enter classification number
+        int m_select ;          // selection on current level
+        int m_maxselect ;       // selection from 0 to maxselect
+        int m_dispbegin ;
+        array <string> m_officerIDlist ;
     
     public:
         pwii_menu( window * parent, int id, int x, int y, int w, int h )
         :window( parent, id, x, y, w, h ) {
-            m_level = 1 ;
-            redraw();
+            level(1);
         }
 
         virtual ~pwii_menu() {
+            m_id = 0 ;                  // so parent can't find me.
+            m_parent->command( CMD_MENUOFF );
         }
 
-        void level(int l) {
-            m_level = l ;
+        void refresh() {
+            settimer( 60000, 1 );           // turn off timer
             redraw();
-        }
-
-        int closed() {
-            return m_level<=0 ;
         }
         
+        void level(int l) {
+            m_level = l ;
+            if( m_level == 1 ) {
+                m_maxselect = 0 ;
+                m_select = 0 ;
+                m_officerIDlist.empty();
+            }
+            else if( m_level == 2 ) {
+                m_officerIDlist.empty();
+                // whats in the ID list?
+                //    first item : "NO ID (bypass)",
+                //    second item : current (previously entered) police ID if present (not bypassed)
+                //    other item : avaiable ID except current ID
+
+                int il ;
+                m_officerIDlist[0]="NO ID (bypass)" ;
+                il = 1 ;
+                if( strlen(g_policeid)>0 ) {
+                    m_officerIDlist[il++]=g_policeid ;
+                    m_select = 1 ;
+                }
+                else {
+                    m_select = 0 ;
+                }
+
+                FILE * fid ;
+                fid=fopen(g_policeidlistfile.getstring(), "r");
+                if( fid ) {
+                    char idline[100] ;
+                    while( fgets(idline, 100, fid) ) {
+                        str_trimtail(idline);
+                        if( strlen(idline)<=0 ) continue ;
+                        if( strcmp(idline, g_policeid)==0 ) continue ;
+                        m_officerIDlist[il++]=idline ;
+                    }
+                    fclose(fid);
+                }
+                m_maxselect = il-1 ;
+                m_dispbegin = 0 ;
+            }
+            refresh();
+        }
+
         void enter() {
-            if( m_level == 1 ){
-                m_level = 0 ;
+            if( m_level == 1 && m_select == 0 ) {
+                level(2);
             }
-            else {
-                m_level *= 10 ;
+            else if( m_level == 2 ) {
+                // update current police ID
+                if( m_select == 0 ) {
+                    // select no ID (bypass) 
+                    g_policeid[0]=0 ;
+                    dvr_log( "Police ID bypassed!");
+                }
+                else {
+                    strcpy(g_policeid, m_officerIDlist[m_select].getstring());
+                    dvr_log( "Police ID selected : %s", g_policeid );
+                }
+                m_officerIDlist[0]="";
+                m_officerIDlist.sort();
+                // write police id list file
+                FILE * fid ;
+                fid=fopen(g_policeidlistfile.getstring(), "w");
+                if( fid ) {
+                    fprintf(fid, "%s\n", g_policeid );      // write current ID or empty line
+                    int i ;
+                    for( i=0; i<m_officerIDlist.size(); i++ ) {
+                        if( m_officerIDlist[i].length()<=0 ) continue ;
+                        if( strcmp(m_officerIDlist[i].getstring(), g_policeid)==0 ) continue ;
+                        fprintf( fid, "%s\n", m_officerIDlist[i].getstring());
+                    }
+                    fclose(fid);
+                }
+
+                m_officerIDlist.empty();
+                level(1);
             }
-            redraw();
+            refresh();
         }
 
         void cancel() {
-            m_level /= 10 ;
-            redraw();
+            if( m_level == 1 ) {
+                destroy();
+            }
+            else if( m_level == 2 ) {
+                // back to level 1 menu with no change
+                level(1);
+            }
+            refresh();
         }
 
         void next() {
-            if( m_level<100 ) m_level++ ;
-            redraw();
+            if( m_level == 1 ) {
+            }
+            else if( m_level == 2 ) {
+                if( m_select < m_maxselect ) {
+                    m_select++ ;
+                }
+                m_dispbegin = m_select-MAXPOLICIDLISTLINE+1 ;
+                if( m_dispbegin<0 ) m_dispbegin=0 ;
+            }
+            refresh();
         }
 
         void prev() {
-            if( m_level>1 ) m_level-- ;
-            redraw();
+            if( m_level == 1 ) {
+            }
+            else if( m_level == 2 ) {
+                if( m_select > 0 ){
+                    m_select-- ;
+                }
+                if( m_select<m_dispbegin ) {
+                    m_dispbegin=m_select ;
+                }
+            }
+            refresh();
         }
 
-        	// event handler
+        // event handler
     protected:
         virtual void paint() {						// paint window
+            char sbuf[256] ;
+            resource font("mono32b.font");
+            setpixelmode (DRAW_PIXELMODE_COPY);
+            resource ball ("ball.pic") ;
+            
             if( m_level==1 ) {
-                setcolor (COLOR(30, 71, 145, 190 )) ;	
-                setpixelmode (DRAW_PIXELMODE_COPY);
-                fillrect ( 50, 120, m_pos.w-100, 50 );	
-                resource font("mono32b.font");
+                setcolor (COLOR(30, 71, 145, 190 )) ;
+                fillrect ( 50, 80, m_pos.w-100, m_pos.h-160 );
+
                 setcolor(COLOR(240,240,80,255));
-                char vristr[256] ;
-                sprintf( vristr, "VRI: %s", g_vri );
-                drawtext( 55, 130, vristr, font );
+                sprintf( sbuf, "VRI: %s", g_vri[0]?g_vri:"(NA)" );
+                drawtext( 55, 120, sbuf, font );
+
+                if( strlen(g_policeid)>0 ) {
+                    setcolor(COLOR(240,240,80,255));
+                    sprintf( sbuf, "Officer ID: %s", g_policeid );
+                    drawtext( 55, 160, sbuf, font );
+
+                    sprintf( sbuf, "Change Officer ID" );
+                    drawtext( 80, 280, sbuf, font );
+                    drawbitmap(ball, (80-20), (280+15));
+                }
+                else {
+                    setcolor(COLOR(240,240,80,255));
+                    sprintf( sbuf, "Officer ID: (NA)" );
+                    drawtext( 55, 160, sbuf, font );
+
+                    sprintf( sbuf, "Enter Officer ID" );
+                    drawtext( 80, 280, sbuf, font );
+                    drawbitmap(ball, (80-20), (280+15));
+                }
             }
-            else  {
-                setcolor (COLOR(30, 71, 145, 190 )) ;	
-                setpixelmode (DRAW_PIXELMODE_COPY);
-                fillrect ( 50, 120, m_pos.w-100, 50 );	
-                resource font("mono32b.font");
+            else if( m_level==2 ) {
+                int i ;
+                setcolor (COLOR(30, 71, 145, 190 )) ;
+                fillrect ( 50, 80, m_pos.w-100, m_pos.h-160 );
+
                 setcolor(COLOR(240,240,80,255));
-                char vristr[256] ;
-                sprintf( vristr, "level: %d", m_level );
-                drawtext( 55, 130, vristr, font );
+                drawtextex( 80, 100, "SELECT OFFICER ID", font, 30, 50 );
+
+                int x = 80 ;
+                int y = 160 ;
+
+                for( i=0; i<MAXPOLICIDLISTLINE; i++ ) {
+                    if( i+m_dispbegin > m_maxselect ) break;
+                    drawtext( x, y, m_officerIDlist[i+m_dispbegin].getstring(), font ) ;
+                    if( (i+m_dispbegin)==m_select ) {
+                        drawbitmap( ball, (x-20), (y+15) ) ;
+                    }
+                    y+=40 ;
+                }
             }
         }
+        
+        virtual void ontimer( int id ) {
+            if( id==1 ) {
+                destroy();
+            }
+            return ;
+        }
 };
-
 
 class video_screen : public window {
 
@@ -267,7 +412,6 @@ class video_screen : public window {
 
         video_status * m_statuswin ;        // status txt on top-left corner
         video_icon   * m_icon ;             // display a icon when button pressed
-        pwii_menu * m_menu ;                // menu
 
         int m_jumptime ;
         int m_keytime ;
@@ -287,7 +431,11 @@ class video_screen : public window {
             time_dvrtime_init(&m_playbacktime, 2000);
             m_statuswin = new video_status(this, 1, 30, 60, 200, 50 );
             m_icon = new video_icon(this, 2, (m_pos.w-75)/2, (m_pos.h-75)/2, 75, 75 );
-            m_menu=NULL ;
+#ifdef PWII_APP
+            if( id == ID_VIDEO_SCREEN ) {
+                settimer( 2000, ID_VIDEO_SCREEN ) ;
+            }
+#endif                
         }
         
         ~video_screen() {
@@ -304,7 +452,20 @@ class video_screen : public window {
                 startliveview(channel);
             }
         }
-        
+
+        void openmenu( int level ) {
+            if( m_videomode <= VIDEO_MODE_PLAYBACK ) {
+                startliveview(m_playchannel);
+            }
+            startmenu() ;
+
+            pwii_menu * pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN ) ;
+            if( pmenu ) {
+                pmenu->level(level);
+            }
+            updatestatus();
+        }
+
         // select audio 
         void select(int s) {
             if( m_select != s ) {
@@ -349,7 +510,16 @@ class video_screen : public window {
             }
         }
 
+        virtual void oncommand( int id, void * param ) {	// children send command to parent
+            if( id == CMD_MENUOFF ) {
+                stopmenu();
+            }
+    	}
+
         void startliveview(int channel)    {
+            if( channel<0 || channel>10 ) {
+                channel = m_playchannel ;
+            }
 #ifdef PWII_APP
             extern int pwii_rear_ch ;
             if( channel==pwii_rear_ch ) {
@@ -397,18 +567,21 @@ class video_screen : public window {
 
         void startmenu() {
 //            stop();
-            m_menu = new pwii_menu(this, 3, 0, 0, m_pos.w, m_pos.h);
+            new pwii_menu(this, ID_MENU_SCREEN, 0, 0, m_pos.w, m_pos.h);
             m_videomode= VIDEO_MODE_MENU ;
+            updatestatus();
         }
         
         void stopmenu() {
             if( m_videomode == VIDEO_MODE_MENU ) 
             {
-                m_videomode = VIDEO_MODE_LIVE ;
-                if( m_menu ) {
-                    delete m_menu ;
-                    m_menu=NULL ;
+                pwii_menu * pmenu ;                // menu
+                pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
+                if( pmenu ) {
+                    delete pmenu ;
                 }
+                m_videomode = VIDEO_MODE_LIVE ;
+                updatestatus();
             }
         }
         
@@ -733,7 +906,15 @@ class video_screen : public window {
         int m_timerstate ;
         int m_keypad_state ;
         int m_keypad_state_p ;
-        virtual int ontimer( int id ) {
+                
+        virtual void ontimer( int id ) {
+#ifdef PWII_APP
+            if( id == ID_VIDEO_SCREEN ) {
+                openmenu(2);
+                return ;
+            }
+            else 
+#endif                
             if( id == VK_MEDIA_STOP ) {
                 stopdecode();
                 stopliveview();
@@ -741,29 +922,29 @@ class video_screen : public window {
 #ifdef	PWII_APP
                 dio_pwii_standby(1);
 #endif
-                return 0 ;
+                return ;
             }
             else if( id == VK_POWER ) {
                 m_videomode=VIDEO_MODE_STANDBY ;
 #ifdef	PWII_APP
                 dio_pwii_standby(1);
 #endif
-                return 0 ;
+                return ;
             }
                 
             if( m_keypad_state == VK_MEDIA_PREV_TRACK ) {           // play backward
 //                m_decode_runmode = DECODE_MODE_PLAY_FASTBACKWARD ;
                 m_decode_runmode = DECODE_MODE_BACKWARD ;
-                settimer(id, 2000);
+                settimer(2000, id);
             }
             else if( m_keypad_state == VK_MEDIA_NEXT_TRACK ) {      // play forward
 //                m_decode_runmode = DECODE_MODE_PLAY_FASTFORWARD ;
                 m_decode_runmode = DECODE_MODE_FORWARD ;
-                settimer(id, 2000);
+                settimer(2000, id);
             }
 
             updatestatus();
-            return 0 ;
+            return ;
         }
 
         virtual int onkey( int keycode, int keydown ) {		// keyboard/keypad event
@@ -827,11 +1008,10 @@ class video_screen : public window {
                         }
                     }
                     else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
-                        if( m_menu ) {
-                            m_menu->cancel();
-                            if( m_menu->closed() ) {
-                                stopmenu();
-                            }
+                        pwii_menu * pmenu ;                // menu
+                        pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
+                        if( pmenu ) {
+                            pmenu->cancel();
                         }
                     }
                 }
@@ -849,11 +1029,10 @@ class video_screen : public window {
                         startmenu();
                     }
                     else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
-                        if( m_menu ) {
-                            m_menu->enter();
-                            if( m_menu->closed() ) {
-                                stopmenu();
-                            }
+                        pwii_menu * pmenu ;                // menu
+                        pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
+                        if( pmenu ) {
+                            pmenu->enter();
                         }
                     }
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
@@ -887,8 +1066,10 @@ class video_screen : public window {
                         m_icon->seticon( "rwd.pic" );
                     }
                     else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
-                        if( m_menu ) {
-                            m_menu->prev();
+                        pwii_menu * pmenu ;                // menu
+                        pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
+                        if( pmenu ) {
+                            pmenu->prev();
                         }
                     }
                 }
@@ -904,8 +1085,10 @@ class video_screen : public window {
                         m_icon->seticon( "fwd.pic" );
                     }
                     else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
-                        if( m_menu ) {
-                            m_menu->next();
+                        pwii_menu * pmenu ;                // menu
+                        pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
+                        if( pmenu ) {
+                            pmenu->next();
                         }
                     }
                 }
@@ -1053,7 +1236,7 @@ class controlpanel : public window {
         }
 
         virtual void onmouseleave() {							// mouse pointer leave window
-            settimer( 40000 );
+            settimer( 40000, 1 );
         }
 
         virtual void onmouseenter() {							// mouse pointer enter window
@@ -1064,10 +1247,9 @@ class controlpanel : public window {
             return 0 ;
         }
 
-        // timer call back functions, return  0: to delete this timer, 1: to continue this timer
-        virtual int ontimer( int id ) {
+        virtual void ontimer( int id ) {
             hide();
-            return 0 ;
+            return ;
         }
 
 
@@ -1094,27 +1276,27 @@ class mainwin : public window {
 
         if( ScreenNum==1 ) {
             startchannel = dvrconfig.getvalueint("VideoOut", "startchannel" );
-            vs = new video_screen( this, VIDEO_SCREEN_ID, ScreenMarginX, ScreenMarginY, m_pos.w-ScreenMarginX*2, m_pos.h-ScreenMarginY*2 );
+            vs = new video_screen( this, ID_VIDEO_SCREEN, ScreenMarginX, ScreenMarginY, m_pos.w-ScreenMarginX*2, m_pos.h-ScreenMarginY*2 );
             vs->liveview( startchannel ) ;
             vs->select(1);
         }
         else if( ScreenNum==2 ) {
-            vs = new video_screen( this, VIDEO_SCREEN_ID, ScreenMarginX, m_pos.h/4, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs = new video_screen( this, ID_VIDEO_SCREEN, ScreenMarginX, m_pos.h/4, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
             vs->liveview( 0 ) ;
             vs->select(1);
-            vs = new video_screen( this, VIDEO_SCREEN_ID+1,     m_pos.w/2, m_pos.h/4, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs = new video_screen( this, ID_VIDEO_SCREEN+1,     m_pos.w/2, m_pos.h/4, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
             vs->liveview( 1 ) ;
         }
         else {         // ScreenNum==4
             ScreenNum = 4 ;
-            vs = new video_screen( this, VIDEO_SCREEN_ID, ScreenMarginX, ScreenMarginY, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs = new video_screen( this, ID_VIDEO_SCREEN, ScreenMarginX, ScreenMarginY, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
             vs->liveview( 0 ) ;
             vs->select(1);
-            vs = new video_screen( this, VIDEO_SCREEN_ID+1,     m_pos.w/2, ScreenMarginY, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs = new video_screen( this, ID_VIDEO_SCREEN+1,     m_pos.w/2, ScreenMarginY, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
             vs->liveview( 1 ) ;
-            vs = new video_screen( this, VIDEO_SCREEN_ID+2, ScreenMarginX,     m_pos.h/2, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs = new video_screen( this, ID_VIDEO_SCREEN+2, ScreenMarginX,     m_pos.h/2, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
             vs->liveview( 2 ) ;
-            vs = new video_screen( this, VIDEO_SCREEN_ID+3,     m_pos.w/2,     m_pos.h/2, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
+            vs = new video_screen( this, ID_VIDEO_SCREEN+3,     m_pos.w/2,     m_pos.h/2, m_pos.w/2-ScreenMarginX, m_pos.h/2-ScreenMarginY );
             vs->liveview( 3 ) ;
         }
 
@@ -1156,7 +1338,7 @@ int screen_setliveview( int channel )
 {
     video_screen * vs ;
     if( topwindow!=NULL ) {
-        vs = (video_screen *) topwindow->findwindow( VIDEO_SCREEN_ID ) ;
+        vs = (video_screen *) topwindow->findwindow( ID_VIDEO_SCREEN ) ;
         if( vs ) {
             vs->liveview( channel );
             return 1 ;
@@ -1165,6 +1347,18 @@ int screen_setliveview( int channel )
     return 0;
 }
 
+int screen_menu( int level ) 
+{
+    video_screen * vs ;
+    if( topwindow!=NULL ) {
+        vs = (video_screen *) topwindow->findwindow( ID_VIDEO_SCREEN ) ;
+        if( vs ) {
+            vs->openmenu( level );
+            return 1 ;
+        }
+    }
+    return 0;
+}
 
 int screen_mouseevent(int x, int y, int buttons)
 {
@@ -1236,27 +1430,28 @@ static int getmouseevent( struct mouse_event * mev, int usdelay )
     if( mousedev>0 && Screen_cursor ) {
         if( readok(mousedev, usdelay) ) {
             if( read(mousedev, mousebuf, 8) >=3 && 
-               ( (mousebuf[0] & 0xc8 )==0x8 ) ) {
-                   if( mousebuf[0] & 0x10 ) {
-                       offsetx = ((-1)&(~0x0ff)) | mousebuf[1] ;
-                   }
-                   else {
-                       offsetx = mousebuf[1] ;
-                   }
-                   if( mousebuf[0] & 0x20 ) {
-                       offsety = ((-1)&(~0x0ff)) | mousebuf[2] ;
-                   }
-                   else {
-                       offsety = mousebuf[2] ;
-                   }
-                   buttons = mousebuf[0] & 0x7 ;
-                   x+=offsetx ;
-                   if( x<0 )x=0 ;
-                   if( x>mousemaxx ) x=mousemaxx ;
-                   y-=offsety ;
-                   if( y<0 )y=0;
-                   if( y>mousemaxy ) y=mousemaxy ;
-               }
+               ( (mousebuf[0] & 0xc8 )==0x8 ) ) 
+            {
+                if( mousebuf[0] & 0x10 ) {
+                    offsetx = ((-1)&(~0x0ff)) | mousebuf[1] ;
+                }
+                else {
+                    offsetx = mousebuf[1] ;
+                }
+                if( mousebuf[0] & 0x20 ) {
+                    offsety = ((-1)&(~0x0ff)) | mousebuf[2] ;
+                }
+                else {
+                    offsety = mousebuf[2] ;
+                }
+                buttons = mousebuf[0] & 0x7 ;
+                x+=offsetx ;
+                if( x<0 )x=0 ;
+                if( x>mousemaxx ) x=mousemaxx ;
+                y-=offsety ;
+                if( y<0 )y=0;
+                if( y>mousemaxy ) y=mousemaxy ;
+            }
         }
         if( x!=mousex || y!=mousey || buttons!=mousebuttons ) {
             mev->x = x ;

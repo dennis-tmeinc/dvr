@@ -28,7 +28,7 @@ class array {
             while( i<=j && m_array[i] < m_array[hi] ) {
                 i++ ;
             }
-            while( j>i  && (!( m_array[j]< m_array[hi]))  ) {
+            while( j>i  && (!( m_array[j] < m_array[hi]))  ) {
                 j-- ;
             }
             if( i<j ) {

@@ -262,3 +262,16 @@ void MD5Final (MD5_CTX * mdContext)
       (unsigned char)((mdContext->buf[i] >> 24) & 0xFF);
   }
 }
+
+// generate 16 bytes md5 checksum
+void md5_checksum( char * checksum, unsigned char * data, int datalen )
+{
+    int i ;
+    MD5_CTX md5ctx ;
+    MD5Init ( &md5ctx ) ;
+    MD5Update( &md5ctx, data, datalen ) ;
+    MD5Final ( &md5ctx ) ;
+    for ( i=0 ; i<16; i++ ) {
+        checksum[i] = md5ctx.digest[i] ;
+    }
+}

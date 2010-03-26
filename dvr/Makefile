@@ -53,6 +53,12 @@ applications:
 # usbid
 	cd usbid; make
 
+# usbnotify
+	cd usbnotify; make
+
+# serial_test
+	cd serial_test; make
+
 mdvr:
 	cp cfg.h.mdvr cfg.h
 	make applications
@@ -96,6 +102,10 @@ pwii:
 	cd deploy/PWII ; ./mkdeploy PWII 1 
 
 clean:
+	cd usbnotify; make clean
+
+	cd serial_test; make clean
+
 	cd dvrsvr;make clean
 
 	cd fb;make clean

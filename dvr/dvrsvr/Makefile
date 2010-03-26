@@ -26,7 +26,8 @@ SOURCES=main.cpp \
 		live.cpp \
 		crypt.cpp \
 		dio.cpp \
-		screen.cpp
+		screen.cpp \
+		md5.cpp
 
 HEADERS=dvr.h \
 		genclass.h \

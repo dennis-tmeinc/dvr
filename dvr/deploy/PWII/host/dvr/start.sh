@@ -110,13 +110,15 @@ cd /davinci/dvr
 
 # start hotplug deamond
 /davinci/dvr/tdevd /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &
+
+sleep 1
+
 # mount disk already found
 /davinci/dvr/tdevmount /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null
 
 # setup ip network for ipcamera board. (slave boards)
 /davinci/dvr/eaglehost `cat /davinci/ID/BOARDNUM`
 
-sleep 1
 # install usb-serial driver
 insmod /davinci/usbserial.ko
 insmod /davinci/mos7840.ko

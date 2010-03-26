@@ -97,13 +97,14 @@ public:
 
 class window {
 protected:
+	int m_id ;					// window ID
+	int m_alive ;		    	// window ID
+    
     struct rect m_pos ;         // windows position relate to parent window
 	int m_screen_x, m_screen_y ; // window's position relate to screen. only vaild during draw period.
 	window * m_parent ;			// parent window
 	window * m_child ;			// lowest child
 	window * m_brother ;		// brother window on top of this window
-
-	int m_id ;					// window ID
 
 	// window draw support
 	int m_redraw ;				// requested to redraw
@@ -126,18 +127,20 @@ public:
 	static char     resourcepath[128] ;  // resource file location
 
 	window() {
+        m_alive = 1 ;
+        m_id = 0 ;
         m_pos.x = m_pos.y = 0 ;
         m_pos.w = m_pos.h = 0 ;
 		m_parent = NULL ;
 		m_child = NULL ;
 		m_brother = NULL ;
-		m_id = 0 ;
 		m_redraw = 0 ;
 		m_show = 0 ;			// no show by default
 		m_timer.id=0;
 	}
 
 	window( window * parent, int id, int x, int y, int w, int h ) {
+        m_alive = 1 ;
 		m_id = id ;
         m_pos.x = x ;
         m_pos.y = y ;
@@ -170,6 +173,10 @@ public:
 		}
 	}
 
+    void destroy() {
+        m_alive=0 ;
+    }
+    
 	void addchild(window * child)
 	{
 		window * topchild ;
@@ -469,10 +476,14 @@ public:
 		return NULL ;
 	}
 
-    void settimer( int interval, int id=1 ) {
+    void settimer( int interval, int id ) {
 		m_timer.id = id ;
-		m_timer.interval = interval ;
-		m_timer.starttime = timertick ;
+        if( id ) {
+            if( interval>0 ) {
+        		m_timer.interval = interval ;
+            }
+    		m_timer.starttime = timertick ;
+        }
 	}
 	
     void checktimer() {
@@ -480,16 +491,15 @@ public:
         if( m_child ) m_child->checktimer();
         if( m_brother ) m_brother->checktimer();
 
-		if( m_timer.id ) {
-			if( timertick >= (m_timer.starttime+m_timer.interval) ) {
-				if( ontimer( m_timer.id ) ) {
-					m_timer.starttime = timertick ;
-				}
-				else {
-					m_timer.id = 0 ;
-				}
-			}
-		}
+        // add alive check here
+        if( m_alive==0 ) {
+            delete this ; 
+        }
+        else if( m_timer.id && timertick >= (m_timer.starttime+m_timer.interval) ) {
+            int tid = m_timer.id ;
+            m_timer.id = 0 ;
+            ontimer(tid);
+        }
     }
         
 	
@@ -611,8 +621,14 @@ public:
 
     */
 
-    void drawbitmap(resource & res, int dx, int dy, int sx, int sy, int w, int h ) {
+    void drawbitmap(resource & res, int dx, int dy, int sx=0, int sy=0, int w=-1, int h=-1 ) {
         if( res.valid() ) {
+            if( w<0 ) {
+                w=res.width();
+            }
+            if( h<0 ) {
+                h=res.height();
+            }
 		    draw_bitmap( res.bitmap(), 
 					m_screen_x+dx, m_screen_y+dy, 
 					sx, sy, 
@@ -620,9 +636,15 @@ public:
         }
 	}
 
-	void stretchbitmap( resource & res, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh ) 
+	void stretchbitmap( resource & res, int dx, int dy, int dw, int dh, int sx=0, int sy=0, int sw=-1, int sh=-1 ) 
 	{
         if( res.valid() ) {
+            if( sw<0 ) {
+                sw=res.width();
+            }
+            if( sh<0 ) {
+                sh=res.height();
+            }
             draw_stretchbitmap( res.bitmap(), 
 							m_screen_x+dx, m_screen_y+dy, 
 							dw, dh, 
@@ -716,9 +738,8 @@ protected:
         return 0 ;
 	}
 
-    // timer call back functions, return  0: to delete this timer, 1: to continue this timer
-    virtual int ontimer( int id ) {
-		return 0 ;
+    // timer call back functions
+    virtual void ontimer( int id ) {
     }
 
 };

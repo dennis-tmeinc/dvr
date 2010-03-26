@@ -91,6 +91,7 @@ extern char g_id2[64] ;
 
 // PWII vri
 extern char g_vri[128];
+extern string g_policeidlistfile ;
 extern char g_policeid[32];
 
 int  dvr_log(char *str, ...);
@@ -885,6 +886,7 @@ enum reqcode_type { REQOK =	1,
     REQSENDDATA,
     REQGETDATA,
     REQCHECKKEY,
+    REQUSBKEYPLUGIN, // plug-in a new usb key. (send by plug-in autorun program)
     
     REQ5BEGIN = 500,                                            // For eagle32 system
     REQNFILEOPEN,
@@ -934,7 +936,7 @@ struct key_data {
     char usbid[32] ;
     char usbkeyserialid[512] ;
     char videokey[512] ;
-    char manufacturered[32] ;
+    char manufacturerid[32] ;
     int counter ;
     int keyinfo_start ;
     int keyinfo_size ;
@@ -1070,6 +1072,7 @@ class dvrsvr {
         virtual void ReqSendData();
         virtual void ReqGetData();
         virtual void ReqCheckKey();
+        virtual void ReqUsbkeyPlugin();
         virtual void ReqNfileOpen();
         virtual void ReqNfileClose();
         virtual void ReqNfileRead();
@@ -1327,6 +1330,7 @@ void screen_init();
 void screen_uninit();
 int screen_io(int usdelay);
 int screen_setliveview( int channel );
+int screen_menu(int level);
 
 // get cpu_usage between calls
 float cpu_usage();
