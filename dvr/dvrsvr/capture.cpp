@@ -269,6 +269,15 @@ void capture::onframe(cap_frame * pcapframe)
         mem_cpy32( m_header, pcapframe->framedata, m_headerlen );
         return ;
     }
+    if( pcapframe->frametype == FRAMETYPE_KEYVIDEO ) {
+        struct hd_frame * pframe = (struct hd_frame *)pcapframe->framedata;
+        if( (pframe->width_height>>16) > 570 ) {
+            m_signal_standard = 2 ;         // PAL mode video
+        }
+        else {
+            m_signal_standard = 1 ;         // assume NTSC
+        }
+    }    
     rec_onframe(pcapframe);
     net_onframe(pcapframe);
     screen_onframe(pcapframe); 
@@ -447,6 +456,11 @@ void capture::updateOSD()
 
 
 #ifdef TVS_APP
+
+static int top_margin = 10 ;
+static int bottom_margin = 10 ;
+static int line_dist = 24 ;
+
 void capture::updateOSD()
 {
     char * k ;
@@ -454,17 +468,17 @@ void capture::updateOSD()
     int line ;
     char osdbuf[128] ;
     struct hik_osd_type	osd ;
-    int pal_diff ;
+    int y_max ;
     
     if( !m_enable || m_remoteosd ) {
         return ;
     }
 
     if( m_signal_standard==2 ) {        // PAL signal?
-        pal_diff=86 ;
+        y_max = 572 ;
     }
     else {
-        pal_diff=0 ;
+        y_max = 480 ;
     }
 
             
@@ -476,7 +490,7 @@ void capture::updateOSD()
     line=0 ;
     i=0; 
     osd.osdline[line][i++]=8 ;           // x position
-    osd.osdline[line][i++]=16 ;          // y position
+    osd.osdline[line][i++]=top_margin ;  // y position
     
     // date and time
     osd.osdline[line][i++]=_OSD_MONTH2 ;          // Month
@@ -503,12 +517,12 @@ void capture::updateOSD()
     }
 
     osd.osdline[line][i]=0 ;
-    
+
     // prepare line 2, GPS
     line++ ;
     i=0; 
     osd.osdline[line][i++]=8 ;             // x position
-    osd.osdline[line][i++]=382 + pal_diff; // y position
+    osd.osdline[line][i++]=y_max - bottom_margin - line_dist*3; // y position
     
     double lati, longi, speed ;
     if( m_attr.GPS_enable && 
@@ -578,7 +592,7 @@ void capture::updateOSD()
     line++ ;
     i=0; 
     osd.osdline[line][i++]=8 ;             // x position
-    osd.osdline[line][i++]=406 + pal_diff; // y position
+    osd.osdline[line][i++]=y_max - bottom_margin - line_dist*2; // y position
 
     // show medallion
     if( m_show_medallion ) {
@@ -611,7 +625,7 @@ void capture::updateOSD()
     line++;
     i=0; 
     osd.osdline[line][i++]=8 ;              // x position
-    osd.osdline[line][i++]=430 + pal_diff ; // y position
+    osd.osdline[line][i++]= y_max - bottom_margin - line_dist; // y position
  
     // show IVCS and/or camera serial no
     sprintf( osdbuf, "%-20s %18s %c",
@@ -634,6 +648,11 @@ void capture::updateOSD()
 #endif
 
 #ifdef PWII_APP
+
+static int top_margin = 18 ;
+static int bottom_margin = 18 ;
+static int line_dist = 24 ;
+
 void capture::updateOSD()
 {
     char * k ;
@@ -641,19 +660,18 @@ void capture::updateOSD()
     int line ;
     char osdbuf[128] ;
     struct hik_osd_type	osd ;
-    int pal_diff ;
+    int y_max ;
     
     if( !m_enable || m_remoteosd ) {
         return ;
     }
 
     if( m_signal_standard==2 ) {        // PAL signal?
-        pal_diff=86 ;
+        y_max = 572 ;
     }
     else {
-        pal_diff=0 ;
+        y_max = 480 ;
     }
-
             
     osd.brightness = osdbrightness ;
     osd.translucent = osdtranslucent ;
@@ -663,7 +681,7 @@ void capture::updateOSD()
     line=0 ;
     i=0; 
     osd.osdline[line][i++]=8 ;           // x position
-    osd.osdline[line][i++]=16 ;          // y position
+    osd.osdline[line][i++]=top_margin ;  // y position
     
     // date and time
     osd.osdline[line][i++]=_OSD_MONTH2 ;          // Month
@@ -689,12 +707,11 @@ void capture::updateOSD()
     }
     osd.osdline[line][i] = 0 ;
 
-
     // prepare line 2, GPS
     line++ ;
     i=0;
     osd.osdline[line][i++]=8 ;             // x position
-    osd.osdline[line][i++]=382 + pal_diff; // y position
+    osd.osdline[line][i++]=y_max - bottom_margin - line_dist*3; // y position
     
     double lati, longi, speed ;
     if( m_attr.GPS_enable && 
@@ -763,7 +780,7 @@ void capture::updateOSD()
     line++ ;
     i=0; 
     osd.osdline[line][i++]=8 ;             // x position
-    osd.osdline[line][i++]=406 + pal_diff; // y position
+    osd.osdline[line][i++]=y_max - bottom_margin - line_dist*2; // y position
 
     // Show sensors
     for(j=0; j<num_sensors; j++) {
@@ -787,7 +804,7 @@ void capture::updateOSD()
     line++;
     i=0; 
     osd.osdline[line][i++]=8 ;              // x position
-    osd.osdline[line][i++]=430 + pal_diff ; // y position
+    osd.osdline[line][i++]=y_max - bottom_margin - line_dist ; // y position
  
     // show VRI and camera serial no
     sprintf( osdbuf, "%19s %19s %c",

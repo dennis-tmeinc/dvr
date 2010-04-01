@@ -324,10 +324,11 @@ void eagle_capture::update(int updosd)
 int eagle_capture::getsignal()
 {
     int res ;
-    int sig ;
+//    int sig ;
     if( m_started ) {
-        sig = m_signal ;
+//        sig = m_signal ;
         res=GetVideoSignal(m_hikhandle, &m_signal);
+/* this method doesn't work, can't get signal standard by GetVideoParam()        
         if( sig!=m_signal ) {
             int b, c, s, h ;
             video_standard v ;
@@ -335,6 +336,7 @@ int eagle_capture::getsignal()
             m_signal_standard = (int)v ;
             updateOSD();
         }
+*/         
     }
     return m_signal ;
 }
