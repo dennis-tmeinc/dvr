@@ -90,11 +90,11 @@ protocol=D
 
 # camera number start from 1
 [camera1]
-show_cameraserial=0
-show_ivcs=0
-show_licenseplate=0
-show_medallion=0
-showgpslocation=0
+show_cameraserial=1
+show_ivcs=1
+show_licenseplate=1
+show_medallion=1
+showgpslocation=1
 
 videotype=0
 # Motion detection sensitvity
@@ -118,7 +118,7 @@ recordalarmpattern=1
 recordalarmen=1
 
 # show gps info on OSD
-showgps=0
+showgps=1
 # GPS speed display mode , 0: English(mph), 1: Metric(km/h)
 gpsunit=1
 
@@ -184,16 +184,16 @@ name=Camera 1
 # enable this camera
 enable=1
 # enable GPS message on OSD
-gpsen=0
+gpsen=1
 #PTZ address
 ptzaddr=2
 
 [camera2]
-show_cameraserial=0
-show_ivcs=0
-show_licenseplate=0
-show_medallion=0
-showgpslocation=0
+show_cameraserial=1
+show_ivcs=1
+show_licenseplate=1
+show_medallion=1
+showgpslocation=1
 disableaudio=0
 videotype=0
 motionsensitivity=4
@@ -207,7 +207,7 @@ recordalarm=0
 recordalarmpattern=1
 recordalarmen=1
 gpsunit=1
-showgps=0
+showgps=1
 postrecordtime=150
 prerecordtime=150
 sensorosd1=1
@@ -239,7 +239,7 @@ enable=1
 ptzaddr=2
 
 #special setup
-gpsen=0
+gpsen=1
 
 [timezones]
 # www.timeanddate.com

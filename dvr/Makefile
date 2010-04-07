@@ -91,9 +91,16 @@ firmware_cycle:
 rel:
 	date +%y.%m%d.%H > release
 
+tvstor:
+	cp cfg.h.tvstoronto cfg.h
+	make applications 
+	cd deploy/TVS21/host/dvr ; cp dvrsvr.conf.tvstor dvrsvr.conf
+	cd deploy/TVS21 ; ./mkdeploy TVS21 1 
+
 tvs:
 	cp cfg.h.tvs cfg.h
 	make applications 
+	cd deploy/TVS21/host/dvr ; cp dvrsvr.conf.tvs dvrsvr.conf
 	cd deploy/TVS21 ; ./mkdeploy TVS21 1 
 
 pwii:
