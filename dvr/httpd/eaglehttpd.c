@@ -46,6 +46,7 @@ static char * mime_type[][2] =
 char * document_root="/home/www" ;
 
 #define KEEP_ALIVE_TIMEOUT  (60)
+#define CACHE_MAXAGE        (600)
 
 int keep_alive ;
 int dynamic_page ;      // if page is dynamic ?
@@ -249,12 +250,9 @@ void http_header( int status, char * title, char * mime_type, int length)
         unsetenv("HEADER_Content-Length" );
         keep_alive=KEEP_ALIVE_TIMEOUT ;
     }
-    else if( length > 0 ) {
+    else {
         printf( "Content-Length: %ld\r\n", (long) length );
         keep_alive=KEEP_ALIVE_TIMEOUT ;
-    }
-    else {
-        keep_alive=0 ;
     }
 
     for(i=0; i<200; ) {
@@ -303,6 +301,7 @@ void http_error( int status, char * title )
     fputs(errtxt, stdout);
 }
 
+/*
 void http_cache( int age, time_t mtime )
 {
     char timebuf[120];
@@ -319,6 +318,58 @@ void http_cache( int age, time_t mtime )
         sprintf( timebuf, "max-age=%d", age );
         http_setheader( "Cache-Control", timebuf );
     }
+}
+*/
+
+// return trun if content modified (base on Etag If-None-Match and If-Modified-since
+int http_cache( struct stat * fst )
+{
+    char modtime[120];
+    char etag[16] ;
+    time_t now ;
+    int i ;
+    unsigned int etagsum ;
+    unsigned char * s ;
+
+    if( fst==NULL ) {
+        now = time( (time_t*) NULL );
+        strftime( modtime, sizeof(modtime), RFC1123FMT, gmtime( &now ) );
+        http_setheader( "Last-Modified", modtime );
+        http_setheader( "Cache-Control", "no-cache" );
+        return 1 ;
+    }
+    else {
+        sprintf( modtime, "max-age=%d",  CACHE_MAXAGE );
+        http_setheader( "Cache-Control", modtime );
+
+        // Modified time
+        strftime( modtime, sizeof(modtime), RFC1123FMT, gmtime( &(fst->st_mtime) ) );
+        http_setheader( "Last-Modified", modtime );
+
+        //  etag    
+        s = (unsigned char *)fst ;
+        etagsum = 0 ;
+        for( i=0 ; i<sizeof(*fst); i++) {
+            etagsum+=((unsigned int)*s++)<<(i%24);
+        }
+        sprintf(etag, "\"%x\"", etagsum);
+        http_setheader( "Etag", etag);
+
+        // check etag
+        if( (s=getenv("HTTP_IF_NONE_MATCH"))) {
+            if( strcmp( s, etag )!=0 ) {        // Etag match?
+                return 1 ;                      // Etag not match, content modified.
+            }
+        }
+
+        // end of check etag
+        if( (s=getenv("HTTP_IF_MODIFIED_SINCE"))) {
+            if( strcmp( s, modtime )!=0 ) {     // Etag match?
+                return 1 ;                      // modified time changed.
+            }
+        }
+    }
+    return 0 ;                                  // content match, use cache
 }
 
 // remove whilespace on head and tail of input string 
@@ -427,7 +478,7 @@ int cgi_run(char * execfile )
         }
     }
     
-    http_cache(0, (time_t)0);
+    http_cache(NULL);
     http_header( 200, "OK", NULL, len-ftell(fp) );
 
     int ch ;
@@ -950,7 +1001,16 @@ void smallssi_run( char * ssipath )
 
     int len = lseek( hssifile, 0, SEEK_END ) ;
 
-    http_cache(0, (time_t)0);
+    http_cache(NULL);
+/*
+    if( dynamic_page ) {
+        http_cache(0, (time_t)0);
+    }
+    else {
+        http_cache( CACHE_MAXAGE, 0 );
+    }
+*/
+    
     http_header( 200, "OK", "text/html; charset=UTF-8", len );
 
     lseek( hssifile, 0, SEEK_SET );
@@ -1241,6 +1301,12 @@ void http()
         http_error( 403, "Forbidden" );
         goto http_done ;
     }
+
+    if( http_cache( &sb )==0 ) {
+        // use cahce
+        http_header( 304, "Not modified", NULL, 0 );
+        goto http_done ;
+    }
     
     fp = fopen( linebuf, "r" );	    
     
@@ -1258,13 +1324,7 @@ void http()
         fclose( fp );
         goto http_done ;
     }
-    
-    if( dynamic_page ) {
-        http_cache(0, (time_t)0);
-    }
-    else {
-        http_cache( 432000, sb.st_mtime );
-    }
+
     http_header( 200, "Ok", get_mime_type( linebuf ), len );
    
     // output whole file 

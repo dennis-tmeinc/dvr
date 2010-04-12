@@ -7,5 +7,9 @@ release 10.0409.17
    Add g-force sensor value on OSD. (not been verified)
 
    For TVS, OSD display selectable on camera setup page
+   TVS, send sensor5 inverted state to MCU on ioprocess startup
 
+release 10.0412.18
 
+  TVS, send sensor2 inverted state (not sensor5) to MCU on ioprocess startup.
+  eaglehttpd, add Etag and Last-Modified support.

@@ -1877,7 +1877,7 @@ void mcu_hdpoweroff()
     mcu_cmd(0x29);
 }
 
-void mcu_initsensor5(int invert)
+void mcu_initsensor2(int invert)
 {
     char * rsp ;
     rsp = mcu_cmd(0x14);
@@ -2701,7 +2701,7 @@ int appinit()
 
 #ifdef TVS_APP
     // setup GP5 polarity for TVS 
-    mcu_initsensor5(dvrconfig.getvalueint( "sensor5", "inverted" ));
+    mcu_initsensor2(dvrconfig.getvalueint( "sensor2", "inverted" ));
 #endif
         
     if( g_syncrtc ) {
