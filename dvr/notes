@@ -1,0 +1,11 @@
+release 10.0409.17
+
+   Video recording only base on camera triggering setting, event marker setting on a sensor do not trigger recording. Event marker only to mark a video file as LOCKED file if that channel (camera) is currently recording.
+
+   Unsolved memeory leak to trigger system reboot through "ioprocess", run "/bin/reboot" could failed when memory is low.
+
+   Add g-force sensor value on OSD. (not been verified)
+
+   For TVS, OSD display selectable on camera setup page
+
+

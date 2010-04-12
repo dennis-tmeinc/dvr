@@ -515,7 +515,40 @@ int main()
                 fprintf(fvalue, "\"bool_show_gps_coordinate\":\"on\"," );
                 fprintf(fvalue, "\"show_gps_coordinate\":\"on\"," );
             }  
+            
+#ifdef TVS_APP
+       
+             // Medallion on OSD
+            ivalue = dvrconfig.getvalueint(section, "show_medallion");
+            if( ivalue>0 ) {
+                fprintf(fvalue, "\"bool_show_medallion\":\"on\"," );
+                fprintf(fvalue, "\"show_medallion\":\"on\"," );
+            }  
 
+            // License plate on OSD
+            ivalue = dvrconfig.getvalueint(section, "show_licenseplate");
+            if( ivalue>0 ) {
+                fprintf(fvalue, "\"bool_show_licenseplate\":\"on\"," );
+                fprintf(fvalue, "\"show_licenseplate\":\"on\"," );
+            }  
+
+            // IVCS on OSD
+            ivalue = dvrconfig.getvalueint(section, "show_ivcs");
+            if( ivalue>0 ) {
+                fprintf(fvalue, "\"bool_show_ivcs\":\"on\"," );
+                fprintf(fvalue, "\"show_ivcs\":\"on\"," );
+            }  
+
+            // IVCS on OSD
+            ivalue = dvrconfig.getvalueint(section, "show_cameraserial");
+            if( ivalue>0 ) {
+                fprintf(fvalue, "\"bool_show_cameraserial\":\"on\"," );
+                fprintf(fvalue, "\"show_cameraserial\":\"on\"," );
+            }  
+            
+#endif            
+            
+#ifdef PWII_APP            
             ivalue = dvrconfig.getvalueint(section, "show_vri");
             if( ivalue>0 ) {
                 fprintf(fvalue, "\"bool_show_vri\":\"on\"," );
@@ -527,7 +560,14 @@ int main()
                 fprintf(fvalue, "\"bool_show_policeid\":\"on\"," );
                 fprintf(fvalue, "\"show_policeid\":\"on\"," );
             }  
-            
+#endif
+           
+            ivalue = dvrconfig.getvalueint(section, "show_gforce");
+            if( ivalue>0 ) {
+                fprintf(fvalue, "\"bool_show_gforce\":\"on\"," );
+                fprintf(fvalue, "\"show_gforce\":\"on\"," );
+            }  
+
              // record_alarm_mode
             value = dvrconfig.getvalue( section, "recordalarmpattern" );
             if( value.length()>0 ) {

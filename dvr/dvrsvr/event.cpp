@@ -18,7 +18,6 @@ int num_alarms ;
 alarm_t ** alarms ;
 
 int alarm_suspend = 0 ;
-int event_marker ;
 
 double g_gpsspeed ;
 
@@ -44,9 +43,6 @@ int sensor_t::check()
     v=dio_input(m_inputpin);
     if( m_inverted )
         v=!v ;
-    if( v && m_eventmarker ) {
-        event_marker = 1 ;      // set event_marker
-    }
     if( v!=m_value ) {
         m_value = v ;
         m_toggle = 1 ;
@@ -122,32 +118,16 @@ void event_check()
 {
     int i ;
     int videolost, videodata, diskready ;
-    int em ;
     static int timer_1s ;
 
     if( dio_check() || g_timetick-timer_1s > 1000 ) {
         timer_1s = g_timetick ;
 
         // check sensors
-        em = event_marker ;
-        event_marker=0 ;                        // reset event marker
         for(i=0; i<num_sensors; i++ ) {
             sensors[i]->check();
         }
-
-#ifdef    PWII_APP
-        extern int pwii_event_marker ;      // rear mirror event marker button
-        if( pwii_event_marker ) {
-            event_marker = 1 ;
-        }
-
-//        extern int pwii_front_ch ;         // pwii front camera channel
-        if( event_marker && em==0 ) {
-            screen_setliveview( -1 ) ;
-        }
-        
-#endif
-        
+       
         // update decoder screen (OSD)
         for(i=0; i<cap_channels; i++ ) {
             cap_channel[i]->update(1);

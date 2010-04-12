@@ -52,14 +52,10 @@ struct dio_mmap {
     int    hdtemperature ;          // hard drive temperature
     
     // G force sensor value
-    int     gforce_log0 ;         // indicator
-    float   gforce_right_0 ;
-    float   gforce_forward_0 ;
-    float   gforce_down_0 ;    
-    int     gforce_log1 ;         // indicator
-    float   gforce_right_1 ;
-    float   gforce_forward_1 ;
-    float   gforce_down_1 ;    
+    int     gforce_serialno ;    // indicator
+    float   gforce_right ;
+    float   gforce_forward ;
+    float   gforce_down ;    
 
     // DVR camera status ;
     int     camera_status[8] ;  // bit 0 = signal, bit 1 = recording, bit 2 = motion, bit 3 = camera video data available
@@ -106,6 +102,7 @@ struct dio_mmap {
 #define DVR_NETWORK     (0x10)
 #define DVR_DISKREADY   (0x20)
 #define DVR_NODATA      (0x40)
+#define DVR_FAILED      (0x4000)        // should ioprocess reboot system?
 #define DVR_ERROR       (0x8000)
 
 #endif

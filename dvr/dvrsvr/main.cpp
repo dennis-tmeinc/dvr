@@ -1,5 +1,6 @@
 
 #include "dvr.h"
+#include "../ioprocess/diomap.h"
 
 char dvrconfigfile[] = "/etc/dvr/dvr.conf";
 
@@ -852,6 +853,17 @@ void do_uninit()
     rec_uninit();
     file_uninit();
     disk_uninit();
+
+    // at this point, memory pool should be clean
+    if( g_memused > 100 ) {
+        dvr_log("Unsolved memory leak, request to restart system" );
+        dio_setstate( DVR_FAILED ) ;
+        sync();
+        sync();
+        sleep(60);
+        app_state = APPQUIT ;
+    }
+    
     event_uninit();
     time_uninit();
 
@@ -909,18 +921,12 @@ int main()
             usleep( 12500 );
         }
         else if (app_state == APPRESTART ) {
-            if( app_ostate == APPUP ) {
-                app_ostate = APPDOWN ;
-                do_uninit();
-            }
             app_state = APPUP ;
-            usleep( 100 );
-            if( g_memused > 100 ) {
-                dvr_log("Unsolved memory leak, restart system" );
-                sync();
-                system("/bin/reboot");
-                app_state = APPQUIT ;
+            if( app_ostate == APPUP ) {
+                do_uninit();
+                app_ostate = APPDOWN ;
             }
+            usleep( 100 );
         }
         sig_check();
     }

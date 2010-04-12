@@ -482,6 +482,20 @@ void dio_devicepower(int onoffmaps)
     dio_unlock();
 }
 
+int dio_getgforce( float * gfb, float * glr, float *gud )
+{
+    int v=0 ;
+    dio_lock();
+    if( p_dio_mmap && p_dio_mmap->glogpid>0 && p_dio_mmap->gforce_serialno ) {
+        *gfb = p_dio_mmap->gforce_forward ;
+        *glr = p_dio_mmap->gforce_right ;
+        *gud = p_dio_mmap->gforce_down ;
+        v = 1 ;
+    }
+    dio_unlock();
+    return v;
+}
+
 int gps_location( double * latitude, double * longitude, double * speed )
 {
     int v = 0 ;
@@ -514,10 +528,6 @@ void rtc_settime()
         close( hrtc );
     }
 }
-
-
-
-
 
 // sync system time to mcu(rtc)
 int dio_syncrtc()
@@ -630,7 +640,7 @@ void dio_uninit()
         p_dio_mmap->dvrpid = 0 ;
         p_dio_mmap->usage-- ;
         p_dio_mmap->dvrcmd = 0 ;
-        p_dio_mmap->dvrstatus = 0 ;
+//        p_dio_mmap->dvrstatus = 0 ;
         p_dio_mmap->dvrwatchdog = -1 ;
         munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
         p_dio_mmap=NULL ;

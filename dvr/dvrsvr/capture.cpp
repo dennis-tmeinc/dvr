@@ -181,6 +181,7 @@ void capture::loadconfig()
     m_show_vri=dvrconfig.getvalueint( section, "show_vri" );
     m_show_policeid=dvrconfig.getvalueint( section, "show_policeid" );
 #endif        
+    m_show_gforce=dvrconfig.getvalueint( section, "show_gforce" );
     
     // reset some attr for special 2 version ()
     int videotype = dvrconfig.getvalueint( section, "videotype" );
@@ -271,8 +272,8 @@ void capture::onframe(cap_frame * pcapframe)
     }
     if( pcapframe->frametype == FRAMETYPE_KEYVIDEO ) {
         struct hd_frame * pframe = (struct hd_frame *)pcapframe->framedata;
-        if( (((pframe->width_height)>>16)&0xfff)%120 == 0 ) {
-            m_signal_standard = 1 ;         // assume NTSC when height would be 120, 240, 480
+        if( (((pframe->width_height)>>16)&0xfff)%40 == 0 ) {
+            m_signal_standard = 1 ;         // assume NTSC when height would be 120, 320, 240, 480
         }
         else {
             m_signal_standard = 2 ;         // PAL mode video
@@ -460,7 +461,10 @@ void capture::updateOSD()
 static int top_margin = 8 ;
 static int bottom_margin = 8 ;
 static int line_dist = 24 ;
-
+static int linepos[8] = {
+    -1, 0, 1, -3, -2
+} ;
+    
 void capture::updateOSD()
 {
     char * k ;
@@ -481,18 +485,12 @@ void capture::updateOSD()
         y_max = 480 ;
     }
 
-            
     osd.brightness = osdbrightness ;
     osd.translucent = osdtranslucent ;
     osd.twinkle = osdtwinkle  ;
-
-#ifdef TVS_TORONTO    
-
-    static int linepos[4] = {
-        -1, -2, 1, 0 } ;
+    line=0 ;
     
     // prepare first line, Date/time and sensor ( always display )
-    line=0 ;
     i=0; 
     osd.osdline[line][i++]=8 ;           // x position
     if( linepos[line]>=0 ) {
@@ -534,84 +532,9 @@ void capture::updateOSD()
     }
     
     osd.osdline[line][i]=0 ;
-
-    // prepare line 2, GPS
     line++ ;
-    i=0; 
-    osd.osdline[line][i++]=8 ;             // x position
-    if( linepos[line]>=0 ) {
-        osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
-    }
-    else {
-        osd.osdline[line][i++]=y_max - bottom_margin + linepos[line]*line_dist; // y position
-    }
-    
-    double lati, longi, speed ;
-    if( m_attr.GPS_enable && 
-        gps_location(&lati, &longi, &speed) )
-    {
-        if( m_showgpslocation ) {
-            int east, north ;
-            if( lati>=0.0 ) {
-                north='N' ;
-            }
-            else {
-                lati=-lati ;
-                north='S' ;
-            }
-            if( longi>=0.0 ) {
-                east='E' ;
-            }
-            else {
-                longi=-longi ;
-                east='W' ;
-            }
 
-            int ladeg, lamin, lasecond ;
-            int lodeg, lomin, losecond ;
-            ladeg = (int) lati ;
-            lati -= (double)ladeg ;
-            lamin = (int)(lati*60) ;
-            lati -= ((double)lamin)/60.0 ;
-            lasecond = (int)(lati*3600) ;
-            lodeg = (int) longi ;
-            longi -= (double)lodeg ;
-            lomin = (int)(longi*60) ;
-            longi -= ((double)lomin)/60.0 ;
-            losecond = (int)(longi*3600) ;
-            sprintf( osdbuf, "%3d\xf8%02d\'%02d\"%c %3d\xf8%02d\'%02d\"%c", 
-                    ladeg, lamin, lasecond, north,
-                    lodeg, lomin, losecond, east );
-            k=osdbuf ;
-            while( i<30 && *k ) {
-                osd.osdline[line][i++] = * k++ ;
-            }
-        }
-        else {
-            while( i<22 ) {
-                osd.osdline[line][i++] = ' ' ;
-            }
-        }
-
-        if( m_attr.ShowGPS ) {
-            if( m_attr.GPSUnit ) {			// kmh or mph
-                sprintf( osdbuf, "%11.1f km/h", speed * 1.852 );
-            }
-            else {
-                sprintf( osdbuf, "%11.1f mph", speed * 1.150779 );
-            }
-            
-            k=osdbuf ;
-            while( *k && i<50 ) {
-                osd.osdline[line][i++] = * k++ ;
-            }
-        }
-    }
-            
-    osd.osdline[line][i] = 0;          // null terminate
-
-    // prepare line 3, medallion and license plate number
-    line++ ;
+    // prepare line 2, medallion and license plate number
     i=0; 
     osd.osdline[line][i++]=8 ;             // x position
     if( linepos[line]>=0 ) {
@@ -622,18 +545,19 @@ void capture::updateOSD()
     }
 
     // show medallion and license plate number
-    sprintf( &osdbuf[i], "%-20s %20s", 
-        m_show_medallion?g_id1:"",
-        m_show_licenseplate?g_id2:"" );
-    while( i<50 && osdbuf[i] ) {
-        osd.osdline[line][i]=osdbuf[i] ;
-        i++ ;
+    if( m_show_medallion || m_show_licenseplate ) {
+        sprintf( &osdbuf[i], "%-20s %20s", 
+            m_show_medallion?g_id1:"",
+            m_show_licenseplate?g_id2:"" );
+        while( i<50 && osdbuf[i] ) {
+            osd.osdline[line][i]=osdbuf[i] ;
+            i++ ;
+        }
     }
-
     osd.osdline[line][i]=0 ;
-
-    // prepare line 4, ivcs and camera name
-    line++;
+    line++ ;
+    
+    // prepare line 3, ivcs and camera name
     i=0; 
     osd.osdline[line][i++]=8 ;              // x position
     if( linepos[line]>=0 ) {
@@ -644,9 +568,9 @@ void capture::updateOSD()
     }
 
     // show IVCS and/or camera serial no
-    if( m_show_ivcs ) {
+    if( m_show_ivcs || m_show_cameraserial ) {
         sprintf( osdbuf, "%-20s %18s %c",
-            g_serial, 
+            m_show_ivcs?g_serial : " ", 
             m_show_cameraserial? m_attr.CameraName : " ",
             m_motion?'*':' ');
         k=osdbuf ;
@@ -655,54 +579,30 @@ void capture::updateOSD()
         }
     }
     osd.osdline[line][i] = 0 ;
-
     line++;
-    osd.lines = line ;
-    
-#else    
 
-    static int linepos[4] = {
-        0, -3, -2, -1 } ;
-    
-    // prepare first line, Date/time and license plate
-    line=0 ;
+    // prepare line 4, g-force value
     i=0; 
-    osd.osdline[line][i++]=8 ;           // x position
+    osd.osdline[line][i++]=8 ;              // x position
     if( linepos[line]>=0 ) {
         osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
     }
     else {
         osd.osdline[line][i++]=y_max - bottom_margin + linepos[line]*line_dist; // y position
     }
-    
-    // date and time
-    osd.osdline[line][i++]=_OSD_MONTH2 ;          // Month
-    osd.osdline[line][i++]='/' ;          
-    osd.osdline[line][i++]=_OSD_DAY ;             // Day
-    osd.osdline[line][i++]='/' ;         
-    osd.osdline[line][i++]=_OSD_YEAR4 ;           // 4 digit year
-    osd.osdline[line][i++]=' ' ;          
-    osd.osdline[line][i++]=_OSD_HOUR24 ;          // 24 hour
-    osd.osdline[line][i++]=':' ;        
-    osd.osdline[line][i++]=_OSD_MINUTE ;          // Minute
-    osd.osdline[line][i++]=':' ;          
-    osd.osdline[line][i++]=_OSD_SECOND ;          // Second
-    osd.osdline[line][i++]=' ' ;         
-    osd.osdline[line][i++]=' ' ;         
-    
-    // show licenseplate
-    if( m_show_licenseplate ) {
-        sprintf( &osdbuf[i], "%20s", g_id2 );
-        while( i<50 && osdbuf[i] ) {
-            osd.osdline[line][i]=osdbuf[i] ;
-            i++ ;
+
+    float gfb, glr, gud ;
+    if( m_show_gforce && dio_getgforce( &gfb, &glr, &gud ) ) {
+        sprintf( osdbuf, "F%5.2lf,L%5.2lf,U%5.2lf", gfb, glr, gud);
+        k=osdbuf ;
+        while( *k && i<50 ) {
+            osd.osdline[line][i++] = * k++ ;
         }
     }
-
-    osd.osdline[line][i]=0 ;
-
-    // prepare line 2, GPS
+    osd.osdline[line][i]=0 ;            // null terminal
     line++ ;
+
+    // prepare line 5, GPS
     i=0; 
     osd.osdline[line][i++]=8 ;             // x position
     if( linepos[line]>=0 ) {
@@ -773,76 +673,10 @@ void capture::updateOSD()
             }
         }
     }
-            
     osd.osdline[line][i] = 0;          // null terminate
-
-    // prepare line 3, medallion and sensor
     line++ ;
-    i=0; 
-    osd.osdline[line][i++]=8 ;             // x position
-    if( linepos[line]>=0 ) {
-        osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
-    }
-    else {
-        osd.osdline[line][i++]=y_max - bottom_margin + linepos[line]*line_dist; // y position
-    }
-    
-    // show medallion
-    if( m_show_medallion ) {
-        sprintf( &osdbuf[i], "%s  ", g_id1 );
-        while( i<50 && osdbuf[i] ) {
-            osd.osdline[line][i]=osdbuf[i] ;
-            i++ ;
-        }
-    }
-    
-    // Show sensors
-    for(j=0; j<num_sensors; j++) {
-        if( m_sensorosd & (1<<j) ) {
-            if( sensors[j]->value() ) {
-                k=sensors[j]->name() ;
-                while( *k ) {
-                    osd.osdline[line][i++] = *k++ ;
-                }
-                osd.osdline[line][i++]=' ' ;
-                if( i>100 ) {
-                    break;
-                }
-            }
-        }
-    }
-    
-    osd.osdline[line][i]=0 ;
 
-    // prepare line 4, ivcs and camera name
-    line++;
-    i=0; 
-    osd.osdline[line][i++]=8 ;              // x position
-    if( linepos[line]>=0 ) {
-        osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
-    }
-    else {
-        osd.osdline[line][i++]=y_max - bottom_margin + linepos[line]*line_dist; // y position
-    }
-    
-
-    // show IVCS and/or camera serial no
-    sprintf( osdbuf, "%-20s %18s %c",
-            m_show_ivcs?g_serial:" ", 
-            m_show_cameraserial? m_attr.CameraName : " ",
-            m_motion?'*':' ');
-    
-    k=osdbuf ;
-    while( *k && i<50 ) {
-        osd.osdline[line][i++] = * k++ ;
-    }
-    osd.osdline[line][i] = 0 ;
-
-    line++;
     osd.lines = line ;
-
-#endif          // TVS_TORONTO
-    
     setosd(&osd);
     return ;
 }
@@ -851,9 +685,12 @@ void capture::updateOSD()
 
 #ifdef PWII_APP
 
-static int top_margin = 18 ;
-static int bottom_margin = 18 ;
+static int top_margin = 20 ;
+static int bottom_margin = 20 ;
 static int line_dist = 24 ;
+static int linepos[8] = {
+    0, -3, -2, -1, 1 
+};
 
 void capture::updateOSD()
 {
@@ -878,13 +715,9 @@ void capture::updateOSD()
     osd.brightness = osdbrightness ;
     osd.translucent = osdtranslucent ;
     osd.twinkle = osdtwinkle  ;
-
-    static int linepos[4] = {
-        0, -3, -2, -1 
-    };
+    line=0 ;
     
     // prepare first line, Date/time
-    line=0 ;
     i=0; 
     osd.osdline[line][i++]=8 ;           // x position
     if( linepos[line]>=0 ) {
@@ -917,9 +750,9 @@ void capture::updateOSD()
         osd.osdline[line][i++] = * k++ ;
     }
     osd.osdline[line][i] = 0 ;
+    line++ ;
 
     // prepare line 2, GPS
-    line++ ;
     i=0;
     osd.osdline[line][i++]=8 ;             // x position
     if( linepos[line]>=0 ) {
@@ -931,6 +764,7 @@ void capture::updateOSD()
     
     double lati, longi, speed ;
     if( m_attr.GPS_enable && 
+        (m_attr.ShowGPS || m_showgpslocation) &&
         gps_location(&lati, &longi, &speed) )
     {
         if( m_showgpslocation ) {
@@ -990,10 +824,10 @@ void capture::updateOSD()
             }
         }
     }
-    osd.osdline[line][i] = 0;          // null terminate
-
-    // prepare line 3, sensor
+    osd.osdline[line][i]=0 ;            // null terminal
     line++ ;
+    
+    // prepare line 3, sensor
     i=0; 
     osd.osdline[line][i++]=8 ;             // x position
     if( linepos[line]>=0 ) {
@@ -1003,7 +837,6 @@ void capture::updateOSD()
         osd.osdline[line][i++]=y_max - bottom_margin + linepos[line]*line_dist; // y position
     }
     
-
     // Show sensors
     for(j=0; j<num_sensors; j++) {
         if( m_sensorosd & (1<<j) ) {
@@ -1019,11 +852,10 @@ void capture::updateOSD()
             }
         }
     }
+    osd.osdline[line][i]=0 ;            // null terminal
+    line++ ;
     
-    osd.osdline[line][i]=0 ;
-
     // prepare line 4, camera name
-    line++;
     i=0; 
     osd.osdline[line][i++]=8 ;              // x position
     if( linepos[line]>=0 ) {
@@ -1043,11 +875,32 @@ void capture::updateOSD()
     while( *k && i<50 ) {
         osd.osdline[line][i++] = * k++ ;
     }
-    osd.osdline[line][i] = 0 ;
-    line++;
+    osd.osdline[line][i]=0 ;            // null terminal
+    line++ ;
+
+    // prepare line 5, g-force value
+    i=0; 
+    osd.osdline[line][i++]=8 ;              // x position
+    if( linepos[line]>=0 ) {
+        osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
+    }
+    else {
+        osd.osdline[line][i++]=y_max - bottom_margin + linepos[line]*line_dist; // y position
+    }
+
+    float gfb, glr, gud ;
+    if( m_show_gforce && dio_getgforce( &gfb, &glr, &gud ) ) {
+        sprintf( osdbuf, "F%5.2lf,L%5.2lf,U%5.2lf", gfb, glr, gud);
+        k=osdbuf ;
+        while( *k && i<50 ) {
+            osd.osdline[line][i++] = * k++ ;
+        }
+        osd.osdline[line][i] = 0 ;
+    }
+    osd.osdline[line][i]=0 ;            // null terminal
+    line++ ;
 
     osd.lines = line ;
-
     setosd(&osd);
     return ;
 }

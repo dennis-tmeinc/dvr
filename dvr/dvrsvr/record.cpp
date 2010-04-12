@@ -69,6 +69,7 @@ class rec_channel {
         int     m_forcerecording ;        // 0: no force, 1: force recording, 2: force no recording. (added for pwii project)
         int     m_forcerecordontime ;     // force recording turn on time
         int     m_forcerecordofftime ;    // force recording trun off time
+        int     m_force_starttime ;	        // force recording start time
         
         struct rec_fifo *m_fifohead;
         struct rec_fifo *m_fifotail;
@@ -81,22 +82,17 @@ class rec_channel {
             pthread_mutex_unlock(&m_fifo_mutex);
         }
         
-        int m_state_starttime ;	        // record state start time
-
+        int m_lock_starttime ;	        // record state start time
+        int m_trigger_starttime ;	    // triggering start time
+            
         // pre-record variables
         int m_prerecord_time ;				// allowed pre-recording time
-        //	list <int> m_prerecord_list ;		// pre-record pos list
-        //	FILE * m_prerecord_file ;			// pre-record file
-        //	string m_prerecord_filename ;		// pre-record filename
-        //	dvrtime m_prerecord_filestart ;		// pre-record file starttime
-        
         // post-record variables
         int m_postrecord_time ;				// post-recording time	length
         
         // lock record variables
         int m_prelock_time ;				// pre lock time length
         int m_postlock_time ;				// post lock time length
-        
       
         int m_maxfilesize;
         int m_maxfiletime;
@@ -130,7 +126,7 @@ class rec_channel {
         }
         void setforcerecording(int force){
             m_forcerecording = force ;
-            m_state_starttime = g_timetick ;
+            m_force_starttime = g_timetick ;
         }
 #endif
         
@@ -240,11 +236,17 @@ rec_channel::rec_channel(int channel)
     }
 */    
 
-    m_state_starttime = 0 ;
-    
     // initialize lock record variables
     m_prelock_time=dvrconfig.getvalueint("system", "prelock" );
     m_postlock_time=dvrconfig.getvalueint("system", "postlock" );
+    if( m_recordmode == 1 || m_recordmode == 3 ) {      // sensor triggering
+        if( m_prelock_time<2*m_prerecord_time ) {
+            m_prelock_time = 2*m_prerecord_time ;       // make it double time of pre-trigger, so all pre-recording file become _L_
+        }
+        if( m_postlock_time<m_postrecord_time ) {
+            m_postlock_time=m_postrecord_time ;
+        }
+    }
     
     // initialize variables for file write
     m_maxfilesize = rec_maxfilesize;
@@ -254,7 +256,11 @@ rec_channel::rec_channel(int channel)
     m_fileday=0;
     m_lastkeytimestamp = 0 ;
     m_reqbreak = 0 ;
-    
+
+    m_lock_starttime = 0 ;
+    m_trigger_starttime = 0 ;
+    m_force_starttime = 0 ;
+
     // start recording	
     start();
 }
@@ -844,103 +850,114 @@ void *rec_thread(void *param)
 void rec_channel::update()
 {
     int i;
-
     if( m_recstate == REC_STOP ) {
         return ;
     }
 
 #ifdef    PWII_APP    
 
+    // force recording feature for PWII
     if( m_forcerecording ) {
         if( m_forcerecording == 1 ) {
-            if( (g_timetick-m_state_starttime )/1000 > m_forcerecordontime ) {     // force recording timeout
+            if( (g_timetick-m_force_starttime )/1000 > m_forcerecordontime ) {     // force recording timeout
                 m_forcerecording = 0 ;
-                m_recstate = REC_PRERECORD ;
             }
-//            if( m_recstate == REC_PRERECORD ) {
-//                m_recstate = REC_RECORD ;
-//            }
             m_recstate = REC_LOCK ;             // REC button make locked file
         }
         else if( m_forcerecording==2 ) {
-            if( (g_timetick-m_state_starttime )/1000 > m_forcerecordofftime ) {     // force recording off timeout
+            if( (g_timetick-m_force_starttime )/1000 > m_forcerecordofftime ) {     // force recording off timeout
                 m_forcerecording = 0 ;
             }
             m_recstate = REC_PRERECORD ;
         }
-        return ;                    // dont continue ;
+        return ;                    // dont continue checking ;
     }
 
 #endif
 
-    if( event_marker ) {
-        m_recstate = REC_LOCK ;
-        m_state_starttime = g_timetick ;
-        return ;
-    }
+    // triggering
+    int trigger = 0 ;           // trigger 0: no trigger, 1: N trigger, 2: L trigger
 
-    if( m_recstate == REC_LOCK && 
-       (g_timetick - m_state_starttime)/1000 < m_postlock_time )
-    {
-        return ;								
-    }
-    
     if( m_recordmode == 0 ) {			// continue recording mode
-        m_recstate = REC_RECORD ;
-        return ;
+        trigger = 1 ;                   // as always triggered
     }
-
-    // check trigging mode
-    int trigger = 0 ;
-    // check sensors
-    if( m_recordmode==1 || m_recordmode==3 ) {				// sensor triggger mode
-        for(i=0; i<num_sensors; i++) {
-            if( ( m_triggersensor[i] & 1 ) &&              // sensor on
-               sensors[i]->value() ) 
-            {
-                trigger=1 ;
-                break ;
-            }
-            if( ( m_triggersensor[i] & 2 ) &&              // sensor off
-               sensors[i]->value()==0 ) 
-            {
-                trigger = 1 ;
-                break ;
-            }
-            if( sensors[i]->toggle() ) {
-                if( ( m_triggersensor[i] & 4 ) &&              // sensor turn on
-                   sensors[i]->value() ) 
-                {
-                    trigger = 1 ;
-                    break ;
-                }
-                if( (m_triggersensor[i] & 8 ) &&              // sensor turn off
-                   sensors[i]->value()==0 ) 
-                {
-                    trigger = 1 ;
-                    break ;
-                }
-            }
-        }
-    }
-
-    // check motion
-    if( trigger==0 && ( m_recordmode==2 || m_recordmode==3 ) ) {				// motion trigger mode
-        if( cap_channel[m_channel]->getmotion() ) {
+    else if( m_recordmode==2 || m_recordmode==3 ) {	// motion trigger mode
+        if( cap_channel[m_channel]->getmotion() ) { // check motion
             trigger=1 ;
         }
     }    
 
-    if( trigger ) {
-        m_recstate = REC_RECORD ;
-        m_state_starttime = g_timetick ;
-    }
-    else if( m_recstate != REC_PRERECORD ) {
-        if( (g_timetick - m_state_starttime)/1000 > m_postrecord_time ){
-            m_recstate = REC_PRERECORD ;
+    if( m_recordmode==0 || m_recordmode==1 || m_recordmode==3 ) {	// check sensor for trigggering and event marker
+        // check sensors
+        for(i=0; i<num_sensors; i++) {
+            int tr = sensors[i]->eventmarker()? 2 : 1 ;
+            if( ( m_triggersensor[i] & 1 ) )              // sensor on 
+            {
+                if(sensors[i]->value() ) 
+                {
+                    trigger=tr ;
+                }
+            }
+            else if( ( m_triggersensor[i] & 2 ) )          // sensor off
+            {
+                if( sensors[i]->value()==0 ) 
+                {
+                    trigger=tr ;
+                }
+            }
+            else if( sensors[i]->toggle() ) {
+                if( ( m_triggersensor[i] & 4 ) &&          // sensor turn on
+                    sensors[i]->value() ) 
+                {
+                    trigger = tr ;
+                }
+                if( (m_triggersensor[i] & 8 ) &&           // sensor turn off
+                    sensors[i]->value()==0 ) 
+                {
+                    trigger = tr ;
+                }
+            }
+            if( trigger==2 ) {
+                break ;
+            }
         }
-        else {
+    }
+
+#ifdef PWII_APP    
+    extern int pwii_event_marker ;      // rear mirror event marker button
+    if( pwii_event_marker ) {
+        trigger = 2 ;
+    }
+#endif
+    
+    if( trigger == 2 ) {
+#ifdef PWII_APP    
+        if( m_recstate != REC_LOCK ) {
+            screen_setliveview( -1 ) ;
+        }
+#endif
+        m_recstate = REC_LOCK ;
+        m_lock_starttime = g_timetick ;
+        m_trigger_starttime = g_timetick ;
+    }
+    else if( trigger == 1 ) {
+        if( m_recstate == REC_PRERECORD ) {
             m_recstate = REC_RECORD ;
+        }
+        m_trigger_starttime = g_timetick ;
+    }
+
+    // check if LOCK mode finished
+    if( m_recstate == REC_LOCK ) {
+        if( (g_timetick - m_lock_starttime)/1000 > m_postrecord_time ){
+            m_recstate = REC_RECORD ;
+        }
+    }
+   
+    // check if RECORD mode finished
+    if( m_recstate == REC_RECORD ) {
+        if( (g_timetick - m_trigger_starttime)/1000 > m_postrecord_time ){
+            m_recstate = REC_PRERECORD ;
         }
     }
 }

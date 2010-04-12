@@ -73,12 +73,15 @@ void *mem_alloc(int size)
         size=0 ;
     }
     size+=12 ;
+/*    
     if( size >= MEM_ALLOC_MMAP_SIZE ) {
         pmemblk = (int *) mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0 );;
     }
     else {
         pmemblk = (int *) malloc(size);
     }
+*/
+    pmemblk = (int *) malloc(size);
     if (pmemblk == NULL) {
         // no enough memory error
         dvr_log("!!!!!mem_alloc failed!");
@@ -104,12 +107,15 @@ void mem_free(void *pmem)
         if( --(pmemblk[1]) <=0 ) {	// reference counter = 0
             g_memused--;
             pmemblk[2]=0;		// clear memory tag
+            free( (void *)pmemblk );
+/*
             if( pmemblk[0] >= MEM_ALLOC_MMAP_SIZE ) {
                 munmap( (void *)pmemblk, pmemblk[0] );
             }
             else {
                 free( (void *)pmemblk );
             }
+*/             
         }
     }
     mem_unlock();

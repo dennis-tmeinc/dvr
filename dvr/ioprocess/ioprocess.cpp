@@ -127,17 +127,16 @@ struct baud_table_t {
 
 struct dio_mmap * p_dio_mmap=NULL ;
 
-#define SERIAL_DELAY	(100000)
-#define DEFSERIALBAUD	(115200)
-#define MCU_CMD_DELAY   (500000)
+#define MIN_SERIAL_DELAY	(10000)
+#define DEFSERIALBAUD	    (115200)
+#define MCU_CMD_DELAY       (500000)
 
-char dvriomap[256] = "/var/dvr/dvriomap" ;
-char serial_dev[256] = "/dev/ttyS1" ;
+char dvriomap[100] = "/var/dvr/dvriomap" ;
+char serial_dev[100] = "/dev/ttyS1" ;
 char * pidfile = "/var/dvr/ioprocess.pid" ;
 int serial_handle = 0 ;
 int serial_baud = 115200 ;
 int mcupowerdelaytime = 0 ;
-char mcu_firmware_version[80] ;
 
 // unsigned int outputmap ;	// output pin map cache
 char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
@@ -365,7 +364,7 @@ static int  serial_buffer_pointer ;
 // Check if data ready to read on serial port
 //     return 0: no data
 //            1: yes
-int serial_dataready(int usdelay=0, int * usremain=NULL)
+int serial_dataready(int usdelay=MIN_SERIAL_DELAY, int * usremain=NULL)
 {
     struct timeval timeout ;
     fd_set fds;
@@ -416,7 +415,7 @@ char serial_readdata()
 #endif
 }
 
-int serial_read(char * sbuf, size_t bufsize, int wait=10000, int interval=10000)
+int serial_read(char * sbuf, size_t bufsize, int wait=MIN_SERIAL_DELAY, int interval=MIN_SERIAL_DELAY)
 {
     size_t nread=0 ;
     if( serial_dataready(wait) ) {
@@ -449,7 +448,7 @@ int serial_write(void * buf, size_t bufsize)
 }
 
 // clear receiving buffer
-void serial_clear(int delay=0)
+void serial_clear(int delay=MIN_SERIAL_DELAY)
 {
     int i;
 #ifdef MCU_DEBUG
@@ -534,32 +533,30 @@ unsigned int mcu_doutputmap ;
 
 // check data check sum
 // return 0: checksum correct
-int mcu_checksum( char * data ) 
+signed char mcu_checksum( char * data ) 
 {
-    char ck;
-    int i ;
-    if( data[0]<5 || data[0]>40 ) {
+    signed char ck;
+    signed char i = *data;
+    if( i<6 || i>60 ) {
         return -1 ;
     }
     ck=0;
-    for( i=0; i<(int)data[0]; i++ ) {
-        ck+=data[i] ;
+    while(i-->0) {
+        ck+=*data++;
     }
-    return (int)ck;
+    return ck ;
 }
 
 // calculate check sum of data
 void mcu_calchecksum( char * data )
 {
     char ck = 0 ;
-    unsigned int si = (unsigned int) *data ;
-    while( --si>0 ) {
+    char i = *data ;
+    while( --i>0 ) {
         ck-=*data++ ;
     }
     *data = ck ;
 }
-
-int mcu_input(int usdelay);
 
 // send command to mcu
 // return 0 : failed
@@ -590,17 +587,17 @@ int mcu_send( char * cmd )
 #endif
 }
 
-int mcu_recv( char * recv, int size, int usdelay=SERIAL_DELAY );
 int mcu_checkinputbuf(char * ibuf);
 
 static int mcu_recverror = 0 ;
 
 // receive one data package from mcu
-// return 0: failed
-//       >0: bytes of data received
-int mcu_recvmsg( char * recv, int size )
+// return : void message buffer
+//       NULL: failed
+char * mcu_recvmsg()
 {
     int n;
+    static char msgbuf[100] ;
 
 #ifdef MCU_DEBUG
     // for debugging 
@@ -614,19 +611,24 @@ int mcu_recvmsg( char * recv, int size )
     printf("%02d:%02d:%05.3f Recv: ", ptm->tm_hour, ptm->tm_min, sec);
 #endif    
     
-    if( serial_read(recv, 1) ) {
-        n=(int) *recv ;
-        if( n>=5 && n<=size ) {
-            n=serial_read(recv+1, n-1)+1 ;
-            if( n==recv[0] && 
-                recv[1]==0 && 
-                mcu_checksum( recv ) == 0 ) 
+    if( serial_read(msgbuf, 1) ) {
+        n=(int) msgbuf[0] ;
+        if( n>=5 && n<(int)(sizeof(msgbuf)) ) {
+            n=serial_read(&msgbuf[1], n-1)+1 ; 
+            if( n==msgbuf[0] &&                 // correct size
+                msgbuf[1]==0 &&                 // correct target
+                mcu_checksum( msgbuf ) == 0 )   // correct checksum
             {
-                mcu_recverror=0 ;
+                mcu_recverror=0 ;               // clear receiver error
 #ifdef MCU_DEBUG
                 printf("\n");
 #endif
-                return n ;
+                return msgbuf ;
+            }
+            if( strncmp(msgbuf, "Enter", 5 )==0 ) {
+                // MCU reboots
+                dvr_log("Help!!!! MCU going to kill me!");
+                sync();sync();sync();
             }
         }
     }
@@ -636,41 +638,48 @@ int mcu_recvmsg( char * recv, int size )
     printf("** error! \n");
 #endif
     serial_clear(200000);
-    return 0 ;
+    return NULL ;
 }
 
 // to receive a respondes message from mcu
-int mcu_recv( char * recv, int size, int usdelay )
+char * mcu_recv( int usdelay = MIN_SERIAL_DELAY, int * usremain=NULL )
 {
+    char * mcu_msg ;
     while( serial_dataready(usdelay, &usdelay) ) {
-        if( mcu_recvmsg (recv, size) ) {
-            if( recv[4]=='\x02' ) {             // is it an input message ?
-                mcu_checkinputbuf(recv) ;
+        mcu_msg = mcu_recvmsg();
+        if( mcu_msg ) {
+            if( mcu_msg[4]=='\x02' ) {             // is it an input message ?
+                mcu_checkinputbuf(mcu_msg) ;
             }
             else {
+                if( mcu_msg[3]=='\x1f' ) {         // error report, ignor this for now
 #ifdef MCU_DEBUG
-                if( recv[3]=='\x1f' ) {         // it is a error report, ignor this for now
                     printf(" An error report detected!\n" );
-                }
 #endif
-                return *recv ;                  // it could be a responding message
+                    break ;
+                }
+                if( usremain ) {
+                    * usremain=usdelay ;
+                }
+                return mcu_msg ;                  // it could be a responding message
             }
         }
         else {
             break;
         }
     }
-    return 0 ;
+    if( usremain ) {
+        * usremain=usdelay ;
+    }
+    return NULL ;
 }
-
-static char mcu_recvbuf[RECVBUFSIZE] ;
 
 // send command to mcu without waiting for responds
 int mcu_sendcmd(int cmd, int datalen=0, ...)
 {
     int i ;
     va_list v ;
-    char mcu_buf[100] ;
+    char mcu_buf[datalen+10] ;
 
     mcu_buf[0] = (char)(datalen+6) ;
     mcu_buf[1] = (char)1 ;
@@ -686,15 +695,42 @@ int mcu_sendcmd(int cmd, int datalen=0, ...)
     return mcu_send(mcu_buf) ;
 }
 
+// wait for response from mcu
+// return valid rsp buffer
+//        NULL if failed or timeout
+char * mcu_waitrsp(int target, int cmd, int delay=MCU_CMD_DELAY)
+{
+    char * mcu_rsp ;
+    while( delay>0 ) {                          // wait until delay time out
+        mcu_rsp = mcu_recv( delay, &delay ) ;   
+        if( mcu_rsp ) {     // received a responds
+            if( mcu_rsp[2]==(char)target &&         // resp from correct target (MCU)
+                mcu_rsp[3]==(char)cmd &&            // correct resp for CMD
+                mcu_rsp[4]==3 )                     // right responds
+            {
+                return mcu_rsp ;           
+            }                                       // ignor wrong resps and continue waiting
+        }
+        else {
+            break;
+        }
+    }
+    return NULL ;
+}
+    
 // Send command to mcu and check responds
+// return 
+//       valid response string
+//       NULL if failed
 char * mcu_cmd(int cmd, int datalen=0, ...)
 {
     int i ;
     va_list v ;
-    char mcu_buf[100] ;
+    char * mcu_rsp ;
+    char mcu_buf[datalen+10] ;
 
     mcu_buf[0] = (char)(datalen+6) ;
-    mcu_buf[1] = (char)1 ;
+    mcu_buf[1] = (char)1 ;                      // target MCU
     mcu_buf[2] = (char)0 ;
     mcu_buf[3] = (char)cmd ;
     mcu_buf[4] = (char)2 ;
@@ -707,16 +743,12 @@ char * mcu_cmd(int cmd, int datalen=0, ...)
     i=3 ;
     while( i-->0 ) {
         if(mcu_send(mcu_buf)) {
-            if( mcu_recv( mcu_recvbuf, sizeof(mcu_recvbuf), MCU_CMD_DELAY )>5 ) {     // received a responds
-                if( mcu_recvbuf[1]==0 && 
-                    mcu_recvbuf[2]==1 &&
-                    mcu_recvbuf[3]==(char)cmd &&
-                    mcu_recvbuf[4]==3 )                             // right responds
-                {
-                    return mcu_recvbuf ;           
-                }
+            mcu_rsp = mcu_waitrsp(1, cmd) ;         // wait rsp from MCU
+            if( mcu_rsp ) {
+                return mcu_rsp ;
             }
         }
+
 #ifdef MCU_DEBUG
         printf("Retry!!!\n" );
 #endif
@@ -735,7 +767,7 @@ static void mcu_response(char * msg, int datalen=0, ... )
 {
     int i ;
     va_list v ;
-    char mcu_buf[100] ;
+    char mcu_buf[datalen+10] ;
     mcu_buf[0] = datalen+6 ;
     mcu_buf[1] = msg[2] ;
     mcu_buf[2] = 0 ;                // cpu
@@ -880,7 +912,8 @@ static signed char g_convert[24][3][3] =
     }
 
 } ;
-        
+
+/* original direction table 
 static char direction_table[24][2] = 
 {
     {0, 2}, {0, 3}, {0, 4}, {0,5},      // Front -> Forward
@@ -889,6 +922,37 @@ static char direction_table[24][2] =
     {3, 0}, {3, 1}, {3, 4}, {3,5},      // Left  -> Forward
     {4, 0}, {4, 1}, {4, 2}, {4,3},      // Buttom -> Forward
     {5, 0}, {5, 1}, {5, 2}, {5,3},      // Top   -> Forward
+};
+*/
+
+// direction table from harrison.  ??? what is the third number ???
+// 0:Front,1:Back, 2:Right, 3:Left, 4:Bottom, 5:Top 
+static char direction_table[24][3] = 
+{
+  {0, 2, 0x62}, // Forward:front, Upward:right    Leftward:top
+  {0, 3, 0x52}, // Forward:Front, Upward:left,    Leftward:bottom
+  {0, 4, 0x22}, // Forward:Front, Upward:bottom,  Leftward:right 
+  {0, 5, 0x12}, // Forward:Front, Upward:top,    Leftward:left 
+  {1, 2, 0x61}, // Forward:back,  Upward:right,    Leftward:bottom 
+  {1, 3, 0x51}, // Forward:back,  Upward:left,    Leftward:top
+  {1, 4, 0x21}, // Forward:back,  Upward:bottom,    Leftward:left
+  {1, 5, 0x11}, // Forward:back, Upward:top,    Leftward:right 
+  {2, 0, 0x42}, // Forward:right, Upward:front,    Leftward:bottom
+  {2, 1, 0x32}, // Forward:right, Upward:back,    Leftward:top
+  {2, 4, 0x28}, // Forward:right, Upward:bottom,    Leftward:back
+  {2, 5, 0x18}, // Forward:right, Upward:top,    Leftward:front
+  {3, 0, 0x41}, // Forward:left, Upward:front,    Leftward:top
+  {3, 1, 0x31}, // Forward:left, Upward:back,    Leftward:bottom
+  {3, 4, 0x24}, // Forward:left, Upward:bottom,    Leftward:front
+  {3, 5, 0x14}, // Forward:left, Upward:top,    Leftward:back
+  {4, 0, 0x48}, // Forward:bottom, Upward:front,    Leftward:left
+  {4, 1, 0x38}, // Forward:bottom, Upward:back,    Leftward:right
+  {4, 2, 0x68}, // Forward:bottom, Upward:right,    Leftward:front
+  {4, 3, 0x58}, // Forward:bottom, Upward:left,    Leftward:back
+  {5, 0, 0x44}, // Forward:top, Upward:front,    Leftward:right
+  {5, 1, 0x34}, // Forward:top, Upward:back,    Leftward:left
+  {5, 2, 0x64}, // Forward:top, Upward:right,    Leftward:back
+  {5, 3, 0x54}  // Forward:top, Upward:left,    Leftward:front
 };
 
 #define DEFAULT_DIRECTION   (7)
@@ -899,19 +963,32 @@ float g_sensor_trigger_right ;
 float g_sensor_trigger_left ;
 float g_sensor_trigger_down ;
 float g_sensor_trigger_up ;
-
+// new parameters for g sensor. (2010-04-08)
+float g_sensor_base_forward ;
+float g_sensor_base_backward ;
+float g_sensor_base_right ;
+float g_sensor_base_left ;
+float g_sensor_base_down ;
+float g_sensor_base_up ;
+float g_sensor_crash_forward ;
+float g_sensor_crash_backward ;
+float g_sensor_crash_right ;
+float g_sensor_crash_left ;
+float g_sensor_crash_down ;
+float g_sensor_crash_up ;
 
 #ifdef PWII_APP
 
 // Send cmd to pwii and check responds
 char * mcu_pwii_cmd(int cmd, int datalen=0, ...)
 {
-    int i ;   
+    int i ;
     va_list v ;
-    char mcu_buf[100] ;
+    char * mcu_rsp ;
+    char mcu_buf[datalen+10] ;
 
     mcu_buf[0] = (char)(datalen+6) ;
-    mcu_buf[1] = (char)5 ;
+    mcu_buf[1] = (char)5 ;                      // target PWII
     mcu_buf[2] = (char)0 ;
     mcu_buf[3] = (char)cmd ;
     mcu_buf[4] = (char)2 ;
@@ -924,16 +1001,16 @@ char * mcu_pwii_cmd(int cmd, int datalen=0, ...)
     i=3 ;
     while( i-->0 ) {
         if(mcu_send(mcu_buf)) {
-            if( mcu_recv( mcu_recvbuf, sizeof(mcu_recvbuf), MCU_CMD_DELAY )>5 ) {     // received a responds
-                if( mcu_recvbuf[1]==0 && 
-                    mcu_recvbuf[2]==5 &&
-                    mcu_recvbuf[3]==(char)cmd &&
-                    mcu_recvbuf[4]==3 )                             // right responds
-                {
-                    return mcu_recvbuf ;           
-                }
+            mcu_rsp = mcu_waitrsp(5, cmd) ;         // wait rsp from PWII
+            if( mcu_rsp ) {
+                return mcu_rsp ;
             }
         }
+
+#ifdef MCU_DEBUG
+        printf("Retry!!!\n" );
+#endif
+
     }
 
     return NULL ;
@@ -945,6 +1022,10 @@ int mcu_pwii_bootupready()
     if( mcu_pwii_cmd(4)!=NULL ) {
         return 1 ;
     }
+    dvr_log("Ooops, MCU is mad on me!!! System power could be cut off! Sync, sync, sync!");
+    sync();
+    sync();
+    sync();
     return 0 ;
 }
 
@@ -1186,24 +1267,12 @@ static void mcu_gforce_log( float gright, float gback, float gbuttom )
 #endif            
     // save to log
     dio_lock();
-    if( p_dio_mmap->gforce_log0==0 ) {
-        p_dio_mmap->gforce_right_0 = gbusright ;
-        p_dio_mmap->gforce_forward_0 = gbusforward ;
-        p_dio_mmap->gforce_down_0 = gbusdown ;
-        if( gforce_log_enable ) {
-            p_dio_mmap->gforce_log0 = 1 ;
-        }
-    }
-    else {
-        p_dio_mmap->gforce_right_1 = gbusright ;
-        p_dio_mmap->gforce_forward_1 = gbusforward ;
-        p_dio_mmap->gforce_down_1 = gbusdown ;
-        if( gforce_log_enable ) {
-            p_dio_mmap->gforce_log1 = 1 ;
-        }
-    }        
+    p_dio_mmap->gforce_serialno++ ;
+    p_dio_mmap->gforce_right = gbusright ;
+    p_dio_mmap->gforce_forward = gbusforward ;
+    p_dio_mmap->gforce_down = gbusdown ;
     dio_unlock();
-
+    
 }
 
 int mcu_checkinputbuf(char * ibuf)
@@ -1346,15 +1415,16 @@ int mcu_checkinputbuf(char * ibuf)
 //      wait - micro-seconds waiting
 // return 
 //		number of input message received.
-int mcu_input(int wait)
+int mcu_input(int usdelay)
 {
     int res = 0 ;
-    char ibuf[RECVBUFSIZE] ;
-    while( serial_dataready(wait, &wait) ) {
-        if( mcu_recvmsg (ibuf, sizeof(ibuf)) ) {
-            if( ibuf[4]=='\x02' ) {             // is it a input message ?
-                mcu_checkinputbuf(ibuf) ;
-                res++ ;
+    char * mcu_msg ;
+    while( serial_dataready(usdelay, &usdelay) ) {
+        mcu_msg = mcu_recvmsg();
+        if( mcu_msg ) {
+            if( mcu_msg[4]=='\x02' ) {             // is it an input message ?
+                mcu_checkinputbuf(mcu_msg) ;
+                res++;
             }
         }
     }
@@ -1405,7 +1475,7 @@ int mcu_readcode()
 }
 
 // return gsensor available
-int mcu_gsensorinit()
+int mcu_gsensorinit_old()
 {
     char * responds ;
     float trigger_back, trigger_front ;
@@ -1470,6 +1540,202 @@ int mcu_gsensorinit()
     }
     
     responds = mcu_cmd( 0x34, 6, tr_rt, tr_lf, tr_bk, tr_fr, tr_bt, tr_tp );
+    if( responds ) {
+        return responds[5] ;        // g_sensor_available
+    }
+    return 0 ;
+}
+
+// init gsensor
+// return 1 if gsensor available
+int mcu_gsensorinit()
+{
+    char * responds ;
+
+    float trigger_back, trigger_front ;
+    float trigger_right, trigger_left ;
+    float trigger_bottom, trigger_top ;
+    int XP, XN, YP, YN, ZP, ZN;
+
+    float base_back, base_front ;
+    float base_right, base_left ;
+    float base_bottom, base_top ;
+    int BXP, BXN, BYP, BYN, BZP, BZN;
+
+    float crash_back, crash_front ;
+    float crash_right, crash_left ;
+    float crash_bottom, crash_top ;
+    int CXP, CXN, CYP, CYN, CZP, CZN;
+
+    if( !gforce_log_enable ) {
+        return 0 ;
+    }
+
+    trigger_back = 
+        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_trigger_forward + 
+        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_trigger_right + 
+        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_trigger_down ;
+    trigger_right = 
+        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_trigger_forward + 
+        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_trigger_right + 
+        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_trigger_down ;
+    trigger_bottom = 
+        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_trigger_forward + 
+        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_trigger_right + 
+        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_trigger_down ;
+
+    trigger_front = 
+        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_trigger_backward +
+        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_trigger_left + 
+        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_trigger_up ;
+    trigger_left = 
+        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_trigger_backward +
+        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_trigger_left + 
+        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_trigger_up ;
+    trigger_top = 
+        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_trigger_backward +
+        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_trigger_left + 
+        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_trigger_up ;
+
+    if( trigger_right >= trigger_left ) {
+        XP  = (int)(trigger_right*14) ;    // Right Trigger
+        XN  = (int)(trigger_left*14) ;     // Left Trigger
+    }
+    else {
+        XP  = (int)(trigger_left*14) ;     // Right Trigger
+        XN  = (int)(trigger_right*14) ;    // Left Trigger
+    }
+
+    if( trigger_back >= trigger_front ) {
+        YP  = (int)(trigger_back*14) ;    // Back Trigger
+        YN  = (int)(trigger_front*14) ;    // Front Trigger
+    }
+    else {
+        YP  = (int)(trigger_front*14) ;    // Back Trigger
+        YN  = (int)(trigger_back*14) ;    // Front Trigger
+    }
+
+    if( trigger_bottom >= trigger_top ) {
+        ZP  = (int)(trigger_bottom*14) ;    // Bottom Trigger
+        ZN = (int)(trigger_top*14) ;    // Top Trigger
+    }
+    else {
+        ZP  = (int)(trigger_top*14) ;    // Bottom Trigger
+        ZN = (int)(trigger_bottom*14) ;    // Top Trigger
+    }
+
+    base_back = 
+        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_base_forward + 
+        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_base_right + 
+        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_base_down ;
+    base_right = 
+        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_base_forward + 
+        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_base_right + 
+        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_base_down ;
+    base_bottom = 
+        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_base_forward + 
+        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_base_right + 
+        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_base_down ;
+
+    base_front = 
+        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_base_backward +
+        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_base_left + 
+        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_base_up ;
+    base_left = 
+        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_base_backward +
+        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_base_left + 
+        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_base_up ;
+    base_top = 
+        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_base_backward +
+        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_base_left + 
+        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_base_up ;
+
+    if( base_right >= base_left ) {
+        BXP  = (int)(base_right*14) ;    // Right Trigger
+        BXN  = (int)(base_left*14) ;     // Left Trigger
+    }
+    else {
+        BXP  = (int)(base_left*14) ;     // Right Trigger
+        BXN  = (int)(base_right*14) ;    // Left Trigger
+    }
+
+    if( base_back >= base_front ) {
+        BYP  = (int)(base_back*14) ;    // Back Trigger
+        BYN  = (int)(base_front*14) ;    // Front Trigger
+    }
+    else {
+        BYP  = (int)(base_front*14) ;    // Back Trigger
+        BYN  = (int)(base_back*14) ;    // Front Trigger
+    }
+
+    if( base_bottom >= base_top ) {
+        BZP  = (int)(base_bottom*14) ;    // Bottom Trigger
+        BZN = (int)(base_top*14) ;    // Top Trigger
+    }
+    else {
+        BZP  = (int)(base_top*14) ;    // Bottom Trigger
+        BZN = (int)(base_bottom*14) ;    // Top Trigger
+    }
+
+    crash_back = 
+        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_crash_forward + 
+        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_crash_right + 
+        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_crash_down ;
+    crash_right = 
+        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_crash_forward + 
+        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_crash_right + 
+        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_crash_down ;
+    crash_bottom = 
+        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_crash_forward + 
+        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_crash_right + 
+        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_crash_down ;
+
+    crash_front = 
+        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_crash_backward +
+        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_crash_left + 
+        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_crash_up ;
+    crash_left = 
+        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_crash_backward +
+        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_crash_left + 
+        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_crash_up ;
+    crash_top = 
+        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_crash_backward +
+        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_crash_left + 
+        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_crash_up ;
+
+    if( crash_right >= crash_left ) {
+        CXP  = (int)(crash_right*14) ;    // Right Trigger
+        CXN  = (int)(crash_left*14) ;     // Left Trigger
+    }
+    else {
+        CXP  = (int)(crash_left*14) ;     // Right Trigger
+        CXN  = (int)(crash_right*14) ;    // Left Trigger
+    }
+
+    if( crash_back >= crash_front ) {
+        CYP  = (int)(crash_back*14) ;    // Back Trigger
+        CYN  = (int)(crash_front*14) ;    // Front Trigger
+    }
+    else {
+        CYP  = (int)(crash_front*14) ;    // Back Trigger
+        CYN  = (int)(crash_back*14) ;    // Front Trigger
+    }
+
+    if( crash_bottom >= crash_top ) {
+        CZP  = (int)(crash_bottom*14) ;    // Bottom Trigger
+        CZN = (int)(crash_top*14) ;    // Top Trigger
+    }
+    else {
+        CZP  = (int)(crash_top*14) ;    // Bottom Trigger
+        CZN = (int)(crash_bottom*14) ;    // Top Trigger
+    }
+
+    responds = mcu_cmd( 0x34, 20, 
+        1,                                          // enable GForce
+        (int)(direction_table[gsensor_direction][2]),      // direction
+        BXP, BXN, BYP, BYN, BZP, BZN,               // base parameter
+        XP, XN, YP, YN, ZP, ZN,                     // trigger parameter
+        CXP, CXN, CYP, CYN, CZP, CZN );             // crash parameter
     if( responds ) {
         return responds[5] ;        // g_sensor_available
     }
@@ -1609,6 +1875,17 @@ void mcu_hdpoweron()
 void mcu_hdpoweroff()
 {
     mcu_cmd(0x29);
+}
+
+void mcu_initsensor5(int invert)
+{
+    char * rsp ;
+    rsp = mcu_cmd(0x14);
+    if( rsp ) {
+        if( invert != ((int)rsp[5]) ) {         // settings are from whats in MCU
+            mcu_cmd(0x13,1,invert);
+        }
+    }
 }
 
 // return time_t: success
@@ -2384,6 +2661,7 @@ int appinit()
         dvr_log("MCU ready.");
         mcu_readcode();
         // get MCU version
+        char mcu_firmware_version[80] ;
         if( mcu_version( mcu_firmware_version ) ) {
             printf("MCU: %s\n", mcu_firmware_version );
             FILE * mcuversionfile=fopen("/var/dvr/mcuversion", "w");
@@ -2423,9 +2701,7 @@ int appinit()
 
 #ifdef TVS_APP
     // setup GP5 polarity for TVS 
-#ifdef TVS_TORONTO
-    mcu_cmd(0x13,1,dvrconfig.getvalueint( "sensor5", "inverted" ));
-#endif
+    mcu_initsensor5(dvrconfig.getvalueint( "sensor5", "inverted" ));
 #endif
         
     if( g_syncrtc ) {
@@ -2448,8 +2724,7 @@ int appinit()
             break;
         }
     }
-    p_dio_mmap->gforce_log0=0;
-    p_dio_mmap->gforce_log1=0;
+    p_dio_mmap->gforce_serialno=0;
     
     g_sensor_trigger_forward = 0.5 ;
     v = dvrconfig.getvalue( "io", "gsensor_forward_trigger");
@@ -2481,8 +2756,71 @@ int appinit()
     if( v.length()>0 ) {
         sscanf(v.getstring(),"%f", &g_sensor_trigger_up);
     }
+
+    // new parameters for gsensor 
+    g_sensor_base_forward = 0.2 ;
+    v = dvrconfig.getvalue( "io", "gsensor_forward_base");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_base_forward);
+    }
+    g_sensor_base_backward = -0.2 ;
+    v = dvrconfig.getvalue( "io", "gsensor_backward_base");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_base_backward);
+    }
+    g_sensor_base_right = 0.2 ;
+    v = dvrconfig.getvalue( "io", "gsensor_right_base");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_base_right);
+    }
+    g_sensor_base_left = -0.2 ;
+    v = dvrconfig.getvalue( "io", "gsensor_left_base");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_base_left);
+    }
+    g_sensor_base_down = 1.0+2.0 ;
+    v = dvrconfig.getvalue( "io", "gsensor_down_base");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_base_down);
+    }
+    g_sensor_base_up = 1.0-2.0 ;
+    v = dvrconfig.getvalue( "io", "gsensor_up_base");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_base_up);
+    }
     
-    // gsensor trigger setup
+    g_sensor_crash_forward = 3.0 ;
+    v = dvrconfig.getvalue( "io", "gsensor_forward_crash");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_crash_forward);
+    }
+    g_sensor_crash_backward = -3.0 ;
+    v = dvrconfig.getvalue( "io", "gsensor_backward_crash");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_crash_backward);
+    }
+    g_sensor_crash_right = 3.0 ;
+    v = dvrconfig.getvalue( "io", "gsensor_right_crash");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_crash_right);
+    }
+    g_sensor_crash_left = -3.0 ;
+    v = dvrconfig.getvalue( "io", "gsensor_left_crash");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_crash_left);
+    }
+    g_sensor_crash_down = 1.0+5.0 ;
+    v = dvrconfig.getvalue( "io", "gsensor_down_crash");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_crash_down);
+    }
+    g_sensor_crash_up = 1.0-5.0 ;
+    v = dvrconfig.getvalue( "io", "gsensor_up_crash");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &g_sensor_crash_up);
+    }
+    
+     // gsensor trigger setup
     if( mcu_gsensorinit() ) {       // g sensor available
         dvr_log("G sensor detected!");
         pidf = fopen( "/var/dvr/gsensor", "w" );
@@ -2784,6 +3122,10 @@ int main(int argc, char * argv[])
             if( watchdogenabled )
                 mcu_watchdogkick () ;
 
+            if( p_dio_mmap->dvrstatus & DVR_FAILED ) {
+                mcu_reset();
+            }
+            
             // printf("mode %d\n", app_mode);
             // do power management mode switching
             if( app_mode==APPMODE_RUN ) {                         // running mode

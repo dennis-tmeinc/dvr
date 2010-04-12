@@ -1068,31 +1068,24 @@ int	sensor_log()
 
     // log g sensor value
     if( gforce_log_enable ) {
+        static int gforce_ser ;
+        double gforward, gright, gdown ;
+        int    g_ser ;
         dio_lock();
-        int glog0 = p_dio_mmap->gforce_log0 ;
-        double gforward_0 = (double) p_dio_mmap->gforce_forward_0 ;
-        double gright_0 = (double) p_dio_mmap->gforce_right_0 ;
-        double gdown_0 = (double) p_dio_mmap->gforce_down_0 ;
-        int glog1 = p_dio_mmap->gforce_log1 ;
-        double gforward_1 = (double) p_dio_mmap->gforce_forward_1 ;
-        double gright_1 = (double) p_dio_mmap->gforce_right_1;
-        double gdown_1 = (double) p_dio_mmap->gforce_down_1 ;
-        dio_unlock();
-        if( glog0 ) {
-            // we record forward/backward, right/left acceleration value, up/down as g-force value
-            gps_logprintf(16, ",%.1f,%.1f,%.1f", 
-                          - gforward_0,
-                          - gright_0,
-                          gdown_0 );
-            p_dio_mmap->gforce_log0=0;
+        g_ser = p_dio_mmap->gforce_serialno ;
+        if( g_ser != gforce_ser ) {
+            gforward = (double) p_dio_mmap->gforce_forward ;
+            gright   = (double) p_dio_mmap->gforce_right ;
+            gdown    = (double) p_dio_mmap->gforce_down ;
         }
-        if( glog1 ) {
+        dio_unlock();
+        if( g_ser != gforce_ser ) {
+            gforce_ser = g_ser ;
             // we record forward/backward, right/left acceleration value, up/down as g-force value
             gps_logprintf(16, ",%.1f,%.1f,%.1f", 
-                          - gforward_1,
-                          - gright_1,
-                          gdown_1 );
-            p_dio_mmap->gforce_log1=0;
+                          - gforward,
+                          - gright,
+                          gdown );
         }
     }
 

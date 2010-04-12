@@ -406,6 +406,8 @@ class capture {
     int m_show_vri;
     int m_show_policeid ;
 #endif        
+
+    int m_show_gforce ;
         
     int m_headerlen ;
   	char m_header[256] ;
@@ -1263,6 +1265,7 @@ int dio_check() ;
 int dio_setstate( int status ) ;
 int dio_clearstate( int status ) ;
 void dio_setchstat( int channel, int ch_state );
+int dio_getgforce( float * gfb, float * glr, float *gud );
 int dio_iobusy();
 
 #ifdef PWII_APP
@@ -1301,6 +1304,9 @@ class sensor_t {
     int toggle() {
         return m_toggle ;
     }
+    int eventmarker() {
+        return m_eventmarker ;
+    }
 } ;
 
 extern sensor_t ** sensors ;
@@ -1324,7 +1330,6 @@ public:
 
 extern alarm_t ** alarms ;
 extern int num_alarms ;
-extern int event_marker ;
 
 void screen_init();
 void screen_uninit();

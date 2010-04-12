@@ -683,6 +683,7 @@ int main()
                 }
             }
 
+#ifdef PWII_APP            
             // show_vri
             if( getsetvalue( "bool_show_vri" )!=NULL ) {
                 v=getsetvalue( "show_vri" );
@@ -702,6 +703,42 @@ int main()
                 }
                 else {
                     dvrconfig.setvalueint(section,"show_policeid",0);
+                }
+            }
+#endif
+
+#ifdef TVS_APP
+
+            // show_medallion
+            if( getsetvalue( "bool_show_medallion" )!=NULL ) {
+                v=getsetvalue( "show_medallion" );
+                dvrconfig.setvalueint(section,"show_medallion",v?1:0);
+            }
+            // show_licenseplate
+            if( getsetvalue( "bool_show_licenseplate" )!=NULL ) {
+                v=getsetvalue( "show_licenseplate" );
+                dvrconfig.setvalueint(section,"show_licenseplate",v?1:0);
+            }
+            // show_ivcs
+            if( getsetvalue( "bool_show_ivcs" )!=NULL ) {
+                v=getsetvalue( "show_ivcs" );
+                dvrconfig.setvalueint(section,"show_ivcs",v?1:0);
+            }
+            // show_medallion
+            if( getsetvalue( "bool_show_cameraserial" )!=NULL ) {
+                v=getsetvalue( "show_cameraserial" );
+                dvrconfig.setvalueint(section,"show_cameraserial",v?1:0);
+            }
+
+#endif
+            // show_gforce sensor value
+            if( getsetvalue( "bool_show_gforce" )!=NULL ) {
+                v=getsetvalue( "show_gforce" );
+                if( v ) {
+                    dvrconfig.setvalueint(section,"show_gforce",1);
+                }
+                else {
+                    dvrconfig.setvalueint(section,"show_gforce",0);
                 }
             }
             
