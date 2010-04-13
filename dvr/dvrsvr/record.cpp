@@ -10,7 +10,6 @@ static int rec_fifo_size = 4000000 ;
 int    rec_lock_all = 0 ;			// all files save as locked file
 struct dvrtime  rec_cliptime ;      // clip starting time. (pre-recording mode only)
 
-
 enum REC_STATE {
     REC_STOP,           // no recording
     REC_PRERECORD,      // pre-recording
@@ -263,6 +262,16 @@ rec_channel::rec_channel(int channel)
 
     // start recording	
     start();
+
+#ifdef TVS_APP
+    // for tvs, required by nelson, 2010-04-13. All camera start recording wile power on
+    if( m_recstate == REC_PRERECORD ) {
+        m_recstate = REC_LOCK ;
+        m_lock_starttime = g_timetick ;
+        m_trigger_starttime = g_timetick ;
+    }
+#endif
+    
 }
 
 rec_channel::~rec_channel()
@@ -949,7 +958,7 @@ void rec_channel::update()
 
     // check if LOCK mode finished
     if( m_recstate == REC_LOCK ) {
-        if( (g_timetick - m_lock_starttime)/1000 > m_postrecord_time ){
+        if( (g_timetick - m_lock_starttime)/1000 > m_postlock_time ){
             m_recstate = REC_RECORD ;
         }
     }

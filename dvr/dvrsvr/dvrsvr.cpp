@@ -1954,8 +1954,10 @@ struct usbkey_plugin_st {
 void dvrsvr::ReqUsbkeyPlugin()
 {
     int res = 0 ;
+#ifdef PWII_APP        
     struct usbkey_plugin_st * usbkeyplugin ;
     struct dvr_ans ans ;
+#endif        
     if( m_recvbuf && m_recvlen>=(int)sizeof( struct usbkey_plugin_st ) ) {
 #ifdef PWII_APP        
         // check pwii police ID key

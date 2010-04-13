@@ -11,7 +11,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
-#define SERVER_NAME "Eagle HTTP 0.2"
+#define SERVER_NAME "Eagle HTTP 0.21"
 #define PROTOCOL "HTTP/1.1"
 #define RFC1123FMT "%a, %d %b %Y %H:%M:%S GMT"
 
@@ -50,6 +50,7 @@ char * document_root="/home/www" ;
 
 int keep_alive ;
 int dynamic_page ;      // if page is dynamic ?
+long etag ;             // Etag of request document
 
 // check if data ready to read
 int recvok(int fd, int usdelay)
@@ -223,38 +224,30 @@ char * getcookie(char * key)
     return NULL;
 }
 
+// output http header
 void http_header( int status, char * title, char * mime_type, int length)
 {
     time_t now;
     char hbuf[120];
     int i ;
     char * resp ;
-    
+
     printf( "%s %d %s\r\n", PROTOCOL, status, title );
+    unsetenv("HEADER_Server");                  //  Not allowed for CGI to change server
+    unsetenv("HEADER_Date");                    //  Not allowed for CGI to change date 
     printf( "Server: %s\r\n", SERVER_NAME );
     now = time( (time_t*) NULL );
     strftime( hbuf, sizeof(hbuf), RFC1123FMT, gmtime( &now ) );
     printf( "Date: %s\r\n", hbuf );
-    unsetenv("HEADER_Date");
 
-    if( (resp=getenv("HEADER_Content-Type"))!=NULL ) {
-        printf( "Content-Type: %s\r\n", resp );
-        unsetenv("HEADER_Content-Type" );
+    keep_alive=KEEP_ALIVE_TIMEOUT ;
+    if( mime_type!=NULL ) {
+        setenv("HEADER_Content-Type", mime_type, 1 );
     }
-    else if( mime_type != NULL ) {
-        printf( "Content-Type: %s\r\n", mime_type );
-    }
-
-    if( (resp=getenv("HEADER_Content-Length")) ) {
-        printf( "Content-Length: %s\r\n", resp );
-        unsetenv("HEADER_Content-Length" );
-        keep_alive=KEEP_ALIVE_TIMEOUT ;
-    }
-    else {
-        printf( "Content-Length: %ld\r\n", (long) length );
-        keep_alive=KEEP_ALIVE_TIMEOUT ;
-    }
-
+    sprintf(hbuf, "%d", length);
+    setenv("HEADER_Content-Length",hbuf,0);         // don't overwrite if env exist
+    setenv("HEADER_Cache-Control", "no-cache", 0);  // don't overwrite it
+    
     for(i=0; i<200; ) {
         if( environ[i]==NULL || environ[i][0]==0 ) {
             break;
@@ -274,7 +267,7 @@ void http_header( int status, char * title, char * mime_type, int length)
         i++ ;
     }
 
-    // empty line, finish of header 
+    // empty line, finishing the http header 
     printf("\r\n");             
 }
 
@@ -301,75 +294,52 @@ void http_error( int status, char * title )
     fputs(errtxt, stdout);
 }
 
-/*
-void http_cache( int age, time_t mtime )
-{
-    char timebuf[120];
-    time_t now ;
-    if( age<=0 ) {
-        now = time( (time_t*) NULL );
-        strftime( timebuf, sizeof(timebuf), RFC1123FMT, gmtime( &now ) );
-        http_setheader( "Last-Modified", timebuf );
-        http_setheader( "Cache-Control", "no-cache" );
-    }
-    else {
-        strftime( timebuf, sizeof(timebuf), RFC1123FMT, gmtime( &mtime ) );
-        http_setheader( "Last-Modified", timebuf );
-        sprintf( timebuf, "max-age=%d", age );
-        http_setheader( "Cache-Control", timebuf );
-    }
-}
-*/
-
-// return trun if content modified (base on Etag If-None-Match and If-Modified-since
-int http_cache( struct stat * fst )
+// return true if cache etag or modified time matched
+int http_cache( char * reqfile )
 {
     char modtime[120];
-    char etag[16] ;
-    time_t now ;
+    char etagstr[16] ;
     int i ;
-    unsigned int etagsum ;
+    struct stat filest ;
     unsigned char * s ;
 
-    if( fst==NULL ) {
-        now = time( (time_t*) NULL );
-        strftime( modtime, sizeof(modtime), RFC1123FMT, gmtime( &now ) );
-        http_setheader( "Last-Modified", modtime );
+    if( reqfile==NULL || stat( reqfile, &filest ) < 0 ) {
         http_setheader( "Cache-Control", "no-cache" );
-        return 1 ;
+        return 0 ;
     }
-    else {
-        sprintf( modtime, "max-age=%d",  CACHE_MAXAGE );
-        http_setheader( "Cache-Control", modtime );
 
-        // Modified time
-        strftime( modtime, sizeof(modtime), RFC1123FMT, gmtime( &(fst->st_mtime) ) );
-        http_setheader( "Last-Modified", modtime );
+    sprintf( modtime, "max-age=%d",  CACHE_MAXAGE );
+    http_setheader( "Cache-Control", modtime );
 
-        //  etag    
-        s = (unsigned char *)fst ;
-        etagsum = 0 ;
-        for( i=0 ; i<sizeof(*fst); i++) {
-            etagsum+=((unsigned int)*s++)<<(i%24);
-        }
-        sprintf(etag, "\"%x\"", etagsum);
-        http_setheader( "Etag", etag);
+    // Modified time
+    strftime( modtime, sizeof(modtime), RFC1123FMT, gmtime( &(filest.st_mtime) ) );
+    http_setheader( "Last-Modified", modtime );
 
-        // check etag
-        if( (s=getenv("HTTP_IF_NONE_MATCH"))) {
-            if( strcmp( s, etag )!=0 ) {        // Etag match?
-                return 1 ;                      // Etag not match, content modified.
-            }
-        }
-
-        // end of check etag
-        if( (s=getenv("HTTP_IF_MODIFIED_SINCE"))) {
-            if( strcmp( s, modtime )!=0 ) {     // Etag match?
-                return 1 ;                      // modified time changed.
-            }
+    //  etag, calcuated check sum from full file stat for now    
+    s = (unsigned char *)&filest ;
+    if( etag == 0 ) {
+        for( i=0 ; i<sizeof(filest); i++) {
+            etag+=((unsigned int)*s++)<<(i%24);
         }
     }
-    return 0 ;                                  // content match, use cache
+    sprintf(etagstr, "\"%x\"", (unsigned int)etag);
+    http_setheader( "Etag", etagstr);
+
+    // check etag
+    if( (s=getenv("HTTP_IF_NONE_MATCH"))) {
+        if( strcmp( s, etagstr )==0 ) {        // Etag match?
+            return 1 ;
+        }
+    }
+
+    // end of check etag
+    if( (s=getenv("HTTP_IF_MODIFIED_SINCE"))) {
+        if( strcmp( s, modtime )!=0 ) {     // Modified time match?
+            return 1 ;
+        }
+    }
+    
+    return 0 ;                                 // cache not match, return false
 }
 
 // remove whilespace on head and tail of input string 
@@ -1167,6 +1137,7 @@ void http()
         return ;
     }
     keep_alive=0 ;
+    etag=0 ;
     
     if ( fgets( linebuf, sizeof(linebuf), stdin ) == NULL )
     {
@@ -1302,9 +1273,9 @@ void http()
         goto http_done ;
     }
 
-    if( http_cache( &sb )==0 ) {
+    if( http_cache( linebuf ) ) {       // check if cache match?
         // use cahce
-        http_header( 304, "Not modified", NULL, 0 );
+        http_header( 304, "Not modified", NULL, 0 );        // let browser to use cache
         goto http_done ;
     }
     

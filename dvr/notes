@@ -13,3 +13,7 @@ release 10.0412.18
 
   TVS, send sensor2 inverted state (not sensor5) to MCU on ioprocess startup.
   eaglehttpd, add Etag and Last-Modified support.
+
+release 10.0412.18 (tvs)
+  Start recording (as locked file) when system startup.
+

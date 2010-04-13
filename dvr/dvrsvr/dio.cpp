@@ -155,7 +155,9 @@ int dio_kickwatchdog()
 int dio_setstate( int status ) 
 {
     int s = 0 ;
+#ifdef PWII_APP
     int rstart = 0 ;
+#endif    
     dio_lock();
     if( p_dio_mmap ){
 #ifdef PWII_APP
@@ -192,8 +194,9 @@ int dio_setstate( int status )
 int dio_clearstate( int status )
 {
     int s = 0 ;
+#ifdef PWII_APP
     int rstart = 1 ;
-
+#endif    
     dio_lock();
     if( p_dio_mmap ){
 #ifdef PWII_APP
