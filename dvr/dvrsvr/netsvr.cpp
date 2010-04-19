@@ -142,6 +142,10 @@ void net_message()
         else if (req == REQMCMSG ) {
             net_mcmsg(msgbuf, msgsize);
         }
+        else if (strncmp(msgbuf, "iamserver", 9)==0) {
+            // received response from a smartserver
+            dio_smartserveron();
+        }
     }
 }
 
@@ -164,6 +168,30 @@ int net_addr(char *netname, int port, struct sockad *addr)
     memcpy(&addr->addr, res->ai_addr, res->ai_addrlen);
     freeaddrinfo(res);
     return 0;
+}
+
+// send out UDP message use msgfd
+int net_sendmsg( char * dest, int port, void * msg, int msgsize )
+{
+    struct sockad destaddr ;
+    net_addr(dest, port, &destaddr);
+    return (int)sendto( msgfd, msg, (size_t)msgsize, 0, &(destaddr.addr), destaddr.addrlen );
+}
+
+int net_broadcast(char * interface, int port, void * msg, int msgsize )
+{
+    // find the broadcast address of given interface
+//    "rausb0", 49954, smartsvrmsg, strlen(smartsvrmsg) );
+    struct ifreq ifr ;
+    memset( &ifr, 0, sizeof(ifr));
+    strcpy( ifr.ifr_name, interface );
+    if( ioctl( msgfd, SIOCGIFADDR, &ifr)>=0 ) {
+        // address ready
+        char brname[20] ;
+        getnameinfo( &(ifr.ifr_broadaddr), sizeof(ifr.ifr_broadaddr), brname, sizeof(brname), NULL, 0, NI_NUMERICHOST );
+        return net_sendmsg( brname, port, msg, msgsize );
+    }
+    return 0 ;   
 }
 
 int net_connect(char *netname, int port)
@@ -525,6 +553,10 @@ void net_init()
         serverfd = -1;
         return;
     }
+
+    // make msgfd broadcast capable
+    int broadcast=1 ;
+    setsockopt(msgfd, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast));
     
     multicast_en = dvrconfig.getvalueint("network", "multicast_en");
     if( multicast_en ) {

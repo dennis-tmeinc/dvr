@@ -266,6 +266,12 @@ void log_unlock()
     pthread_mutex_unlock(&log_mutex);
 }
 
+/*
+   share memory lock implemented use atomic swap
+
+    operations between lock() and unlock() should be quick enough and only memory access only.
+ 
+*/ 
 
 // atomically swap value
 int atomic_swap( int *m, int v)
@@ -285,14 +291,25 @@ int atomic_swap( int *m, int v)
 
 void dio_lock()
 {
-    while( atomic_swap( &(p_dio_mmap->lock), 1 ) ) {
-        sleep(0);      // or sched_yield()
+    if( p_dio_mmap ) {
+        int c=0;
+        while( atomic_swap( &(p_dio_mmap->lock), 1 ) ) {
+            if( c++<20 ) {
+                sched_yield();
+            }
+            else {
+                // yield too many times ?
+                usleep(1);
+            }
+        }
     }
 }
 
 void dio_unlock()
 {
-    p_dio_mmap->lock=0;
+    if( p_dio_mmap ) {
+        p_dio_mmap->lock=0;
+    }
 }
 
 struct buzzer_t_type {

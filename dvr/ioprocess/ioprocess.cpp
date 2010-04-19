@@ -131,6 +131,27 @@ struct dio_mmap * p_dio_mmap=NULL ;
 #define DEFSERIALBAUD	    (115200)
 #define MCU_CMD_DELAY       (500000)
 
+#define MCU_CMD_RESET	        (0)
+#define MCU_CMD_READRTC         (0x6)
+#define MCU_CMD_WRITERTC        (0x7)
+#define MCU_CMD_POWEROFFDELAY	(0x8)
+#define MCU_CMD_IOTEMPERATURE   (0x0b)
+#define MCU_CMD_HDTEMPERATURE   (0x0c)
+#define MCU_CMD_BOOTUPREADY     (0x11)
+#define MCU_CMD_KICKWATCHDOG    (0x18)
+#define MCU_CMD_SETWATCHDOGTIMEOUT (0x19)
+#define MCU_CMD_ENABLEWATCHDOG  (0x1a)
+#define MCU_CMD_DISABLEWATCHDOG (0x1b)
+#define MCU_CMD_DIGITALINPUT	(0x1d)
+#define MCU_CMD_HDPOWERON       (0x28)
+#define MCU_CMD_HDPOWEROFF      (0x29)
+#define MCU_CMD_GETVERSION	    (0x2d)
+#define MCU_CMD_DEVICEPOWER     (0x2e)
+#define MCU_CMD_PANELLED        (0x2f)
+#define MCU_CMD_DIGITALOUTPUT	(0x31)
+#define MCU_CMD_GSENSORINIT	    (0x34)
+#define MCU_CMD_READCODE	    (0x41)
+
 char dvriomap[100] = "/var/dvr/dvriomap" ;
 char serial_dev[100] = "/dev/ttyS1" ;
 char * pidfile = "/var/dvr/ioprocess.pid" ;
@@ -300,6 +321,13 @@ unsigned int getruntime()
     return (unsigned int)(tv.tv_sec-starttime)*1000 + tv.tv_usec/1000 ;
 }
 
+/*
+   share memory lock implemented use atomic swap
+
+    operations between lock() and unlock() should be quick enough and only memory access only.
+ 
+*/ 
+
 // atomically swap value
 int atomic_swap( int *m, int v)
 {
@@ -316,32 +344,27 @@ int atomic_swap( int *m, int v)
     return result ;
 }
 
-/*
 void dio_lock()
 {
-    int i;
-    for( i=0; i<1000; i++ ) {
-        if( p_dio_mmap->lock>0 ) {
-            usleep(1);
+    if( p_dio_mmap ) {
+        int c=0;
+        while( atomic_swap( &(p_dio_mmap->lock), 1 ) ) {
+            if( c++<20 ) {
+                sched_yield();
+            }
+            else {
+                // yield too many times ?
+                usleep(1);
+            }
         }
-        else {
-            break ;
-        }
-    }
-    p_dio_mmap->lock=1;
-}
-*/
-
-void dio_lock()
-{
-    while( atomic_swap( &(p_dio_mmap->lock), 1 ) ) {
-        sleep(0);      // or sched_yield()
     }
 }
 
 void dio_unlock()
 {
-    p_dio_mmap->lock=0;
+    if( p_dio_mmap ) {
+        p_dio_mmap->lock=0;
+    }
 }
 
 // set onboard rtc 
@@ -626,8 +649,8 @@ char * mcu_recvmsg()
                 return msgbuf ;
             }
             if( strncmp(msgbuf, "Enter", 5 )==0 ) {
-                // MCU reboots
-                dvr_log("Help!!!! MCU going to kill me!");
+                // MCU reboots, why?
+                dvr_log("Help!!!! MCU going to cut off my power!");
                 sync();sync();sync();
             }
         }
@@ -652,12 +675,11 @@ char * mcu_recv( int usdelay = MIN_SERIAL_DELAY, int * usremain=NULL )
                 mcu_checkinputbuf(mcu_msg) ;
             }
             else {
-                if( mcu_msg[3]=='\x1f' ) {         // error report, ignor this for now
 #ifdef MCU_DEBUG
-                    printf(" An error report detected!\n" );
-#endif
-                    break ;
+                if( mcu_msg[3]=='\x1f' ) {         // error report, not action for this now
+                    printf("A possible error report detected!\n" );
                 }
+#endif
                 if( usremain ) {
                     * usremain=usdelay ;
                 }
@@ -1022,10 +1044,6 @@ int mcu_pwii_bootupready()
     if( mcu_pwii_cmd(4)!=NULL ) {
         return 1 ;
     }
-    dvr_log("Ooops, MCU is mad on me!!! System power could be cut off! Sync, sync, sync!");
-    sync();
-    sync();
-    sync();
     return 0 ;
 }
 
@@ -1433,16 +1451,31 @@ int mcu_input(int usdelay)
 
 int mcu_bootupready()
 {
+    int i ;
+    char * rsp ;
     serial_clear() ;
-    if( mcu_cmd(0x11, 1, 0 )!=NULL ) {
+    if( (rsp=mcu_cmd(MCU_CMD_BOOTUPREADY, 1, 0 ))!=NULL ) {
+        int rlen = *rsp - 6 ;
+        char status[200] ;
+        char tst[10] ;
+        status[0]=0 ;
+        for( i=0; i<rlen; i++ ) {
+            sprintf(tst, " %02x", (unsigned int)(unsigned char)rsp[5+i] );
+            strcat( status, tst );
+        }
+        dvr_log( "MCU boot up with status :%s", status );
         return 1 ;
     }
+    dvr_log("Ooops, MCU is mad on me!!! System power could be cut off! Sync, sync, sync!");
+    sync();
+    sync();
+    sync();
     return 0 ;
 }
 
 int mcu_readcode()
 {
-    char * v = mcu_cmd(0x41);
+    char * v = mcu_cmd(MCU_CMD_READCODE);
     if( v ) {
         if( v[5]!=(unsigned char)0xff ) {
             struct tm ttm ;
@@ -1539,7 +1572,7 @@ int mcu_gsensorinit_old()
         tr_tp = (signed char)(trigger_bottom*0xe) ;    // Top Trigger
     }
     
-    responds = mcu_cmd( 0x34, 6, tr_rt, tr_lf, tr_bk, tr_fr, tr_bt, tr_tp );
+    responds = mcu_cmd( MCU_CMD_GSENSORINIT, 6, tr_rt, tr_lf, tr_bk, tr_fr, tr_bt, tr_tp );
     if( responds ) {
         return responds[5] ;        // g_sensor_available
     }
@@ -1730,7 +1763,7 @@ int mcu_gsensorinit()
         CZN = (int)(crash_bottom*14) ;    // Top Trigger
     }
 
-    responds = mcu_cmd( 0x34, 20, 
+    responds = mcu_cmd( MCU_CMD_GSENSORINIT, 20, 
         1,                                          // enable GForce
         (int)(direction_table[gsensor_direction][2]),      // direction
         BXP, BXN, BYP, BYN, BZP, BZN,               // base parameter
@@ -1748,7 +1781,7 @@ int mcu_gsensorinit()
 int mcu_version(char * version)
 {
     char * v ;
-    v = mcu_cmd( 0x2d ) ;
+    v = mcu_cmd( MCU_CMD_GETVERSION ) ;
     if( v ) {
         memcpy( version, &v[5], *v-6 );
         version[*v-6]=0 ;
@@ -1776,7 +1809,7 @@ int mcu_doutput()
             dout|=(1<<i) ;
         }
     }
-    if( mcu_cmd(0x31, 1, dout) ) {
+    if( mcu_cmd(MCU_CMD_DIGITALOUTPUT, 1, dout) ) {
         mcu_doutputmap=outputmap ;
     }
     return 1;
@@ -1820,9 +1853,9 @@ void mcu_watchdogenable()
     printf("mcu watchdog enable, timeout %d s.\n", watchdogtimeout );
 #endif                    
     // set watchdog timeout
-    mcu_cmd( 0x19, 2, watchdogtimeout/256, watchdogtimeout%256 ) ;
+    mcu_cmd( MCU_CMD_SETWATCHDOGTIMEOUT, 2, watchdogtimeout/256, watchdogtimeout%256 ) ;
     // enable watchdog
-    mcu_cmd( 0x1a );
+    mcu_cmd( MCU_CMD_ENABLEWATCHDOG  );
     watchdogenabled = 1 ;
 }
 
@@ -1831,7 +1864,7 @@ void mcu_watchdogdisable()
 #ifdef MCU_DEBUG        
     printf("mcu watchdog disable.\n" );
 #endif                    
-    mcu_cmd( 0x1b );
+    mcu_cmd( MCU_CMD_DISABLEWATCHDOG  );
     watchdogenabled = 0 ;
 }
 
@@ -1841,14 +1874,14 @@ int mcu_watchdogkick()
 #ifdef MCU_DEBUG        
     printf("mcu watchdog kick.\n" );
 #endif                    
-    mcu_cmd(0x18);
+    mcu_cmd(MCU_CMD_KICKWATCHDOG);
     return 0;
 }
 
 // get io board temperature
 int mcu_iotemperature()
 {
-    char * v = mcu_cmd(0x0b) ;
+    char * v = mcu_cmd(MCU_CMD_IOTEMPERATURE) ;
     if( v ) {
         return (int)(signed char)v[5] ;
     }
@@ -1859,7 +1892,7 @@ int mcu_iotemperature()
 int mcu_hdtemperature()
 {
 #ifdef  MDVR_APP
-    char * v = mcu_cmd(0x0c) ;
+    char * v = mcu_cmd(MCU_CMD_HDTEMPERATURE) ;
     if( v ) {
         return (int)(signed char)v[5] ;
     }
@@ -1869,12 +1902,12 @@ int mcu_hdtemperature()
 
 void mcu_hdpoweron()
 {
-    mcu_cmd(0x28);
+    mcu_cmd(MCU_CMD_HDPOWERON);
 }
 
 void mcu_hdpoweroff()
 {
-    mcu_cmd(0x29);
+    mcu_cmd(MCU_CMD_HDPOWEROFF);
 }
 
 void mcu_initsensor2(int invert)
@@ -1896,7 +1929,7 @@ time_t mcu_r_rtc( struct tm * ptm = NULL )
     time_t tt ;
     char * responds ;
 
-    responds = mcu_cmd( 0x06 ) ;
+    responds = mcu_cmd( MCU_CMD_READRTC ) ;
     if( responds ) {
         memset( &ttm, 0, sizeof(ttm) );
         ttm.tm_year = getbcd(responds[11]) + 100 ;
@@ -1954,7 +1987,7 @@ void mcu_readrtc()
 //      flash: 0=off, 1=flash
 void mcu_led(int led, int flash)
 {
-    mcu_cmd( 0x2f, 2, led, (flash!=0) );
+    mcu_cmd( MCU_CMD_PANELLED, 2, led, (flash!=0) );
 }
 
 // Device Power
@@ -1963,7 +1996,7 @@ void mcu_led(int led, int flash)
 //      poweron: 0=poweroff, 1=poweron
 void mcu_devicepower(int device, int poweron )
 {
-    mcu_cmd( 0x2e, 2, device, poweron );
+    mcu_cmd( MCU_CMD_DEVICEPOWER, 2, device, poweron );
 }
 
 // reboot mcu, (with force-power-on)
@@ -1971,7 +2004,7 @@ int mcu_reset()
 {
     int r ;
     char enteracommand[200] ;
-    mcu_sendcmd( 0 ) ;
+    mcu_sendcmd( MCU_CMD_RESET ) ;
     r = serial_read(enteracommand, sizeof(enteracommand)-1, 30000000, 1000000);
     if( r>10 ) {
         enteracommand[r]=0 ;
@@ -2128,7 +2161,7 @@ int mcu_w_rtc(time_t tt)
 {
     struct tm t ;
     gmtime_r( &tt, &t);
-    if( mcu_cmd( 0x07, 7, 
+    if( mcu_cmd( MCU_CMD_WRITERTC, 7, 
                 bcd( t.tm_sec ),
                 bcd( t.tm_min ),
                 bcd( t.tm_hour ),
@@ -2154,7 +2187,7 @@ void mcu_setrtc()
     bmonth  = bcd( p_dio_mmap->rtc_month );
     byear   = bcd( p_dio_mmap->rtc_year );
     dio_unlock();
-    if( mcu_cmd( 0x07, 7, 
+    if( mcu_cmd( MCU_CMD_WRITERTC, 7, 
                 bsecond,
                 bminute,
                 bhour,

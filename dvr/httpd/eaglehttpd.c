@@ -294,7 +294,7 @@ void http_error( int status, char * title )
     fputs(errtxt, stdout);
 }
 
-// return true if cache etag or modified time matched
+// return true if cache is fresh
 int http_cache( char * reqfile )
 {
     char modtime[120];
@@ -328,18 +328,14 @@ int http_cache( char * reqfile )
     // check etag
     if( (s=getenv("HTTP_IF_NONE_MATCH"))) {
         if( strcmp( s, etagstr )==0 ) {        // Etag match?
-            return 1 ;
+            if( (s=getenv("HTTP_IF_MODIFIED_SINCE"))) {
+                if( strcmp( s, modtime )==0 ) {     // Modified time match?
+                    return 1 ;
+                }
+            }
         }
     }
-
-    // end of check etag
-    if( (s=getenv("HTTP_IF_MODIFIED_SINCE"))) {
-        if( strcmp( s, modtime )!=0 ) {     // Modified time match?
-            return 1 ;
-        }
-    }
-    
-    return 0 ;                                 // cache not match, return false
+    return 0 ;
 }
 
 // remove whilespace on head and tail of input string 

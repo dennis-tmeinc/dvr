@@ -19,14 +19,20 @@ LDFLAGS= -lpthread -lstdc++ -L../dvrsvr/eagle32 -lsdk -ldadsp ../dvrsvr/eagle32/
 
 CFLAGS=-I../dvrsvr -g -Wall
 
+all : serialtest gentest
+
 serialtest : $(OBJS) $(HEADERS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 	cp serialtest  $(debug_folder)
+
+gentest : gentest.c
+	$(CC) $(CFLAGS) -o $@ gentest.c $(LDFLAGS)
+	cp $@  $(debug_folder)
 
 %.o : %.c $(HEADERS) $(EXTHEADERS)
 	$(CC) -g -Wall -c $< -o $@
 
 clean :
 	rm -f *.o
-	rm -f serialtest
+	rm -f serialtest gentest
 

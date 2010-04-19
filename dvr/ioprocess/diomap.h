@@ -92,6 +92,10 @@ struct dio_mmap {
     int     pwii_error_LED_flash_timer ; // LED flash timer (output),  0: stayon, others in 0.25 second step
     char    pwii_VRI[128] ;             // current VRI(video recording Id)
 
+    // Wifi status
+    int     smartserver ;        // smartserver detected
+    int     wifi_req ;
+
 } ;
 
 // dvr status bits

@@ -9,6 +9,14 @@ struct dio_mmap * p_dio_mmap ;
 unsigned int dio_old_inputmap ;
 int dio_standby_mode ;
 
+
+/*
+   share memory lock implemented use atomic swap
+
+    operations between lock() and unlock() should be quick enough and only memory access only.
+ 
+*/ 
+
 // atomically swap value
 int atomic_swap( int *m, int v)
 {
@@ -28,8 +36,15 @@ int atomic_swap( int *m, int v)
 void dio_lock()
 {
     if( p_dio_mmap ) {
+        int c=0;
         while( atomic_swap( &(p_dio_mmap->lock), 1 ) ) {
-            sleep(0);      // or sched_yield()
+            if( c++<20 ) {
+                sched_yield();
+            }
+            else {
+                // yield too many times ?
+                usleep(1);
+            }
         }
     }
 }
@@ -389,10 +404,28 @@ void dio_pwii_standby( int standby )
 
 #endif    // PWII_APP
 
+void dio_smartserveron()
+{
+    int log=0 ;
+    if( p_dio_mmap ){
+        dio_lock();
+        if( p_dio_mmap->smartserver==0 ) {
+            p_dio_mmap->smartserver=1;
+            log=1 ;
+        }
+        dio_unlock();
+    }
+    if( log ) {
+        dvr_log( "Smart server detected!" );
+    }
+}
+
 // checking io maps and dvr commands, return if io pins changed after last check
 int dio_check()
 {
     int res=0 ;
+    int smsdetect=0 ;       // smart server detection requested?
+
     dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ){
         // dvrcmd :  1: restart(resume), 2: suspend, 3: stop record, 4: start record
@@ -424,8 +457,19 @@ int dio_check()
         res = res || pwii_event_marker ;
 #endif
         dio_old_inputmap = p_dio_mmap->inputmap ;
+
+        // smartserver probe ?
+        if( p_dio_mmap->wifi_req!=0 && p_dio_mmap->smartserver==0 ) {
+            smsdetect=1 ;
+        }
     }
     dio_unlock();
+
+    // probe smart server
+    if( smsdetect ) {
+        static char smartsvrmsg[]="lookingforsmartserver" ;
+        net_broadcast("rausb0", 49954, smartsvrmsg, strlen(smartsvrmsg) );
+    }
     return res ;
 }
 
@@ -572,6 +616,7 @@ int dio_syncrtc()
     }
     return res;
 }
+
 
 void dio_init()
 {

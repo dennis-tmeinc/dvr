@@ -587,7 +587,7 @@ class video_screen : public window {
         
         void restartdecoder() {
             StopDecode( m_decode_handle );
-            m_decode_handle = StartDecode(MAIN_OUTPUT, m_playchannel+1, 1,  Dvr264Header);
+            m_decode_handle = StartDecode(MAIN_OUTPUT, (m_playchannel%ScreenNum)+1, 1,  Dvr264Header);
             if( m_decode_runmode == DECODE_MODE_PLAY ) {
                 m_decode_speed = DECODE_SPEED_NORMAL ; 
                 SetDecodeSpeed(m_decode_handle, m_decode_speed);
@@ -642,7 +642,7 @@ class video_screen : public window {
 
             playback * ply = new playback( m_playchannel, 1 ) ;
 
-            m_decode_handle = StartDecode(MAIN_OUTPUT, m_playchannel+1, 1,  Dvr264Header);
+            m_decode_handle = StartDecode(MAIN_OUTPUT, (m_playchannel%ScreenNum)+1, 1,  Dvr264Header);
             m_decode_speed = DECODE_SPEED_NORMAL ;
             res = SetDecodeSpeed(m_decode_handle, m_decode_speed);
 
@@ -867,8 +867,8 @@ class video_screen : public window {
             if( channel < eagle32_channels ) {
                 cap_stop();       // stop live codec, so decoder has full DSP power
                 m_playchannel = channel ;
-                res = SetDecodeScreen(MAIN_OUTPUT, m_playchannel+1, 1);
-				res = SetDecodeAudio(MAIN_OUTPUT, m_playchannel+1, 1);
+                res = SetDecodeScreen(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 1);
+                res = SetDecodeAudio(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 1);
 
                 m_videomode = VIDEO_MODE_PLAYBACK ; 
                 m_decode_runmode = DECODE_MODE_PLAY ;
@@ -895,8 +895,8 @@ class video_screen : public window {
             m_decodethreadid = 0 ;
 
             // stop decode screen
-            res = SetDecodeScreen(MAIN_OUTPUT, m_playchannel+1, 0);
-            res = SetDecodeAudio(MAIN_OUTPUT, m_playchannel+1, 0);
+            res = SetDecodeScreen(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 0);
+            res = SetDecodeAudio(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 0);
 
             m_videomode = VIDEO_MODE_NONE ; 
             cap_start();       // start video capture.
@@ -1124,7 +1124,7 @@ class video_screen : public window {
 						SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_liveaudio);
 					}
 //					else {
-//						SetDecodeAudio(MAIN_OUTPUT, m_playchannel+1, 1);
+//						SetDecodeAudio(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 1);
 //					}
 				}
             }

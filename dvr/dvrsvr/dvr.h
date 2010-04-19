@@ -813,6 +813,8 @@ void net_trigger();
 int net_sendok(int fd, int tout);
 int net_recvok(int fd, int tout);
 void net_message();
+int net_sendmsg( char * dest, int port, void * msg, int msgsize );
+int net_broadcast( char * interface, int port, void * msg, int msgsize );
 int net_listen(int port, int socktype);
 int net_connect(char *ip, int port);
 void net_clean(int sockfd);
@@ -1267,6 +1269,7 @@ int dio_clearstate( int status ) ;
 void dio_setchstat( int channel, int ch_state );
 int dio_getgforce( float * gfb, float * glr, float *gud );
 int dio_iobusy();
+void dio_smartserveron();
 
 #ifdef PWII_APP
 // return pwii media key event, 0=no key event, 1=key event
