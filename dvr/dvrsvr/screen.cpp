@@ -1092,9 +1092,9 @@ class video_screen : public window {
                         }
                     }
                 }
-                else if( keycode == VK_EM ) { //  event marker key
-                    m_icon->seticon( "tm.pic" );
-                }
+//                else if( keycode == VK_EM ) { //  event marker key
+//                    m_icon->seticon( "tm.pic" );
+//                }
                 else if( keycode == VK_POWER ) {                //  LCD power on/off and blackout
                     if( m_videomode <= VIDEO_MODE_PLAYBACK ) {  // playback
                         stop();
@@ -1255,12 +1255,61 @@ class controlpanel : public window {
 
 };
 
+class iomsg : public window {
+    char m_iomsg[128] ;
+    public:
+    iomsg( window * parent, int id, int x, int y, int w, int h ) :
+        window( parent, id, x, y, w, h ) 
+    {
+        hide();
+        settimer( 2000, 1 );
+    }
+
+    void setmsg( char * msg )
+    {
+        if( strcmp( msg, m_iomsg)!=0 ) {
+            strcpy( m_iomsg, msg );
+            redraw();
+        }
+        if( m_iomsg[0] ) {
+            show();
+        }
+        else {
+            hide();
+        }
+    }
+        // event handler
+    protected:
+        virtual void paint() {
+            setcolor (COLOR(0,0,0,0)) ;	// full transparent
+            setpixelmode (DRAW_PIXELMODE_COPY);
+            fillrect ( 0, 0, m_pos.w, m_pos.h );	
+            resource font("mono32b.font");
+            setcolor(COLOR(240,240,80,200));
+            drawtext( 0, 0, m_iomsg, font );
+        }
+        virtual void ontimer( int id ) {
+            if( dio_getiomsg( m_iomsg ) ) {
+                if( m_iomsg[0] ) {
+                    show();
+                    redraw();
+                }
+                else {
+                    hide();
+                }
+            }
+            settimer( 2000, 1 );
+            return ;
+        }
+};
+
 class mainwin : public window {
     protected:
         UINT32 m_backgroundcolor;
         window * firstchild ;
         cursor * mycursor ;
         controlpanel * panel ;
+        iomsg * iomessage ;
             
     public:
     mainwin() :
@@ -1314,6 +1363,8 @@ class mainwin : public window {
         else {
             panel = NULL ;
         }
+
+        iomessage = new iomsg( this, 1, 50, m_pos.h/2-20, m_pos.w-100, 40 );
     }
 
         ~mainwin(){
@@ -1492,15 +1543,13 @@ struct key_event {
 static int getkeyevent( struct key_event * kev )
 {
 #ifdef    PWII_APP
-    if( dio_getpwiikeycode(&(kev->keycode), &(kev->keydown)) ) {
-        return 1 ;
-    }
-#endif    // PWII_APP    
-
+    return dio_getpwiikeycode(&(kev->keycode), &(kev->keydown));
+#else    
     return 0 ;
+#endif
 }
 
-// called periodically by main process (12.5ms)
+// called periodically by main process
 int screen_io(int usdelay)
 {
     struct mouse_event mev ;

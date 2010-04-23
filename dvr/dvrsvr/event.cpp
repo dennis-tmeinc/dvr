@@ -17,8 +17,6 @@ sensor_t ** sensors ;
 int num_alarms ;
 alarm_t ** alarms ;
 
-int alarm_suspend = 0 ;
-
 double g_gpsspeed ;
 
 sensor_t::sensor_t(int n) 
@@ -94,7 +92,6 @@ void alarm_t::update()
     }
     else if( m_value>1 ) {
         dio_output(m_outputpin, g_timetick&(1<<(m_value+6)) );
-//        dio_output(m_outputpin, event_tstamp&(1<<(m_value+2)) );
     }
     else {
         dio_output(m_outputpin, 0);
@@ -104,21 +101,24 @@ void alarm_t::update()
 // time_t poweroffstarttime ;
 // int shutdowndelaytime;
 
+static int alarm_suspend_timer = 0 ;
 void setdio(int onoff)
 {
     int i;
-    alarm_suspend=800 ;
+    alarm_suspend_timer=g_timetick+10000 ;        // 10 second io output
     for( i=0; i<num_alarms; i++ ) {
         dio_output(i, onoff);
     }
 }
 
-// called every 0.0125 second
+// main program loop here
 void event_check()
 {
     int i ;
     int videolost, videodata, diskready ;
     static int timer_1s ;
+
+    screen_io(20000);           	// do screen io
 
     if( dio_check() || g_timetick-timer_1s > 1000 ) {
         timer_1s = g_timetick ;
@@ -203,6 +203,13 @@ void event_check()
         else {
             dio_clearstate (DVR_RECORD);
         }
+
+        if( rec_lockstate(-1) ) {
+            dio_setstate (DVR_LOCK);
+        }
+        else {
+            dio_clearstate (DVR_LOCK);
+        }
         
         if( net_active ) {
             dio_setstate (DVR_NETWORK);
@@ -211,6 +218,9 @@ void event_check()
             dio_clearstate (DVR_NETWORK);
         }
 
+        // check if we need to detect smartserver (wifi)
+        dio_checkwifi();
+        
 #ifdef POWERCYCLETEST
         if( cycletest ) {
             static int cycle=0 ;
@@ -251,10 +261,7 @@ void event_check()
     }
 
     // display alarm (LEDs)
-    if( alarm_suspend>0 ) {
-        alarm_suspend-- ;
-    }
-    else {
+    if( g_timetick>alarm_suspend_timer ) {
         for(i=0; i<num_alarms; i++) {
             alarms[i]->update();
         }
@@ -316,6 +323,7 @@ void event_init()
 //    dio_lockpower(shutdowndelaytime);
     
     g_gpsspeed = 0 ;
+    alarm_suspend_timer = 0 ;
 }
 
 void event_uninit()

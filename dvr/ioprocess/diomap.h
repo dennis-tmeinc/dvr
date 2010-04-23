@@ -19,12 +19,13 @@ struct dio_mmap {
     
     int		dvrcmd ;		// -1: status error, 0: status OK, 1: restart(resume), 2: suspend, 3: stop record, 4: start record
     int     dvrstatus ;		// bit0: running, bit1: recording, bit2: video lost, bit3: no motion, bit4: network active, bit5: disk ready, bit6: no camera data, bit15: error condition
+    char    iomsg[128] ;    // IO message to display on screen
     
     int     poweroff ;
     int		lockpower ;		// 1: lock power (don't turn off power), 0: unlock power
     int		dvrwatchdog ;	// dvr watchdog counter, dvr should clear this number
-    int     iobusy ;
-    
+    int     iomode ;        // io runing mode
+
     unsigned short rtc_year ;
     unsigned short rtc_month ;
     unsigned short rtc_day ;
@@ -35,7 +36,7 @@ struct dio_mmap {
     int	    rtc_cmd ;		// DVR rtc command, 1: read rtc, 2: set rtc, 3: sync system time to rtc, 0: cmd finish, -1: error
     
     // GPS communicate area
-    int		gps_valid ;			// GPS process set to 1 for valid data
+    int		gps_valid ;			// 1 for valid gps signal data
     double	gps_speed ;			// knots
     double	gps_direction ;     // degree
     double  gps_latitude ;		// degree, + for north, - for south
@@ -106,7 +107,19 @@ struct dio_mmap {
 #define DVR_NETWORK     (0x10)
 #define DVR_DISKREADY   (0x20)
 #define DVR_NODATA      (0x40)
+#define DVR_LOCK        (0x80)
 #define DVR_FAILED      (0x4000)        // should ioprocess reboot system?
 #define DVR_ERROR       (0x8000)
+
+// io mode
+#define IOMODE_QUIT            (0)
+#define IOMODE_RUN             (1)
+#define IOMODE_SHUTDOWNDELAY   (2)
+#define IOMODE_DETECTWIRELESS  (3)
+#define IOMODE_UPLOADING       (4)
+#define IOMODE_STANDBY         (5)
+#define IOMODE_SHUTDOWN        (6)
+#define IOMODE_REBOOT          (7)
+#define IOMODE_REINITAPP       (8)
 
 #endif

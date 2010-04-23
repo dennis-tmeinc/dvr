@@ -947,6 +947,14 @@ int gps_logprintf(int logid, char * fmt, ...)
     }
     
     log_lock();
+
+    int iomode = p_dio_mmap->iomode ;
+
+    if( iomode<IOMODE_QUIT || iomode>IOMODE_SHUTDOWNDELAY ) {
+        gps_logclose();
+        log_unlock();
+        return 0 ;
+    }
     
 	logfile = gps_logopen(&t);
     
@@ -1107,21 +1115,17 @@ int	sensor_log()
     }
 
 #ifdef PWII_APP   
-    static int dvrstatus = 0 ;
     static char st_pwii_VRI[128] ;
-    char pwii_VRI[128] ;
-    pwii_VRI[0]=0 ;
+    int log_vri=0 ;
+    
     dio_lock();
-    if( dvrstatus != p_dio_mmap->dvrstatus ) {
-        dvrstatus = p_dio_mmap->dvrstatus ;
-        if( (dvrstatus&DVR_RECORD) ){
-            memcpy( pwii_VRI, p_dio_mmap->pwii_VRI, sizeof( pwii_VRI ) );
-        }
+    if( strcmp(st_pwii_VRI, p_dio_mmap->pwii_VRI)!=0 ) {
+        strncpy(st_pwii_VRI, p_dio_mmap->pwii_VRI, sizeof( st_pwii_VRI )-1);
+        log_vri=1 ;
     }
     dio_unlock();
-    if( pwii_VRI[0] && strcmp(st_pwii_VRI, pwii_VRI)!=0 ) {
-        strcpy( st_pwii_VRI, pwii_VRI );
-        gps_logprintf( 18, ",%s", pwii_VRI ) ;
+    if( log_vri && st_pwii_VRI[0] ) {
+        gps_logprintf( 18, ",%s", st_pwii_VRI ) ;
     }
 
     static unsigned int pwii_buttons = 0 ;

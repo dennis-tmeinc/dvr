@@ -909,16 +909,15 @@ int main()
                 time1.tv_sec = time2.tv_sec ;
             }
 */        
-            screen_io(12500);							// do screen io
             event_check();
-//            usleep( 12500 );
         }
         else if (app_state == APPDOWN ) {			// application down
             if( app_ostate == APPUP ) {
                 app_ostate = APPDOWN ;
                 do_uninit();
             }
-            usleep( 12500 );
+            sleep(1);                               // will wake up on signal.
+//            usleep( 12500 );
         }
         else if (app_state == APPRESTART ) {
             app_state = APPUP ;

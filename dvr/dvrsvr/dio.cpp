@@ -9,7 +9,6 @@ struct dio_mmap * p_dio_mmap ;
 unsigned int dio_old_inputmap ;
 int dio_standby_mode ;
 
-
 /*
    share memory lock implemented use atomic swap
 
@@ -58,41 +57,34 @@ void dio_unlock()
 
 int dio_inputnum()
 {
-    int inputnum=0 ;
-    dio_lock();
+    // atomic op, no lock nessissary
     if( p_dio_mmap && p_dio_mmap->iopid ) {
-        inputnum = p_dio_mmap->inputnum ;
+        return p_dio_mmap->inputnum ;
     }
-    dio_unlock();
-    return inputnum ;
+    return 0;
 }
 
 int dio_outputnum()
 {
-    int outputnum = 0 ;
-    dio_lock();
+    // atomic op, no lock nessissary
     if( p_dio_mmap && p_dio_mmap->iopid ) {
-        outputnum = p_dio_mmap->outputnum ;
+        return p_dio_mmap->outputnum ;
     }
-    dio_unlock();
-    return outputnum ;
+    return 0 ;
 }
 
 int dio_input( int no )
 {
-    int v = 0 ;
-    dio_lock();
-    if( p_dio_mmap && p_dio_mmap->iopid && no>=0 && no<p_dio_mmap->inputnum ) {
-        v = ((p_dio_mmap->inputmap)>>no)&1 ;
+    if( p_dio_mmap && p_dio_mmap->iopid ) {
+        return ((p_dio_mmap->inputmap)>>no)&1 ;
     }
-    dio_unlock();
-    return v ;
+    return 0 ;
 }
 
 void dio_output( int no, int v)
 {
     dio_lock();
-    if( p_dio_mmap && p_dio_mmap->iopid && no>=0 && no<p_dio_mmap->outputnum ) {
+    if( p_dio_mmap && p_dio_mmap->iopid ) {
         if( v ) {
             p_dio_mmap->outputmap |= 1<<no ;
         }
@@ -169,15 +161,15 @@ int dio_kickwatchdog()
 // set dvr status bits
 int dio_setstate( int status ) 
 {
-    int s = 0 ;
 #ifdef PWII_APP
     int rstart = 0 ;
 #endif    
     dio_lock();
     if( p_dio_mmap ){
 #ifdef PWII_APP
-        if( status == DVR_RECORD ) {
-            if( (p_dio_mmap->dvrstatus & DVR_RECORD)==0 ) {
+        if( status == DVR_LOCK &&
+            (p_dio_mmap->dvrstatus & DVR_LOCK)==0 ) 
+        {
                 // start recording
                 struct dvrtime cliptime ;
                 time_now(&cliptime) ;
@@ -190,41 +182,38 @@ int dio_setstate( int status )
                     );
                 memcpy( p_dio_mmap->pwii_VRI, g_vri, sizeof(p_dio_mmap->pwii_VRI) );
                 rstart = 1 ;
-            }
         }
 #endif    
        	p_dio_mmap->dvrstatus |= status ;
-        s = p_dio_mmap->dvrstatus ;
     }
     dio_unlock();
 #ifdef PWII_APP    
     if( rstart ) {
-        dvr_log( "Recording started, ID: %s", g_vri);
+        dvr_log( "Recording started, VRI: %s", g_vri);
     }
 #endif
-    return s ;
+    return 0 ;
 }
 
 // clear dvr status
 int dio_clearstate( int status )
 {
-    int s = 0 ;
 #ifdef PWII_APP
     int rstart = 1 ;
 #endif    
     dio_lock();
     if( p_dio_mmap ){
 #ifdef PWII_APP
-        if( status == DVR_RECORD ) {
-            if( (p_dio_mmap->dvrstatus & DVR_RECORD) ) {
-                // stop recording
-                rstart = 0 ;
-                g_vri[0]=0 ;
-            }
+        if( status == DVR_LOCK &&
+            (p_dio_mmap->dvrstatus & DVR_LOCK) ) 
+        {
+            // stop recording
+            rstart = 0 ;
+            g_vri[0]=0 ;
+            p_dio_mmap->pwii_VRI[0]=0 ;
         }
 #endif    
        	p_dio_mmap->dvrstatus &= ~status ;
-        s = p_dio_mmap->dvrstatus ;
     }
     dio_unlock();
 #ifdef PWII_APP
@@ -232,9 +221,8 @@ int dio_clearstate( int status )
         dvr_log( "Recording stopped.");
     }
 #endif    
-    return s ;
+    return 0 ;
 }
-
 
 // check if IO process busy (doing smartftp)
 int dio_iobusy()
@@ -242,7 +230,7 @@ int dio_iobusy()
     int busy=0 ;
     dio_lock();
     if( p_dio_mmap ){
-        busy = p_dio_mmap->iobusy ;
+        busy = ( p_dio_mmap->iomode == IOMODE_UPLOADING ) ;
     }
     dio_unlock();
     return busy ;
@@ -274,72 +262,77 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
     void rec_pwii_toggle_rec_rear() ;
 
     static unsigned int pwiikey = 0 ;
-    static int key_timetick = 0 ;
+    unsigned int nkey=0 ;
     unsigned int xkey ;
 
-    dio_lock();
-    xkey=p_dio_mmap->pwii_buttons ^ pwiikey ;
-    dio_unlock();
+    if( p_dio_mmap ) {
+//    dio_lock();
+        // this is atomic op already
+        nkey=p_dio_mmap->pwii_buttons ;
+//    dio_unlock();
+    }
+    
+    xkey=pwiikey^nkey ;
 
     if( xkey ) {
-        key_timetick = g_timetick ;
         
         if( xkey & 1 ) {                    // bit 0: rew
             * keycode = (int) VK_MEDIA_PREV_TRACK ;
-            * keydown = ((pwiikey&1)==0 );
+            * keydown = ((nkey&1)!=0 );
             pwiikey ^= 1 ;
             return 1 ;
         }
         if( xkey & 2 ) {                     // bit 1: play/pause
             * keycode = (int) VK_MEDIA_PLAY_PAUSE ;
-            * keydown = ((pwiikey&2)==0 );
+            * keydown = ((nkey&2)!=0 );
             pwiikey ^= 2 ;
             return 1 ;
         }
         if( xkey & 4 ) {                     // bit 2: ff
             * keycode = (int) VK_MEDIA_NEXT_TRACK ;
-            * keydown = ((pwiikey&4)==0 );
+            * keydown = ((nkey&4)!=0 );
             pwiikey ^= 4 ;
             return 1 ;
         }
         if( xkey & 8 ) {                     // bit 3: ST/PWR
             * keycode = (int) VK_MEDIA_STOP ;
-            * keydown = ((pwiikey&8)==0 );
+            * keydown = ((nkey&8)!=0 );
             pwiikey ^= 8 ;
             return 1 ;
         }
         if( xkey & 0x10 ) {                     // bit 4: PR
             * keycode = (int) VK_PRIOR ;
-            * keydown = ((pwiikey&0x10)==0 );
+            * keydown = ((nkey&0x10)!=0 );
             pwiikey ^= 0x10 ;
             return 1 ;
         }
         if( xkey & 0x20 ) {                     // bit 5: NX
             * keycode = (int) VK_NEXT ;
-            * keydown = ((pwiikey&0x20)==0 );
+            * keydown = ((nkey&0x20)!=0 );
             pwiikey ^= 0x20 ;
-            return 1 ;
-        }
-        if( xkey & 0x400 ) {                            // bit 10: tm
-            * keycode = (int) VK_EM ;
-            pwii_event_marker = * keydown = ((pwiikey&0x400)==0 );
-            pwiikey ^= 0x400 ;
-            dvr_log("TraceMark %s (%d).", pwii_event_marker==1?"pressed":"released", pwii_event_marker );
             return 1 ;
         }
         if( xkey & 0x800 ) {                            // bit 11: lp
             * keycode = (int) VK_LP ;
-            * keydown = ((pwiikey&0x800)==0 );
+            * keydown = ((nkey&0x800)!=0 );
             pwiikey ^= 0x800 ;
             return 1 ;
         }
         if( xkey & 0x1000 ) {        // bit 12: blackout
 			* keycode = (int) VK_POWER ;
-            * keydown = ((pwiikey&0x1000)==0 );
+            * keydown = ((nkey&0x1000)!=0 );
 			pwiikey ^= 0x1000 ;
 			return 1 ;
         }
-
+        if( xkey & 0x400 ) {                            // bit 10: tm
+			pwiikey ^= 0x400 ;
+			* keycode = (int) VK_EM ;
+            pwii_event_marker = * keydown = ((nkey&0x400)!=0 );
+            if ( pwii_event_marker ){
+                dvr_log("TraceMark pressed!");
+            }
+			return 1 ;
+        }
         if( xkey & 0x100 ) {        // bit 8: front camera rec
             if( (pwiikey & 0x100 )==0 ) {
                 rec_pwii_toggle_rec_front() ;
@@ -352,24 +345,7 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
                 dvr_log("C2 pressed!");
             }
         }
-        dio_lock();
-        pwiikey = p_dio_mmap->pwii_buttons ;            // save key pad status
-        dio_unlock();
-    }
-    else {                                              // no key
-        // REC, C1 auto clear
-        if( pwiikey & 0x300 ) {
-            if( (g_timetick-key_timetick)>1200 || g_timetick<key_timetick ){
-                dio_lock();
-                if( p_dio_mmap->pwii_buttons & 0x100 ) {
-                    p_dio_mmap->pwii_buttons &= ~0x100 ;		// auto clear
-                }
-                if( p_dio_mmap->pwii_buttons & 0x200 ) {
-                    p_dio_mmap->pwii_buttons &= ~0x200 ;		// auto clear
-                }
-                dio_unlock();
-            }
-        }
+        pwiikey = nkey ;
     }
     return 0 ;
 }
@@ -420,56 +396,92 @@ void dio_smartserveron()
     }
 }
 
-// checking io maps and dvr commands, return if io pins changed after last check
-int dio_check()
+void dio_checkwifi()
 {
-    int res=0 ;
     int smsdetect=0 ;       // smart server detection requested?
 
-    dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ){
-        // dvrcmd :  1: restart(resume), 2: suspend, 3: stop record, 4: start record
-        if( p_dio_mmap->dvrcmd == 1 ) {
-            p_dio_mmap->dvrcmd = 0 ;
-            app_state = APPRESTART ;
-            dio_standby_mode=0;
-        }
-        else if( p_dio_mmap->dvrcmd == 2 ) {
-            p_dio_mmap->dvrcmd = 0 ;
-            app_state = APPDOWN ;
-        }
-        else if( p_dio_mmap->dvrcmd == 3 ) {
-            p_dio_mmap->dvrcmd = 0 ;
-            dio_standby_mode=1;
-            dio_unlock();
-            rec_stop();
-            dio_lock();
-        }
-        else if( p_dio_mmap->dvrcmd == 4 ) {
-            p_dio_mmap->dvrcmd = 0 ;
-            dio_standby_mode=0;
-            dio_unlock();
-            rec_start ();
-            dio_lock();
-        }
-        res = (dio_old_inputmap != p_dio_mmap->inputmap) ;
-#ifdef    PWII_APP
-        res = res || pwii_event_marker ;
-#endif
-        dio_old_inputmap = p_dio_mmap->inputmap ;
-
+        dio_lock();
         // smartserver probe ?
         if( p_dio_mmap->wifi_req!=0 && p_dio_mmap->smartserver==0 ) {
             smsdetect=1 ;
         }
+        dio_unlock();
     }
-    dio_unlock();
 
     // probe smart server
     if( smsdetect ) {
-        static char smartsvrmsg[]="lookingforsmartserver" ;
-        net_broadcast("rausb0", 49954, smartsvrmsg, strlen(smartsvrmsg) );
+        net_broadcast("rausb0", 49954, (void *)"lookingforsmartserver", 21 );
     }
+}
+
+// checking io maps and dvr commands, return if io pins changed after last check
+int dio_check()
+{
+    int res=0 ;
+
+    if( p_dio_mmap && p_dio_mmap->iopid ){
+        dio_lock();
+        if( p_dio_mmap->dvrcmd ) {
+            // dvrcmd :  1: restart(resume), 2: suspend, 3: stop record, 4: start record
+            if( p_dio_mmap->dvrcmd == 1 ) {
+                app_state = APPRESTART ;
+                dio_standby_mode=0;
+            }
+            else if( p_dio_mmap->dvrcmd == 2 ) {
+                app_state = APPDOWN ;
+            }
+            else if( p_dio_mmap->dvrcmd == 3 ) {
+                dio_unlock();
+                rec_stop();
+                dio_lock();
+            }
+            else if( p_dio_mmap->dvrcmd == 4 ) {
+                dio_unlock();
+                rec_start ();
+                dio_lock();
+            }
+            p_dio_mmap->dvrcmd = 0 ;
+        }
+        if( p_dio_mmap->iomode > IOMODE_SHUTDOWNDELAY || p_dio_mmap->iomode<IOMODE_QUIT ) {
+            if( dio_standby_mode == 0 ) {
+                dio_unlock();
+                rec_stop();
+                dio_lock();
+                dio_standby_mode=1;
+            }
+        }
+        else {
+            if( dio_standby_mode ) {
+                dio_unlock();
+                rec_start();
+                dio_lock();
+                dio_standby_mode=0;
+            }
+        }
+        
+        res = (dio_old_inputmap != p_dio_mmap->inputmap) ;
+#ifdef    PWII_APP
+        res = ( res || pwii_event_marker );
+#endif
+        dio_old_inputmap = p_dio_mmap->inputmap ;
+        dio_unlock();
+    }
+
+    return res ;
+}
+
+int dio_getiomsg( char * oldmsg )
+{
+    int res = 0 ;
+    dio_lock();
+    if( p_dio_mmap ){
+        if( strcmp( oldmsg, p_dio_mmap->iomsg )!=0 ) {
+            strcpy( oldmsg, p_dio_mmap->iomsg );
+            res=1 ;
+        }
+    }
+    dio_unlock();
     return res ;
 }
 

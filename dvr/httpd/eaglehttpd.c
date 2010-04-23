@@ -46,11 +46,11 @@ static char * mime_type[][2] =
 char * document_root="/home/www" ;
 
 #define KEEP_ALIVE_TIMEOUT  (60)
-#define CACHE_MAXAGE        (600)
+#define CACHE_MAXAGE        (900)
 
 int keep_alive ;
-int dynamic_page ;      // if page is dynamic ?
 long etag ;             // Etag of request document
+time_t modtime ;        // last modified time
 
 // check if data ready to read
 int recvok(int fd, int usdelay)
@@ -294,34 +294,53 @@ void http_error( int status, char * title )
     fputs(errtxt, stdout);
 }
 
-// return true if cache is fresh
-int http_cache( char * reqfile )
+// update page modified time and etag
+void cache_upd(char * pagefile)
 {
-    char modtime[120];
-    char etagstr[16] ;
-    int i ;
     struct stat filest ;
-    unsigned char * s ;
+    int i ;
+    unsigned char * et ;
+    if( pagefile==NULL || stat( pagefile, &filest ) < 0 ) {
+        modtime=time(NULL);
+    }
+    else {
+        if( modtime<filest.st_mtime ) {
+            modtime=filest.st_mtime ;
+        }
+        et = (unsigned char *) &filest ;
+        for( i=0; i<(int)sizeof(filest); i++) {
+            etag+=((unsigned int)*et++)<<(i%24); 
+        }
+    }
+}
 
-    if( reqfile==NULL || stat( reqfile, &filest ) < 0 ) {
+// return true if cache is fresh
+int http_cache()
+{
+    char tbuf[120];
+    char etagstr[16] ;
+    char * s ;
+
+    if( modtime==(time_t)0 || etag==0 ) {
         http_setheader( "Cache-Control", "no-cache" );
         return 0 ;
     }
 
-    sprintf( modtime, "max-age=%d",  CACHE_MAXAGE );
-    http_setheader( "Cache-Control", modtime );
-
-    // Modified time
-    strftime( modtime, sizeof(modtime), RFC1123FMT, gmtime( &(filest.st_mtime) ) );
-    http_setheader( "Last-Modified", modtime );
-
-    //  etag, calcuated check sum from full file stat for now    
-    s = (unsigned char *)&filest ;
-    if( etag == 0 ) {
-        for( i=0 ; i<sizeof(filest); i++) {
-            etag+=((unsigned int)*s++)<<(i%24);
+    if( (s=getenv( "REQUEST_METHOD" )) ) {
+        if( strcmp(s, "POST")==0 ) {
+            http_setheader( "Cache-Control", "no-cache" );
+            return 0 ;
         }
     }
+    
+    sprintf( tbuf, "max-age=%d",  CACHE_MAXAGE );
+    http_setheader( "Cache-Control", tbuf );
+
+    // Modified time
+    strftime( tbuf, sizeof(tbuf), RFC1123FMT, gmtime( &modtime ) );
+    http_setheader( "Last-Modified", tbuf );
+
+    //  etag
     sprintf(etagstr, "\"%x\"", (unsigned int)etag);
     http_setheader( "Etag", etagstr);
 
@@ -329,8 +348,8 @@ int http_cache( char * reqfile )
     if( (s=getenv("HTTP_IF_NONE_MATCH"))) {
         if( strcmp( s, etagstr )==0 ) {        // Etag match?
             if( (s=getenv("HTTP_IF_MODIFIED_SINCE"))) {
-                if( strcmp( s, modtime )==0 ) {     // Modified time match?
-                    return 1 ;
+                if( strcmp( s, tbuf )==0 ) {   // Modified time match?
+                    return 1 ;                 // cache is fresh
                 }
             }
         }
@@ -444,7 +463,7 @@ int cgi_run(char * execfile )
         }
     }
     
-    http_cache(NULL);
+    http_cache();
     http_header( 200, "OK", NULL, len-ftell(fp) );
 
     int ch ;
@@ -566,21 +585,21 @@ void smallssi_include_file( char * ifilename )
     if( fp==NULL ) {
         return ;
     }
+    cache_upd(ifilename);
     while( (r=smallssi_gettoken(fp, linebuf, sizeof(linebuf) ) )>0 ) {
         if( r<8 ) {
             fputs(linebuf, stdout);
         }
         else if( strncasecmp(linebuf, "<!--#include ", 13) == 0 ) {		// found ssi include command
             smallssi_include(linebuf);
-            dynamic_page = 1; 
         }
         else if( strncasecmp(linebuf, "<!--#echo ", 10) == 0 ) {		// found ssi echo command
             smallssi_echo(linebuf);
-            dynamic_page = 1; 
+            cache_upd(NULL);
         }
         else if( strncasecmp(linebuf, "<!--#exec ", 10) == 0 ) {		// found ssi exec command
             smallssi_exec(linebuf);
-            dynamic_page = 1; 
+            cache_upd(NULL);
         }
         else {
             fputs(linebuf, stdout);		// pass to client
@@ -957,6 +976,7 @@ void smallssi_run( char * ssipath )
     setenv("POST_FILE_TMPSSI", ssifile, 1 );
     int hssifile = open(ssifile, O_RDWR|O_CREAT, S_IRWXU );
     dup2( hssifile, 1 ) ;
+    close( hssifile );
 
     smallssi_include_file( ssidir );
     
@@ -965,9 +985,6 @@ void smallssi_run( char * ssipath )
     dup2( dupstdout, 1 );
     close( dupstdout );
 
-    int len = lseek( hssifile, 0, SEEK_END ) ;
-
-    http_cache(NULL);
 /*
     if( dynamic_page ) {
         http_cache(0, (time_t)0);
@@ -976,16 +993,21 @@ void smallssi_run( char * ssipath )
         http_cache( CACHE_MAXAGE, 0 );
     }
 */
-    
-    http_header( 200, "OK", "text/html; charset=UTF-8", len );
-
-    lseek( hssifile, 0, SEEK_SET );
-    fp = fdopen( hssifile, "r" );
-    int ch ;
-    while( (ch=fgetc(fp))!=EOF ) {
-        fputc( ch, stdout );
+    if( http_cache() ) {       // check if cache fresh?
+        // use cahce
+        http_header( 304, "Not modified", NULL, 0 );        // let browser to use cache
     }
-    fclose( fp ) ;
+    else {
+        fp = fopen( ssifile, "r" );
+        fseek( fp, 0, SEEK_END );
+        http_header( 200, "OK", "text/html; charset=UTF-8", ftell(fp) );
+        fseek( fp, 0, SEEK_SET );
+        int ch ;
+        while( (ch=fgetc(fp))!=EOF ) {
+            fputc( ch, stdout );
+        }
+        fclose( fp ) ;
+    }
     unlink( ssifile );
     unsetenv( "POST_FILE_TMPSSI" );
 }
@@ -1127,13 +1149,12 @@ void http()
     FILE* fp;
     struct stat sb;
 
-    dynamic_page = 0;           // assume it is static page
-
     if( recvok(0, keep_alive*1000000)<=0 ) {
         return ;
     }
     keep_alive=0 ;
     etag=0 ;
+    modtime=0 ;
     
     if ( fgets( linebuf, sizeof(linebuf), stdin ) == NULL )
     {
@@ -1269,7 +1290,8 @@ void http()
         goto http_done ;
     }
 
-    if( http_cache( linebuf ) ) {       // check if cache match?
+    cache_upd( linebuf );
+    if( http_cache() ) {       // check if cache fresh?
         // use cahce
         http_header( 304, "Not modified", NULL, 0 );        // let browser to use cache
         goto http_done ;

@@ -664,6 +664,7 @@ void rec_postrecord(int channel);
 void rec_lockstart(int channel);
 void rec_lockstop(int channel);
 int  rec_state(int channel);
+int  rec_lockstate(int channel);
 void rec_lock(time_t locktime);
 void rec_unlock();
 void rec_break();
@@ -1264,11 +1265,13 @@ int dio_kickwatchdog();
 //void dio_videolost_led(int v);
 int dio_syncrtc();
 int dio_check() ;
+void dio_checkwifi();
 int dio_setstate( int status ) ;
 int dio_clearstate( int status ) ;
 void dio_setchstat( int channel, int ch_state );
 int dio_getgforce( float * gfb, float * glr, float *gud );
 int dio_iobusy();
+int dio_getiomsg( char * oldmsg );
 void dio_smartserveron();
 
 #ifdef PWII_APP

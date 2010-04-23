@@ -153,6 +153,9 @@ class rec_channel {
                      m_recstate == REC_LOCK )
                    );
         }
+        int  lockstate() {
+            return( m_recording && m_recstate == REC_LOCK ) ;
+        }
         void update();          						// update recording status
         void alarm();						            // set recording alarm.
 
@@ -1131,6 +1134,24 @@ int  rec_state(int channel)
         }
     }    
     return rec_prelock_lock ;       // if pre-lock thread running, also consider busy
+}
+
+// return recording channel state
+//    0: not recording
+//	  1: recording
+int  rec_lockstate(int channel)
+{
+    if (channel>=0 && channel < rec_channels)
+        return recchannel[channel]->lockstate();
+    else {
+        int i;
+        for( i=0; i<rec_channels; i++ ) {
+            if( recchannel[i]->lockstate() ) {
+                return 1;
+            }
+        }
+    }    
+    return 0 ;
 }
 
 void rec_break()

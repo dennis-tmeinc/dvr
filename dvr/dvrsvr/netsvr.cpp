@@ -185,7 +185,7 @@ int net_broadcast(char * interface, int port, void * msg, int msgsize )
     struct ifreq ifr ;
     memset( &ifr, 0, sizeof(ifr));
     strcpy( ifr.ifr_name, interface );
-    if( ioctl( msgfd, SIOCGIFADDR, &ifr)>=0 ) {
+    if( ioctl( msgfd, SIOCGIFBRDADDR, &ifr)>=0 ) {
         // address ready
         char brname[20] ;
         getnameinfo( &(ifr.ifr_broadaddr), sizeof(ifr.ifr_broadaddr), brname, sizeof(brname), NULL, 0, NI_NUMERICHOST );

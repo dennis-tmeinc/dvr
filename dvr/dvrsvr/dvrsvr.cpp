@@ -2083,6 +2083,7 @@ int dvr_openlive(int sockfd, int channel)
             if( ans.anssize>0 ) {
                 char * buf = new char [ans.anssize] ;
                 net_recv(sockfd, buf, ans.anssize );
+                delete buf ;
             }
             return 1 ;
         }

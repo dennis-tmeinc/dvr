@@ -476,6 +476,7 @@ public:
 		return NULL ;
 	}
 
+    // interval on miliseconds
     void settimer( int interval, int id ) {
 		m_timer.id = id ;
         if( id ) {
