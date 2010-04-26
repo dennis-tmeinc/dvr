@@ -42,7 +42,6 @@ window * window::focuswindow ;
 window * window::mouseonwindow ;
 int window::gredraw ;
 static cursor * Screen_cursor ;
-int window::timertick ;
 
 // to support video out liveview on ip camera
 int screen_liveview_channel ;
@@ -957,7 +956,7 @@ class video_screen : public window {
                     if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
 //                        settimer( 2000 );
                         if( keycode == m_keypad_state_p && // pressed same key, double the jump timer
-                           (window::timertick-m_keytime)/1000 < screen_play_doublejumptimer ) {
+                           (g_timetick-m_keytime)/1000 < screen_play_doublejumptimer ) {
                             if( m_jumptime < screen_play_maxjumptime ) {
                                 m_jumptime *= 2 ;
                             }
@@ -974,7 +973,7 @@ class video_screen : public window {
                     if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
 //                        settimer( 2000 );
                         if( keycode == m_keypad_state_p && // pressed same key, double the jump timer
-                           (window::timertick-m_keytime)/1000 < screen_play_doublejumptimer ) {
+                           (g_timetick-m_keytime)/1000 < screen_play_doublejumptimer ) {
                             if( m_jumptime < screen_play_maxjumptime ) {
                                 m_jumptime *= 2 ;
                             }
@@ -1150,7 +1149,7 @@ class video_screen : public window {
                 }
 */            
                
-                m_keytime = window::timertick ;
+                m_keytime = g_timetick ;
                 settimer( 0, 0 );           // delete timer
                 m_keypad_state = 0 ;
                 m_keypad_state_p = keycode ;
@@ -1278,13 +1277,17 @@ class iomsg : public window {
             hide();
         }
     }
+        
         // event handler
     protected:
         virtual void paint() {
-            setcolor (COLOR(0,0,0,0)) ;	// full transparent
             setpixelmode (DRAW_PIXELMODE_COPY);
-            fillrect ( 0, 0, m_pos.w, m_pos.h );	
             resource font("mono32b.font");
+            int h = font.fontheight();
+            int w = font.fontwidth();
+            int l = strlen(m_iomsg);
+            setcolor (COLOR(0,50,240,128)) ;
+            fillrect ( 0, 0, w*l, h );	
             setcolor(COLOR(240,240,80,200));
             drawtext( 0, 0, m_iomsg, font );
         }
@@ -1445,12 +1448,6 @@ int screen_draw()
     return 0;
 }
 
-void	screen_timer()
-{
-    window::timertick = g_timetick;
-    topwindow->checktimer();
-}
-
 struct mouse_event {
     int x, y ;
     int buttons ;
@@ -1515,7 +1512,7 @@ static int getmouseevent( struct mouse_event * mev, int usdelay )
             mousex=x ;
             mousey=y ;
             mousebuttons=buttons ;
-            mouseeventtime = window::timertick ;
+            mouseeventtime = g_timetick ;
             mev->time = mouseeventtime ;
 
             if( !Screen_cursor->isshow() ) {
@@ -1529,7 +1526,7 @@ static int getmouseevent( struct mouse_event * mev, int usdelay )
     else {
         usleep(usdelay);
     }
-    if( (window::timertick-mouseeventtime) > 60000 ) {
+    if( (g_timetick-mouseeventtime) > 60000 ) {
         Screen_cursor->hide();
     }
     return 0 ;
@@ -1557,8 +1554,8 @@ int screen_io(int usdelay)
     int event=0 ;
 
     // window timer
-    screen_timer();
-
+    topwindow->checktimer();
+    
     // key pad
     while( getkeyevent( &kev ) ) {
         event = 1 ;

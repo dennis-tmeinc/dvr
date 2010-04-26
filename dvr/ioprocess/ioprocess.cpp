@@ -3192,7 +3192,7 @@ int main(int argc, char * argv[])
                         p_dio_mmap->smartserver=0 ;         // smartserver detected
                         p_dio_mmap->wifi_req=1 ;            // request to search wifi
                         p_dio_mmap->iomode=IOMODE_DETECTWIRELESS ;
-                        strcpy( p_dio_mmap->iomsg, "Detected Smart Server!");
+                        strcpy( p_dio_mmap->iomsg, "Detecting Smart Server!");
                         dio_unlock();
                         
                         modeendtime = runtime + 60000 ;     // 1 min to detect smart server
@@ -3230,10 +3230,10 @@ int main(int argc, char * argv[])
                             smartftp_retry=3 ;
                             smartftp_start() ;
                             dio_lock();
-                            strcpy( p_dio_mmap->iomsg, "Uploading files to Smart Server!");
+                            strcpy( p_dio_mmap->iomsg, "Uploading Video to Smart Server!");
                             p_dio_mmap->iomode = IOMODE_UPLOADING ;
                             dio_unlock();
-                            modeendtime = runtime+3600*1000 ;
+                            modeendtime = runtime+getstandbytime()*1000 ;   // using standby time for uploading
                             dvr_log("Enter uploading mode. (mode %d).", p_dio_mmap->iomode);
                             buzzer( 3, 250, 250);
                         }
@@ -3284,9 +3284,14 @@ int main(int argc, char * argv[])
                         p_dio_mmap->wifi_req=0 ;            // request to search wifi
                         p_dio_mmap->iomode=IOMODE_STANDBY ;
                         dio_unlock();
-                        modeendtime = runtime+getstandbytime()*1000 ;   // standby time
+                        modeendtime += 30*1000 ;            // extend extra 30 seconds
                         dvr_log("Enter standby mode. (mode %d).", p_dio_mmap->iomode);
                     }
+                }
+            }
+            else if( p_dio_mmap->iomode==IOMODE_SUSPEND ) {                    // suspend io, for file copying process
+                if( p_dio_mmap->poweroff != 0 ) {
+                    mcu_poweroffdelay ();
                 }
             }
             else if( p_dio_mmap->iomode==IOMODE_STANDBY ) {                    // standby

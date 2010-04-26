@@ -121,5 +121,6 @@ struct dio_mmap {
 #define IOMODE_SHUTDOWN        (6)
 #define IOMODE_REBOOT          (7)
 #define IOMODE_REINITAPP       (8)
+#define IOMODE_SUSPEND         (9)
 
 #endif

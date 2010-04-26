@@ -17,3 +17,13 @@ release 10.0412.18
 release 10.0412.18 (tvs)
   Start recording (as locked file) when system startup.
 
+release 10.0426.18 (pwii)
+  One line overlay msg for io. Currently display "Detecting Smart Server", "Uploading Video to Smart Server", "Copying Video Files". Message set from ioprocess or other process.
+  Up to 1 minute time after shutdown delay timeout to detect smart server availablity.
+  If smart server detected, run "smartftp".
+  If no smart server detected, go to standby mode. On standby mode, CDC is been turn off.
+  Standby setting time include smartftp uploading time and standby time. After standby timeout, power off system
+  Fixed lost audio when play back Front Camera
+  Extend HD (CF card) mounting time to 120 seconds. (CF mounting may be up to 100s if it is not umount properly. This may cause system rebooting on previous firmware).
+
+

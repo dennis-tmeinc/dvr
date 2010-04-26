@@ -842,6 +842,7 @@ void *rec_thread(void *param)
                     recchannel[ch]->closefile();
                 }
                 norec=0 ;
+                sync();
             }
             else if( rec_pause > 0 ) {
                 rec_pause-- ;

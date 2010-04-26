@@ -123,7 +123,6 @@ public:
 	static window * focuswindow ;	    // current focussed window
 	static window * mouseonwindow ;	    // current mouse pointed window
 	static int      gredraw ;		    // globle window redraw flag
-	static int      timertick ;          // globle window timer tick
 	static char     resourcepath[128] ;  // resource file location
 
 	window() {
@@ -483,7 +482,7 @@ public:
             if( interval>0 ) {
         		m_timer.interval = interval ;
             }
-    		m_timer.starttime = timertick ;
+    		m_timer.starttime = g_timetick ;
         }
 	}
 	
@@ -496,7 +495,7 @@ public:
         if( m_alive==0 ) {
             delete this ; 
         }
-        else if( m_timer.id && timertick >= (m_timer.starttime+m_timer.interval) ) {
+        else if( m_timer.id && g_timetick >= (m_timer.starttime+m_timer.interval) ) {
             int tid = m_timer.id ;
             m_timer.id = 0 ;
             ontimer(tid);
