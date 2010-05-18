@@ -2,11 +2,82 @@
 #include "genclass.h"
 #include "cfg.h"
 
+static char defconf[]="/davinci/dvr/defconf" ;
+
 config::config(char *configfilename)
 {
 	m_configfile=configfilename;
 	readtxtfile ( configfilename, m_strlist );
 	m_dirty = 0;
+
+    // merge default config
+    mergedefconf( defconf );
+}
+
+// merge default configure
+void config::mergedefconf( char * defconffile )
+{
+    int i ;
+    string mgsection ;
+    char * mgkey ;
+    char * mgvalue ;
+    string li ;
+    char * line ;
+    char * p ;
+    array <string> deflist ;
+    readtxtfile( defconffile, deflist );
+    for( i=0; i<deflist.size(); i++) {
+        li = str_skipspace( deflist[i].getstring() ) ;
+        line = li.getstring();
+        if (*line == '[') 
+        {
+            mgsection = str_skipspace(line + 1);
+            line = mgsection.getstring();
+            p = strchr( line, ']' ); 
+            if( p ) {
+                *p='\0' ;
+            }
+            str_trimtail(line);
+        }
+        else if( *line == '#' || *line == ';' ) {
+            continue ;
+        }
+        else if( (mgvalue= strchr( line, '=' ))!=NULL ) {
+            *mgvalue='\0' ;
+            mgkey=line ;
+            str_trimtail( mgkey );
+            mgvalue=str_skipspace( mgvalue+1 );
+            p=strchr( mgvalue, '#' );
+            if( p ) {
+                *p=0 ;
+            }
+            p=strchr( mgvalue, ';' );
+            if( p ) {
+                *p=0 ;
+            }
+            str_trimtail(mgvalue);
+            if( getvalue(mgsection.getstring(), mgkey).length()==0 ) {
+                setvalue(mgsection.getstring(), mgkey, mgvalue );
+            }
+        }
+    }
+}
+            
+// search for section
+int config::nextsection(int idx)
+{
+	char *line;
+    if( idx<0 || idx>=m_strlist.size() ) {
+        return -1 ;
+    }
+	for (; idx < m_strlist.size(); idx++) {
+		line = m_strlist[idx].getstring();
+		line = str_skipspace(line);
+		if (*line == '[') {
+            return idx ;
+        }
+	}
+	return -1;					// not found ;
 }
 
 // search for section
@@ -213,7 +284,13 @@ void config::setvalue(char *section, char *key, char *value)
 		// section found
 		keyindex = findkey(sectionindex, key);
 		if (keyindex < 0) {								// no key found
-			m_strlist.insert(keystr,sectionindex);
+            keyindex = nextsection( sectionindex ) ;
+            if( keyindex<0 ) {
+                m_strlist.add(keystr);
+            }
+            else {
+                m_strlist.insert(keystr,keyindex);
+            }
 		}
 		else {											// key found
 			m_strlist[keyindex] = keystr ;

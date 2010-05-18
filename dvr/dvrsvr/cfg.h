@@ -22,7 +22,9 @@ class config {
 	string  m_configfile;
 	string  m_tempstr;
 	int 	m_dirty;
-	int findsection(char *section);
+    void mergedefconf( char * defconffile );
+    int nextsection(int idx);
+    int findsection(char *section);
 	int findkey(int section, char *key);
   public:
 	config(char *configfilename);

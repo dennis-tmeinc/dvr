@@ -19,8 +19,8 @@
 ./dvr/md5check
 ./dvr/cfg
 ./dvr/passwd
+./dvr/defconf
 ./dvr/dvrsvr.conf
-./dvr/dvrsvr.conf ./dvr/dvrsvr.conf.def
 ./dvr/eth_ip
 ./dvr/eth_mask
 ./dvr/wifi_ip

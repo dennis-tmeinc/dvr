@@ -73,6 +73,7 @@ extern pthread_mutex_t mutex_init ;
 extern char dvrconfigfile[];
 extern int app_state;
 extern int system_shutdown;
+extern float g_cpu_usage ;
 extern int g_lowmemory;
 extern int g_memdirty;
 extern int g_memused;
@@ -654,6 +655,7 @@ double operator - ( struct dvrtime &t1, struct dvrtime &t2 ) ;
 
 extern string rec_basedir;
 extern int rec_pause;           // pause recording temperary
+extern int rec_busy ;
 extern int rec_watchdog ;      // recording watchdog
 void rec_init();
 void rec_uninit();
@@ -708,6 +710,10 @@ void disk_getdaylist(array <int> & daylist, int channel);
 int disk_unlockfile( dvrtime * begin, dvrtime * end );
 void disk_check();
 void disk_sync();
+void disk_archive_start();
+void disk_archive_stop();
+int disk_archive_runstate();
+int disk_stat(int * recordtime, int * lockfiletime, int * remaintime);
 int disk_renew(char * newfilename, int add=1);
 void disk_init();
 void disk_uninit();
@@ -1270,7 +1276,7 @@ int dio_setstate( int status ) ;
 int dio_clearstate( int status ) ;
 void dio_setchstat( int channel, int ch_state );
 int dio_getgforce( float * gfb, float * glr, float *gud );
-int dio_iobusy();
+int dio_iorun();
 int dio_getiomsg( char * oldmsg );
 void dio_smartserveron();
 
@@ -1342,8 +1348,5 @@ void screen_uninit();
 int screen_io(int usdelay);
 int screen_setliveview( int channel );
 int screen_menu(int level);
-
-// get cpu_usage between calls
-float cpu_usage();
 
 #endif							// __dvr_h__

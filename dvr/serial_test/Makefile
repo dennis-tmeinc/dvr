@@ -8,8 +8,8 @@ CC=$(CROSS_COMPILE_PREFIX)gcc
 
 SOURCES=serialtest.c
 
-#EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h ../ioprocess/diomap.h
-#EXTSOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp
+EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h ../ioprocess/diomap.h
+EXTSOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp
 
 HEADERS=
 
@@ -19,14 +19,14 @@ LDFLAGS= -lpthread -lstdc++ -L../dvrsvr/eagle32 -lsdk -ldadsp ../dvrsvr/eagle32/
 
 CFLAGS=-I../dvrsvr -g -Wall
 
-all : serialtest gentest
+all : gentest
 
 serialtest : $(OBJS) $(HEADERS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 	cp serialtest  $(debug_folder)
 
-gentest : gentest.c
-	$(CC) $(CFLAGS) -o $@ gentest.c $(LDFLAGS)
+gentest : gentest.cpp $(EXTHEADERS) $(EXTSOURCES)
+	$(CC) $(CFLAGS) -o $@ gentest.cpp $(EXTSOURCES) $(LDFLAGS)
 	cp $@  $(debug_folder)
 
 %.o : %.c $(HEADERS) $(EXTHEADERS)

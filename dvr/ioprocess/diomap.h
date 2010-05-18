@@ -108,6 +108,7 @@ struct dio_mmap {
 #define DVR_DISKREADY   (0x20)
 #define DVR_NODATA      (0x40)
 #define DVR_LOCK        (0x80)
+#define DVR_ARCH        (0x100)         // ARCH
 #define DVR_FAILED      (0x4000)        // should ioprocess reboot system?
 #define DVR_ERROR       (0x8000)
 
@@ -115,12 +116,13 @@ struct dio_mmap {
 #define IOMODE_QUIT            (0)
 #define IOMODE_RUN             (1)
 #define IOMODE_SHUTDOWNDELAY   (2)
-#define IOMODE_DETECTWIRELESS  (3)
-#define IOMODE_UPLOADING       (4)
-#define IOMODE_STANDBY         (5)
-#define IOMODE_SHUTDOWN        (6)
-#define IOMODE_REBOOT          (7)
-#define IOMODE_REINITAPP       (8)
-#define IOMODE_SUSPEND         (9)
+#define IOMODE_SAVEFILE        (3)
+#define IOMODE_DETECTWIRELESS  (4)
+#define IOMODE_UPLOADING       (5)
+#define IOMODE_STANDBY         (6)
+#define IOMODE_SHUTDOWN        (7)
+#define IOMODE_REBOOT          (8)
+#define IOMODE_REINITAPP       (9)
+#define IOMODE_SUSPEND         (10)
 
 #endif

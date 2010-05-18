@@ -5,8 +5,10 @@ string rec_basedir;
 static pthread_t rec_threadid;
 static int rec_run = 0 ;           // 0: quit record thread, 1: recording
 
+int    rec_busy ;
 int    rec_pause = 0 ;             // 1: to pause recording, while network playback
 static int rec_fifo_size = 4000000 ;
+int    rec_fifobusy ;
 int    rec_lock_all = 0 ;			// all files save as locked file
 struct dvrtime  rec_cliptime ;      // clip starting time. (pre-recording mode only)
 
@@ -126,6 +128,7 @@ class rec_channel {
         void setforcerecording(int force){
             m_forcerecording = force ;
             m_force_starttime = g_timetick ;
+            update();
         }
 #endif
         
@@ -373,6 +376,9 @@ void rec_channel::putfifo(rec_fifo * fifo)
             m_fifotail->next = fifo;
             m_fifotail = fifo;
             m_fifosize+=fifo->bufsize ;
+            if( m_fifosize>rec_fifobusy ) {
+                rec_busy=1 ;
+            }
         }
         fifo->next = NULL ;
     }
@@ -723,9 +729,7 @@ void * rec_prelock_thread(void * param)
     
     mem_free( param );
 
-    dvr_lock() ;
     rec_prelock_lock = 0 ;
-    dvr_unlock() ;
 
     return NULL ;
 }
@@ -836,13 +840,16 @@ void *rec_thread(void *param)
             }
         }
         if( wframes==0 ) {
+            rec_busy=0 ;
             usleep(100000);
 			if( ++norec > 50 ) {
                 for (ch = 0; ch < rec_channels; ch++) {
                     recchannel[ch]->closefile();
                 }
                 norec=0 ;
+                dvr_lock();
                 sync();
+                dvr_unlock();
             }
             else if( rec_pause > 0 ) {
                 rec_pause-- ;
@@ -856,6 +863,8 @@ void *rec_thread(void *param)
         recchannel[ch]->closefile();
     }
     file_sync();
+    rec_busy=0 ;
+
     return NULL;
 }
 
@@ -1025,6 +1034,14 @@ void rec_init()
     if( i>1000000 && i<16000000 ) {
         rec_fifo_size=i ;
     }
+
+    rec_fifobusy = dvrconfig.getvalueint("system", "record_fifobusy");
+    if( rec_fifobusy < rec_fifo_size/10 ) {
+        rec_fifobusy = rec_fifo_size/10 ;
+    }
+    else if( rec_fifobusy > rec_fifo_size/2 ) {
+        rec_fifobusy = rec_fifo_size/2 ;
+    }
     
     rec_threadid=0 ;
     if( dvrconfig.getvalueint("system", "norecord")>0 ) {
@@ -1050,6 +1067,8 @@ void rec_init()
     }
 
 	rec_lock_all = dvrconfig.getvalueint("system", "lock_all");
+    rec_busy=0;
+
 }
 
 void rec_uninit()
@@ -1106,6 +1125,7 @@ void rec_record(int channel)
 void rec_start()
 {
     int i;
+    rec_busy=0;
     for(i=0; i<rec_channels; i++) {
         recchannel[i]->start();
     }
@@ -1117,6 +1137,7 @@ void rec_stop()
     for(i=0; i<rec_channels; i++) {
         recchannel[i]->stop();
     }
+    rec_busy=0;
 }
 
 // return recording channel state

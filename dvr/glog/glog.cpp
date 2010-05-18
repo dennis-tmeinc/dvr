@@ -1119,12 +1119,12 @@ int	sensor_log()
     int log_vri=0 ;
     
     dio_lock();
-    if( strcmp(st_pwii_VRI, p_dio_mmap->pwii_VRI)!=0 ) {
+    if( p_dio_mmap->pwii_VRI[0] && strcmp(st_pwii_VRI, p_dio_mmap->pwii_VRI)!=0 ) {
         strncpy(st_pwii_VRI, p_dio_mmap->pwii_VRI, sizeof( st_pwii_VRI )-1);
         log_vri=1 ;
     }
     dio_unlock();
-    if( log_vri && st_pwii_VRI[0] ) {
+    if( log_vri ) {
         gps_logprintf( 18, ",%s", st_pwii_VRI ) ;
     }
 

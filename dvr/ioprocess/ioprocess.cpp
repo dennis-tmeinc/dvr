@@ -1344,20 +1344,24 @@ int mcu_checkinputbuf(char * ibuf)
        switch( ibuf[3] ) {
        case '\x05' :                   // Front Camera (REC) button
            dio_lock();
-           p_dio_mmap->pwii_buttons &= ~0x700 ;     // Release other bits
-           p_dio_mmap->pwii_buttons |= 0x100 ;      // bit 8: front camera
+           if( (p_dio_mmap->pwii_output & (1<<12))==0 ) {   // pwii not standby
+               p_dio_mmap->pwii_buttons &= ~0x700 ;     // Release other bits
+               p_dio_mmap->pwii_buttons |= 0x100 ;      // bit 8: front camera
+               pwii_keyreltime = runtime+1000 ;         // auto release
+           }
            dio_unlock();
-           pwii_keyreltime = runtime+1000 ;         // auto release
 //           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&1)!=0) );  // bit 0: c1 led
            mcu_response( ibuf, 1, 0 );                                  // bit 0: c1 led
            break;
 
        case '\x06' :                   // Back Seat Camera (C2) Starts/Stops Recording
            dio_lock();
-           p_dio_mmap->pwii_buttons &= ~0x700 ;     // Release other bits
-           p_dio_mmap->pwii_buttons |= 0x200 ;      // bit 9: back camera
+           if( (p_dio_mmap->pwii_output & (1<<12))==0 ) {   // pwii not standby
+               p_dio_mmap->pwii_buttons &= ~0x700 ;     // Release other bits
+               p_dio_mmap->pwii_buttons |= 0x200 ;      // bit 9: back camera
+               pwii_keyreltime = runtime+1000 ;         // auto release
+           }
            dio_unlock();
-           pwii_keyreltime = runtime+1000 ;         // auto release
 //           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&2)!=0) );  // bit 1: c2 led
            mcu_response( ibuf, 1, 0 );                                  // bit 1: c2 led
            break;
@@ -1365,15 +1369,17 @@ int mcu_checkinputbuf(char * ibuf)
        case '\x07' :                   // TM Button
            mcu_response( ibuf );
            dio_lock();
-           if( ibuf[5] ) {
-               p_dio_mmap->pwii_buttons &= ~0x700 ;     // Release other bits
-               p_dio_mmap->pwii_buttons |= 0x400 ;      // bit 10: tm button
-               pwii_keyreltime = runtime+1000 ;         // auto release
-           }
+           if( (p_dio_mmap->pwii_output & (1<<12))==0 ) {   // pwii not standby
+               if( ibuf[5] ) {
+                   p_dio_mmap->pwii_buttons &= ~0x700 ;     // Release other bits
+                   p_dio_mmap->pwii_buttons |= 0x400 ;      // bit 10: tm button
+                   pwii_keyreltime = runtime+1000 ;         // auto release
+               }
 //  ignor TM release, the bit will be auto release after 1 sec           
 //           else {
 //               p_dio_mmap->pwii_buttons &= (~0x400) ;   // bit 10: tm button
 //           }
+           }
            dio_unlock();
            break;
 
@@ -1407,8 +1413,10 @@ int mcu_checkinputbuf(char * ibuf)
            
        case '\x09' :                        // Video play Control
            dio_lock();
-           p_dio_mmap->pwii_buttons &= (~0x3f) ;
-           p_dio_mmap->pwii_buttons |= ((unsigned char)ibuf[5])^0x3f ;
+           if( (p_dio_mmap->pwii_output & (1<<12))==0 ) {   // pwii not standby
+               p_dio_mmap->pwii_buttons &= (~0x3f) ;
+               p_dio_mmap->pwii_buttons |= ((unsigned char)ibuf[5])^0x3f ;
+           }
            dio_unlock();
            mcu_response( ibuf );
            break;
@@ -2328,6 +2336,42 @@ void setnetwork()
     }
 }
 
+static int disk_mounted = 1 ;       // by default assume disks is mounted!
+static pid_t pid_disk_mount=0 ;
+
+void mountdisks()
+{
+    int status ;
+    if( pid_disk_mount>0 ) {
+        kill(pid_disk_mount, SIGKILL);
+        waitpid( pid_disk_mount, &status, 0 );
+    }
+    pid_disk_mount = fork ();
+    if( pid_disk_mount==0 ) {
+        static char mountdisks[]="/davinci/dvr/mountdisks" ;
+        sleep(5) ;
+        execl(mountdisks, mountdisks, NULL);
+        exit(0);    // should not return to here
+    }
+    disk_mounted=1 ;
+}
+
+void umountdisks()
+{
+    int status ;
+    if( pid_disk_mount>0 ) {
+        kill(pid_disk_mount, SIGKILL);
+        waitpid( pid_disk_mount, &status, 0 );
+    }
+    pid_disk_mount = fork ();
+    if( pid_disk_mount==0 ) {
+        static char umountdisks[]="/davinci/dvr/umountdisks" ;
+        execl(umountdisks, umountdisks, NULL);
+        exit(0);    // should not return to here
+    }
+    disk_mounted=0 ;
+}
+
 // bring up wifi adaptor
 static int wifi_run=0 ;
 void wifi_up()
@@ -2402,6 +2446,7 @@ void buzzer_run( int runtime )
 int smartftp_retry ;
 int smartftp_disable ;
 int smartftp_reporterror ;
+int smartftp_src ;
 
 /*
 void smartftp_log(char * fmt, ...)
@@ -2449,10 +2494,11 @@ void smartftp_log(char * fmt, ...)
 }
 */
 
-void smartftp_start()
+// src == 0 : do "disk", src==1 : do "arch"
+void smartftp_start(int src=0)
 {
-
-    dvr_log( "Start smart server uploading.");
+    smartftp_src = src ;
+    dvr_log( "Start smart server uploading. (%s)", (src==0)?"disks":"arch" );
     pid_smartftp = fork();
     if( pid_smartftp==0 ) {     // child process
         char hostname[128] ;
@@ -2461,22 +2507,27 @@ void smartftp_start()
         // get BUS name
         gethostname(hostname, 128) ;
 
-        // get mount directory
-/*        
-        mountdir[0]=0 ;
-        FILE * fcurdirname = fopen( "/var/dvr/dvrcurdisk", "r" );
+        // get disk base directory
+/*
+         FILE * fcurdirname ;
+        if( src==0 ) {
+            fcurdirname = fopen( "/var/dvr/dvrcurdisk", "r" );
+        }
+        else {
+            fcurdirname = fopen( "/var/dvr/dvrcurdisk", "r" );
+        }
         if( fcurdirname ) {
-            fscanf( fcurdirname, "%s", mountdir );
+            fscanf( fcurdirname, "%s", disk );
             fclose( fcurdirname );
         }
-        if( mountdir[0]==0 ) {
+        if( disk[0]==0 ) {
             exit(102);                  // no disk mounted. quit!
         }
-*/        
-
-//        system("/davinci/dvr/setnetwork");  // reset network, this would restart wifi adaptor
-
-        execl( "/davinci/dvr/smartftp", "/davinci/dvr/smartftp",
+*/
+        
+//      system("/davinci/dvr/setnetwork");  // reset network, this would restart wifi adaptor
+        if( src==0 ) {
+            execl( "/davinci/dvr/smartftp", "/davinci/dvr/smartftp",
               "rausb0",
               hostname,
               "247SECURITY",
@@ -2489,6 +2540,22 @@ void smartftp_start()
               getenv("TZ"), 
               NULL 
               );
+        }
+        else {
+            execl( "/davinci/dvr/smartftp", "/davinci/dvr/smartftp",
+              "rausb0",
+              hostname,
+              "247SECURITY",
+              "/var/dvr/arch",
+              "510",
+              "247ftp",
+              "247SECURITY",
+              "0",
+              smartftp_reporterror?"Y":"N",
+              getenv("TZ"), 
+              NULL 
+              );
+        }
         
 //        smartftp_log( "Smartftp start failed." );
 
@@ -2518,7 +2585,11 @@ int smartftp_wait()
                    --smartftp_retry>0 ) 
                 {
                     dvr_log( "\"smartftp\" failed, retry...");
-                    smartftp_start();
+                    smartftp_start(smartftp_src);
+                }
+                else if(smartftp_src == 0 ){             // do uploading arch disk
+                    smartftp_retry=3 ;
+                    smartftp_start(1) ;
                 }
             }
             else if( WIFSIGNALED(smartftp_status)) {
@@ -2613,7 +2684,7 @@ int appinit()
     }
     fd = open(dvriomap, O_RDWR | O_CREAT, S_IRWXU);
     if( fd<=0 ) {
-        printf("Can't create io map file!\n");
+        dvr_log("Can't create io map file (%s).", dvriomap);
         return 0 ;
     }
     ftruncate(fd, sizeof(struct dio_mmap));
@@ -2651,7 +2722,7 @@ int appinit()
         p_dio_mmap->inputnum = MCU_INPUTNUM ;	
     p_dio_mmap->outputnum = dvrconfig.getvalueint( "io", "outputnum");	
     if( p_dio_mmap->outputnum<=0 || p_dio_mmap->outputnum>32 )
-        p_dio_mmap->outputnum = MCU_INPUTNUM ;	
+        p_dio_mmap->outputnum = MCU_OUTPUTNUM ;	
 
     p_dio_mmap->panel_led = 0;
     p_dio_mmap->devicepower = 0xffff;				// assume all device is power on
@@ -2876,7 +2947,7 @@ int appinit()
 
     hd_timeout = dvrconfig.getvalueint("io", "hdtimeout");
     if( hd_timeout<=0 || hd_timeout>3000 ) {
-        hd_timeout=120 ;             // default timeout 120 seconds
+        hd_timeout=180 ;             // default timeout 180 seconds
     }
 
     pidf = fopen( pidfile, "w" );
@@ -3191,17 +3262,33 @@ int main(int argc, char * argv[])
                         dio_lock();
                         p_dio_mmap->smartserver=0 ;         // smartserver detected
                         p_dio_mmap->wifi_req=1 ;            // request to search wifi
-                        p_dio_mmap->iomode=IOMODE_DETECTWIRELESS ;
-                        strcpy( p_dio_mmap->iomsg, "Detecting Smart Server!");
+                        p_dio_mmap->iomode=IOMODE_SAVEFILE  ;
+                        strcpy( p_dio_mmap->iomsg, "Saving video files!");
                         dio_unlock();
                         
-                        modeendtime = runtime + 60000 ;     // 1 min to detect smart server
-                        dvr_log("Shutdown delay timeout, start detecting smart server. (mode %d).", p_dio_mmap->iomode);
+                        modeendtime = runtime + 900000 ;     // 15 min to save video and clean up disks (to finish archiving)
+                        dvr_log("Shutdown delay timeout, saving files. (mode %d).", p_dio_mmap->iomode);
                     }
                 }
                 else {
                     p_dio_mmap->iomode=IOMODE_RUN ;                        // back to run normal
                     dvr_log("Power on switch, set to running mode. (mode %d)", p_dio_mmap->iomode);
+                }
+            }
+            else if( p_dio_mmap->iomode==IOMODE_SAVEFILE ) {   // shutdown delay
+                if( p_dio_mmap->poweroff ) {
+                    mcu_poweroffdelay ();               // keep system alive
+                }
+                if( p_dio_mmap->dvrpid<=0 ||
+                    ( (p_dio_mmap->dvrstatus & DVR_RECORD )==0 &&
+                        (p_dio_mmap->dvrstatus & DVR_ARCH )==0 ) ||
+                    runtime>modeendtime )
+                {
+                    modeendtime = runtime + 60000 ;     // 1 min more to detect smart server
+                    dio_lock();
+                    strcpy( p_dio_mmap->iomsg, "Detecting Smart Server!");
+                    p_dio_mmap->iomode = IOMODE_DETECTWIRELESS ;
+                    dio_unlock();
                 }
             }
             else if( p_dio_mmap->iomode==IOMODE_DETECTWIRELESS ) {  // close recording and run smart ftp
@@ -3307,6 +3394,8 @@ int main(int argc, char * argv[])
                     dio_unlock();
                     wifi_down();
                     dvr_log("Power on switch, set to running mode. (mode %d)", p_dio_mmap->iomode);
+
+                    mountdisks();
                 }
                 else {
                     mcu_poweroffdelay ();
@@ -3317,9 +3406,15 @@ int main(int argc, char * argv[])
                         (p_dio_mmap->dvrstatus & DVR_NETWORK) )
                     {
                         p_dio_mmap->devicepower=0xffff ;    // turn on all devices power
+                        if( disk_mounted==0 ) {
+                            mountdisks();
+                        }
                     }
                     else {
                         p_dio_mmap->devicepower=0 ;        // turn off all devices power
+                        if( disk_mounted ) {
+                            umountdisks();
+                        }
                     }
 
                     // turn off HD power ?
@@ -3449,7 +3544,7 @@ int main(int argc, char * argv[])
                     mcu_hdpoweron() ;
                 }
                 hdkeybounce = 0 ;
-               
+
                 if( hdinserted &&                      // hard drive inserted
                     p_dio_mmap->dvrpid > 0 &&
                     p_dio_mmap->dvrwatchdog >= 0 &&
@@ -3458,7 +3553,9 @@ int main(int argc, char * argv[])
                 {
                     p_dio_mmap->outputmap ^= HDLED ;
                     
-                    if( ++hdpower>hd_timeout*2 )                // 120 seconds, sometimes it take 100s to mount HD(CF)
+                    if( ( p_dio_mmap->iomode==IOMODE_RUN ||
+                        p_dio_mmap->iomode==IOMODE_SHUTDOWNDELAY ) &&
+                        ++hdpower>hd_timeout*2 )                // 120 seconds, sometimes it take 100s to mount HD(CF)
                     {
                         dvr_log("Hard drive failed, system reset!");
                         buzzer( 10, 250, 250 );

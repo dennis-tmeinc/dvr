@@ -1,44 +1,77 @@
-#include <string.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <sys/mman.h>
+#include <signal.h>
+#include <termios.h>
 #include <unistd.h>
-#include <time.h>
-#include <sys/timex.h>
+#include <sys/reboot.h>
 
-static int abc ;
-void doingnothing()
+#include "../dvrsvr/genclass.h"
+#include "../dvrsvr/cfg.h"
+#include "../ioprocess/diomap.h"
+
+struct dio_mmap * p_dio_mmap ;
+
+char dvriomap[256] = "/var/dvr/dvriomap" ;
+
+// unsigned int outputmap ;	// output pin map cache
+char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
+
+// return 
+//        0 : failed
+//        1 : success
+int appinit()
 {
-    abc+=1 ;
+    int fd ;
+    char * p ;
+    config dvrconfig(dvrconfigfile);
+    string v ;
+    v = dvrconfig.getvalue( "system", "iomapfile");
+    char * iomapfile = v.getstring();
+    if( iomapfile && strlen(iomapfile)>0 ) {
+        strncpy( dvriomap, iomapfile, sizeof(dvriomap));
+    }
+    fd = open(dvriomap, O_RDWR );
+    if( fd<=0 ) {
+        printf("Can't open io map file!\n");
+        return 0 ;
+    }
+    p=(char *)mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
+    close( fd );								// fd no more needed
+    if( p==(char *)-1 || p==NULL ) {
+        printf( "IO memory map failed!");
+        return 0;
+    }
+    p_dio_mmap = (struct dio_mmap *)p ;
+	return (p_dio_mmap->iopid > 0 );
 }
 
-void yield()
+// app finish, clean up
+void appfinish()
 {
-//    struct timeval timeout ;
-//    timeout.tv_sec = 0 ;
-//    timeout.tv_usec = 0 ;
-//        sleep(0);
-//        sleep(1);
-//    select(1,  NULL, NULL, NULL, &timeout);
-    struct timespec tmReq;
-    tmReq.tv_sec = 0;
-    tmReq.tv_nsec = 0;
-    // we're not interested in remaining time nor in return value
-    (void)nanosleep(&tmReq, NULL);
-//        sched_yield();
+    // clean up shared memory
+    munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
 }
 
-int main()
+int main(int argc, char * argv[])
 {
-    int i ;
-    for(i=0; i<0x7fff0000; i++) {
-        yield();
-        if( i%100000==0 ) {
-            struct timeval tv ;
-            gettimeofday(&tv, NULL);
-            printf("%d.%06d\n", (int)tv.tv_sec, (int)tv.tv_usec);
-        }
+	unsigned int devicepower;
+    
+	if( argc<2 ) {
+		printf("Usage: devicepower [devicepowermap]\n");
+		printf("       powermap: bit0=GPS, bit1=Slave Eagle32, bit2=Network switch\n");
+		return 1;
+	}
+	
+	devicepower=0 ;
+	sscanf(argv[1], "%i", &devicepower);
+	
+    if( appinit()==0 ) {
+        return 1;
     }
 
-	return 0;
+	p_dio_mmap->devicepower = devicepower & 0xffff ;		
+
+	appfinish();
+    return 0;
 }
 

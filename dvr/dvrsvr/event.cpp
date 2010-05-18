@@ -111,6 +111,25 @@ void setdio(int onoff)
     }
 }
 
+float g_cpu_usage = 0.0 ;
+
+static void cpu_usage()
+{
+    static float s_cputime=0.0, s_idletime=0.0 ;
+    float cputime, idletime ;
+    FILE * uptime ;
+    uptime = fopen( "/proc/uptime", "r" );
+    if( uptime ) {
+        fscanf( uptime, "%f %f", &cputime, &idletime );
+        fclose( uptime );
+        if( cputime>s_cputime ) {
+            g_cpu_usage=1.0 -(idletime-s_idletime)/(cputime-s_cputime) ;
+            s_cputime=cputime ;
+            s_idletime=idletime ;
+        }
+    }
+}
+
 // main program loop here
 void event_check()
 {
@@ -210,7 +229,14 @@ void event_check()
         else {
             dio_clearstate (DVR_LOCK);
         }
-        
+
+        if( disk_archive_runstate() ) {
+            dio_setstate (DVR_ARCH);
+        }
+        else {
+            dio_clearstate(DVR_ARCH);
+        }
+
         if( net_active ) {
             dio_setstate (DVR_NETWORK);
         }
@@ -258,6 +284,8 @@ void event_check()
             dvr_log("Memory low. reload DVR.");
             app_state = APPRESTART ;
         }
+        // calculate cpu usage
+        cpu_usage();
     }
 
     // display alarm (LEDs)
@@ -267,25 +295,6 @@ void event_check()
         }
     }
     
-}
-
-float cpu_usage()
-{
-    static float s_cputime=0.0, s_idletime=0.0 ;
-    static float s_usage = 0.0 ;
-    float cputime, idletime ;
-    FILE * uptime ;
-    uptime = fopen( "/proc/uptime", "r" );
-    if( uptime ) {
-        fscanf( uptime, "%f %f", &cputime, &idletime );
-        fclose( uptime );
-        if( cputime>s_cputime ) {
-            s_usage=1.0 -(idletime-s_idletime)/(cputime-s_cputime) ;
-            s_cputime=cputime ;
-            s_idletime=idletime ;
-        }
-    }
-    return s_usage ;
 }
 
 void event_init()

@@ -331,6 +331,7 @@ class pwii_menu : public window {
     protected:
         virtual void paint() {						// paint window
             char sbuf[256] ;
+            int y ;
             resource font("mono32b.font");
             setpixelmode (DRAW_PIXELMODE_COPY);
             resource ball ("ball.pic") ;
@@ -338,15 +339,34 @@ class pwii_menu : public window {
             if( m_level==1 ) {
                 setcolor (COLOR(30, 71, 145, 190 )) ;
                 fillrect ( 50, 80, m_pos.w-100, m_pos.h-160 );
+                y = 120 ;
 
                 setcolor(COLOR(240,240,80,255));
                 sprintf( sbuf, "VRI: %s", g_vri[0]?g_vri:"(NA)" );
-                drawtext( 55, 120, sbuf, font );
+                drawtext( 55, y, sbuf, font );
 
+                y+=40 ;
+                // show disk avaialbe space
+                int rectime, locktime, remtime ;
+                if( disk_stat( &rectime, &locktime, &remtime ) ) {
+                    remtime = (rectime-locktime+remtime)/60 ;
+                    remtime /= cap_channels ;
+                    locktime /= 60 ;
+                    locktime /= cap_channels ;
+                    setcolor(COLOR(240,240,80,255));
+                    sprintf( sbuf, "Video length %d:%02d  Remain %d:%02d", 
+                        locktime/60,
+                        locktime%60,
+                        remtime/60,
+                        remtime%60 );
+                    drawtext( 55, y, sbuf, font );
+                    y+=40 ;
+                }
+                
                 if( strlen(g_policeid)>0 ) {
                     setcolor(COLOR(240,240,80,255));
                     sprintf( sbuf, "Officer ID: %s", g_policeid );
-                    drawtext( 55, 160, sbuf, font );
+                    drawtext( 55, y, sbuf, font );
 
                     sprintf( sbuf, "Change Officer ID" );
                     drawtext( 80, 280, sbuf, font );
@@ -355,7 +375,7 @@ class pwii_menu : public window {
                 else {
                     setcolor(COLOR(240,240,80,255));
                     sprintf( sbuf, "Officer ID: (NA)" );
-                    drawtext( 55, 160, sbuf, font );
+                    drawtext( 55, y, sbuf, font );
 
                     sprintf( sbuf, "Enter Officer ID" );
                     drawtext( 80, 280, sbuf, font );
@@ -865,6 +885,7 @@ class video_screen : public window {
 
             if( channel < eagle32_channels ) {
                 cap_stop();       // stop live codec, so decoder has full DSP power
+                disk_archive_stop();   // stop archiving
                 m_playchannel = channel ;
                 res = SetDecodeScreen(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 1);
                 res = SetDecodeAudio(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 1);

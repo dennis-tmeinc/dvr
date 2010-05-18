@@ -353,18 +353,15 @@ class string {
     protected:
         char *m_str;
         void setstring(const char *str){
-            int l ;
             if( m_str!=NULL ) {
                 delete m_str ;
-                m_str=NULL ;
             }
             if( str ) {
-                l = strlen(str);
-                m_str=new char [l+4];
+                m_str=new char [strlen(str)+2];
                 strcpy(m_str, str);
             }
             else {
-                m_str=new char [4] ;
+                m_str=new char [2] ;
                 *m_str=0 ;
             }
         }
@@ -379,7 +376,7 @@ class string {
         }
         char *getstring(){
             if (m_str == NULL) {
-                m_str=new char [4] ;
+                m_str=new char [2] ;
                 m_str[0]='\0' ;
             }
             return m_str;
@@ -401,21 +398,9 @@ class string {
             return *this;
         }
         string & operator =(string & str) {
-            int l ;
-            char * pstr;
-            if( m_str!=NULL ) {
-                delete m_str ;
-                m_str=NULL ;
-            }
-            pstr = str.getstring();
-            if( pstr ) {
-                l = strlen(pstr);
-                m_str=new char [l+4];
-                strcpy(m_str, pstr);
-            }
+            setstring(str.getstring());
             return *this;
         }
-        
         int operator < ( string & s2 ) {
             return ( strcmp(getstring(), s2.getstring())<0 );
         }

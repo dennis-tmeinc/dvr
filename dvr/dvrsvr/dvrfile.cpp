@@ -724,11 +724,11 @@ int dvrfile::repair()
     seek(filepos, SEEK_SET);
     while ((frsize=framesize()) > 0) {
 
-        // if rec_busy, delay for 5 s
+        // if rec_busy, delay for 10 s
         int busywait ;
-        for( busywait=0; busywait<500; busywait++) {
-            if( disk_busy || cpu_usage()>0.6 ) {
-                usleep(10000);
+        for( busywait=0; busywait<100; busywait++) {
+            if( rec_busy || disk_busy || g_cpu_usage>0.5 ) {
+                usleep(100000);
             }
             else {
                 break ;
@@ -832,11 +832,11 @@ int dvrfile::repairpartiallock()
     lockfile.m_fileencrypt=0 ;
     
     for( i=breakindex ; i<m_keyarray.size(); i++ ) {
-        // if rec_busy, delay for 5 s
+        // if rec_busy, delay for 10 s
         int busywait ;
-        for( busywait=0; busywait<500; busywait++) {
-            if( disk_busy || cpu_usage()>0.6 ) {
-                usleep(10000);
+        for( busywait=0; busywait<100; busywait++) {
+            if( rec_busy || disk_busy || g_cpu_usage>0.5 ) {
+                usleep(100000);
             }
             else {
                 break ;
@@ -1030,7 +1030,9 @@ void file_sync()
 //        sync();
 //    }
 //	  sync();
+    dvr_lock();
     disk_sync();
+    dvr_unlock();
 }
 
 void file_init()

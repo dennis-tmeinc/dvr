@@ -225,17 +225,16 @@ int dio_clearstate( int status )
 }
 
 // check if IO process busy (doing smartftp)
-int dio_iobusy()
+int dio_iorun()
 {
-    int busy=0 ;
-    dio_lock();
+    int iorun=0 ;
     if( p_dio_mmap ){
-        busy = ( p_dio_mmap->iomode == IOMODE_UPLOADING ) ;
+        dio_lock();
+        iorun = ( p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) ;
+        dio_unlock();
     }
-    dio_unlock();
-    return busy ;
+    return iorun ;
 }
-
 
 // set video channel status
 // parameter :  channel = camera channle
