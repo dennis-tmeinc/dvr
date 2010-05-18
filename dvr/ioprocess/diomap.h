@@ -25,7 +25,7 @@ struct dio_mmap {
     int		lockpower ;		// 1: lock power (don't turn off power), 0: unlock power
     int		dvrwatchdog ;	// dvr watchdog counter, dvr should clear this number
     int     iomode ;        // io runing mode
-
+ 
     unsigned short rtc_year ;
     unsigned short rtc_month ;
     unsigned short rtc_day ;
