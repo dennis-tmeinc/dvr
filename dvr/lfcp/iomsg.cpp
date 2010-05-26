@@ -125,6 +125,7 @@ int main(int argc, char * argv[])
     }
     else if( susp==1 ) {
         p_dio_mmap->iomode = IOMODE_SUSPEND;
+        p_dio_mmap->suspendtimer = 600 ;
     }
     dio_unlock();
 

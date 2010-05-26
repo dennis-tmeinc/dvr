@@ -20,11 +20,12 @@ struct dio_mmap {
     int		dvrcmd ;		// -1: status error, 0: status OK, 1: restart(resume), 2: suspend, 3: stop record, 4: start record
     int     dvrstatus ;		// bit0: running, bit1: recording, bit2: video lost, bit3: no motion, bit4: network active, bit5: disk ready, bit6: no camera data, bit15: error condition
     char    iomsg[128] ;    // IO message to display on screen
-    
+
     int     poweroff ;
     int		lockpower ;		// 1: lock power (don't turn off power), 0: unlock power
     int		dvrwatchdog ;	// dvr watchdog counter, dvr should clear this number
     int     iomode ;        // io runing mode
+    int     suspendtimer ;  // suspend timer for IO suspend mode (during file copying)
  
     unsigned short rtc_year ;
     unsigned short rtc_month ;

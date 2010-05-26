@@ -26,4 +26,13 @@ release 10.0426.18 (pwii)
   Fixed lost audio when play back Front Camera
   Extend HD (CF card) mounting time to 120 seconds. (CF mounting may be up to 100s if it is not umount properly. This may cause system rebooting on previous firmware).
 
+release 10.0519.14
+   Archive only locked file, after copy locked file archiving disk, rename original file from *_L_* to *_N_* (unlocked)
+   After shutdown delay period timeout, allow up to 15 minute for archiving to finish. At this period , display "Saving video files!" on screen.
+   On detected smartserver available, run "smartftp" two times, first time run "smartftp" on recording disk, second time run "smartftp" on archiving disk.
+   Add a timer on USB file copying period, if file copying process not active, system return to running mode instead of hang on waiting mode.
+   Seperate configure file to two files, one for factory default setting, one for user configuration. 
+      User settings on setup page only modify the user configuration file, in case this file corrupted, system would work on default setting instead of work on unknown state.
+   Add disk space usage on CDC status screen (menu screen), ex: "Video length 2:30 Remain 6:13", this message means there are videos total of 2 hour and 30 minute on disk and available disk space to record 6 hours and 13 minutes.
+   
 

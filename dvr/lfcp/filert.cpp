@@ -4,21 +4,137 @@
 #include <errno.h>
 #include <string.h>
 #include <fcntl.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <stdarg.h>
 #include <dirent.h>
 #include <signal.h>
+#include <dirent.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <sys/vfs.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 //#include "dvrproto.h"
 #include "../dvrsvr/dvr.h"
-#include "parseconfig.h"
+#include "../dvrsvr/cfg.h"
+#include "../ioprocess/diomap.h"
+
+struct dio_mmap * p_dio_mmap ;
+char dvriomap[128] = "/var/dvr/dvriomap" ;
+char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
+
+
+/*
+   share memory lock implemented use atomic swap
+
+    operations between lock() and unlock() should be quick enough and only memory access only.
+ 
+*/ 
+
+// atomically swap value
+int atomic_swap( int *m, int v)
+{
+    register int result ;
+/*
+    result=*m ;
+    *m = v ;
+*/
+    asm volatile (
+        "swp  %0, %2, [%1]\n\t"
+        : "=r" (result)
+        : "r" (m), "r" (v)
+    ) ;
+    return result ;
+}
+
+void dio_lock()
+{
+    if( p_dio_mmap ) {
+        int c=0;
+        while( atomic_swap( &(p_dio_mmap->lock), 1 ) ) {
+            if( c++<20 ) {
+                sched_yield();
+            }
+            else {
+                // yield too many times ?
+                usleep(1);
+            }
+        }
+    }
+}
+
+void dio_unlock()
+{
+    if( p_dio_mmap ) {
+        p_dio_mmap->lock=0;
+    }
+}
+
+void dio_iomsg(char * msg=NULL, int suspend=0)
+{
+    dio_lock();
+    if( msg ) {
+        strcpy( p_dio_mmap->iomsg, msg );
+    }
+    else {
+        p_dio_mmap->iomsg[0]=0 ;
+    }
+    if( suspend ) {
+        p_dio_mmap->iomode = IOMODE_SUSPEND;
+        p_dio_mmap->suspendtimer = 600 ;
+    }
+    else {
+        p_dio_mmap->iomode = IOMODE_RUN;
+    }
+    dio_unlock();
+}
+
+// return 
+//        0 : failed
+//        1 : success
+int dio_start()
+{
+    int fd ;
+    char * p ;
+    config dvrconfig(dvrconfigfile);
+    string v ;
+    p_dio_mmap=NULL ;
+    v = dvrconfig.getvalue( "system", "iomapfile");
+    if( v.length()>0 ) {
+        fd = open(v.getstring(), O_RDWR );
+    }
+    else {
+        fd = open(dvriomap, O_RDWR );
+    }
+    if( fd<=0 ) {
+        printf("Can't open io map file!\n");
+        return 0 ;
+    }
+    p=(char *)mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
+    close( fd );								// fd no more needed
+    if( p==(char *)-1 || p==NULL ) {
+        printf( "IO memory map failed!");
+        return 0;
+    }
+    p_dio_mmap = (struct dio_mmap *)p ;
+    return 1 ;
+}
+ 
+// dio finish, clean up
+void dio_finish()
+{
+    // clean up shared memory
+    if( p_dio_mmap ) {
+        dio_iomsg(NULL, 0);
+        munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
+        p_dio_mmap=NULL ;
+    }
+}
+
 
 #define MAX_CHANNEL 16
 #define DVRPORT 15111
@@ -82,7 +198,8 @@ long long event_duration;
 struct rangeEntry *range_list;
 struct fileEntry *file_list;
 struct dirEntry *dir_list;
-char *mountdir = "/var/dvr/disks", *pidfile = "/var/dvr/dvrsvr.pid";
+char mountdir[128] = "/var/dvr/disks";
+char pidfile[128] = "/var/dvr/dvrsvr.pid";
 pid_t pid_dvrsvr;
 
 int connectTcp(char *addr, short port);
@@ -913,39 +1030,29 @@ static int rename_file(char *filename, char type)
 
 void read_config()
 {
-  char *p, *tz;
+    char *p ;
+    config dvrconfig(dvrconfigfile);
+    string v ;
 
-  if (cfg_parse_file("/etc/dvr/dvr.conf")) {
-    writeDebug("config file error");
-    exit(RT_CFGFILE_ERROR);
-  }
+    v = dvrconfig.getvalue( "system", "mountdir");
+    if( v.length()>0 ) {
+        strcpy( mountdir, v.getstring() );
+    }
 
-  p = cfg_get_str("system", "mountdir");
-  if (p) {
-    mountdir = p;
-  }
+    v = dvrconfig.getvalue( "system", "pidfile" );
+    if( v.length()>0 ) {
+        strcpy( pidfile, v.getstring() );
+    }
 
-  p = cfg_get_str("system", "pidfile");
-  if (p) {
-    pidfile = p;
-  }
-
-  p = cfg_get_str("system", "timezone");
-  if (!p) {
-    writeDebug("config file error:no timezone");
-    exit(RT_CFGFILE_ERROR);
-  }
-
-  tz = cfg_get_str("timezones", p);
-  if (!tz) {
-    writeDebug("config file error:no timezone str");
-    exit(RT_CFGFILE_ERROR);
-  }
-
-  p = strchr(tz, ' ');
-  if (p) *p = 0;
-  setenv("TZ", tz, 1);
-  writeDebug("tz:%s", tz);
+    v = dvrconfig.getvalue( "system", "timezone" );
+    v = dvrconfig.getvalue( "timezones", v.getstring() );
+    if( v.length()>0 ) {
+        p = strchr( v.getstring(), ' ' );
+        if( p ) {
+            *p=0 ;
+        }
+        setenv( "TZ", v.getstring(), 1 );
+    }
 }
 
 /* returns path_id in the list(-1 on error),
@@ -1705,6 +1812,8 @@ int copy_file_to_usb(char *usbroot, char *servername,
     return -1;
   }
 
+  dio_iomsg("Copying Video Files", 1) ;
+        
   if (!from && !to) {
     /* just copy 264/k files */
     int ret = copy_file_to_path(usbroot, fullname, dest_dir);
@@ -1967,6 +2076,10 @@ int upload_files(char *usbroot, char *servername)
 
   node = file_list;
   while (node) {
+
+// Display io message
+  dio_iomsg("Copying Video Files", 1) ;
+      
     if (!pid_dvrsvr) {
       pid_dvrsvr = stop_dvrsvr();
       if (pid_dvrsvr > 0)
@@ -2064,8 +2177,15 @@ int main(int argc, char **argv)
 
   writeDebug("busname:%s, usbroot:%s", servername, usbroot);
 
+  if( !dio_start() ) {
+      writeDebug("IO map file error!");
+      exit( RT_HOSTNAME_ERROR );
+  }
+      
   read_config();
 
+  dio_iomsg("Copying Video Files",1);
+    
   time_range = checkTmeLogFile(usbroot);
   if (time_range) {
     add_time_range_to_list(time_range, servername);
@@ -2094,6 +2214,7 @@ int main(int argc, char **argv)
 
   writeDebug("filert ends");
 
+  dio_finish();
   sleep(1);
 
   return 0;

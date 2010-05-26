@@ -1344,11 +1344,9 @@ int mcu_checkinputbuf(char * ibuf)
        switch( ibuf[3] ) {
        case '\x05' :                   // Front Camera (REC) button
            dio_lock();
-           if( (p_dio_mmap->pwii_output & (1<<12))==0 ) {   // pwii not standby
-               p_dio_mmap->pwii_buttons &= ~0x700 ;     // Release other bits
-               p_dio_mmap->pwii_buttons |= 0x100 ;      // bit 8: front camera
-               pwii_keyreltime = runtime+1000 ;         // auto release
-           }
+           p_dio_mmap->pwii_buttons &= ~0x700 ;     // Release other bits
+           p_dio_mmap->pwii_buttons |= 0x100 ;      // bit 8: front camera
+           pwii_keyreltime = runtime+1000 ;         // auto release
            dio_unlock();
 //           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&1)!=0) );  // bit 0: c1 led
            mcu_response( ibuf, 1, 0 );                                  // bit 0: c1 led
@@ -1356,11 +1354,9 @@ int mcu_checkinputbuf(char * ibuf)
 
        case '\x06' :                   // Back Seat Camera (C2) Starts/Stops Recording
            dio_lock();
-           if( (p_dio_mmap->pwii_output & (1<<12))==0 ) {   // pwii not standby
-               p_dio_mmap->pwii_buttons &= ~0x700 ;     // Release other bits
-               p_dio_mmap->pwii_buttons |= 0x200 ;      // bit 9: back camera
-               pwii_keyreltime = runtime+1000 ;         // auto release
-           }
+           p_dio_mmap->pwii_buttons &= ~0x700 ;     // Release other bits
+           p_dio_mmap->pwii_buttons |= 0x200 ;      // bit 9: back camera
+           pwii_keyreltime = runtime+1000 ;         // auto release
            dio_unlock();
 //           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&2)!=0) );  // bit 1: c2 led
            mcu_response( ibuf, 1, 0 );                                  // bit 1: c2 led
@@ -1369,17 +1365,15 @@ int mcu_checkinputbuf(char * ibuf)
        case '\x07' :                   // TM Button
            mcu_response( ibuf );
            dio_lock();
-           if( (p_dio_mmap->pwii_output & (1<<12))==0 ) {   // pwii not standby
-               if( ibuf[5] ) {
-                   p_dio_mmap->pwii_buttons &= ~0x700 ;     // Release other bits
-                   p_dio_mmap->pwii_buttons |= 0x400 ;      // bit 10: tm button
-                   pwii_keyreltime = runtime+1000 ;         // auto release
-               }
+           if( ibuf[5] ) {
+               p_dio_mmap->pwii_buttons &= ~0x700 ;     // Release other bits
+               p_dio_mmap->pwii_buttons |= 0x400 ;      // bit 10: tm button
+               pwii_keyreltime = runtime+1000 ;         // auto release
+           }
 //  ignor TM release, the bit will be auto release after 1 sec           
 //           else {
 //               p_dio_mmap->pwii_buttons &= (~0x400) ;   // bit 10: tm button
 //           }
-           }
            dio_unlock();
            break;
 
@@ -1447,6 +1441,8 @@ int mcu_checkinputbuf(char * ibuf)
 //      wait - micro-seconds waiting
 // return 
 //		number of input message received.
+//      0: timeout (no message)
+//     -1: error
 int mcu_input(int usdelay)
 {
     int res = 0 ;
@@ -1459,32 +1455,11 @@ int mcu_input(int usdelay)
                 res++;
             }
         }
+        else {
+            return -1 ;
+        }
     }
     return res ;
-}
-
-int mcu_bootupready()
-{
-    int i ;
-    char * rsp ;
-    serial_clear() ;
-    if( (rsp=mcu_cmd(MCU_CMD_BOOTUPREADY, 1, 0 ))!=NULL ) {
-        int rlen = *rsp - 6 ;
-        char status[200] ;
-        char tst[10] ;
-        status[0]=0 ;
-        for( i=0; i<rlen; i++ ) {
-            sprintf(tst, " %02x", (unsigned int)(unsigned char)rsp[5+i] );
-            strcat( status, tst );
-        }
-        dvr_log( "MCU boot up with status :%s", status );
-        return 1 ;
-    }
-    dvr_log("Ooops, MCU is mad on me!!! System power could be cut off! Sync, sync, sync!");
-    sync();
-    sync();
-    sync();
-    return 0 ;
 }
 
 int mcu_readcode()
@@ -1521,6 +1496,36 @@ int mcu_readcode()
     return 0 ;
 }
 
+int mcu_bootupready()
+{
+    static int mcuready = 0 ;
+    int i ;
+    char * rsp ;
+    if( mcuready ) {
+        return 1 ;
+    }
+    serial_clear() ;
+    if( (rsp=mcu_cmd(MCU_CMD_BOOTUPREADY, 1, 0 ))!=NULL ) {
+        int rlen = *rsp - 6 ;
+        char status[200] ;
+        char tst[10] ;
+        status[0]=0 ;
+        for( i=0; i<rlen; i++ ) {
+            sprintf(tst, " %02x", (unsigned int)(unsigned char)rsp[5+i] );
+            strcat( status, tst );
+        }
+        dvr_log( "MCU ready with status :%s", status );
+        mcuready = 1 ;
+        mcu_readcode();
+        return 1 ;
+    }
+    dvr_log("Ooops, MCU is mad on me!!! System power could be cut off! Sync, sync, sync!");
+    sync();
+    sync();
+    sync();
+    return 0 ;
+}
+
 // return gsensor available
 int mcu_gsensorinit_old()
 {
@@ -1533,10 +1538,10 @@ int mcu_gsensorinit_old()
     if( !gforce_log_enable ) {
         return 0 ;
     }
-           
-    trigger_back = 
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_trigger_forward + 
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_trigger_right + 
+
+    trigger_back =
+        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_trigger_forward +
+        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_trigger_right +
         ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_trigger_down ;
     trigger_right = 
         ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_trigger_forward + 
@@ -2765,9 +2770,6 @@ int appinit()
         
     // initialize mcu (power processor)
     if( mcu_bootupready () ) {
-        printf("MCU UP!\n");
-        dvr_log("MCU ready.");
-        mcu_readcode();
         // get MCU version
         char mcu_firmware_version[80] ;
         if( mcu_version( mcu_firmware_version ) ) {
@@ -3078,15 +3080,19 @@ int main(int argc, char * argv[])
 
         // do input pin polling
         static unsigned int mcu_input_timer ;
-        if( mcu_input(50000)>0 ) {
+        i = mcu_input(50000) ;
+        if( i>0 ) {
             mcu_input_timer = runtime ;
         }
-        else {
+        else if( i==0 ) {
             // no input message
-            if( (runtime - mcu_input_timer)> 5000 ) {    // 5 seconds to poll mcu input
+            if( (runtime - mcu_input_timer)> 10000 ) {    // 10 seconds to poll mcu input
                 mcu_input_timer = runtime ;
                 mcu_dinput();
             }
+        }
+        else {      // input message error. We may miss the io input message, so pull input rightaway
+            mcu_dinput();
         }
 
         // Buzzer functions
@@ -3379,6 +3385,14 @@ int main(int argc, char * argv[])
             else if( p_dio_mmap->iomode==IOMODE_SUSPEND ) {                    // suspend io, for file copying process
                 if( p_dio_mmap->poweroff != 0 ) {
                     mcu_poweroffdelay ();
+                }
+                p_dio_mmap->suspendtimer -= 3 ;
+                if( p_dio_mmap->suspendtimer <= 0 ) {
+                    dvr_log( "Suspend mode timeout!" );
+                    dio_lock();
+                    p_dio_mmap->iomsg[0]=0 ;
+                    p_dio_mmap->iomode=IOMODE_RUN ;    // back to run normal
+                    dio_unlock();
                 }
             }
             else if( p_dio_mmap->iomode==IOMODE_STANDBY ) {                    // standby

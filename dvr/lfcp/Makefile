@@ -17,8 +17,8 @@ LDFLAGS=
 
 all: filert iomsg
 
-filert : filert.cpp parseconfig.cpp
-	$(CC) $(CFLAGS) -o $@ filert.cpp parseconfig.cpp $(LDFLAGS)
+filert : filert.cpp $(EXTRASOURCES) $(INCS)
+	$(CC) $(CFLAGS) -o $@ filert.cpp $(EXTRASOURCES) $(LDFLAGS)
 	cp $@  smartdl/
 	$(STRIP) smartdl/$@
 
