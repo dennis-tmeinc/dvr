@@ -5,6 +5,7 @@
 include ../arm_tool
 
 CC=$(CROSS_COMPILE_PREFIX)gcc
+CPP=$(CROSS_COMPILE_PREFIX)g++
 
 SOURCES=serialtest.c
 
@@ -15,19 +16,25 @@ HEADERS=
 
 OBJS = $(patsubst %.c, %.o, $(SOURCES))
 
-LDFLAGS= -lpthread -lstdc++ -L../dvrsvr/eagle32 -lsdk -ldadsp ../dvrsvr/eagle32/dsplink.lib
+#LDFLAGS= -lpthread -lstdc++ -L../dvrsvr/eagle32 -lsdk -ldadsp ../dvrsvr/eagle32/dsplink.lib
+LDFLAGS= -lpthread -lstdc++
 
-CFLAGS=-I../dvrsvr -g -Wall
+#CFLAGS=-I../dvrsvr -g -Wall
+CFLAGS=-g -Wall
 
-all : gentest
+all : serialtest
 
 serialtest : $(OBJS) $(HEADERS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 	cp serialtest  $(debug_folder)
 
-gentest : gentest.cpp $(EXTHEADERS) $(EXTSOURCES)
-	$(CC) $(CFLAGS) -o $@ gentest.cpp $(EXTSOURCES) $(LDFLAGS)
-	cp $@  $(debug_folder)
+gentest : gentest.cpp
+	$(CC) $(CFLAGS) -o gentest gentest.cpp $(LDFLAGS)
+	cp gentest   $(debug_folder)
+
+#gentest : gentest.cpp $(EXTHEADERS) $(EXTSOURCES)
+#	$(CPP) $(CFLAGS) -o $@ gentest.cpp $(EXTSOURCES) $(LDFLAGS)
+#	cp $@  $(debug_folder)
 
 %.o : %.c $(HEADERS) $(EXTHEADERS)
 	$(CC) -g -Wall -c $< -o $@
@@ -35,4 +42,5 @@ gentest : gentest.cpp $(EXTHEADERS) $(EXTSOURCES)
 clean :
 	rm -f *.o
 	rm -f serialtest gentest
+
 

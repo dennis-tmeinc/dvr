@@ -242,7 +242,8 @@ int readmcu(struct tm * t)
     int i;
     char * p ;
     config dvrconfig(dvrconfigfile);
-    string iomapfile = dvrconfig.getvalue( "system", "iomapfile");
+    string iomapfile ;
+    iomapfile = dvrconfig.getvalue( "system", "iomapfile");
     if( iomapfile.length()>0 ) {
         strncpy( dvriomap, iomapfile.getstring(), sizeof(dvriomap));
     }
@@ -302,7 +303,7 @@ int writemcu(struct tm * t)
     int i;
     char * p ;
     config dvrconfig(dvrconfigfile);
-    string iomapfile = dvrconfig.getvalue( "system", "iomapfile");
+    string iomapfile( dvrconfig.getvalue( "system", "iomapfile") ) ;
     if( iomapfile.length()>0 ) {
         strncpy( dvriomap, iomapfile.getstring(), sizeof(dvriomap));
     }
@@ -427,7 +428,7 @@ int readgps(struct tm * t)
     int fd ;
     char * p ;
     config dvrconfig(dvrconfigfile);
-    string iomapfile = dvrconfig.getvalue( "system", "iomapfile");
+    string iomapfile( dvrconfig.getvalue( "system", "iomapfile")) ;
     if( iomapfile.length()>0 ) {
         strncpy( dvriomap, iomapfile.getstring(), sizeof(dvriomap));
     }

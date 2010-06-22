@@ -175,13 +175,18 @@ void ipeagle32_capture::streamthread()
                     capframe.framesize = ans.anssize ;
                     capframe.frametype = ans.data ;
                     capframe.framedata=(char *)mem_alloc (capframe.framesize) ;
-                    if( net_recv( m_streamfd, capframe.framedata, capframe.framesize )>0 ) {
-                        onframe(&capframe);
+                    if( capframe.framedata ) {
+                        if( net_recv( m_streamfd, capframe.framedata, capframe.framesize )>0 ) {
+                            onframe(&capframe);
+                        }
+                        else {
+                            net_clean(m_streamfd);
+                        }
+                        mem_free(capframe.framedata);
                     }
                     else {
                         net_clean(m_streamfd);
                     }
-                    mem_free(capframe.framedata);
                     timeout=0 ;
                 }
             }

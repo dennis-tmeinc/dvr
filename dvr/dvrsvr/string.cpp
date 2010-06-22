@@ -3,7 +3,7 @@
 
 #include "genclass.h"
 
-void str_trimtail(char *line)
+char * str_trimtail(char *line)
 {
 	int len;
 	len = strlen(line);
@@ -16,6 +16,7 @@ void str_trimtail(char *line)
 		}
 	}
 	if( len>=0 ) line[len]='\0' ;
+    return line ;
 }
 
 char * str_skipspace(char *line)
@@ -23,6 +24,11 @@ char * str_skipspace(char *line)
 	while (*line >0 && *line<=' ' )
 		line++;
 	return line;
+}
+
+char * str_trim(char *line)
+{
+    return  str_trimtail(str_skipspace(line)) ;
 }
 
 int savetxtfile(char *filename, array <string> & strlist )

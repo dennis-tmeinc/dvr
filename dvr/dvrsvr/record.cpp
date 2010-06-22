@@ -82,6 +82,13 @@ class rec_channel {
         void    fifo_unlock() {
             pthread_mutex_unlock(&m_fifo_mutex);
         }
+        // allocate new fifo block and buffer
+        rec_fifo *  newfifo( char *fifobuf, int bufsize );
+        // delete fifo ( release fifo buffer and fifo block )
+        void  deletefifo( rec_fifo * rf );
+        struct rec_fifo *getfifo();
+        void putfifo(rec_fifo * fifo);
+        int  clearfifo();
         
         int m_lock_starttime ;	        // record state start time
         int m_trigger_starttime ;	    // triggering start time
@@ -99,8 +106,9 @@ class rec_channel {
         int m_maxfiletime;
         dvrtime m_filebegintime;
         dvrtime m_fileendtime;
+        dvrtime m_keytime ;
         int m_fileday;						// day of opened file, used for breaking file across midnight
-        DWORD m_lastkeytimestamp ;
+//        DWORD m_lastkeytimestamp ;
         
         int m_reqbreak;				// reqested for file break
 
@@ -131,10 +139,7 @@ class rec_channel {
             update();
         }
 #endif
-        
-        struct rec_fifo *getfifo();
-        void putfifo(rec_fifo * fifo);
-        int  clearfifo();
+
         
         void onframe(cap_frame * pframe);
         int dorecord();
@@ -259,7 +264,7 @@ rec_channel::rec_channel(int channel)
     time_dvrtime_init( &m_filebegintime, 2000 );
     time_dvrtime_init( &m_fileendtime, 2000 );
     m_fileday=0;
-    m_lastkeytimestamp = 0 ;
+//    m_lastkeytimestamp = 0 ;
     m_reqbreak = 0 ;
 
     m_lock_starttime = 0 ;
@@ -314,20 +319,20 @@ void rec_channel::onframe(cap_frame * pframe)
 {
     int s ;
     struct rec_fifo *nfifo;
-    
+
     if( m_recstate == REC_STOP ||
-       rec_pause ||
-       rec_basedir.length()<=0 ||
-       dio_standby_mode )
+        rec_pause ||
+        dio_iorun == 0 ||
+        rec_basedir.length()<=0 )
     {
+        clearfifo();
         if( m_file.isopen() ) {
-            nfifo = (struct rec_fifo *) mem_alloc(sizeof(struct rec_fifo));
-            nfifo->rectype = REC_STOP ;
-            nfifo->buf=NULL ;
-            nfifo->bufsize=0 ;
-            nfifo->key=1 ;
-            time_now(&nfifo->time);
-            putfifo( nfifo );
+            nfifo = newfifo( NULL, 0 );
+            if( nfifo ) {
+                nfifo->rectype = REC_STOP ;
+                nfifo->key=1 ;
+                putfifo( nfifo );
+            }
         }
         return ;								// if stop recording.
     }
@@ -340,35 +345,65 @@ void rec_channel::onframe(cap_frame * pframe)
     }
     
     // build new fifo frame
-    nfifo = (struct rec_fifo *) mem_alloc(sizeof(struct rec_fifo));
+    nfifo = newfifo( pframe->framedata, pframe->framesize );
+    if( nfifo ) {
+        // this is a keyframe ?
+        nfifo->key=( pframe->frametype == FRAMETYPE_KEYVIDEO ) ;
 
-    if (mem_check(pframe->framedata)) {
-        nfifo->buf = (char *) mem_addref(pframe->framedata);
-    } else {
-        nfifo->buf = (char *) mem_alloc(nfifo->bufsize);
-        mem_cpy32(nfifo->buf, pframe->framedata, nfifo->bufsize);
-    }
-    nfifo->bufsize = pframe->framesize;
-    
-    if( pframe->frametype == FRAMETYPE_KEYVIDEO )   {           // this is a keyframe ?
-        nfifo->key=1 ;
-    }
-    else {
-        nfifo->key=0 ;
-    }
-    
-    // set frame recording type
-    nfifo->rectype = m_recstate ;
-    time_now(&nfifo->time);
-    putfifo( nfifo );
+        // set frame recording type
+        nfifo->rectype = m_recstate ;
 
+        putfifo( nfifo );
+    }
+}
+
+// allocate new fifo
+rec_fifo *  rec_channel::newfifo( char *fifobuf, int bufsize )
+{
+    rec_fifo * nf ;
+    nf = (struct rec_fifo *) mem_alloc(sizeof(struct rec_fifo)) ;
+    if( nf ) {
+        time_now(&(nf->time));
+        if( fifobuf ) {
+            nf->bufsize=bufsize ;
+            if (mem_check(fifobuf)) {
+                nf->buf = (char *) mem_addref(fifobuf);
+            } else {
+                nf->buf = (char *) mem_alloc(bufsize);
+                if( nf->buf ) {
+                    mem_cpy32(nf->buf, fifobuf, bufsize);
+                }
+                else {
+                    mem_free(nf);
+                    nf=NULL ;
+                }
+            }
+        }
+        else {
+            nf->buf=NULL ;
+            nf->bufsize=0;
+        }
+    }
+    return nf ;
+}
+
+// delete fifo ( release fifo buffer and fifo block )
+void  rec_channel::deletefifo( rec_fifo * rf )
+{
+    if( rf ) {
+        if( rf->buf ) {
+            mem_free( rf->buf );
+        }
+        mem_free( rf );
+    }
 }
 
 // add fifo into fifo queue
 void rec_channel::putfifo(rec_fifo * fifo)
 {
-    fifo_lock();
     if( fifo!=NULL ){
+        fifo_lock();
+        fifo->next = NULL ;
         if (m_fifohead == NULL) {
             m_fifotail = m_fifohead = fifo;
             m_fifosize = fifo->bufsize ;
@@ -380,11 +415,11 @@ void rec_channel::putfifo(rec_fifo * fifo)
                 rec_busy=1 ;
             }
         }
-        fifo->next = NULL ;
+        fifo_unlock();
     }
-    fifo_unlock();
 }
 
+// remove fifo from queue
 struct rec_fifo *rec_channel::getfifo()
 {
     struct rec_fifo *head;
@@ -400,24 +435,11 @@ struct rec_fifo *rec_channel::getfifo()
 // clear fifos, return fifos deleted.
 int rec_channel::clearfifo()
 {
-    int c=0;
-    struct rec_fifo * head ;
-    struct rec_fifo * n ;
-
-    fifo_lock();
-    head = m_fifohead ;
-    m_fifohead=NULL ;
-    m_fifosize=0 ;
-    fifo_unlock();
-    
-    while (head) {
-        n = head->next ;
-        if( head->buf ) {
-            mem_free(head->buf);
-        }
-        mem_free(head);
+    struct rec_fifo * rf ;
+    int c=0 ;
+    while( (rf=getfifo())!=NULL ) {
+        deletefifo( rf );
         c++ ;
-        head = n ;
     }
     return c ;
 }
@@ -598,23 +620,28 @@ int rec_channel::recorddata(rec_fifo * data)
     char newfilename[512];
     int l;
     
-    if( data->bufsize<=0 || data->buf==NULL ) {
+    if( data==NULL || 
+        data->buf==NULL || 
+        data->rectype == REC_STOP || 
+        data->bufsize<=0 ) 
+    {
         closefile();
         return 0;
     }
     
     // check if file need to be broken
     if( data->key ) {           // close or open file on key frame
-        DWORD timestamp ;
-        timestamp = ((struct hd_frame *)(data->buf))->timestamp ;
+//        DWORD timestamp ;
+//        timestamp = ((struct hd_frame *)(data->buf))->timestamp ;
 
         if ( m_file.isopen() ) {	
             if( m_reqbreak ||
                 data->rectype != m_filerecstate ||
-                timestamp < m_lastkeytimestamp || 
-                (timestamp-m_lastkeytimestamp)>1000 ||
+//                timestamp < m_lastkeytimestamp || 
+//                (timestamp-m_lastkeytimestamp)>1000 ||
                 m_file.tell() > m_maxfilesize ||
                 data->time.day != m_fileday ||
+                data->time < m_keytime ||
                 time_dvrtime_diff( &m_fileendtime, &m_filebegintime ) > m_maxfiletime ||
                 ( m_filerecstate == REC_PRERECORD  && time_dvrtime_diff(&m_fileendtime, &m_filebegintime) > m_prerecord_time )
                 )
@@ -625,8 +652,9 @@ int rec_channel::recorddata(rec_fifo * data)
                 closefile(data->rectype);
                 m_reqbreak=0;
             }
-            m_lastkeytimestamp = timestamp ;
         }
+//      m_lastkeytimestamp = timestamp ;
+        m_keytime = data->time ;
         
         // create new dvr file
         if ( !m_file.isopen()  ) {	            // open a new file
@@ -679,11 +707,8 @@ int rec_channel::recorddata(rec_fifo * data)
             if (m_file.open(newfilename, "wb")) {
                 m_filename = newfilename;
                 m_filebegintime = data->time;
-                m_fileendtime = data->time;
                 m_filebegintime.milliseconds=0 ;
-                m_lastkeytimestamp = timestamp ;
                 m_filerecstate = data->rectype ;
-                //			dvr_log("Start recording file: %s", newfilename);
             } else {
                 dvr_log("File open error:%s", newfilename);
                 rec_basedir="";
@@ -693,8 +718,8 @@ int rec_channel::recorddata(rec_fifo * data)
     
     // record frame
     if( m_file.isopen() ) {
+        m_fileendtime=data->time ;    
         if( m_file.writeframe(data->buf, data->bufsize, data->key, &(data->time) )>0 ) {
-            m_fileendtime=data->time ;    
             return 1 ;
         }
         dvr_log("record:write file error.");
@@ -790,25 +815,14 @@ int rec_channel::dorecord()
 		}
 		return 0;
     }
-	m_activetime=g_timetick;
-    if(fifo->rectype == REC_STOP  || fifo->buf == NULL ) {
-        m_fileendtime=fifo->time ;
-        closefile();                       
-        m_recording = 0 ;
-    }
     else {
         m_recording = recorddata( fifo ) ;
+        // release buffer
+        deletefifo( fifo );
+        m_activetime=g_timetick;
+        return 1 ;
     }
-
-    // release buffer
-    if( fifo->buf ) {
-        mem_free(fifo->buf);
-    }
-    mem_free(fifo);
-
-    return 1 ;
 }
-
 
 void *rec_thread(void *param)
 {
@@ -830,7 +844,7 @@ void *rec_thread(void *param)
         
         wframes = 0 ;
         for( ch = 0 ; ch <rec_channels ; ch++ ) {
-            for( i=0; i<100 ; i++ ) {
+            for( i=0; i<20 ; i++ ) {
                 if(recchannel[ch]->dorecord()) {
                     wframes++;
                 }
@@ -847,9 +861,6 @@ void *rec_thread(void *param)
                     recchannel[ch]->closefile();
                 }
                 norec=0 ;
-                dvr_lock();
-                sync();
-                dvr_unlock();
             }
             else if( rec_pause > 0 ) {
                 rec_pause-- ;
@@ -999,13 +1010,15 @@ void rec_init()
 {
     int i;
     string v;
+    char * p ;
     config dvrconfig(dvrconfigfile);
     v = dvrconfig.getvalue("system", "maxfilesize");
     if (sscanf(v.getstring(), "%d", &rec_maxfilesize)>0) {
         i = v.length();
-        if (v[i - 1] == 'M' || v[i - 1] == 'm')
+        p=v.getstring();
+        if (p[i - 1] == 'M' || p[i - 1] == 'm')
             rec_maxfilesize *= 1000000;
-        else if (v[i - 1] == 'K' || v[i - 1] == 'k')
+        else if (p[i - 1] == 'K' || p[i - 1] == 'k')
             rec_maxfilesize *= 1000;
     } else {
         rec_maxfilesize = DEFMAXFILESIZE;
@@ -1015,12 +1028,12 @@ void rec_init()
     if (rec_maxfilesize > 1000000000)
         rec_maxfilesize = 1000000000;
     
-    v = dvrconfig.getvalue("system", "maxfilelength");
-    if (sscanf(v.getstring(), "%d", &rec_maxfiletime)>0) {
-        i = v.length();
-        if (v[i - 1] == 'H' || v[i - 1] == 'h')
+    p = dvrconfig.getvalue("system", "maxfilelength");
+    if (sscanf(p, "%d", &rec_maxfiletime)>0) {
+        i = strlen(p);
+        if (p[i - 1] == 'H' || p[i - 1] == 'h')
             rec_maxfiletime *= 3600;
-        else if (v[i - 1] == 'M' || v[i - 1] == 'm')
+        else if (p[i - 1] == 'M' || p[i - 1] == 'm')
             rec_maxfiletime *= 60;
     } else {
         rec_maxfiletime = DEFMAXFILETIME;
@@ -1044,9 +1057,9 @@ void rec_init()
     }
     
     rec_threadid=0 ;
+    rec_channels=0 ;
+    recchannel=NULL ;
     if( dvrconfig.getvalueint("system", "norecord")>0 ) {
-        rec_channels = 0 ;
-        recchannel = NULL ;
         dvr_log( "Dvr no recording mode."); 
     }
     else {
@@ -1074,11 +1087,11 @@ void rec_init()
 void rec_uninit()
 {
     int i;
+    rec_run = 0;
     i=rec_channels ;
     rec_channels=0;
     if( recchannel ) {
         // stop rec_thread
-        rec_run = 0;
         rec_stop() ;
         
         // wait for pre-lock threads to finish
@@ -1109,7 +1122,8 @@ void rec_uninit()
 
 void rec_onframe(cap_frame * pframe)
 {
-    if ( rec_run && pframe->channel < rec_channels &&
+    if ( rec_run && 
+        pframe->channel < rec_channels &&
         recchannel[pframe->channel]!=NULL )
     {
         recchannel[pframe->channel]->onframe(pframe);

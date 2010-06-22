@@ -13,6 +13,7 @@
 ./dvr/tdevhotplug
 ./dvr/tdevmount
 ./dvr/umountdisks
+./dvr/mountdisks
 ./dvr/eaglehost
 ./dvr/usbcheck
 ./dvr/volumeid

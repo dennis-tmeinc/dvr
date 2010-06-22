@@ -111,16 +111,12 @@ cd /davinci/dvr
 # start hotplug deamond
 /davinci/dvr/tdevd /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &
 # mount disk already found
-/davinci/dvr/tdevmount /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null
+/davinci/dvr/tdevmount /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &
 
 # setup ip network for ipcamera board. (slave boards)
 /davinci/dvr/eaglehost `cat /davinci/ID/BOARDNUM`
 
 sleep 1
-
-# install usb-serial driver
-insmod /davinci/usbserial.ko
-insmod /davinci/mos7840.ko
 
 # start dvr server
 /davinci/dvr/dvrsvr < /dev/null > /dev/null 2> /dev/null &
@@ -139,9 +135,13 @@ cd www
 #smartftp support
 ln -sf /davinci/dvr/librt-0.9.28.so /lib/librt.so.0
 
-# start gps log process, because glog use ttyS0, so execute it
+sleep 100
+# install usb-serial driver
+insmod /davinci/usbserial.ko
+insmod /davinci/mos7840.ko
+sleep 20
 cd /davinci/dvr
-/davinci/dvr/glog > /dev/null 2> /dev/null &
+/davinci/dvr/glog < /dev/null > /dev/null 2> /dev/null &
 
 # do endless loop
 while true ; do sleep 1000 ; done 

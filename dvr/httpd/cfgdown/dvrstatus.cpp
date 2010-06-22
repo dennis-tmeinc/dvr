@@ -166,6 +166,7 @@ int getchannelstate(struct channelstate * chst, unsigned long * streambytes, int
     return rch ;
 }
 
+/*
 int memory_usage( int * mem_total, int * mem_free)
 {
     // Parse /proc/meminfo
@@ -195,6 +196,34 @@ int memory_usage( int * mem_total, int * mem_free)
 
     *mem_total = MemTotal ;
     *mem_free = MemFree + Cached + Buffers ;
+    return 1;
+}
+*/
+ 
+int memory_usage( int * mem_total, int * mem_free)
+{
+    char buf[256];
+    * mem_total = 0 ;
+    * mem_free = 0 ;
+    FILE * fproc = fopen("/proc/meminfo", "r");
+    if (fproc) {
+        while (fgets(buf, 256, fproc)) {
+            char header[20] ;
+            int  v ;
+            if( sscanf( buf, "%19s%d", header, &v )==2 ) {
+                if( strcmp( header, "MemTotal:")==0 ) {
+                     *mem_total=v ;
+                }
+                else if( strcmp( header, "MemFree:")==0 ) {
+                    * mem_free+=v ;
+                }
+                else if( strcmp( header, "Inactive:")==0 ) {
+                    * mem_free+=v ;
+                }
+            }
+        }
+        fclose(fproc);
+    }
     return 1;
 }
 
@@ -255,7 +284,6 @@ void print_status()
     FILE * statfile ;
     int i;
     int  chno=0 ;
-    int camera_number ;
     struct channelstate cs[16] ;
     struct dvrstat stat ;
     
@@ -263,12 +291,6 @@ void print_status()
     statfile = fopen( "savedstat", "rb");
     if( statfile ) {
         fread( &savedstat, sizeof(savedstat), 1, statfile );
-        fclose( statfile );
-    }
-
-    statfile = fopen( "camera_number", "r");
-    if( statfile ) {
-        fscanf(statfile, "%d", &camera_number );
         fclose( statfile );
     }
 
@@ -306,7 +328,7 @@ void print_status()
     // get status from dvrsvr
     memset( cs, 0, sizeof(cs) );
     chno=getchannelstate(cs, stat.streambytes, 16);
-    for( i=1; i<=camera_number ; i++ ) 
+    for( i=1; i<=chno ; i++ ) 
     {
         if( cs[i-1].sig ) {
             printf("\"camera_%d_signal_lost\":\"on\",", i );

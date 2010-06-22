@@ -80,6 +80,7 @@ int gps_port_handle = -1;
 char gps_port_dev[256] = "/dev/ttyS0" ;
 int gps_port_baudrate = 4800 ;      // gps default baud
 int gps_fifofile ;               // gps data debugging fifo (pipe file)
+int gps_resetsirf ;                 // reset sirf GPS sentense rate
 
 int gforce_log_enable = 0 ;
 int tab102b_enable = 0 ;
@@ -372,6 +373,11 @@ int serial_open(int * handle, char * serial_dev, int serial_baudrate )
     }
     else {
         serial_handle = open( serial_dev, O_RDWR | O_NOCTTY );
+        if(serial_handle>0) {
+            close(serial_handle);       // do reopen to fix ttyUSB port bugs
+            usleep(20000);
+        }
+        serial_handle = open( serial_dev, O_RDWR | O_NOCTTY );
     }
     
 	if( serial_handle >= 0 ) {
@@ -487,42 +493,38 @@ int serial_clear(int serial_handle)
 	return 0;
 }
 
-#define GPS_BUFFER_TSIZE (2000)
-static char gps_buffer[GPS_BUFFER_TSIZE] ;
+#define GPS_BUFFER_SIZE (100)
+static char gps_buffer[GPS_BUFFER_SIZE] ;
 static int  gps_buffer_len = 0 ;
 static int  gps_buffer_pointer ;
 
-#define gps_open() serial_open(&gps_port_handle, gps_port_dev, gps_port_baudrate )
+#define gps_open() ( gps_buffer_len=0, serial_open(&gps_port_handle, gps_port_dev, gps_port_baudrate ))
 #define gps_close() serial_close(&gps_port_handle)
 // #define gps_dataready(microsecondsdelay) serial_dataready(gps_port_handle, microsecondsdelay)
 // #define gps_read(buf,bufsize) serial_read(gps_port_handle, buf, bufsize)
 #define gps_write(buf,bufsize) serial_write(gps_port_handle, buf, bufsize)
 #define gps_clear() ( gps_buffer_len=0, serial_clear(gps_port_handle))
 
-int gps_dataready(int microsecondsdelay)
+int gps_dataready(int ustimeout)
 {
-    if( gps_buffer_len>0 ) { // buffer available
-        return 1 ;
+    if( gps_buffer_len<=0 ) {
+        if( serial_dataready(gps_port_handle, ustimeout) ) {
+            gps_buffer_pointer=0 ;
+            gps_buffer_len = serial_read(gps_port_handle, gps_buffer, GPS_BUFFER_SIZE);
+        }
     }
-    else {
-        return serial_dataready(gps_port_handle, microsecondsdelay);
-    }
+    return  gps_buffer_len>0 ;
 }
 
-int gps_read(char * buf, int bufsize)
+int gps_read(char * buf, int bufsize, int ustimeout=0)
 {
-    if( gps_buffer_len<=0 ) {   // gps buffer empty
-        gps_buffer_pointer=0 ;
-        gps_buffer_len = serial_read(gps_port_handle, gps_buffer, GPS_BUFFER_TSIZE);
+    int rbytes=0 ;
+    while( bufsize>0 &&  gps_dataready(ustimeout) ) {
+        buf[rbytes++] = gps_buffer[gps_buffer_pointer++] ;
+        gps_buffer_len--;
+        bufsize--;
     }
-    if( gps_buffer_len>0 ) { // buffer available
-        int cpbytes = (gps_buffer_len > bufsize)?bufsize:gps_buffer_len ;
-        memcpy( buf, &gps_buffer[gps_buffer_pointer], cpbytes );
-        gps_buffer_pointer+=cpbytes ;
-        gps_buffer_len-=cpbytes ;
-        return cpbytes ;
-    }
-    return 0 ;                  // err, no data.
+    return rbytes ;
 }
 
 unsigned char gps_calcchecksum( char * line )
@@ -550,6 +552,19 @@ void gps_setsirfrate(int sentense, int rate)
     gps_write(buf2, strlen(buf2));
 }
 
+// set SiRF sentense rate
+void gps_setsirfbaudrate(int baudrate)
+{
+    char buf1[100], buf2[100] ;
+    gps_port_baudrate = baudrate ;
+    sprintf( buf1, "$PSRF100,1,%d,8,1,0*", baudrate );
+    sprintf( buf2, "%s%02x\r\n", buf1, gps_calcchecksum( buf1 ) );
+    gps_write(buf2, strlen(buf2));
+    gps_close();
+    gps_open();
+}
+
+
 int gps_readline( char * line, int linesize )
 {
 //	strcpy( line, "$GPRMC,225446,A,4916.45,N,12311.12,W,000.5,054.7,191194,020.3,E*68" );
@@ -566,18 +581,10 @@ int gps_readline( char * line, int linesize )
             sleep(1);
             return 0 ;					
         }
-        // set SiRF sentences rates
-        gps_setsirfrate(0,0);       // turn off GGA
-        gps_setsirfrate(1,0);       // turn off GLL
-        gps_setsirfrate(2,0);       // turn off GSA
-        gps_setsirfrate(3,0);       // turn off GSV
-        gps_setsirfrate(5,0);       // turn off VTG
-        gps_setsirfrate(8,0);       // turn off ZDA
-        gps_setsirfrate(4,1);       // turn on RMC
     }
 
     for( i=0 ;i<linesize; ) {
-		if( gps_dataready(1200000) ) {
+		if( gps_dataready(2200000) ) {
 			if( gps_read(&c, 1)==1 ) {
 				if( c=='\n' ) {
 					line[i]=0;
@@ -597,13 +604,13 @@ int gps_readline( char * line, int linesize )
 		}
 		else {
     	    break;
-    	}
+        }
 	}
-    
-	// line too long, or error
-    if( errcount++ > 10 ) {
-	gps_close();
-        usleep(10000);
+
+    // error !
+    if( ++errcount > 10 ) {
+    	gps_close();
+        usleep(100000);
         errcount=0 ;
     }
 	return 0;
@@ -658,6 +665,10 @@ int gps_readdata(struct gps_data * gpsdata)
             write( gps_fifofile, line, l );
             write( gps_fifofile, "\n", 1 );
         }
+
+#ifdef MCU_DEBUG
+        printf( "gps:%s\n", line );
+#endif        
         // end of debug
 		if( memcmp(line, "$GPRMC,", 7)==0 && gps_checksum(line) )
         {
@@ -696,9 +707,32 @@ int gps_readdata(struct gps_data * gpsdata)
             else {
                 gpsdata->year+=2000 ;
             }
+
+            static int ttyusbBug =10 ;
+            if( ttyusbBug > 0 ) {
+                if( --ttyusbBug==0 ) {
+                    gps_resetsirf=0 ;
+                    gps_close();            // close and re-open it try to fix mos7840 bugs (which make all usb interface dead!!)
+                }
+            }
+
             return 1 ;
         }
         else {
+            if( gps_resetsirf<=0 ) {
+                // set SiRF sentences rates
+                gps_setsirfrate(0,0);       // turn off GGA
+                gps_setsirfrate(1,0);       // turn off GLL
+                gps_setsirfrate(2,0);       // turn off GSA
+                gps_setsirfrate(3,0);       // turn off GSV
+                gps_setsirfrate(5,0);       // turn off VTG
+                gps_setsirfrate(8,0);       // turn off ZDA
+                gps_setsirfrate(4,2);       // turn on RMC
+                gps_resetsirf = 3000 ;
+            }
+            else {
+                gps_resetsirf--;
+            }
             return 2 ;
         }
     }
@@ -1163,66 +1197,38 @@ static void * sensorlog_thread(void *param)
 
 // TAB102B sensor log
 
-#define TAB102B_BUFFER_TSIZE (2000)
-static char tab102b_buffer[TAB102B_BUFFER_TSIZE] ;
+#define TAB102B_BUFFER_SIZE (100)
+static char tab102b_buffer[TAB102B_BUFFER_SIZE] ;
 static int  tab102b_buffer_len ;
 static int  tab102b_buffer_pointer ;
 
-#define tab102b_open() serial_open(&tab102b_port_handle, tab102b_port_dev, tab102b_port_baudrate )
+#define tab102b_open() (tab102b_buffer_len = 0, serial_open(&tab102b_port_handle, tab102b_port_dev, tab102b_port_baudrate ))
 #define tab102b_close() serial_close(&tab102b_port_handle)
 //#define tab102b_dataready(microsecondsdelay) serial_dataready(tab102b_port_handle, microsecondsdelay)
 //#define tab102b_read(buf,bufsize) serial_read(tab102b_port_handle, buf, bufsize)
 #define tab102b_write(buf,bufsize) serial_write(tab102b_port_handle, buf, bufsize)
 #define tab102b_clear() (tab102b_buffer_len = 0, serial_clear(tab102b_port_handle))
 
-int tab102b_dataready(int microsecondsdelay)
+int tab102b_dataready(int ustimeout)
 {
-    if( tab102b_buffer_len>0 ) { // buffer available
-        return 1 ;
-    }
-    else {
-        return serial_dataready(tab102b_port_handle, microsecondsdelay);
-    }
-}
-
-int tab102b_read(unsigned char * buf, int bufsize)
-{
-    if( tab102b_buffer_len<=0 ) {   // gps buffer empty
-        tab102b_buffer_pointer=0 ;
-        tab102b_buffer_len = serial_read(tab102b_port_handle, tab102b_buffer, TAB102B_BUFFER_TSIZE);
-    }
-    if( tab102b_buffer_len>0 ) { // buffer available
-        int cpbytes = (tab102b_buffer_len > bufsize)?bufsize:tab102b_buffer_len ;
-        memcpy( buf, &gps_buffer[gps_buffer_pointer], cpbytes );
-        gps_buffer_pointer+=cpbytes ;
-        gps_buffer_len-=cpbytes ;
-        return cpbytes ;
-    }
-    return 0 ;                  // err, no data.
-}
-
-// read with timeout in microseconds
-int tab102b_read_withtimeout(unsigned char * buf, int bufsize, int microsecondtimeout)
-{
-    unsigned char * buf_pointer = buf ;
-    int    n_toread = bufsize ;
-    int    n_read ;
-    while( n_toread > 0 ) {
-        if( tab102b_dataready(microsecondtimeout) ) {
-            n_read = tab102b_read(buf_pointer, n_toread) ;
-            if( n_read>0 ) {
-                n_toread-=n_read ;
-                buf_pointer+=n_read ;
-            }
-            else {          // err? 
-                return 0 ;
-            }
-        }
-        else {              // time out
-            return bufsize-n_toread ; 
+    if( tab102b_buffer_len<=0 ) {
+        if( serial_dataready(tab102b_port_handle, ustimeout) ) {
+            tab102b_buffer_pointer=0 ;
+            tab102b_buffer_len = serial_read(tab102b_port_handle, tab102b_buffer, TAB102B_BUFFER_SIZE);
         }
     }
-    return bufsize ;
+    return  tab102b_buffer_len>0 ;
+}
+
+int tab102b_read(unsigned char * buf, int bufsize, int ustimeout=0)
+{
+    int rbytes=0 ;
+    while( bufsize>0 &&  tab102b_dataready(ustimeout) ) {
+        buf[rbytes++] = tab102b_buffer[tab102b_buffer_pointer++] ;
+        tab102b_buffer_len--;
+        bufsize--;
+    }
+    return rbytes ;
 }
 
 // check data check sum
@@ -1299,7 +1305,7 @@ int tab102b_recvmsg( unsigned char * data, int size )
     if( tab102b_read(data, 1) ) {
         n=(int) *data ;
         if( n>=5 && n<=size ) {
-            n=tab102b_read_withtimeout(data+1, n-1, 1000000)+1 ;
+            n=tab102b_read(data+1, n-1, 1000000)+1 ;
             if( n==*data && 
                 data[1]==0 && 
                 data[2]==4 &&
@@ -1788,7 +1794,7 @@ int appinit()
 	if( i>=1200 && i<=115200 ) {
 		gps_port_baudrate=i ;
 	}
-
+    gps_resetsirf = 0 ;              // reset
     tstr = dvrconfig.getvalue( "glog", "gpsfifo" ); 
     if( tstr.length()>0 ) {
         gps_fifofile = open( tstr.getstring(), O_WRONLY | O_NONBLOCK );
@@ -2000,7 +2006,11 @@ int main()
             sigcap=0 ;
         }
 
-        if( app_state==1 && gps_port_disable==0 ) {
+        if( app_state==1 && 
+            gps_port_disable==0 &&
+            p_dio_mmap->iomode >= IOMODE_RUN &&
+            p_dio_mmap->iomode <= IOMODE_SHUTDOWNDELAY )
+        {
             r=gps_readdata(&gpsdata) ;
             if( r==1 ) {      // read a GPRMC sentence?
                 // update dvrsvr OSD speed display

@@ -9,6 +9,7 @@
 #define ARRAYSTEPSIZE (50)
 
 // dynamic growable array
+/*
 template <class T> 
 class array {
     T * m_array ;
@@ -181,190 +182,166 @@ class array {
             return *this;
         }
 };
+*/
 
-// duel link list
-template <class T>
-class list {
-    struct item {
-        item * prev ;
-        item * next ;
-        T data ;
-    } ;
-    item * m_head ;
-    item * m_tail ;
-    item * m_iter ;			// iterator
-    T * getdata() {
-        if( m_iter ) {
-            return &(m_iter->data) ;
+template <class T> 
+class array {
+    T * * m_array ;
+    int m_size ;
+    int m_arraysize ;
+    
+    // swap items of index a and b
+    void swap( int a, int b) {
+        T * sw ;
+        sw = m_array[a] ;
+        m_array[a] = m_array[b] ;
+        m_array[b] = sw ;
+    }
+    
+    void quicksort(int lo, int hi) {
+        int i=lo, j=hi-1;
+        while(i<=j) {
+            while( i<=j && *m_array[i] < *m_array[hi] ) {
+                i++ ;
+            }
+            while( j>i  && (!( *m_array[j] < *m_array[hi]))  ) {
+                j-- ;
+            }
+            if( i<j ) {
+                swap(i, j);
+                i++;
+            }
+            j-- ;
         }
-        else {
-            return NULL;
+        if( i<hi ) {
+            swap(i,hi);
+        }
+        if( lo<i-1 ) {
+            quicksort( lo, i-1 );
+        }
+        if( hi>i+1 ) {
+            quicksort( i+1, hi );
+        }		
+    }
+    void expand( int newsize ) {
+        if( newsize>m_arraysize ) {
+            int i;
+            m_arraysize=newsize+ARRAYSTEPSIZE ;
+            T ** newarray = new T * [m_arraysize] ;
+            for( i=0; i<m_size; i++ ) {
+                newarray[i] = m_array[i] ;
+            }
+            delete [] m_array ;
+            m_array = newarray ;
         }
     }
     public:
-        list() {
-            m_head=NULL;
-            m_tail=NULL;
-            m_iter=NULL;	
-        }
-        ~list() {
-            while(m_head) {
-                m_iter=m_head;
-                m_head=m_head->next ;
-                delete m_iter ;
+        array(int initialsize=0){
+            m_size=0;
+            m_arraysize = initialsize ;
+            if( m_arraysize<=0 ) {
+                m_arraysize = ARRAYSTEPSIZE ;
             }
+            m_array=new T *  [m_arraysize] ;
         }
-        T * head() {
-            m_iter=m_head ;
-            return getdata();
-        }
-        T * tail() {
-            m_iter=m_tail ;
-            return getdata();
-        }
-        T * next() {
-            if( m_iter ) {
-                m_iter=m_iter->next ;
-            }
-            return getdata();
-        }
-        T * prev() {
-            if( m_iter ) {
-                m_iter=m_iter->prev ;
-            }
-            return getdata();
+        ~array(){
+            empty();
+            delete [] m_array ;
         }
         int size() {
-            int count=0;
-            item * pit = m_head ;
-            while( pit ) {
-                count++;
-                pit=pit->next ;
-            }
-            return count ;
+            return m_size;
         }
-        T * find(T & t) {				// find a item equal to t, return NULL failed
-            T * f ;
-            f=head();
-            while( f != NULL ) {
-                if( t == *f ) {
-                    return f;
+        void setsize(int newsize) {
+            int i;
+            expand(newsize);
+            if( newsize>m_size ) {
+                for( i=m_size; i<newsize; i++ ) {
+                    m_array[i]=new T ;
                 }
-                f=next();
-            }
-            return NULL;
-        }
-        T * inserthead(T & t){
-            item * nitem = new item ;
-            nitem->data = t ;
-            nitem->next = m_head ;
-            nitem->prev = NULL ;
-            if( m_head ) {
-                m_head->prev = nitem ;
-                m_head = nitem ;
             }
             else {
-                m_head=m_tail=nitem;
-                
+                for( i=newsize; i<m_size; i++ ) {
+                    delete m_array[i] ;
+                }
             }
-            return head();
+            m_size=newsize ;
         }
-        T * inserttail(T & t){
-            item * nitem = new item ;
-            nitem->data = t;
-            nitem->next = NULL;
-            nitem->prev = m_tail ;
-            if( m_tail ) {
-                m_tail->next = nitem;
-                m_tail=nitem ;
+        T * at(int index) {
+            if( index>=m_size ) {
+                setsize(index+1);
+            }
+            return m_array[index] ;
+        }
+        T & operator [] (int index) {
+            if( index>=m_size ) {
+                setsize(index+1);
+            }
+            return *m_array[index] ;
+        }
+        void add( T & t ) {
+            expand(m_size+1);
+            m_array[m_size] = new T ;
+            *m_array[m_size]=t ;
+            m_size++;
+        }
+        void insert( T & t, int pos ) {
+            if( pos>= m_size ) {
+                setsize(pos+1);
             }
             else {
-                m_head=m_tail=nitem;
+                expand(m_size+1);
+                for( int i=m_size; i>pos; i-- ) {
+                    m_array[i] = m_array[i-1] ;
+                }
+                m_array[pos]=new T ;
+                m_size++;
             }
-            return tail();	
+            *m_array[pos]=t ;
         }
-        int removehead() {
-            item * t ;
-            if( m_head ) {
-                t=m_head->next ;
-                delete m_head ;
-                m_head=t ;
-                if( m_head ) {
-                    m_head->prev=NULL ;
+        void remove(int pos) {
+            if( pos<m_size ) {
+                delete m_array[pos] ;
+                m_size-- ;
+                for( int i=pos; i<m_size; i++ ) {
+                    m_array[i]=m_array[i+1] ;
                 }
-                else {
-                    m_tail=NULL ;
-                }
-                return 1;
-            }
-            return 0;
-        }
-        int removetail() {
-            item * t ;
-            if( m_tail ) {
-                t=m_tail->prev ;
-                delete m_tail;
-                m_tail=t ;
-                if( m_tail ) {
-                    m_tail->next=NULL ;
-                }
-                else {
-                    m_head=NULL;
-                }
-                return 1;
-            }
-            return 0;
-        }
-        int removecurrent() {		// remove current item pointer by m_iter
-            if( m_iter==NULL ) {
-                return 0 ;
-            }
-            else if( m_iter == m_head ) {
-                m_iter=NULL ;
-                return removehead();
-            }
-            else if( m_iter==m_tail ) {
-                m_iter=NULL ;
-                return removetail();
-            }
-            else {
-                m_iter->prev->next = m_iter->next ;
-                m_iter->next->prev = m_iter->prev ;
-                delete m_iter ;
-                m_iter=NULL;
-                return 1;
             }
         }
-        void clean() {          // clean all items
-            while(m_head) {
-                m_iter=m_head;
-                m_head=m_head->next ;
-                delete m_iter ;
+        void remove(T * pos) {
+            int i;
+            for( i=0; i<m_size; i++ ) {
+                if( m_array[i]==pos ) {
+                    remove( i );
+                    break;
+                }
             }
-            m_tail=NULL;
-            m_iter=NULL;
+        }
+        void empty(){
+            setsize(0);
+        }
+        void compact(){
+        }
+        void sort(){
+            if( m_size>1 ) {
+                quicksort(0,m_size-1);
+            }
+        }
+        array <T> & operator = ( array <T> & a ) {
+            int i;
+            empty();
+            setsize( a.size() );
+            for( i=0; i<m_size; i++) {
+                *m_array[i] = a[i] ;
+            }
+            return *this;
         }
 };
-
 
 // string and string list
 // string functions
 class string {
     protected:
         char *m_str;
-        void setstring(const char *str){
-            if( m_str!=NULL ) {
-                delete m_str ;
-            }
-            if( str ) {
-                m_str=new char [strlen(str)+2];
-                strcpy(m_str, str);
-            }
-            else {
-                m_str=new char [2] ;
-                *m_str=0 ;
-            }
-        }
     public:
         string() {
             m_str=NULL;
@@ -380,6 +357,19 @@ class string {
                 m_str[0]='\0' ;
             }
             return m_str;
+        }
+        void setstring(const char *str){
+            if( m_str!=NULL ) {
+                delete m_str ;
+            }
+            if( str ) {
+                m_str=new char [strlen(str)+2];
+                strcpy(m_str, str);
+            }
+            else {
+                m_str=new char [2] ;
+                *m_str=0 ;
+            }
         }
         string(const char *str) {
             m_str = NULL;
@@ -404,7 +394,6 @@ class string {
         int operator < ( string & s2 ) {
             return ( strcmp(getstring(), s2.getstring())<0 );
         }
-        
         int length(){
             if( m_str ) {
                 return strlen(m_str);
@@ -432,13 +421,11 @@ class string {
         int isempty() {
             return (length() == 0);
         }
-        char & operator[] (int idx) {
-            return m_str[idx] ;
-        }
 };
 
-void str_trimtail(char *line);
+char * str_trimtail(char *line);
 char * str_skipspace(char *line);
+char * str_trim(char * line );
 int savetxtfile(char *filename, array <string> & strlist );
 int readtxtfile(char *filename, array <string> & strlist);
 

@@ -7,7 +7,7 @@
 
 struct dio_mmap * p_dio_mmap ;
 unsigned int dio_old_inputmap ;
-int dio_standby_mode ;
+int dio_iorun ;
 
 /*
    share memory lock implemented use atomic swap
@@ -225,15 +225,15 @@ int dio_clearstate( int status )
 }
 
 // check if IO process busy (doing smartftp)
-int dio_iorun()
+int dio_mode_archive()
 {
-    int iorun=0 ;
+    int arch=0 ;
     if( p_dio_mmap ){
         dio_lock();
-        iorun = ( p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) ;
+        arch = ( p_dio_mmap->iomode == IOMODE_ARCHIVE ) ;
         dio_unlock();
     }
-    return iorun ;
+    return arch ;
 }
 
 // set video channel status
@@ -397,20 +397,11 @@ void dio_smartserveron()
 
 void dio_checkwifi()
 {
-    int smsdetect=0 ;       // smart server detection requested?
-
-    if( p_dio_mmap && p_dio_mmap->iopid ){
-        dio_lock();
-        // smartserver probe ?
-        if( p_dio_mmap->wifi_req!=0 && p_dio_mmap->smartserver==0 ) {
-            smsdetect=1 ;
+    if( p_dio_mmap ){
+        if( p_dio_mmap->iomode==IOMODE_DETECTWIRELESS ) {
+            // probe smartserver
+            net_broadcast("rausb0", 49954, (void *)"lookingforsmartserver", 21 );
         }
-        dio_unlock();
-    }
-
-    // probe smart server
-    if( smsdetect ) {
-        net_broadcast("rausb0", 49954, (void *)"lookingforsmartserver", 21 );
     }
 }
 
@@ -425,7 +416,6 @@ int dio_check()
             // dvrcmd :  1: restart(resume), 2: suspend, 3: stop record, 4: start record
             if( p_dio_mmap->dvrcmd == 1 ) {
                 app_state = APPRESTART ;
-                dio_standby_mode=0;
             }
             else if( p_dio_mmap->dvrcmd == 2 ) {
                 app_state = APPDOWN ;
@@ -442,22 +432,8 @@ int dio_check()
             }
             p_dio_mmap->dvrcmd = 0 ;
         }
-        if( p_dio_mmap->iomode > IOMODE_SHUTDOWNDELAY || p_dio_mmap->iomode<IOMODE_QUIT ) {
-            if( dio_standby_mode == 0 ) {
-                dio_unlock();
-                rec_stop();
-                dio_lock();
-                dio_standby_mode=1;
-            }
-        }
-        else {
-            if( dio_standby_mode ) {
-                dio_unlock();
-                rec_start();
-                dio_lock();
-                dio_standby_mode=0;
-            }
-        }
+
+        dio_iorun = ( p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) ;
         
         res = (dio_old_inputmap != p_dio_mmap->inputmap) ;
 #ifdef    PWII_APP
@@ -639,7 +615,7 @@ void dio_init()
     iomapfile = dvrconfig.getvalue( "system", "iomapfile");
     
     dio_old_inputmap = 0 ;
-    dio_standby_mode = 0 ;
+    dio_iorun = 1 ;
 #ifdef PWII_APP
     pwii_event_marker = 0 ;
 #endif        
@@ -674,21 +650,15 @@ void dio_init()
         return ;
     }
     p_dio_mmap = (struct dio_mmap *)p ;
-    for( i=0; i<10; i++ ) {
-        if( p_dio_mmap->iopid ) {
-            p_dio_mmap->lockpower = 0 ;
-            p_dio_mmap->dvrpid = getpid () ;
-            p_dio_mmap->dvrwatchdog = 0 ;
-            p_dio_mmap->usage++ ;
-            // initialize dvrsvr communications 
-            p_dio_mmap->dvrcmd = 0 ;
-            p_dio_mmap->dvrstatus = DVR_RUN ;
-            return ;		// success 
-        }
-        sleep(1);			// wait for 10 seconds
-    }
-    munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
-    p_dio_mmap = NULL ;
+    dio_lock();
+    p_dio_mmap->lockpower = 0 ;
+    p_dio_mmap->dvrpid = getpid () ;
+    p_dio_mmap->dvrwatchdog = 0 ;
+    p_dio_mmap->usage++ ;
+    // initialize dvrsvr communications 
+    p_dio_mmap->dvrcmd = 0 ;
+    p_dio_mmap->dvrstatus = DVR_RUN ;
+    dio_unlock();
     return ;
 }
 
@@ -696,11 +666,13 @@ void dio_uninit()
 {
     if( p_dio_mmap ) {
         dio_unlockpower();
+        dio_lock();
         p_dio_mmap->dvrpid = 0 ;
         p_dio_mmap->usage-- ;
         p_dio_mmap->dvrcmd = 0 ;
-//        p_dio_mmap->dvrstatus = 0 ;
+        p_dio_mmap->dvrstatus &= ~DVR_RUN ;
         p_dio_mmap->dvrwatchdog = -1 ;
+        dio_unlock();
         munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
         p_dio_mmap=NULL ;
     }

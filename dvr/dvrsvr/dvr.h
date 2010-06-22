@@ -190,7 +190,6 @@ struct cap_frame {
 	int channel;
 	int framesize;
 	int frametype;
-//    struct dvrtime frametime ;      // only available on key frames
 	char *framedata;
 };
 
@@ -591,12 +590,6 @@ struct dvrtime * time_dvrtimelocal( time_t t, struct dvrtime * dvrt);
 struct dvrtime * time_dvrtimeutc( time_t t, struct dvrtime * dvrt);
 time_t time_timelocal( struct dvrtime * dvrt);
 time_t time_timeutc( struct dvrtime * dvrt);
-// get a replace hik card time stamp
-DWORD time_hiktimestamp() ;
-
-// appliction up time in seconds
-int time_uptime();
-
 int time_readrtc(struct dvrtime * dvrt);
 int time_setrtc();
 
@@ -1276,7 +1269,7 @@ int dio_setstate( int status ) ;
 int dio_clearstate( int status ) ;
 void dio_setchstat( int channel, int ch_state );
 int dio_getgforce( float * gfb, float * glr, float *gud );
-int dio_iorun();
+int dio_mode_archive();
 int dio_getiomsg( char * oldmsg );
 void dio_smartserveron();
 
@@ -1290,7 +1283,7 @@ void dio_uninit();
 double gps_speed();
 int gps_location( double * latitude, double * longitude, double * speed );
 extern double g_gpsspeed ;
-extern int dio_standby_mode ;
+extern int dio_iorun;
 
 //};
 

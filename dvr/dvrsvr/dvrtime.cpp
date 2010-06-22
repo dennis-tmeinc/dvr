@@ -452,20 +452,12 @@ time_t time_timeutc( struct dvrtime * dvrt)
     return timegm( &stm );
 }
 
-// appliction up time in seconds
-int time_uptime()
-{
-    struct timeval current_time;
-    gettimeofday(&current_time, NULL);
-    return (current_time.tv_sec - app_time.tv_sec);
-}
-
 // return ticks (milli-seconds) from time_init()
 int time_tick()
 {
     struct timeval current_time;
     gettimeofday(&current_time, NULL);
-    g_timetick = ((int)(current_time.tv_sec - app_time.tv_sec)) * 1000 + ((int)(current_time.tv_usec - app_time.tv_usec))/1000 ;
+    g_timetick = ((int)(current_time.tv_sec - app_time.tv_sec)) * 1000 + ((int)current_time.tv_usec)/1000 ;
     return g_timetick ;
 }
 
@@ -474,11 +466,4 @@ int time_setrtc()
 {
     dio_syncrtc ();                             // update time to RTC on MCU
     return 1;
-}
-
-DWORD time_hiktimestamp()
-{
-    struct timeval tv ;
-    gettimeofday(&tv, NULL);
-    return (tv.tv_sec%(86400*10))*64 + tv.tv_usec * 64 / 1000000 ;
 }

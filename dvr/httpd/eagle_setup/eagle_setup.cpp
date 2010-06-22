@@ -14,6 +14,7 @@
 #include "../../dvrsvr/crypt.h"
 
 char dvrconfigfile[]="/etc/dvr/dvr.conf" ;
+char defconfigfile[]="/davinci/dvr/defconf" ;
 
 int hextoint(int c)
 {
@@ -674,6 +675,20 @@ void mfid_page()
             keysize = fread( c_key, 1, 4096, id_file ) ;
             if( checktvskey( usbid, key, keysize ) ) {
                 if( key->usbid[0] == 'M' && key->usbid[1] == 'F' ) {
+                    bin2c64((unsigned char *)(key->videokey), 256, usbid);		// convert to c64
+                    
+                    config defconfig(defconfigfile);    
+#ifdef TVS_APP		                    
+                    defconfig.setvalue( "system", "tvsmfid", key->usbid );
+#endif // TVS_APP                    
+
+#ifdef PWII_APP		                    
+                    defconfig.setvalue( "system", "mfid", key->usbid );
+#endif // PWII_APP                    
+
+                    defconfig.setvalue("system", "filepassword", usbid);	// save password to config file
+                    defconfig.save();
+
                     config dvrconfig(dvrconfigfile);    
 #ifdef TVS_APP		                    
                     dvrconfig.setvalue( "system", "tvsmfid", key->usbid );
@@ -683,7 +698,6 @@ void mfid_page()
                     dvrconfig.setvalue( "system", "mfid", key->usbid );
 #endif // PWII_APP                    
 
-                    bin2c64((unsigned char *)(key->videokey), 256, usbid);		// convert to c64
                     dvrconfig.setvalue("system", "filepassword", usbid);	// save password to config file
                     dvrconfig.save();
                     res=1 ;     // success ;

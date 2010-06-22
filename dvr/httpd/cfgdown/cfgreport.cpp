@@ -178,33 +178,28 @@ int getchannelstate(struct channelstate * chst, unsigned long * streambytes, int
 
 int memory_usage( int * mem_total, int * mem_free)
 {
-    // Parse /proc/meminfo
-    int MemTotal, MemFree, Cached, Buffers, SwapTotal, SwapFree;
-    FILE * fproc=NULL;
     char buf[256];
-    int rnum = 0;
-    fproc = fopen("/proc/meminfo", "r");
-    if (fproc == NULL)
-        return 0;
-    while (fgets(buf, 256, fproc)) {
-        if (memcmp(buf, "MemTotal:", 9) == 0) {
-            rnum += sscanf(buf + 9, "%d", &MemTotal);
-        } else if (memcmp(buf, "MemFree:", 8) == 0) {
-            rnum += sscanf(buf + 8, "%d", &MemFree);
-        } else if (memcmp(buf, "Cached:", 7) == 0) {
-            rnum += sscanf(buf + 7, "%d", &Cached);
-        } else if (memcmp(buf, "Buffers:", 8) == 0) {
-            rnum += sscanf(buf + 8, "%d", &Buffers);
-        } else if (memcmp(buf, "SwapTotal:", 10) == 0) {
-            rnum += sscanf(buf + 10, "%d", &SwapTotal);
-        } else if (memcmp(buf, "SwapFree:", 9) == 0) {
-            rnum += sscanf(buf + 9, "%d", &SwapFree);
+    * mem_total = 0 ;
+    * mem_free = 0 ;
+    FILE * fproc = fopen("/proc/meminfo", "r");
+    if (fproc) {
+        while (fgets(buf, 256, fproc)) {
+            char header[20] ;
+            int  v ;
+            if( sscanf( buf, "%19s%d", header, &v )==2 ) {
+                if( strcmp( header, "MemTotal:")==0 ) {
+                     *mem_total=v ;
+                }
+                else if( strcmp( header, "MemFree:")==0 ) {
+                    * mem_free+=v ;
+                }
+                else if( strcmp( header, "Inactive:")==0 ) {
+                    * mem_free+=v ;
+                }
+            }
         }
+        fclose(fproc);
     }
-    fclose(fproc);
-
-    *mem_total = MemTotal ;
-    *mem_free = MemFree + Cached + Buffers ;
     return 1;
 }
 

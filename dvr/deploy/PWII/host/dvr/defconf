@@ -1,4 +1,4 @@
-# DVR default config file
+#DEFCONF ; DVR default config file
 
 [system]
 keycheck=1
@@ -102,7 +102,7 @@ protocol=D
 
 
 # camera number start from 1
-[camera1]
+[camera2]
 show_gforce=1
 # force recording on
 forcerecordontime = 7200
@@ -196,6 +196,7 @@ disableaudio=0
 
 # camera name
 name=Rear
+channel=1
 # enable this camera
 enable=1
 # enable GPS message on OSD
@@ -207,7 +208,7 @@ show_policeid=1
 #PTZ address
 ptzaddr=2
 
-[camera2]
+[camera1]
 show_gforce=1
 forcerecordontime = 7200
 forcerecordofftime = 0
@@ -255,6 +256,7 @@ resolution=3
 recordmode=1
 
 name=Front
+channel=2
 enable=1
 ptzaddr=2
 

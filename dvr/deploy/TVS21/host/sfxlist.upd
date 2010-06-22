@@ -12,6 +12,7 @@
 ./dvr/tdevd
 ./dvr/tdevhotplug
 ./dvr/tdevmount
+./dvr/mountdisks
 ./dvr/umountdisks
 ./dvr/eaglehost
 ./dvr/usbcheck

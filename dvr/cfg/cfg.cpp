@@ -13,6 +13,7 @@
 #include <pthread.h>
 #include <termios.h>
 #include <stdarg.h>
+#include <time.h>
 
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
@@ -22,7 +23,7 @@ char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
 int main( int argc, char * argv[] )
 {
     if( argc<4 ) {
-        printf("Usage: cfg [-fFILENAME] get|set section key [value]\n");
+        printf("Usage: cfg [-fFILENAME] get|set|list section key [value]\n");
         exit(1);
     }
     int i;
@@ -66,8 +67,9 @@ int main( int argc, char * argv[] )
             }
         }
     }
-    
+
 	config dvrconfig(filename.getstring());
+
     if( strcasecmp(cmd.getstring(), "get")==0 ) {
         str=dvrconfig.getvalue( section.getstring(), key.getstring());
         if( str.length()>0 ) {
@@ -85,6 +87,22 @@ int main( int argc, char * argv[] )
             printf("%s\n", str.getstring());
         }
         dvrconfig.save();
+        return 0 ;
+    }
+    else if(  strcasecmp(cmd.getstring(), "list")==0 ) {
+        struct config_enum en_section ;
+        char * section ;
+        en_section.line=0;
+        while( (section=dvrconfig.enumsection( &en_section ))!=NULL ){
+            struct config_enum en_key ;
+            char * key ;
+            printf("[%s]\n", section);
+            en_key.line=0;
+            while( (key=dvrconfig.enumkey( section, &en_key ))!=NULL ){
+                char * v = dvrconfig.getvalue( section, key );
+                printf("%s = %s\n", key, v ); 
+            }
+        }
         return 0 ;
     }
     return 3 ;

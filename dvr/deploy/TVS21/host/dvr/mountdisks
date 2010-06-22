@@ -1,0 +1,3 @@
+#!/bin/sh
+
+/davinci/dvr/tdevmount /davinci/dvr/tdevhotplug

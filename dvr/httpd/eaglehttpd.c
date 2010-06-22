@@ -26,6 +26,7 @@ static char * mime_type[][2] =
     {"jpeg", "image/jpeg"},
     {"gif", "image/gif"},
     {"png", "image/png"},
+    {"ico", "image/ico"},
     {"js",  "text/javascript"},
     {"css", "text/css"},
     {"au", "audio/basic"},

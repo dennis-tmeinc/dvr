@@ -7,8 +7,8 @@ char dvrconfigfile[] = "/etc/dvr/dvr.conf";
 static char deftmplogfile[] = "/tmp/dvrlog.txt";
 static char deflogfile[] = "dvrlog.txt";
 static string tmplogfile ;
-static string logfile ;
 static int    logfilesize ;	// maximum logfile size
+string logfile ;
 
 char g_hostname[128] ;
 pthread_mutex_t mutex_init=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP ;
@@ -130,10 +130,10 @@ int dvr_log(char *fmt, ...)
             symlink(logfilename, "/var/dvr/dvrlogfile");
         }
     }
-    
-    flog = file_open(logfilename, "a");
+
+   flog = fopen(logfilename, "a");
     if (flog) {
-        ftmplog = file_open(tmplogfile.getstring(), "r");	// copy temperary log to logfile
+        ftmplog = fopen(tmplogfile.getstring(), "r");	// copy temperary log to logfile        
         if (ftmplog) {
             dvr_lock();
             fputs("\n", flog);
@@ -142,13 +142,13 @@ int dvr_log(char *fmt, ...)
             }
             fputs("\n", flog);
             dvr_unlock();
-            file_close(ftmplog);
+            fclose(ftmplog);
             unlink(tmplogfile.getstring());
         }
         res=1 ;
     } else {
         logfilename[0]=0 ;
-        flog = file_open(tmplogfile.getstring(), "a");
+        flog = fopen(tmplogfile.getstring(), "a");        
         rectemp=1 ;
     }
 
@@ -162,7 +162,6 @@ int dvr_log(char *fmt, ...)
     vprintf(fmt, ap );
     printf("\n");
     if (flog) {
-        dvr_lock();
         fprintf(flog, "%s:", lbuf);
         vfprintf(flog, fmt, ap );
         if( rectemp ) {
@@ -171,11 +170,10 @@ int dvr_log(char *fmt, ...)
         else {
             fprintf(flog, "\n");		
         }
-        dvr_unlock();
         if( ftell(flog) > logfilesize ) {		// log file oversize ?
             dvr_cleanlog( flog );
         }
-        if( file_close(flog)!=0 ) {
+        if( fclose(flog)!=0 ) {
             res = 0 ;
         }
     }
@@ -221,30 +219,30 @@ static void dvr_logkey_settings()
         
 #ifdef TVS_APP
         fprintf(flog, "\nTVS settings\n" );
-        fprintf(flog, "\tMedallion #: %s\n", dvrconfig.getvalue("system", "tvs_medallion").getstring() );
-        fprintf(flog, "\tController serial #: %s\n", dvrconfig.getvalue("system", "tvs_ivcs_serial").getstring() );
-        fprintf(flog, "\tLicense plate #: %s\n", dvrconfig.getvalue("system", "tvs_licenseplate").getstring() );
+        fprintf(flog, "\tMedallion #: %s\n", dvrconfig.getvalue("system", "tvs_medallion") );
+        fprintf(flog, "\tController serial #: %s\n", dvrconfig.getvalue("system", "tvs_ivcs_serial") );
+        fprintf(flog, "\tLicense plate #: %s\n", dvrconfig.getvalue("system", "tvs_licenseplate") );
 #endif // TVS_APP
 
 #ifdef PWII_APP
         fprintf(flog, "\nPWII settings\n" );
-        fprintf(flog, "\tVehicle ID: %s\n", dvrconfig.getvalue("system", "id1").getstring() );
-        fprintf(flog, "\tDistrict : %s\n", dvrconfig.getvalue("system", "id2").getstring() );
-        fprintf(flog, "\tUnit #: %s\n", dvrconfig.getvalue("system", "serial").getstring() );
+        fprintf(flog, "\tVehicle ID: %s\n", dvrconfig.getvalue("system", "id1") );
+        fprintf(flog, "\tDistrict : %s\n", dvrconfig.getvalue("system", "id2") );
+        fprintf(flog, "\tUnit #: %s\n", dvrconfig.getvalue("system", "serial") );
 #endif					
 
-        fprintf(flog, "\tTime Zone : %s\n", dvrconfig.getvalue("system", "timezone").getstring() );
+        fprintf(flog, "\tTime Zone : %s\n", dvrconfig.getvalue("system", "timezone") );
         for( int camera=1; camera<=2 ; camera++ ) {
             char cameraid[10] ;
             sprintf( cameraid, "camera%d", camera );
             fprintf(flog, "Camera %d settings\n", camera);
             if( dvrconfig.getvalueint(cameraid, "enable")) {
                 fprintf(flog, "\tEnabled\n");
-                fprintf(flog, "\tSerial #: %s\n", dvrconfig.getvalue(cameraid, "name").getstring() );
+                fprintf(flog, "\tSerial #: %s\n", dvrconfig.getvalue(cameraid, "name") );
                 for( int s=1; s<=6; s++) {
                     char sen[10] ;
                     sprintf(sen, "sensor%d", s);
-                    fprintf(flog, "\tSensor (%s) trigger : ", dvrconfig.getvalue(sen, "name").getstring() );
+                    fprintf(flog, "\tSensor (%s) trigger : ", dvrconfig.getvalue(sen, "name") );
                     sprintf(sen, "trigger%d", s);
                     int t = dvrconfig.getvalueint(cameraid, sen);
                     if( t&1 ) {
@@ -351,6 +349,7 @@ int dvr_getsystemsetup(struct system_stru * psys)
     string tmpstr;
     char buf[40] ;
     string v ;
+    char * pv ;
     config dvrconfig(dvrconfigfile);
 
 #ifdef MDVR_APP    
@@ -378,12 +377,12 @@ int dvr_getsystemsetup(struct system_stru * psys)
     psys->breakMode = 0 ;
     
     // maxfilelength ;
-    v = dvrconfig.getvalue("system", "maxfilelength");
-    if (sscanf(v.getstring(), "%d", &x)>0) {
-        i = v.length();
-        if (v[i - 1] == 'H' || v[i - 1] == 'h')
+    pv = dvrconfig.getvalue("system", "maxfilelength");
+    if (sscanf(pv, "%d", &x)>0) {
+        i = strlen(pv);
+        if (pv[i - 1] == 'H' || pv[i - 1] == 'h')
             x *= 3600;
-        else if (v[i - 1] == 'M' || v[i - 1] == 'm')
+        else if (pv[i - 1] == 'M' || pv[i - 1] == 'm')
             x *= 60;
     } else {
         x = DEFMAXFILETIME;
@@ -395,12 +394,12 @@ int dvr_getsystemsetup(struct system_stru * psys)
     psys->breakTime = x ;
     
     // maxfilesize
-    v = dvrconfig.getvalue("system", "maxfilesize");
-    if (sscanf(v.getstring(), "%d", &x)>0) {
-        i = v.length();
-        if (v[i - 1] == 'M' || v[i - 1] == 'm')
+    pv = dvrconfig.getvalue("system", "maxfilesize");
+    if (sscanf(pv, "%d", &x)>0) {
+        i = strlen(pv);
+        if (pv[i - 1] == 'M' || pv[i - 1] == 'm')
             x *= 1024*1024;
-        else if (v[i - 1] == 'K' || v[i - 1] == 'k')
+        else if (pv[i - 1] == 'K' || pv[i - 1] == 'k')
             x *= 1024;
     } else {
         x = DEFMAXFILESIZE;
@@ -412,14 +411,14 @@ int dvr_getsystemsetup(struct system_stru * psys)
     psys->breakSize = x;
     
     // mindiskspace	
-    v = dvrconfig.getvalue("system", "mindiskspace");
-    if (sscanf(v.getstring(), "%d", &x)) {
-        i = v.length();
-        if (v[i - 1] == 'G' || v[i - 1] == 'g') {
+    pv = dvrconfig.getvalue("system", "mindiskspace");
+    if (sscanf(pv, "%d", &x)) {
+        i = strlen(pv);
+        if (pv[i - 1] == 'G' || pv[i - 1] == 'g') {
             x *= 1024*1024*1024;
-        } else if (v[i - 1] == 'K' || v[i - 1] == 'k') {
+        } else if (pv[i - 1] == 'K' || pv[i - 1] == 'k') {
             x *= 1024;
-        } else if (v[i - 1] == 'B' || v[i - 1] == 'b') {
+        } else if (pv[i - 1] == 'B' || pv[i - 1] == 'b') {
             x = x;
         } else {		// M
             x *= 1024*1024;
@@ -858,7 +857,6 @@ void do_uninit()
     if( g_memused > 100 ) {
         dvr_log("Unsolved memory leak, request to restart system" );
         dio_setstate( DVR_FAILED ) ;
-        sync();
         sync();
         sleep(60);
         app_state = APPQUIT ;

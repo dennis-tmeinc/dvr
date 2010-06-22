@@ -1292,6 +1292,7 @@ class iomsg : public window {
             redraw();
         }
         if( m_iomsg[0] ) {
+            hide();
             show();
         }
         else {
@@ -1314,12 +1315,9 @@ class iomsg : public window {
         }
         virtual void ontimer( int id ) {
             if( dio_getiomsg( m_iomsg ) ) {
+                hide();
                 if( m_iomsg[0] ) {
                     show();
-                    redraw();
-                }
-                else {
-                    hide();
                 }
             }
             settimer( 2000, 1 );

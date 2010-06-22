@@ -1,4 +1,4 @@
-# DVR default config file
+#DEFCONF ; DVR default config file
 
 [system]
 tvskeycheck=1

@@ -157,7 +157,7 @@ void tdev_mount(char * path, int level )
             exit(1);
         }
         else {
-//            waitpid(childid, NULL, 0);
+            waitpid(childid, NULL, 0);
         }
     }
 }

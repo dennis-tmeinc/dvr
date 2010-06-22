@@ -271,6 +271,7 @@ void capture::onframe(cap_frame * pcapframe)
         return ;
     }
     if( pcapframe->frametype == FRAMETYPE_KEYVIDEO ) {
+        
         struct hd_frame * pframe = (struct hd_frame *)pcapframe->framedata;
         if( (((pframe->width_height)>>16)&0xfff)%40 == 0 ) {
             m_signal_standard = 1 ;         // assume NTSC when height would be 120, 320, 240, 480
@@ -292,7 +293,7 @@ void capture::update(int updosd)
         updateOSD();
     }
     if( m_oldsignal!=m_signal ) {
-        if( dio_standby_mode == 0 ) {				// don't record video lost event in standby mode. (Requested by Harrison)
+        if(dio_iorun ) {				// don't record video lost event in standby mode. (Requested by Harrison)
             dvr_log("Camera %d video signal %s.", m_channel, m_signal?"on":"lost");
         }
         m_oldsignal=m_signal ;
@@ -992,8 +993,12 @@ void cap_init()
         sprintf(cameraid, "camera%d", i+1 );
         cameratype = dvrconfig.getvalueint(cameraid, "type");	
         if( cameratype == 0 ) {			// local capture card
-            if( ilocal<dvrchannels ) {
-                cap_channel[i]=new eagle_capture(i, ilocal++);
+            int lch = dvrconfig.getvalueint(cameraid, "channel");	
+            if( lch==0 ) {
+                lch = ++ilocal ;
+            }
+            if( lch>0 && lch<=dvrchannels ) {
+                cap_channel[i]=new eagle_capture(i, lch-1);
             }
             else {
                 cap_channel[i]=new eagle_capture(i, -1);		// dummy channel

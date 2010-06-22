@@ -3,7 +3,6 @@
 #include "dvr.h"
 
 int g_memdirty = 0;
-
 int g_memused = 0 ;
 
 #define MEMTAG	0x462021dc
@@ -19,47 +18,30 @@ static void mem_unlock()
     pthread_mutex_unlock(&mem_mutex);
 }
 
-// Parse /proc/meminfo
-static int MemTotal, MemFree, Cached, Buffers, SwapTotal, SwapFree;
-static int ParseMeminfo()
-{
-    FILE *fproc=NULL;
-    char buf[256];
-    int rnum = 0;
-    fproc = fopen("/proc/meminfo", "r");
-    if (fproc == NULL)
-        return 0;
-    while (fgets(buf, 256, fproc)) {
-        if (memcmp(buf, "MemTotal:", 9) == 0) {
-            rnum += sscanf(buf + 9, "%d", &MemTotal);
-        } else if (memcmp(buf, "MemFree:", 8) == 0) {
-            rnum += sscanf(buf + 8, "%d", &MemFree);
-        } else if (memcmp(buf, "Cached:", 7) == 0) {
-            rnum += sscanf(buf + 7, "%d", &Cached);
-        } else if (memcmp(buf, "Buffers:", 8) == 0) {
-            rnum += sscanf(buf + 8, "%d", &Buffers);
-        } else if (memcmp(buf, "SwapTotal:", 10) == 0) {
-            rnum += sscanf(buf + 10, "%d", &SwapTotal);
-        } else if (memcmp(buf, "SwapFree:", 9) == 0) {
-            rnum += sscanf(buf + 9, "%d", &SwapFree);
-        } else if (memcmp(buf, "Dirty:", 6) == 0) {
-            rnum += sscanf(buf + 6, "%d", &g_memdirty);
-        }
-    }
-    fclose(fproc);
-    return rnum;
-}
-
 // return kbytes of available memory (Usable Ram)
 int mem_available()
 {
-    int memfree;
-    if (ParseMeminfo() == 0)
-        return 0;
-//	memfree = MemFree + Cached + Buffers + SwapFree - SwapTotal;
-    memfree = MemFree + Cached + Buffers ;
-//    if (memfree < MemFree)
-//        memfree = MemFree;
+    int memfree=0;
+    char buf[256];
+    FILE * fproc = fopen("/proc/meminfo", "r");
+    if (fproc) {
+        while (fgets(buf, 256, fproc)) {
+            char header[20] ;
+            int  v ;
+            if( sscanf( buf, "%19s%d", header, &v )==2 ) {
+                if( strcmp( header, "MemFree:")==0 ) {
+                    memfree+=v ;
+                }
+                else if( strcmp( header, "Inactive:")==0 ) {
+                    memfree+=v ;
+                }
+                else if( strcmp( header, "Dirty:")==0 ) {
+                    g_memdirty=v ;
+                }
+            }
+        }
+        fclose(fproc);
+    }
     return memfree;
 }
 
@@ -73,14 +55,6 @@ void *mem_alloc(int size)
         size=0 ;
     }
     size+=12 ;
-/*    
-    if( size >= MEM_ALLOC_MMAP_SIZE ) {
-        pmemblk = (int *) mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0 );;
-    }
-    else {
-        pmemblk = (int *) malloc(size);
-    }
-*/
     pmemblk = (int *) malloc(size);
     if (pmemblk == NULL) {
         // no enough memory error
@@ -108,14 +82,6 @@ void mem_free(void *pmem)
             g_memused--;
             pmemblk[2]=0;		// clear memory tag
             free( (void *)pmemblk );
-/*
-            if( pmemblk[0] >= MEM_ALLOC_MMAP_SIZE ) {
-                munmap( (void *)pmemblk, pmemblk[0] );
-            }
-            else {
-                free( (void *)pmemblk );
-            }
-*/             
         }
     }
     mem_unlock();

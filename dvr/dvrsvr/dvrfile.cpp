@@ -1022,14 +1022,8 @@ int file_flush(FILE *stream)
     return r ;
 }
 
-
 void file_sync()
 {
-//    if (file_syncreq) {
-//        file_syncreq = 0;
-//        sync();
-//    }
-//	  sync();
     dvr_lock();
     disk_sync();
     dvr_unlock();

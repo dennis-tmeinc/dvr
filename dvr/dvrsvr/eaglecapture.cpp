@@ -3,7 +3,7 @@
 #include "eagle32/davinci_sdk.h"
 
 int    eagle32_channels = 0 ;
-static WORD eagle32_tsadjust = 0 ;
+//static WORD eagle32_tsadjust = 0 ;
 #define MAX_EAGLE_CHANNEL   (8)
 static eagle_capture * eagle_capture_array[MAX_EAGLE_CHANNEL] ;
 
@@ -73,7 +73,6 @@ void eagle_capture::streamcallback(
 {
     int xframetype = FRAMETYPE_UNKNOWN ;
     struct cap_frame capframe;
-    struct hd_frame * pframe ;
     
     if( frame_type==FRAME_TYPE_AUDIO ) {
         xframetype = FRAMETYPE_AUDIO ;
@@ -124,13 +123,13 @@ void eagle_capture::streamcallback(
         return ;
     }
     mem_cpy32(capframe.framedata, buf, size ) ;
-
+/*
     if( xframetype == FRAMETYPE_AUDIO ||
         xframetype == FRAMETYPE_KEYVIDEO ||
         xframetype == FRAMETYPE_VIDEO ) 
     {
         // replace hik time stamp.
-        pframe = (struct hd_frame *) capframe.framedata ;
+        struct hd_frame * pframe  = (struct hd_frame *) capframe.framedata ;
         if( eagle32_tsadjust ==0 ) {
             struct timeval tv ;
             gettimeofday(&tv, NULL);
@@ -138,6 +137,7 @@ void eagle_capture::streamcallback(
         }
         pframe->timestamp += eagle32_tsadjust ;
     }
+*/
     // send frame
     onframe(&capframe);
     mem_free(capframe.framedata);
@@ -232,21 +232,8 @@ void eagle_capture::start()
         video_standard v ;
         res = GetVideoParam(m_hikhandle, &v, &b, &c, &s, &h );
         m_signal_standard = (int)v ;
-        
-        struct SYSTEMTIME nowt ;
-        struct dvrtime dvrt ;
-        time_now ( &dvrt );
-        memset( &nowt, 0, sizeof(nowt));
-        nowt.year = dvrt.year ;
-        nowt.month = dvrt.month ;
-        nowt.day = dvrt.day ;
-        nowt.hour = dvrt.hour ;
-        nowt.minute = dvrt.minute ;
-        nowt.second = dvrt.second ;
-        nowt.milliseconds = dvrt.milliseconds ;
-        
-        SetDSPDateTime(m_hikhandle, &nowt);
-        eagle32_tsadjust=0 ;
+
+//        eagle32_tsadjust=0 ;
         
         // start encoder
         eagle_capture_array[m_hikhandle-1]=this ;
@@ -280,7 +267,7 @@ void eagle_capture::setosd( struct hik_osd_type * posd )
     //	EnableOSD(m_hikhandle, 0);		// disable OSD
     int i;
     WORD * osdformat[8] ;
-    if( m_started ) {
+    if( m_started && posd!=NULL ) {
         for( i=0; i<posd->lines; i++) {
             osdformat[i]=&(posd->osdline[i][0]) ;
         }
@@ -291,15 +278,10 @@ void eagle_capture::setosd( struct hik_osd_type * posd )
                           posd->lines,
                           osdformat );
         EnableOSD(m_hikhandle, 1);		// enable OSD
-    }
-}
-
-void eagle_capture::update(int updosd)
-{
-    if( m_started ) {
-        if( ++m_dspdatecounter>500 ) {
-            struct SYSTEMTIME nowt ;
+        if( m_dspdatecounter > g_timetick || (g_timetick-m_dspdatecounter)>60000 ) {
             struct dvrtime dvrt ;
+            struct SYSTEMTIME nowt ;
+            m_dspdatecounter = g_timetick ;
             time_now ( &dvrt );
             memset( &nowt, 0, sizeof(nowt));
             nowt.year = dvrt.year ;
@@ -310,9 +292,13 @@ void eagle_capture::update(int updosd)
             nowt.second = dvrt.second ;
             nowt.milliseconds = dvrt.milliseconds ;
             SetDSPDateTime(m_hikhandle, &nowt);
-            eagle32_tsadjust=0 ;
-            m_dspdatecounter=0 ;
-        }
+        }        
+    }
+}
+
+void eagle_capture::update(int updosd)
+{
+    if( m_started ) {
         if( m_motionupd ) {
             m_motionupd = 0 ;
             updosd=1;
@@ -376,7 +362,8 @@ int eagle32_init()
     }
     
     // reset time stamp adjustment
-    eagle32_tsadjust = 0 ;
+//    eagle32_tsadjust = 0 ;
+    
     return eagle32_channels ;
 }
 

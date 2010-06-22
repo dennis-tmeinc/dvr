@@ -25,10 +25,16 @@ class config {
     void mergedefconf( char * defconffile );
     int nextsection(int idx);
     int findsection(char *section);
-	int findkey(int section, char *key);
+    int findkey(int sectionline, char *key);
+    int findkey(char *section, char *key);
   public:
+	config();
 	config(char *configfilename);
-	string & getvalue(char *section, char *key);
+    ~config();
+	void open(char *configfilename);
+    void close();
+    char * getvalue(char *section, char *key);
+    char * getvalue(char *section, char *key, string & value);
 	int getvalueint(char *section, char *key);
 	void setvalue(char *section, char *key, char *value);
   	void setvalueint(char *section, char *key, int value);

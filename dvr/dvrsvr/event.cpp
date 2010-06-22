@@ -139,9 +139,7 @@ void event_check()
 
     screen_io(20000);           	// do screen io
 
-    if( dio_check() || g_timetick-timer_1s > 1000 ) {
-        timer_1s = g_timetick ;
-
+    if( dio_check() || g_timetick<timer_1s || g_timetick-timer_1s > 1000 ) {
         // check sensors
         for(i=0; i<num_sensors; i++ ) {
             sensors[i]->check();
@@ -244,9 +242,6 @@ void event_check()
             dio_clearstate (DVR_NETWORK);
         }
 
-        // check if we need to detect smartserver (wifi)
-        dio_checkwifi();
-        
 #ifdef POWERCYCLETEST
         if( cycletest ) {
             static int cycle=0 ;
@@ -271,21 +266,30 @@ void event_check()
                             disk,
                             video );
                     fclose( xfile );
-                    sync();
                     sprintf(sysbuf, "cd /home ; /davinci/dvr/tmefile p %s %s ", cyclefile.getstring(), cycleserver.getstring() );
                     system(sysbuf);
                 }
             }
         }
 #endif    
-        dio_kickwatchdog ();
-        // check memory
-        if( mem_available () < g_lowmemory && rec_basedir.length()>1 ) {
-            dvr_log("Memory low. reload DVR.");
-            app_state = APPRESTART ;
+
+        if( g_timetick<timer_1s || g_timetick-timer_1s > 1000 ) {
+            timer_1s = g_timetick ;
+
+            // check if we need to detect smartserver (wifi)
+            dio_checkwifi();
+
+            dio_kickwatchdog ();
+
+            // calculate cpu usage
+            cpu_usage();
+
+            // check memory
+            if( mem_available () < g_lowmemory && rec_basedir.length()>1 ) {
+                dvr_log("Memory low. reload DVR.");
+                app_state = APPRESTART ;
+            }
         }
-        // calculate cpu usage
-        cpu_usage();
     }
 
     // display alarm (LEDs)
@@ -294,7 +298,6 @@ void event_check()
             alarms[i]->update();
         }
     }
-    
 }
 
 void event_init()

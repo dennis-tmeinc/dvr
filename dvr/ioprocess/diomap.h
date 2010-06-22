@@ -96,7 +96,6 @@ struct dio_mmap {
 
     // Wifi status
     int     smartserver ;        // smartserver detected
-    int     wifi_req ;
 
 } ;
 
@@ -117,7 +116,7 @@ struct dio_mmap {
 #define IOMODE_QUIT            (0)
 #define IOMODE_RUN             (1)
 #define IOMODE_SHUTDOWNDELAY   (2)
-#define IOMODE_SAVEFILE        (3)
+#define IOMODE_ARCHIVE         (3)
 #define IOMODE_DETECTWIRELESS  (4)
 #define IOMODE_UPLOADING       (5)
 #define IOMODE_STANDBY         (6)

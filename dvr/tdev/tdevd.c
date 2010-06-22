@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 
 		// last env
 		envp[i] = NULL;
-	
+
         usleep(150000);         // this fixed ttyUSB missing problem
         
 		if( (childid=fork())==0 ) {

@@ -1115,7 +1115,7 @@ int disk_archive_copyfile( char * srcfile, char * destfile )
     int r ;
     int res ;
 
-#define ARCH_BUFSIZE (0x10000)    
+#define ARCH_BUFSIZE (0x40000)    
 
     filebuf=(char *)malloc(ARCH_BUFSIZE) ;
     if( filebuf==NULL ) {
@@ -1133,10 +1133,9 @@ int disk_archive_copyfile( char * srcfile, char * destfile )
 
     res = 1 ;
     while( (r=file_read( filebuf, ARCH_BUFSIZE, fsrc ))>0 ) {
-        usleep( 10000 );
         file_write( filebuf, r, fdest ) ;
         disk_sync();
-        while( rec_busy || disk_busy || g_cpu_usage>0.5 ) {
+        while( rec_busy || disk_busy || g_cpu_usage>0.6 ) {
             usleep( 100000 );
             if( disk_archive_run == 0 ) {
                 break;
@@ -1237,6 +1236,41 @@ int disk_archive_arch( char * filename, char * srcdir, char * destdir )
     return res ;
 }
 
+// copy log files, smartlog files
+static int disk_archive_cplogfile( char * srcdir, char * destdir)
+{
+    int l ;
+    char srcfile[256] , destfile[256] ;
+    dir_find dfind ;
+    // copy smartlog
+    sprintf( srcfile, "%s/smartlog", srcdir );
+    dfind.open( srcfile );
+    while( dfind.find() ) {
+        if( dfind.isfile() ) {
+            if( strstr( dfind.filename(), "_L.001" ) ) {
+                sprintf( destfile, "%s/smartlog", destdir );
+                mkdir( destfile, 0755 );
+                sprintf( destfile, "%s/smartlog/%s", destdir, dfind.filename() );
+                if( disk_archive_copyfile( dfind.pathname(), destfile ) ) {
+                    strcpy( destfile, dfind.pathname() );
+                    l=strlen( destfile );
+                    if( l>6 && destfile[l-5]== 'L' ) {
+                        destfile[l-5] = 'N' ;
+                        rename( dfind.pathname(), destfile );
+                    }
+                }
+            }
+        }
+    }
+
+    extern string logfile ;
+// copy dvrlog file
+    sprintf(srcfile, "%s/_%s_/%s", srcdir, g_hostname, logfile.getstring());
+    sprintf(destfile, "%s/_%s_/%s", destdir, g_hostname, logfile.getstring());
+    disk_archive_copyfile(srcfile, destfile ) ;
+    return 1 ;
+}
+
 static void disk_archive_round(char * srcdir, char * destdir)
 {
     int day ;
@@ -1263,6 +1297,10 @@ static void disk_archive_round(char * srcdir, char * destdir)
             if( disk_archive_run == 0 ) break;
         }
         if( disk_archive_run == 0 ) break;
+    }
+    if( disk_archive_run ) {
+        // copy log files, smartlog files
+        disk_archive_cplogfile(srcdir, destdir);
     }
     return ;
 }
@@ -1302,7 +1340,7 @@ void * disk_archive_thread(void * param)
 {
     string archbase ;
     while( disk_archive_state ) {
-        if( disk_archive_run && dio_iorun() ) {
+        if( disk_archive_run && dio_mode_archive() ) {
             if( rec_basedir.length()>0 && disk_archive_basedisk( archbase ) ) {
                 disk_archive_run = 2 ;
                 disk_archive_round(rec_basedir.getstring(), archbase.getstring() );
@@ -1310,7 +1348,7 @@ void * disk_archive_thread(void * param)
             disk_archive_run = 0 ;
         }
         else {
-            usleep(50000);
+            usleep(200000);
         }
     }
     return NULL ;
@@ -1335,7 +1373,7 @@ int disk_archive_runstate()
     return (disk_archive_run==2) ;   // arch is actively run
 }
 
-// regular disk check, every 1 seconds
+// regular disk check, every 3 seconds
 void disk_check()
 {
     int i;
@@ -1408,7 +1446,7 @@ void disk_logdir(char * logfilename)
 
 void disk_init()
 {
-    string pcfg;
+    char * pcfg;
     int l;
 
     config dvrconfig(dvrconfigfile);
@@ -1425,9 +1463,8 @@ void disk_init()
     disk_arch = dvrconfig.getvalue("system", "archivedir");
 
     pcfg = dvrconfig.getvalue("system", "mindiskspace");
-    l = pcfg.length();
-    if (sscanf(pcfg.getstring(), "%d", &disk_minfreespace)) {
-        l = pcfg.length();
+    l = strlen( pcfg );
+    if (sscanf(pcfg, "%d", &disk_minfreespace)) {
         if (pcfg[l - 1] == 'G' || pcfg[l - 1] == 'g') {
             disk_minfreespace *= 1024;
         } else if (pcfg[l - 1] == 'K' || pcfg[l - 1] == 'k') {

@@ -57,7 +57,7 @@ applications:
 	cd usbnotify; make
 
 # serial_test
-	cd serial_test; make
+#	cd serial_test; make
 
 mdvr:
 	cp cfg.h.mdvr cfg.h
@@ -101,6 +101,11 @@ pwii:
 	make applications 
 	cd deploy/PWII ; ./mkdeploy PWII 1 
 
+pw34:
+	cp cfg.h.pw34 cfg.h
+	make applications
+	cd deploy/PW34 ; ./mkdeploy PW34 1 
+    
 clean:
 	cd usbnotify; make clean
 

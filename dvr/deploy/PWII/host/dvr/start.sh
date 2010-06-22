@@ -119,10 +119,6 @@ sleep 1
 # setup ip network for ipcamera board. (slave boards)
 /davinci/dvr/eaglehost `cat /davinci/ID/BOARDNUM`
 
-# install usb-serial driver
-insmod /davinci/usbserial.ko
-insmod /davinci/mos7840.ko
-
 # start dvr server
 /davinci/dvr/dvrsvr < /dev/null > /dev/null 2> /dev/null &
 
@@ -140,8 +136,12 @@ cd www
 #smartftp support
 ln -sf /davinci/dvr/librt-0.9.28.so /lib/librt.so.0
 
+sleep 100
+# install usb-serial driver
+insmod /davinci/usbserial.ko
+insmod /davinci/mos7840.ko
+sleep 20
 cd /davinci/dvr
-
 /davinci/dvr/glog < /dev/null > /dev/null 2> /dev/null &
 
 # do endless loop
