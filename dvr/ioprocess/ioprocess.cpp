@@ -164,10 +164,10 @@ struct dio_mmap * p_dio_mmap=NULL ;
 #define MCU_INPUT_ACCEL         ('\x40')
 
 char dvriomap[100] = "/var/dvr/dvriomap" ;
-char serial_dev[100] = "/dev/ttyS1" ;
+char mcu_dev[100] = "/dev/ttyS1" ;
 char * pidfile = "/var/dvr/ioprocess.pid" ;
-int serial_handle = 0 ;
-int serial_baud = 115200 ;
+int mcu_handle = 0 ;
+int mcu_baud = 115200 ;
 int mcupowerdelaytime = 0 ;
 
 int shutdowndelaytime ;
@@ -383,147 +383,23 @@ void rtc_set(time_t utctime)
     }
 }
 
-#define SERIAL_BUFFER_TSIZE (100)
-static char serial_buffer[SERIAL_BUFFER_TSIZE] ;
-static int  serial_buffer_len ;
-static int  serial_buffer_pointer ;
 
-// Check if data ready to read on serial port
-//     return 0: no data
-//            1: yes
-int serial_dataready(int usdelay=MIN_SERIAL_DELAY, int * usremain=NULL)
+// open serial port
+int serial_open(char * device, int buadrate) 
 {
-    struct timeval timeout ;
-    fd_set fds;
-    if( serial_handle<=0 ) {
-        return 0;
-    }
-    if( serial_buffer_len > 0 ) {       // buffer available?
-        if( usremain ) {
-            *usremain = usdelay ;
-        }
-        return serial_buffer_len ;
-    }
-    FD_ZERO(&fds);
-    FD_SET(serial_handle, &fds);
-    timeout.tv_sec = usdelay/1000000 ;
-    timeout.tv_usec = usdelay%1000000 ;
-
-    if (select(serial_handle + 1, &fds, NULL, NULL, &timeout) > 0) {
-        if( FD_ISSET(serial_handle, &fds) ) {
-            serial_buffer_pointer=0 ;
-            serial_buffer_len = read(serial_handle, serial_buffer, SERIAL_BUFFER_TSIZE);
-            if( serial_buffer_len > 0 ) {       // buffer available?
-                if( usremain ) {
-                    *usremain = (int)(timeout.tv_sec*1000000 + timeout.tv_usec) ;
-                }
-                return serial_buffer_len ;
-            }
-        }
-    }
-
-    if( usremain ) {
-        *usremain = 0 ;
-    }
-    serial_buffer_len = 0 ;
-    return 0;
-}
-
-char serial_readdata()
-{
-    serial_buffer_len-- ;
-#ifdef MCU_DEBUG
-    char d ;
-    d = serial_buffer[serial_buffer_pointer++];
-    printf("%02x ", (int)d );
-    return d ;
-#else        
-    return serial_buffer[serial_buffer_pointer++] ;
-#endif
-}
-
-int serial_read(char * sbuf, size_t bufsize, int wait=MIN_SERIAL_DELAY, int interval=MIN_SERIAL_DELAY)
-{
-    size_t nread=0 ;
-    if( serial_dataready(wait) ) {
-        while( nread<bufsize ) {
-            if( serial_dataready(interval) ) {
-                sbuf[nread++] = serial_readdata();
-            }
-            else {
-                break ;
-            }
-        }
-    }
-    return nread ;
-}
-
-int serial_write(void * buf, size_t bufsize)
-{
-    if( serial_handle>0 ) {
-#ifdef MCU_DEBUG
-        size_t i ;
-        char * cbuf ;
-        cbuf = (char *)buf ;
-        for( i=0; i<bufsize ; i++ ) {
-            printf("%02x ", (int)cbuf[i] );
-        }
-#endif
-        return write( serial_handle, buf, bufsize);
-    }
-    return 0;
-}
-
-// clear receiving buffer
-void serial_clear(int delay=MIN_SERIAL_DELAY)
-{
+    int hserial ;
     int i;
-#ifdef MCU_DEBUG
-    printf("clear: ");
-#endif     
-    for(i=0;i<10000;i++) {
-        if( serial_dataready(delay, &delay) ) {
-#ifdef MCU_DEBUG
-            serial_readdata();
-#else
-            serial_buffer_len=0;
-#endif            
-        }
-        else {
-            break;
-        }
-    }
-#ifdef MCU_DEBUG
-    printf("\n");
-#endif                
-    serial_buffer_len = 0 ;
-}
-
-// initialize serial port
-void serial_init() 
-{
-   int i;
-    int port=0 ;
    
-    if( serial_handle > 0 ) {
-        close( serial_handle );
-        serial_handle = 0 ;
-    }
-    if( strcmp( serial_dev, "/dev/ttyS1")==0 ) {
-        port=1 ;
-    }
-//    serial_handle = open( serial_dev, O_RDWR | O_NOCTTY | O_NDELAY );
-    serial_handle = open( serial_dev, O_RDWR | O_NOCTTY );
-    if( serial_handle > 0 ) {
-//        fcntl(serial_handle, F_SETFL, 0);
-        if( port==1 ) {		// port 1
+    hserial = open( device, O_RDWR | O_NOCTTY );
+    if( hserial > 0 ) {
+        if( strcmp( device, "/dev/ttyS1")==0 ) {    // this is hikvision specific serial port
             // Use Hikvision API to setup serial port (RS485)
-            InitRS485(serial_handle, serial_baud, DATAB8, STOPB1, NOPARITY, NOCTRL);
+            InitRS485(hserial, buadrate, DATAB8, STOPB1, NOPARITY, NOCTRL);
         }
         else {
             struct termios tios ;
             speed_t baud_t ;
-            tcgetattr(serial_handle, &tios);
+            tcgetattr(hserial, &tios);
             // set serial port attributes
             tios.c_cflag = CS8|CLOCAL|CREAD;
             tios.c_iflag = IGNPAR;
@@ -533,7 +409,7 @@ void serial_init()
             tios.c_cc[VTIME]=1;		// 0.1 sec time out
             baud_t = B115200 ;
             for( i=0; i<7; i++ ) {
-                if( serial_baud == baud_table[i].baudrate ) {
+                if( buadrate == baud_table[i].baudrate ) {
                     baud_t = baud_table[i].baudv ;
                     break;
                 }
@@ -542,12 +418,153 @@ void serial_init()
             cfsetispeed(&tios, baud_t);
             cfsetospeed(&tios, baud_t);
             
-            tcflush(serial_handle, TCIFLUSH);
-            tcsetattr(serial_handle, TCSANOW, &tios);
+            tcflush(hserial, TCIFLUSH);
+            tcsetattr(hserial, TCSANOW, &tios);
         }
-        serial_buffer_len = 0 ;
+        return hserial ;
     }
-    else {
+    return 0 ;
+}
+
+//  
+int serial_dataready(int handle, int usdelay=MIN_SERIAL_DELAY, int * usremain=NULL)
+{
+    struct timeval timeout ;
+    fd_set fds;
+
+    FD_ZERO(&fds);
+    FD_SET(handle, &fds);
+    timeout.tv_sec = usdelay/1000000 ;
+    timeout.tv_usec = usdelay%1000000 ;
+
+    if (select(handle + 1, &fds, NULL, NULL, &timeout) > 0) {
+        if( FD_ISSET(handle, &fds) ) {
+            if( usremain ) {
+                *usremain = (int)(timeout.tv_sec*1000000 + timeout.tv_usec) ;
+            }
+            return 1 ;
+        }
+    }
+
+    if( usremain ) {
+        *usremain = 0 ;
+    }
+    return 0;
+}
+
+#define MCU_BUFFER_SIZE (100)
+static char mcu_buffer[MCU_BUFFER_SIZE] ;
+static int  mcu_buffer_len ;
+static int  mcu_buffer_pointer ;
+
+// Check if data ready to read on serial port
+//     return 0: no data
+//            1: yes
+int mcu_dataready(int usdelay=MIN_SERIAL_DELAY, int * usremain=NULL)
+{
+    if( mcu_handle<=0 ) {
+        return 0;
+    }
+    if( mcu_buffer_len > 0 ) {       // buffer available?
+        if( usremain ) {
+            *usremain = usdelay ;
+        }
+        return mcu_buffer_len ;
+    }
+    if( serial_dataready( mcu_handle, usdelay, usremain ) ) {
+        mcu_buffer_pointer=0 ;
+        mcu_buffer_len = read(mcu_handle, mcu_buffer, MCU_BUFFER_SIZE);
+        if( mcu_buffer_len > 0 ) {       // buffer available?
+            return mcu_buffer_len ;
+        }
+    }
+    if( usremain ) {
+        *usremain = 0 ;
+    }
+    mcu_buffer_len = 0 ;
+    return 0;
+}
+
+char mcu_readdata()
+{
+    mcu_buffer_len-- ;
+#ifdef MCU_DEBUG
+    char d ;
+    d = mcu_buffer[mcu_buffer_pointer++];
+    printf("%02x ", (int)d );
+    return d ;
+#else        
+    return mcu_buffer[mcu_buffer_pointer++] ;
+#endif
+}
+
+int mcu_read(char * sbuf, size_t bufsize, int wait=MIN_SERIAL_DELAY, int interval=MIN_SERIAL_DELAY)
+{
+    size_t nread=0 ;
+    if( mcu_dataready(wait) ) {
+        while( nread<bufsize ) {
+            if( mcu_dataready(interval) ) {
+                sbuf[nread++] = mcu_readdata();
+            }
+            else {
+                break ;
+            }
+        }
+    }
+    return nread ;
+}
+
+int mcu_write(void * buf, size_t bufsize)
+{
+    if( mcu_handle>0 ) {
+#ifdef MCU_DEBUG
+        size_t i ;
+        char * cbuf ;
+        cbuf = (char *)buf ;
+        for( i=0; i<bufsize ; i++ ) {
+            printf("%02x ", (int)cbuf[i] );
+        }
+#endif
+        return write( mcu_handle, buf, bufsize);
+    }
+    return 0;
+}
+
+// clear receiving buffer
+void mcu_clear(int delay=MIN_SERIAL_DELAY)
+{
+    int i;
+#ifdef MCU_DEBUG
+    printf("clear: ");
+#endif     
+    for(i=0;i<10000;i++) {
+        if( mcu_dataready(delay, &delay) ) {
+#ifdef MCU_DEBUG
+            mcu_readdata();
+#else
+            mcu_buffer_len=0;
+#endif            
+        }
+        else {
+            break;
+        }
+    }
+#ifdef MCU_DEBUG
+    printf("\n");
+#endif                
+    mcu_buffer_len = 0 ;
+}
+
+// initialize serial port
+void mcu_init() 
+{
+    if( mcu_handle > 0 ) {
+        close( mcu_handle );
+        mcu_handle = 0 ;
+    }
+    mcu_handle = serial_open( mcu_dev, mcu_baud );
+    mcu_buffer_len = 0 ;
+    if( mcu_handle<=0 ) {
         // even no serail port, we still let process run
         printf("Serial port failed!\n");
     }
@@ -606,11 +623,11 @@ int mcu_send( char * cmd )
     sec = ptm->tm_sec + tv.tv_usec/1000000.0 ;
     
     printf("%02d:%02d:%05.3f Send: ", ptm->tm_hour, ptm->tm_min, sec);
-    r=serial_write(cmd, (int)(*cmd));
+    r=mcu_write(cmd, (int)(*cmd));
     printf("\n");
     return r ;
 #else    
-    return serial_write(cmd, (int)(*cmd));
+    return mcu_write(cmd, (int)(*cmd));
 #endif
 }
 
@@ -638,10 +655,10 @@ char * mcu_recvmsg()
     printf("%02d:%02d:%05.3f Recv: ", ptm->tm_hour, ptm->tm_min, sec);
 #endif    
     
-    if( serial_read(msgbuf, 1) ) {
+    if( mcu_read(msgbuf, 1) ) {
         n=(int) msgbuf[0] ;
         if( n>=5 && n<(int)sizeof(msgbuf) ) {
-            n=serial_read(&msgbuf[1], n-1)+1 ; 
+            n=mcu_read(&msgbuf[1], n-1)+1 ; 
             if( n==(int)msgbuf[0] &&                   // correct size
                 msgbuf[1]==0 &&                 // correct target
                 mcu_checksum( msgbuf ) == 0 )   // correct checksum
@@ -664,7 +681,7 @@ char * mcu_recvmsg()
     printf("** error! \n");
 #endif
     mcu_inputmissed = 1 ;
-    serial_clear(100000);
+    mcu_clear(100000);
     return NULL ;
 }
 
@@ -672,7 +689,7 @@ char * mcu_recvmsg()
 char * mcu_recv( int usdelay = MIN_SERIAL_DELAY, int * usremain=NULL )
 {
     char * mcu_msg ;
-    while( serial_dataready(usdelay, &usdelay) ) {
+    while( mcu_dataready(usdelay, &usdelay) ) {
         mcu_msg = mcu_recvmsg();
         if( mcu_msg ) {
             if( mcu_msg[4]=='\x02' ) {             // is it an input message ?
@@ -782,7 +799,7 @@ char * mcu_cmd(int cmd, int datalen=0, ...)
 #endif
         if( ++mcu_error>10 ) {
             sleep(1);
-            serial_init();
+            mcu_init();
             mcu_error=0 ;
         }
     }
@@ -808,6 +825,76 @@ static void mcu_response(char * msg, int datalen=0, ... )
     va_end(v);
     mcu_send( mcu_buf );
 }
+
+
+#ifdef PWII_APP
+char zoomcam_dev[20] = "/dev/ttyUSB0" ;
+int  zoomcam_baud = 115200 ;
+int  zoomcam_handle = 0 ;
+
+void zoomcam_open()
+{
+    zoomcam_handle = serial_open( zoomcam_dev, zoomcam_baud );
+}
+
+void zoomcam_close()
+{
+    if( zoomcam_handle>0 ) {
+        close( zoomcam_handle );
+        zoomcam_handle = 0 ;
+    }
+}
+
+void zoomcam_prep()
+{
+    if( zoomcam_handle<=0 ) {
+        zoomcam_open();
+    }
+    if( zoomcam_handle>0 ) {
+        char r ;
+        while( serial_dataready(zoomcam_handle, 0, NULL) ) {
+            read( zoomcam_handle, &r, 1 ) ;
+        }
+    }
+}
+
+void zoomcam_zoomin()
+{
+    static char cmd_zoomin[8]="\x06\x0f\x00\x04\x02\x00\x00" ;
+    zoomcam_prep();
+    if( zoomcam_handle>0 ) {
+        mcu_calchecksum( cmd_zoomin ) ;
+        write( zoomcam_handle, cmd_zoomin, (int)cmd_zoomin[0] ) ;
+    }
+}
+
+void zoomcam_zoomout()
+{
+    static char cmd_zoomout[8]="\x06\x0f\x00\x05\x02\x00\x00" ;
+    zoomcam_prep();
+    if( zoomcam_handle>0 ) {
+        mcu_calchecksum( cmd_zoomout ) ;
+        write( zoomcam_handle, cmd_zoomout, (int)cmd_zoomout[0] ) ;
+    }
+}
+
+void zoomcam_led(int on)
+{
+    static char cmd_zoomled[8]="\x07\x0f\x00\x06\x02\x00\x00" ;
+    zoomcam_prep();
+    if( zoomcam_handle>0 ) {
+        if( on ) {
+            cmd_zoomled[5] = 1 ;
+        }
+        else {
+            cmd_zoomled[5] = 0 ;
+        }
+        mcu_calchecksum( cmd_zoomled ) ;
+        write( zoomcam_handle, cmd_zoomled, (int)cmd_zoomled[0] ) ;
+    }
+}
+
+#endif
 
 // g value converting vectors , (Forward, Right, Down) = [vecttabe] * (Back, Right, Buttom)
 static signed char g_convert[24][3][3] = 
@@ -1046,7 +1133,7 @@ char * mcu_pwii_cmd(int cmd, int datalen=0, ...)
 
 int mcu_pwii_bootupready()
 {
-    serial_clear() ;
+    mcu_clear() ;
     if( mcu_pwii_cmd(PWII_CMD_BOOTUPREADY)!=NULL ) {
         return 1 ;
     }
@@ -1076,6 +1163,8 @@ void mcu_pwii_setc1c2()
     if( p_dio_mmap->camera_status[pwii_front_ch] & 2 ) {         // front ca
         if( (p_dio_mmap->pwii_output & 1) == 0 ) {
             p_dio_mmap->pwii_output |= 1 ;
+            // turn on zoomcamera led
+            zoomcam_led(1) ;
             // turn on mic
             dio_unlock();
             mcu_cmd(MCU_CMD_MICON) ;
@@ -1085,6 +1174,8 @@ void mcu_pwii_setc1c2()
     else {
         if( (p_dio_mmap->pwii_output & 1) != 0 ) {
             p_dio_mmap->pwii_output &= (~1) ;
+            // turn off zoomcamera led
+            zoomcam_led(0) ;
             // turn off mic
             dio_unlock();
             mcu_cmd(MCU_CMD_MICOFF);
@@ -1225,10 +1316,12 @@ void mcu_pwii_init()
 void mcu_camera_zoom( int zoomin )
 {
     if( zoomin ) {
-        mcu_cmd( MCU_CMD_CAMERA_ZOOMIN ) ;
+        zoomcam_zoomin();
+//        mcu_cmd( MCU_CMD_CAMERA_ZOOMIN ) ;
     }
     else {
-        mcu_cmd( MCU_CMD_CAMERA_ZOOMOUT ) ;
+        zoomcam_zoomout();
+//        mcu_cmd( MCU_CMD_CAMERA_ZOOMOUT ) ;
     }
 }
 
@@ -1462,7 +1555,7 @@ int mcu_input(int usdelay)
 {
     int res = 0 ;
     char * mcu_msg ;
-    while( serial_dataready(usdelay, &usdelay) ) {
+    while( mcu_dataready(usdelay, &usdelay) ) {
         mcu_msg = mcu_recvmsg();
         if( mcu_msg ) {
             if( mcu_msg[4]=='\x02' ) {             // is it an input message ?
@@ -1519,7 +1612,7 @@ int mcu_bootupready()
     if( mcuready ) {
         return 1 ;
     }
-    serial_clear() ;
+    mcu_clear() ;
     if( (rsp=mcu_cmd(MCU_CMD_BOOTUPREADY, 1, 0 ))!=NULL ) {
         int rlen = *rsp - 6 ;
         char status[200] ;
@@ -2039,7 +2132,7 @@ int mcu_reset()
     int r ;
     char enteracommand[200] ;
     mcu_sendcmd( MCU_CMD_RESET ) ;
-    r = serial_read(enteracommand, sizeof(enteracommand)-1, 30000000, 1000000);
+    r = mcu_read(enteracommand, sizeof(enteracommand)-1, 30000000, 1000000);
     if( r>10 ) {
         enteracommand[r]=0 ;
         if( strcasestr( enteracommand, "command" ) ) {
@@ -2082,13 +2175,13 @@ int mcu_update_firmware( char * firmwarefile)
     
     // clean out serial buffer
     memset( responds, 0, sizeof(responds)) ;
-    serial_write( responds, sizeof(responds));
-    serial_clear(1000000);
+    mcu_write( responds, sizeof(responds));
+    mcu_clear(1000000);
     
     printf("Erasing.\n");
     rd=0 ;
-    if( serial_write( cmd_updatefirmware, 5 ) ) {
-        rd=serial_read( responds, sizeof(responds), 20000000, 500000 ) ;
+    if( mcu_write( cmd_updatefirmware, 5 ) ) {
+        rd=mcu_read( responds, sizeof(responds), 20000000, 500000 ) ;
     }
     
     if( rd>=5 && 
@@ -2110,10 +2203,10 @@ int mcu_update_firmware( char * firmwarefile)
     // send firmware 
     res = 0 ;
     while( (c=fgetc( fwfile ))!=EOF ) {
-        if( serial_write( &c, 1)!=1 ) 
+        if( mcu_write( &c, 1)!=1 ) 
             break;
-        if( c=='\n' && serial_dataready (0) ) {
-            rd = serial_read(responds, sizeof(responds), 200000, 200000 );
+        if( c=='\n' && mcu_dataready (0) ) {
+            rd = mcu_read(responds, sizeof(responds), 200000, 200000 );
             if( rd>=5 &&
                responds[0]==0x05 && 
                responds[1]==0x0 && 
@@ -2155,7 +2248,7 @@ int mcu_update_firmware( char * firmwarefile)
 
     // wait a bit (10 seconds), for firmware update done signal
     if( res==0 ) {
-        rd = serial_read(responds, sizeof(responds), 10000000, 200000 );
+        rd = mcu_read(responds, sizeof(responds), 10000000, 200000 );
         if( rd>=5 &&
             responds[0]==0x05 && 
             responds[1]==0x0 && 
@@ -2767,13 +2860,13 @@ int appinit()
     // initilize serial port
     v = dvrconfig.getvalue( "io", "serialport");
     if( v.length()>0 ) {
-        strcpy( serial_dev, v.getstring() );
+        strcpy( mcu_dev, v.getstring() );
     }
-    serial_baud = dvrconfig.getvalueint("io", "serialbaudrate");
-    if( serial_baud<2400 || serial_baud>115200 ) {
-            serial_baud=DEFSERIALBAUD ;
+    mcu_baud = dvrconfig.getvalueint("io", "serialbaudrate");
+    if( mcu_baud<2400 || mcu_baud>115200 ) {
+            mcu_baud=DEFSERIALBAUD ;
     }
-    serial_init ();
+    mcu_init ();
 
     // smartftp variable
     smartftp_disable = dvrconfig.getvalueint("system", "smartftp_disable");
@@ -2821,7 +2914,19 @@ int appinit()
     
     pwii_front_ch = dvrconfig.getvalueint( "pwii", "front");
     pwii_rear_ch = dvrconfig.getvalueint( "pwii", "rear");
-    
+
+    // zoom camera
+    zoomcam_handle = 0 ;
+    v = dvrconfig.getvalue( "io", "zoomcam_port");
+    if( v.length()>0 ) {
+        strncpy( zoomcam_dev, v.getstring(), sizeof(zoomcam_dev) );
+    }
+    zoomcam_baud = dvrconfig.getvalueint("io", "zoomcam_baudrate");
+    if( zoomcam_baud<2400 || zoomcam_baud>115200 ) {
+            mcu_baud=DEFSERIALBAUD ;
+    }
+
+        
 #endif // PWII_APP   
 
 #ifdef TVS_APP
@@ -3026,9 +3131,9 @@ void appfinish()
     }
     
     // close serial port
-    if( serial_handle>0 ) {
-        close( serial_handle );
-        serial_handle=0;
+    if( mcu_handle>0 ) {
+        close( mcu_handle );
+        mcu_handle=0;
     }
     
     p_dio_mmap->iopid = 0 ;
@@ -3048,6 +3153,10 @@ void appfinish()
         unlink( dvriomap );         // remove map file.
     }
 
+#ifdef PWII_APP    
+    zoomcam_close();
+#endif
+        
     // delete pid file
     unlink( pidfile );
 }
@@ -3316,6 +3425,9 @@ int main(int argc, char * argv[])
                         dio_unlock();
                         modeendtime = runtime+archivetime*1000 ;   
                         dvr_log("Enter archiving mode. (mode %d).", p_dio_mmap->iomode);
+#ifdef PWII_APP    
+                        zoomcam_close();        // close ttyUSB to restore USB performance.
+#endif                        
                     }
                 }
                 else {

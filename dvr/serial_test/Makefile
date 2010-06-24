@@ -22,16 +22,17 @@ LDFLAGS= -lpthread -lstdc++
 #CFLAGS=-I../dvrsvr -g -Wall
 CFLAGS=-g -Wall
 
-all : serialtest
+all : gentest
 
 serialtest : $(OBJS) $(HEADERS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 	cp serialtest  $(debug_folder)
 
 gentest : gentest.cpp
-	$(CC) $(CFLAGS) -o gentest gentest.cpp $(LDFLAGS)
-	cp gentest   $(debug_folder)
-
+	gcc $(CFLAGS) -o gentest gentest.cpp $(LDFLAGS)
+	$(CC) $(CFLAGS) -o gentest1 gentest.cpp $(LDFLAGS)
+	cp gentest1  $(debug_folder)
+	
 #gentest : gentest.cpp $(EXTHEADERS) $(EXTSOURCES)
 #	$(CPP) $(CFLAGS) -o $@ gentest.cpp $(EXTSOURCES) $(LDFLAGS)
 #	cp $@  $(debug_folder)
