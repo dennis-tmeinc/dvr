@@ -399,39 +399,70 @@ void runapp( char * execfile, char * arg )
     }
 }
 
+/*
+#include <dlfcn.h>
+int fcgi_run( char * fcgifile ) 
+{   
+    // debug
+    int i=0; 
+    while( ++i<500 ) sleep(1);
+    void * fcgi = dlopen( fcgifile, RTLD_LAZY );
+    if( fcgi ) {
+        void (* fcgifunc)() ;
+        fcgifunc = (void (*)()) dlsym( fcgi, "fcgi_run" ) ;
+        if( fcgifunc ) {
+            fcgifunc();
+            return 1 ;
+        }
+        else {
+            dlclose( fcgi );
+        }
+    }
+    return 0 ;
+}
+*/
+
 int cgi_run(char * execfile )
 {
     pid_t childpid ;
     int   status ;
+    char  env_originalhandle[]="POST_CGI_ORIGINHANDLE" ;
+    char  env_cgifile[]="POST_FILE_TMPCGI" ;
+    
     fflush(stdout);
-
+    
     // save old stdout
     char cgiout[20] ;
     int dupstdout = dup(1);
+    sprintf( cgiout, "%d", dupstdout );
+    setenv(env_originalhandle, cgiout, 1 );  // pass original socket handle to cgi
     sprintf( cgiout, "/tmp/cgi%d", getpid() );
-    setenv("POST_FILE_TMPCGI", cgiout, 1 );                 // set a POST_FILE_* env, so the file can be clean out
+    setenv(env_cgifile, cgiout, 1 );         // set a POST_FILE_* env, so the file can be clean out
     int hcgifile = open(cgiout, O_RDWR|O_CREAT, S_IRWXU );
     dup2( hcgifile, 1 ) ;
 
-    childpid=fork();
-
-    if( childpid==0 ) {
-        char execdir[512] ;
-        char * d ;
-        strncpy( execdir, execfile, 511);
-        execdir[511]=0;
-        d=strrchr( execdir, '/' );
-        if( d ) {
-            *d='\0' ;
-            chdir( execdir );
+//    if( fcgi_run( "YAYA" ) == 0 ) {
+        childpid=fork();
+        if( childpid==0 ) {
+            char execdir[512] ;
+            char * d ;
+            strncpy( execdir, execfile, 511);
+            execdir[511]=0;
+            d=strrchr( execdir, '/' );
+            if( d ) {
+                *d='\0' ;
+                chdir( execdir );
+            }
+            execl( execfile, execfile, NULL );
+            http_error( 403, "Forbidden" );
+            exit(0) ;
         }
-        execl( execfile, execfile, NULL );
-        http_error( 403, "Forbidden" );
-        exit(0) ;
-    }
-    else if( childpid>0) {
-        waitpid(childpid, &status, 0);
-    }
+        else if( childpid>0) {
+            waitpid(childpid, &status, 0);
+        }
+//    }
+        
+    unsetenv(env_originalhandle);
     
     // restore stdout
     fflush( stdout );
@@ -473,7 +504,7 @@ int cgi_run(char * execfile )
     }
     fclose( fp ) ;
     unlink( cgiout );
-    unsetenv( "POST_FILE_TMPCGI" );
+    unsetenv( env_cgifile );
 
     return 0 ;
 }

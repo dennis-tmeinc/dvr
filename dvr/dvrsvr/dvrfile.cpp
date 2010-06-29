@@ -12,6 +12,13 @@ static int file_repaircut=FILETRUNCATINGSIZE ;
 
 unsigned char g_filekey[256] ;
 
+#ifdef EAGLE32
+const char g_264ext[]=".264" ;
+#endif
+#ifdef EAGLE34
+const char g_264ext[]=".265" ;
+#endif
+
 // convert timestamp value to milliseconds
 inline int tstamp2ms(int tstamp )
 {
@@ -570,7 +577,7 @@ void dvrfile::readkey()
     FILE * keyfile = NULL;
     dvr_lock();
     m_keyarray.empty();
-    if( strcmp( &pk[l-4], ".264")==0 ) {
+    if( strcmp( &pk[l-4], g_264ext)==0 ) {
         strcpy(&pk[l-4],".k");
         keyfile=file_open( pk, "r" );
         if( keyfile ) {
@@ -595,7 +602,7 @@ void dvrfile::writekey()
         return;
     }
     dvr_lock();
-    if( strcmp( &pk[l-4], ".264")==0 ) {
+    if( strcmp( &pk[l-4], g_264ext)==0 ) {
         strcpy(&pk[l-4],".k");
         keyfile=file_open( pk, "w" );
         if( keyfile ) {
@@ -812,14 +819,15 @@ int dvrfile::repairpartiallock()
     
     strcpy( lockfilename, m_filename.getstring() );
     lockfilenamebase = basefilename( lockfilename );
-    sprintf(lockfilenamebase+5, "%04d%02d%02d%02d%02d%02d_0_L_%s.264", 
-                breaktime.year,
-                breaktime.month,
-                breaktime.day,
-                breaktime.hour,
-                breaktime.minute,
-                breaktime.second,
-                g_hostname);
+    sprintf(lockfilenamebase+5, "%04d%02d%02d%02d%02d%02d_0_L_%s%s", 
+        breaktime.year,
+        breaktime.month,
+        breaktime.day,
+        breaktime.hour,
+        breaktime.minute,
+        breaktime.second,
+        g_hostname,
+        g_264ext);
     lockfile.open(lockfilename, "wb");
     if( !lockfile.isopen() ) {
         return 0 ;
@@ -873,15 +881,16 @@ int dvrfile::repairpartiallock()
     lockfilenamebase = basefilename( lockfilename1 );
     
     locklength = m_keyarray[breakindex].ktime / 1000 ;
-    sprintf(lockfilenamebase+5, "%04d%02d%02d%02d%02d%02d_%d_L_%s.264", 
-            breaktime.year,
-            breaktime.month,
-            breaktime.day,
-            breaktime.hour,
-            breaktime.minute,
-            breaktime.second,
-            m_filelen-locklength,
-            g_hostname);
+    sprintf(lockfilenamebase+5, "%04d%02d%02d%02d%02d%02d_%d_L_%s%s", 
+        breaktime.year,
+        breaktime.month,
+        breaktime.day,
+        breaktime.hour,
+        breaktime.minute,
+        breaktime.second,
+        m_filelen-locklength,
+        g_hostname,
+        g_264ext );
     
     dvrfile::rename( lockfilename, lockfilename1 );
     
@@ -897,7 +906,7 @@ int dvrfile::repairpartiallock()
     // rename old locked filename
     strcpy( lockfilename1, m_filename.getstring() );
     lockfilenamebase = basefilename( lockfilename1 );
-    sprintf(lockfilenamebase+5, "%04d%02d%02d%02d%02d%02d_%d_N_%s.264", 
+    sprintf(lockfilenamebase+5, "%04d%02d%02d%02d%02d%02d_%d_N_%s%s", 
             m_filetime.year,
             m_filetime.month,
             m_filetime.day,
@@ -905,7 +914,7 @@ int dvrfile::repairpartiallock()
             m_filetime.minute,
             m_filetime.second,
             locklength,
-            g_hostname);
+            g_hostname, g_264ext );
     dvrfile::rename( m_filename.getstring(), lockfilename1 );
     return 1 ;
 }
@@ -922,8 +931,8 @@ int dvrfile::rename(const char * oldfilename, const char * newfilename)
     strcpy( newkfile, newfilename );
     lo = strlen( oldkfile );
     ln = strlen( newkfile );
-    if( strcmp( &oldkfile[lo-4], ".264" )== 0 &&
-       strcmp( &newkfile[ln-4], ".264" )== 0 ) {
+    if( strcmp( &oldkfile[lo-4], g_264ext )== 0 &&
+       strcmp( &newkfile[ln-4], g_264ext )== 0 ) {
            strcpy( &oldkfile[lo-4], ".k" );
            strcpy( &newkfile[ln-4], ".k" );
            ::rename( oldkfile, newkfile );
@@ -942,7 +951,7 @@ int dvrfile::remove(const char * filename)
     res = ::remove( filename );
     strcpy( kfile, filename );
     l = strlen( kfile );
-    if( strcmp( &kfile[l-4], ".264" ) == 0 ) {
+    if( strcmp( &kfile[l-4], g_264ext ) == 0 ) {
         strcpy( &kfile[l-4], ".k" ) ;
         ::remove( kfile );
     }

@@ -41,7 +41,8 @@ OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 # LIBRARY=libdio.so
 
 CCFLAGS= -Wall -g
-LDFLAGS= -lpthread -lstdc++ -L./eagle32 -lsdk -ldadsp  ./eagle32/dsplink.lib -Wl,-rpath,.
+LDFLAGS= -lpthread -lstdc++ -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib -Wl,-rpath,.
+
 
 all : dvrsvr
 

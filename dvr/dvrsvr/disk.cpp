@@ -2,7 +2,7 @@
 
 #include <sys/mount.h>
 
-#define MINDATE     (19000000)
+#define MINDATE     (19800000)
 #define MAXDATE     (21000000)
 
 int disk_busy ;
@@ -343,7 +343,7 @@ static int disk_removefile( const char * file264 )
         dvr_log( "Delete file failed : %s", basename(file264) );
         return -1;
     }
-    extension=strstr( f264.getstring(), ".264" );
+    extension=strstr( f264.getstring(), g_264ext );
     if( extension ) {
         strcpy( extension, ".k");
         unlink( f264.getstring() );
@@ -411,7 +411,7 @@ static int disk_find264(char *dir)
         else if( dfind.isfile() ) {
             char * filename = dfind.filename() ;
             int l = strlen(filename);
-            if ( l > 20 && strcmp(&filename[l - 4], ".264") == 0 ) {
+            if ( l > 20 && strcmp(&filename[l - 4], g_264ext) == 0 ) {
                 return 1 ;
             }
         }
@@ -439,7 +439,7 @@ void disk_repair264(char *dir)
         else if( dfind.isfile() ) {
             char * filename = dfind.filename() ;
             int l = strlen(filename);
-            if ( l > 20 && strcmp(&filename[l - 4], ".264") == 0 ) {
+            if ( l > 20 && strcmp(&filename[l - 4], g_264ext ) == 0 ) {
                 if( strstr( filename, "_P_" ) ) {
                     disk_removefile(dfind.pathname());                      // remove pre-recording file
                 }
@@ -489,7 +489,7 @@ static void disk_listday_help(char *dir, array <f264name> & flist, int day, int 
                             char * filename = find264.filename() ;
                             int l = strlen(filename) ;
                             if( l>8 && 
-                                strcmp(&filename[l-4], ".264")==0 && 
+                                strcmp(&filename[l-4], g_264ext)==0 && 
 								( strstr(filename, "_L_")!=NULL || strstr(filename, "_N_")!=NULL ) &&
                                 strstr(filename, "_0_")==NULL )          // is it a .264 file?
                             {	
@@ -628,7 +628,7 @@ static int disk_oldestfile_hlp( char *dir, int day, int & timeofday, string & fi
         else if( dfind.isfile() ) {
             filename = dfind.filename();
             int l = strlen(filename) ;
-            if( l>20 && strcmp(&filename[l-4], ".264")==0 ) {    // is it a .264 file ?
+            if( l>20 && strcmp(&filename[l-4], g_264ext)==0 ) {    // is it a .264 file ?
                 if( lock || strstr(filename, "_L_")==NULL ) {
                     f264time(filename, &dvrt);
                     int tod = dvrt.hour*3600+dvrt.minute*60+dvrt.second ;
@@ -884,7 +884,7 @@ void disk_renewdisk(char * dir)
         else if( dfind.isfile() ) {
             char *filename=dfind.filename();
             int l = strlen(filename);
-            if( l>20 && strcmp( &filename[l-4], ".264")==0 ) {
+            if( l>20 && strcmp( &filename[l-4], g_264ext)==0 ) {
                 disk_renew(dfind.pathname());
             }
         }
@@ -1105,6 +1105,7 @@ int disk_archive_mkfreespace( char * diskdir, int minfreespace )
 
 
 static char disk_archive_tmpfile[]=".DVRARCH" ;
+static int  disk_archive_unlock ; // = dvrconfig.getvalueint( "system", "archive_upload");
 
 // return 1: success, 0: fail, -1: to quit
 int disk_archive_copyfile( char * srcfile, char * destfile )
@@ -1156,6 +1157,7 @@ int disk_archive_copyfile( char * srcfile, char * destfile )
 // archiving files
 int disk_archive_arch( char * filename, char * srcdir, char * destdir )
 {
+    struct stat sfst ;
     struct stat fst ;
     char * p ;
     int l1, l ;
@@ -1164,7 +1166,7 @@ int disk_archive_arch( char * filename, char * srcdir, char * destdir )
     char arch_filename[256] ;
     char arch_tmpfile[256] ;
 
-    if( stat( filename, &fst )!=0 ) {
+    if( stat( filename, &sfst )!=0 ) {
         return 0;
     }
 
@@ -1186,8 +1188,11 @@ int disk_archive_arch( char * filename, char * srcdir, char * destdir )
     sprintf( arch_filename, "%s%s", destdir, &filename[l] );
 
     if( stat( arch_filename, &fst )==0 ) {
-        if( S_ISREG( fst.st_mode ) ) {          // destination file already exist
-            dvrfile::unlock( filename );
+        if( S_ISREG( fst.st_mode ) && fst.st_size == sfst.st_size ) {
+            // destination file already exist
+            if( disk_archive_unlock ) {
+                dvrfile::unlock( filename );
+            }
             return 0;
         }
     }
@@ -1197,8 +1202,11 @@ int disk_archive_arch( char * filename, char * srcdir, char * destdir )
     if( p ) {
         p[1]='N' ;  
         if( stat( arch_filename, &fst )==0 ) {
-            if( S_ISREG( fst.st_mode ) ) {          // unlocked arch file already exist
-                dvrfile::unlock( filename );
+            if( S_ISREG( fst.st_mode ) && fst.st_size == sfst.st_size ) {      
+                // unlocked arch file already exist
+                if( disk_archive_unlock ) {
+                    dvrfile::unlock( filename );
+                }
                 return 0;
             }
         }
@@ -1214,7 +1222,7 @@ int disk_archive_arch( char * filename, char * srcdir, char * destdir )
     }
 
     // copy file to a temperary file in arching dir
-    sprintf(arch_tmpfile, "%s/%s.264", destdir, disk_archive_tmpfile );
+    sprintf(arch_tmpfile, "%s/%s%s", destdir, disk_archive_tmpfile, g_264ext );
     res = disk_archive_copyfile( filename, arch_tmpfile );
     if( res ) {
         // move file to final archive file
@@ -1223,7 +1231,7 @@ int disk_archive_arch( char * filename, char * srcdir, char * destdir )
         // copy .k file if available
         strcpy( arch_tmpfile, filename ) ;
         l = strlen( arch_tmpfile ) ;
-        if( strcmp( &arch_tmpfile[l-4], ".264")==0 ) {
+        if( strcmp( &arch_tmpfile[l-4], g_264ext)==0 ) {
             arch_tmpfile[l-3] = 'k' ;
             arch_tmpfile[l-2] = 0 ;
             l = strlen( arch_filename );
@@ -1231,7 +1239,9 @@ int disk_archive_arch( char * filename, char * srcdir, char * destdir )
             arch_filename[l-2] = 0 ;
             res = disk_archive_copyfile( arch_tmpfile, arch_filename );
         }
-        dvrfile::unlock( filename );
+        if( disk_archive_unlock ) {
+            dvrfile::unlock( filename );
+        }
     }
     return res ;
 }
@@ -1252,11 +1262,13 @@ static int disk_archive_cplogfile( char * srcdir, char * destdir)
                 mkdir( destfile, 0755 );
                 sprintf( destfile, "%s/smartlog/%s", destdir, dfind.filename() );
                 if( disk_archive_copyfile( dfind.pathname(), destfile ) ) {
-                    strcpy( destfile, dfind.pathname() );
-                    l=strlen( destfile );
-                    if( l>6 && destfile[l-5]== 'L' ) {
-                        destfile[l-5] = 'N' ;
-                        rename( dfind.pathname(), destfile );
+                    if( disk_archive_unlock ) {
+                        strcpy( destfile, dfind.pathname() );
+                        l=strlen( destfile );
+                        if( l>6 && destfile[l-5]== 'L' ) {
+                            destfile[l-5] = 'N' ;
+                            rename( dfind.pathname(), destfile );
+                        }
                     }
                 }
             }
@@ -1273,26 +1285,75 @@ static int disk_archive_cplogfile( char * srcdir, char * destdir)
 
 static void disk_archive_round(char * srcdir, char * destdir)
 {
-    int day ;
-    int i, j ;
+    int i, j, day ;
     array <int> daylist ;
     array <f264name> flist ;
+    FILE * archupdfile ;
+    char   archupdfilename[128] ;
+    int    upd_date[cap_channels] ;
+    int    upd_time[cap_channels] ;
 
-    daylist.empty();
+    // get lasted archived file time
+    for( i=0; i<cap_channels; i++) {
+        upd_date[i]=0;
+        upd_time[i]=0;
+    }
+    sprintf( archupdfilename, "%s/.archupd", srcdir);
+    archupdfile = file_open( archupdfilename, "r" );
+    if( archupdfile ) {
+        for( i=0; i<cap_channels; i++ ) {
+            if( fscanf(archupdfile, "%d %d", 
+             &(upd_date[i]),
+             &(upd_time[i]) )<2 ) 
+            {
+                break;
+            }
+        }
+        file_close( archupdfile );
+    }
+
     disk_getdaylist_help(srcdir, daylist, -1);
     daylist.sort();
 
-    for( j=daylist.size()-1; j>=0 ; j-- ) {
+    for( j=0; j<daylist.size(); j++ ) {
         day = daylist[j] ;
+        for( i=0; i<cap_channels; i++ ) {
+            if( day>=upd_date[i] )
+                break;
+        }
+        if( i>=cap_channels ) 
+            continue ;
         flist.empty();
         disk_listday_help(srcdir, flist, day, -1 );
         flist.sort();
-        for( i=flist.size()-1; i>=0 ; i-- ) {
+        for( i=0; i<flist.size(); i++ ) {
 			int l, lockl; 
 			l = f264length(flist[i].getstring());
 			lockl = f264locklength( flist[i].getstring());
 			if( lockl>0 && lockl==l ) {
-                disk_archive_arch( flist[i].getstring(), srcdir, destdir );
+                int ch, fday, ftime ;
+                struct dvrtime ft ;
+                ch = f264channel( flist[i].getstring() );
+                if( ch<0 || ch>= cap_channels ) {
+                    continue ;
+                }
+                f264time(flist[i].getstring(), &ft);
+                fday = ft.year*10000+ft.month*100+ft.day ;
+                ftime = ft.hour*10000+ft.minute*100+ft.second ;
+                if( fday>=upd_date[ch] && ftime>upd_time[ch] ) {
+                    if( disk_archive_arch( flist[i].getstring(), srcdir, destdir ) ) {
+                        // successfully archived.
+                        archupdfile = file_open( archupdfilename, "w" );
+                        if( archupdfile ) {
+                            upd_date[ch]=fday ;
+                            upd_time[ch]=ftime ;
+                            for( ch=0; ch<cap_channels; ch++ ) {
+                                fprintf( archupdfile, "%d %d\n", upd_date[ch], upd_time[ch]) ;
+                            }
+                            file_close( archupdfile );
+                        }
+                    }
+                }
 			}
             if( disk_archive_run == 0 ) break;
         }
@@ -1505,6 +1566,7 @@ void disk_init()
         disk_archdiskfile="/var/dvr/dvrarchdisk" ;
     }
 
+    disk_archive_unlock = dvrconfig.getvalueint( "system", "archive_upload");
     
     // start archive thread
     if( disk_arch.length()>0 ) {

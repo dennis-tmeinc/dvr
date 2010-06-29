@@ -1,0 +1,215 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<link href="eagle.css" rel="stylesheet" type="text/css" /><title>System Setup Page</title>
+
+<script type="text/javascript" src="eagle.js"></script>
+</head>
+
+<body>
+<!--#include file="header.i"-->
+<div class="tabs">
+<ul>
+<li class="current"><a onclick="on_system_click()"><span>System</span></a></li>
+<li><a onclick="on_camera_click()"><span>Camera</span></a></li>
+<li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
+<li><a onclick="on_network_click()"><span>Network</span></a></li>
+<li><a onclick="on_status_click()"><span>Status</span></a></li>
+<li><a onclick="on_tools_click()"><span>Tools</span></a></li>
+</ul>
+</div>
+<p>&nbsp;</p>
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="apply.html">
+<input name="page" value="system" type="hidden" />
+<table>
+<tbody>
+
+<tr>
+<td class="col1">Manufacture ID #:</td>
+<td> <!--#include mfid="manufacture_id" --> </td>
+</tr>
+
+<tr>
+<td class="col1">Vehicle ID:</td>
+<td><input name="vehicleid" /></td>
+</tr>
+
+<tr>
+<td class="col1">District:</td>
+<td><input name="district" /></td>
+</tr>
+
+<tr>
+<td class="col1">Unit #:</td>
+<td>
+<input name="unit" />
+</td>
+</tr>
+
+<!--
+<tr>
+<td class="col1">Admin Password:</td>
+<td><input name="password" value="" type="password" /></td>
+</tr>
+-->
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+<tr>
+<td class="col1">DVR Time Zone:</td>
+<td>
+</td>
+</tr>
+<tr>
+<td colspan="2">
+&nbsp; &nbsp;&nbsp; &nbsp;
+<select size="1" name="dvr_time_zone" id="id_dvr_time_zone"><!--#include file="tz_option" --></select>
+</td>
+<td></td>
+</tr>
+<tr>
+<td class="col1">Shutdown Delay
+(seconds):</td>
+<td><input name="shutdown_delay" /></td>
+</tr>
+
+<tr>
+<td class="col1">Standby Time
+(seconds):</td>
+<td><input name="standbytime" /></td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+<tr>
+<td class="col1">Maximum File Size(MB):</td>
+<td><input name="file_size" /></td>
+</tr>
+<tr>
+<td class="col1">Maximum File Time(s):</td>
+<td><input name="file_time" /></td>
+</tr>
+
+<tr>
+<td class="col1">Minimum Available Disk Space(MB):</td>
+<td><input name="minimun_disk_space" /></td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+</tr>
+
+<tr>
+<td class="col1">Pre-Lock Time (s):</td>
+<td><input name="pre_lock_time" /></td>
+</tr>
+<tr>
+<td class="col1">Post-Lock Time (s):</td>
+<td><input name="post_lock_time" /></td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1"><label for="id_norecplayback">Stop Recording When Play Back:</label></td>
+<td>
+<input name="norecplayback" id="id_norecplayback" value="on" type="checkbox" />
+<input name="bool_norecplayback" value="on" type="hidden" />
+</td>
+</tr>
+<tr>
+
+<tr>
+<td class="col1"><label for="id_noreclive">Stop Recording When Live View:</label></td>
+<td>
+<input name="noreclive" id="id_noreclive" value="on" type="checkbox" />
+<input name="bool_noreclive" value="on" type="hidden" />
+</td>
+</tr>
+<tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1"><label for="id_en_gpslog">Enable GPS:</label></td>
+<td>
+<input name="en_gpslog" id="id_en_gpslog" value="on" type="checkbox" />
+<input name="bool_en_gpslog" value="on" type="hidden" />
+</td>
+</tr>
+
+<tr>
+<td class="col1">GPS port:</td>
+<td>
+<select name="gpsport">
+    <option value="/dev/ttyS0">COM1</option>
+    <option value="/dev/ttyUSB0">USB0</option>
+    <option value="/dev/ttyUSB1">USB1</option>
+    <option value="/dev/ttyUSB2">USB2</option>
+    <option value="/dev/ttyUSB3">USB3</option>
+</select>
+</td>
+</tr>
+
+
+<tr>
+<td class="col1">GPS Baudrate:</td>
+<td>
+<select name="gpsbaudrate">
+    <option value="4800">4800</option>
+    <option value="9600">9600</option>
+    <option value="19200">19200</option>
+    <option value="38400">38400</option>
+    <option value="57600">57600</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1">Default Video Output:</td>
+<td>
+<select name="videoout">
+    <option value="0">Camera 1</option>
+    <option value="1">Camera 2</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td></td>
+<td> <input id="id_apply" value="Apply" type="submit" />
+</td>
+</tr>
+</tbody>
+</table>
+</form>
+<script type="text/javascript">
+var formdata = 
+<!--#include file="system_value" --> 
+;
+JSONinitfield( formdata );
+
+</script>
+</body>
+</html>

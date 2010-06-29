@@ -270,16 +270,6 @@ void capture::onframe(cap_frame * pcapframe)
         mem_cpy32( m_header, pcapframe->framedata, m_headerlen );
         return ;
     }
-    if( pcapframe->frametype == FRAMETYPE_KEYVIDEO ) {
-        
-        struct hd_frame * pframe = (struct hd_frame *)pcapframe->framedata;
-        if( (((pframe->width_height)>>16)&0xfff)%40 == 0 ) {
-            m_signal_standard = 1 ;         // assume NTSC when height would be 120, 320, 240, 480
-        }
-        else {
-            m_signal_standard = 2 ;         // PAL mode video
-        }
-    }    
     rec_onframe(pcapframe);
     net_onframe(pcapframe);
     screen_onframe(pcapframe); 

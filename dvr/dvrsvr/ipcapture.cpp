@@ -196,7 +196,7 @@ void ipeagle32_capture::streamthread()
             }
         }
         else {
-            if( ++timeout> 20 ) {
+            if( ++timeout> 50 ) {
                 closesocket( m_streamfd );
                 m_streamfd = 0 ;
             }

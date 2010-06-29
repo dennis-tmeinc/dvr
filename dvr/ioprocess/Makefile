@@ -15,7 +15,7 @@ HEADERS=diomap.h
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
-LDFLAGS= -lstdc++  -L../dvrsvr/eagle32 -lsdk -ldadsp ../dvrsvr/eagle32/dsplink.lib
+LDFLAGS= -lstdc++  -L../dvrsvr/$(EAGLE) -lsdk -ldadsp ../dvrsvr/$(EAGLE)/dsplink.lib
 
 CFLAGS=-I../dvrsvr -g -Wall
 

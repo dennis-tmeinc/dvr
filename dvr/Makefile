@@ -5,7 +5,7 @@
 applications: 
 
 #dvrsvr/libfbdraw.so:
-	cd fb ; make 
+	cd fb; make 
     
 #dvrsvr/dvrsvr:
 	cd dvrsvr ; make 
@@ -56,9 +56,6 @@ applications:
 # usbnotify
 	cd usbnotify; make
 
-# serial_test
-#	cd serial_test; make
-
 mdvr:
 	cp cfg.h.mdvr cfg.h
 	make applications
@@ -107,42 +104,23 @@ pw34:
 	cd deploy/PW34 ; ./mkdeploy PW34 1 
     
 clean:
-	cd usbnotify; make clean
-
-	cd serial_test; make clean
-
+	cd usbnotify; make clean 
 	cd dvrsvr;make clean
-
 	cd fb;make clean
-
 	cd dvrtime;make clean
-
 	cd eaglehost;make clean
-
 	cd glog;make clean
-    
 	cd httpd;make clean
-    
 	cd ioprocess;make clean
-
 	cd nfile;make clean
-    
 	cd sfx;make clean
-    
 	cd tdev;make clean
-    
 	cd usbgenkey;make clean
 	cd volumeid;make clean
-    
 	cd cfg; make clean
-
 	cd tmeft; make clean
-
-	cd deploy/PWII ; ./mkdeploy clean 0
-
-	cd deploy/TVS21 ; ./mkdeploy clean 0
-
 	cd usbid; make clean
-
-	find -name *~ -delete
-	
+	cd test; make clean
+	cd deploy/TVS21 ; ./mkdeploy clean 0
+	cd deploy/PWII ; ./mkdeploy clean 0
+	find -name \*~ -delete

@@ -1,0 +1,21 @@
+#!/bin/sh
+
+cd /davinci/dvr 
+
+# reconfigure ether net
+if [ -f eth_ip ]; then
+    ifconfig eth0:1 `cat eth_ip`
+fi
+
+if [ -f eth_mask ]; then
+    ifconfig eth0:1 netmask `cat eth_mask`
+fi
+
+sleep 3
+
+route del default
+
+for gw in `ls gateway*` ; do 
+   route add default gw `cat $gw`   
+done
+

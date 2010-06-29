@@ -32,6 +32,10 @@
 
 #include "../cfg.h"
 
+#include "crypt.h"
+#include "genclass.h"
+#include "cfg.h"
+
 // memory allocation
 void *mem_alloc(int size);
 void mem_free(void *pmem);
@@ -43,10 +47,6 @@ void mem_cpy32(void *dest, const void *src, size_t count);
 int mem_available();
 void mem_init();
 void mem_uninit();
-
-#include "crypt.h"
-#include "genclass.h"
-#include "cfg.h"
 
 #define SUPPORT_EVENTMARKER	1
 
@@ -82,6 +82,7 @@ extern int g_timetick ;            // global time tick ;
 extern int g_keyactive ;
 
 extern unsigned char g_filekey[256] ; 
+extern const char g_264ext[] ;
 
 // TVS related
 extern char g_mfid[32] ;
@@ -667,7 +668,8 @@ void rec_update();
 void rec_alarm();
 void rec_start();
 void rec_stop();
-struct nfileinfo {
+/*
+ struct nfileinfo {
     int channel;
     struct dvrtime filetime ;
     int filelength ;
@@ -675,6 +677,7 @@ struct nfileinfo {
     int  filesize ;                             // option, can be 0
 } ;
 FILE * rec_opennfile(int channel, struct nfileinfo * nfi);
+*/
 
 // disk and .264 file directories
 // get .264 file list by day and channel

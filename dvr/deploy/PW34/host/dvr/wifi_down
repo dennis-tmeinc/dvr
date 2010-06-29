@@ -1,0 +1,7 @@
+#!/bin/sh
+
+if [ -d /sys/class/net/rausb0 ] ; then 
+    /bin/ifconfig rausb0 down 
+    /bin/rmmod rt73
+fi
+

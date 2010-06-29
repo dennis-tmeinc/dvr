@@ -67,7 +67,7 @@ lowmemory=15000
 shutdowndelay=180
 
 # percentage of locked file
-lockfile_percentage = 30
+lockfile_percentage = 99
 
 standbytime=1800
 

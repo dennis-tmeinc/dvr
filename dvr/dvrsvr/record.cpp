@@ -508,10 +508,10 @@ void rec_channel::closefile(enum REC_STATE newrecst)
         // need to rename to contain file lengh
         strcpy(newfilename, m_filename.getstring());
         if ((rn = strstr(newfilename, "_0_")) != NULL) {
-            sprintf( rn, "_%d_%c_%s.264", 
+            sprintf( rn, "_%d_%c_%s%s", 
                     filelength, 
                     rec_stname( m_filerecstate ),
-                    g_hostname );
+                    g_hostname, g_264ext );
             m_file.rename( m_filename.getstring(), newfilename ) ;
 			m_filename = newfilename ;
 
@@ -693,7 +693,7 @@ int rec_channel::recorddata(rec_fifo * data)
             // make new file name
             l = strlen(newfilename);
             sprintf(newfilename + l,
-                "/CH%02d_%04d%02d%02d%02d%02d%02d_0_%c_%s.264", 
+                "/CH%02d_%04d%02d%02d%02d%02d%02d_0_%c_%s%s", 
                 m_channel,
                 data->time.year,
                 data->time.month,
@@ -702,7 +702,7 @@ int rec_channel::recorddata(rec_fifo * data)
                 data->time.minute,
                 data->time.second,
                 rec_stname( data->rectype ),
-                g_hostname);
+                g_hostname, g_264ext);
             m_fileday = data->time.day ;
             if (m_file.open(newfilename, "wb")) {
                 m_filename = newfilename;

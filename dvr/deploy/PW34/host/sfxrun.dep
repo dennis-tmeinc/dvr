@@ -1,0 +1,75 @@
+#!/bin/sh
+echo Start update mDVR firmware...
+echo Kill processes...
+if [ -f /var/dvr/dvrsvr.pid ] ; then
+  kill `cat /var/dvr/dvrsvr.pid` 
+fi
+
+if [ -f /var/dvr/glog.pid ] ; then
+  kill `cat /var/dvr/glog.pid`
+fi
+
+if [ -f /var/dvr/ioprocess.pid ] ; then
+   kill `cat /var/dvr/ioprocess.pid`
+fi
+
+for i in 1 2 3 4 5 6 7 8 9 10 ; do
+  if [ -f /var/dvr/ioprocess.pid ] ; then
+    sleep 2
+  else
+    break;
+  fi
+done
+
+if [ -f /var/dvr/mcuversion ] ; then
+
+  sleep 1
+  ./dvr/ioprocess &
+
+  sleep 1
+  # flashing panel leds
+  ./dvr/panelled 07
+
+fi
+
+for i in 1 2 3 4 5 6 7 8 9 10 ; do
+  if [ -f /var/dvr/dvrsvr.pid ] ; then
+    sleep 2
+  else
+    break;
+  fi
+done
+
+for i in 1 2 3 4 5 6 7 8 9 10 ; do
+  if [ -f /var/dvr/glog.pid ] ; then
+    sleep 2
+  else
+    break;
+  fi
+done
+
+# remove old files
+rm -f -r /dav/*
+
+# start copying files
+echo Copying file to /dav, please wait.
+cp -f -a * /dav
+rm /dav/sfxrun
+sync
+
+# stop panel led flashing
+./dvr/panelled 0
+
+cd /dav/dvr
+
+echo Firmware update complete. 
+echo New Version:
+cat firmwareid
+echo
+echo Turn off system power and turn on power again.
+
+if [ -f /var/dvr/mcuversion ] ; then
+ ./ioprocess -reboot 8
+fi
+
+

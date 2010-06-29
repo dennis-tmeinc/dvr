@@ -6,14 +6,27 @@
 
 // time functions
 
-static struct timeval app_time;
+static struct timeval time_uptime;
+static struct timeval time_prevt ;
 int g_timetick ;            // global time tick ;
 
 void time_init()
 {
     time_inittimezone();
-    gettimeofday(&app_time, NULL);
+    gettimeofday(&time_uptime, NULL);
     g_timetick = 0 ;
+
+    // adjust startup time by system uptime (/proc/uptime)
+    FILE * uptimefile ;
+    uptimefile = fopen( "/proc/uptime", "r" );
+    if( uptimefile ) {
+        float uptime ;
+        fscanf( uptimefile, "%f", &uptime );
+        time_uptime.tv_sec -= (int) uptime ;
+        fclose( uptimefile );
+        g_timetick = (int) uptime * 1000 ;       
+    }
+
 }
 
 void time_uninit()
@@ -457,7 +470,19 @@ int time_tick()
 {
     struct timeval current_time;
     gettimeofday(&current_time, NULL);
-    g_timetick = ((int)(current_time.tv_sec - app_time.tv_sec)) * 1000 + ((int)current_time.tv_usec)/1000 ;
+    if( current_time.tv_sec < time_prevt.tv_sec ) {     // these code is to make sure time tick alway go up
+        // need to adjust start time ;
+        FILE * uptimefile ;
+        uptimefile = fopen( "/proc/uptime", "r" );
+        if( uptimefile ) {
+            float uptime ;
+            fscanf( uptimefile, "%f", &uptime );
+            time_uptime.tv_sec = current_time.tv_sec - (int) uptime ;
+            fclose( uptimefile );
+        }
+    }
+    time_prevt.tv_sec = current_time.tv_sec ;
+    g_timetick = ((int)(current_time.tv_sec - time_uptime.tv_sec)) * 1000 + ((int)current_time.tv_usec)/1000 ;
     return g_timetick ;
 }
 

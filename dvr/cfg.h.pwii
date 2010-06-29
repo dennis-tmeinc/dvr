@@ -1,9 +1,12 @@
-
 /* generic definition file */
 
 #ifndef __CFG_H__
 #define __CFG_H__
 
+#define EAGLE32
+//#define EAGLE34
+
+//#define MDVR_APP
 #define PWII_APP
 //#define TVS_APP
 
@@ -18,3 +21,4 @@
 
 
 #endif
+

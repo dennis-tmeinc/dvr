@@ -2000,6 +2000,7 @@ void dvrsvr::ReqUsbkeyPlugin()
 //     req.data : channel number
 void dvrsvr::ReqNfileOpen()
 {
+    /*
     struct dvr_ans ans ;
     struct nfileinfo nfi ;
     FILE * fnfile = rec_opennfile(m_req.data, &nfi);
@@ -2010,11 +2011,13 @@ void dvrsvr::ReqNfileOpen()
         Send( &ans, sizeof(ans));
         return ;
     }
+*/
     DefaultReq();
 }
 
 void dvrsvr::ReqNfileClose()
 {
+    /*
     struct dvr_ans ans ;
     if( m_req.data == (int) this && m_nfilehandle!=NULL ) {
         fclose( m_nfilehandle );
@@ -2025,6 +2028,7 @@ void dvrsvr::ReqNfileClose()
         Send( &ans, sizeof(ans));
         return ;
     }
+*/
     DefaultReq();
 }
 
@@ -2376,6 +2380,7 @@ int dvr_getchstate(int sockfd, int ch)
 // open new clip file on remote dvr
 int dvr_nfileopen(int sockfd, int channel, struct nfileinfo * nfi)
 {
+/*
     struct dvr_req req ;
     struct dvr_ans ans ;
     
@@ -2391,6 +2396,7 @@ int dvr_nfileopen(int sockfd, int channel, struct nfileinfo * nfi)
             }
         }
     }
+*/
     return 0 ;
 }
 
@@ -2401,6 +2407,7 @@ int dvr_nfileopen(int sockfd, int channel, struct nfileinfo * nfi)
 //       0: failed
 int dvr_nfileclose(int sockfd, int nfile)
 {
+    /*
     struct dvr_req req ;
     struct dvr_ans ans ;
     
@@ -2414,6 +2421,7 @@ int dvr_nfileclose(int sockfd, int nfile)
             return 1 ;
         }
     }
+*/
     return 0 ;
 }
 
@@ -2422,6 +2430,7 @@ int dvr_nfileclose(int sockfd, int nfile)
 // return actual readed bytes
 int dvr_nfileread(int sockfd, int nfile, void * buf, int size)
 {
+    /*
     struct dvr_req req ;
     struct dvr_ans ans ;
     
@@ -2441,5 +2450,6 @@ int dvr_nfileread(int sockfd, int nfile, void * buf, int size)
             }
         }
     }
+*/
     return 0 ;
 }

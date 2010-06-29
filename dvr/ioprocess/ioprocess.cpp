@@ -1,10 +1,12 @@
 #include <stdio.h>
-#include <sys/mman.h>
 #include <signal.h>
 #include <termios.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <time.h>
+#include <sched.h>
+#include <sys/mman.h>
 #include <sys/reboot.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -828,13 +830,19 @@ static void mcu_response(char * msg, int datalen=0, ... )
 
 
 #ifdef PWII_APP
+int  zoomcam_enable = 0 ;
 char zoomcam_dev[20] = "/dev/ttyUSB0" ;
 int  zoomcam_baud = 115200 ;
 int  zoomcam_handle = 0 ;
 
 void zoomcam_open()
 {
-    zoomcam_handle = serial_open( zoomcam_dev, zoomcam_baud );
+    if( zoomcam_enable ) {
+        zoomcam_handle = serial_open( zoomcam_dev, zoomcam_baud );
+    }
+    else {
+        zoomcam_handle = 0 ;
+    }
 }
 
 void zoomcam_close()
@@ -2559,6 +2567,7 @@ void buzzer_run( int runtime )
 int smartftp_retry ;
 int smartftp_disable ;
 int smartftp_reporterror ;
+int smartftp_arch ;     // do smartftp arch files
 int smartftp_src ;
 
 /*
@@ -2702,7 +2711,7 @@ int smartftp_wait()
                     dvr_log( "\"smartftp\" failed, retry...");
                     smartftp_start(smartftp_src);
                 }
-                else if(smartftp_src == 0 ){             // do uploading arch disk
+                else if( smartftp_arch && smartftp_src == 0 ){  // do uploading arch disk
                     smartftp_retry=3 ;
                     smartftp_start(1) ;
                 }
@@ -2926,6 +2935,7 @@ int appinit()
             mcu_baud=DEFSERIALBAUD ;
     }
 
+    zoomcam_enable = dvrconfig.getvalueint("io", "zoomcam_enable");
         
 #endif // PWII_APP   
 
@@ -3089,25 +3099,21 @@ int appinit()
     }
 
     wifidetecttime = dvrconfig.getvalueint( "system", "wifidetecttime");
-    if(wifidetecttime<=0 ) {
+    if(wifidetecttime<10 | wifidetecttime>600 ) {
         wifidetecttime=60 ;
-    }
-    else if(wifidetecttime<10 ) {
-        wifidetecttime=10 ;
-    }
-    else if( wifidetecttime>300 ) {
-        wifidetecttime=300 ;
     }
 
     uploadingtime = dvrconfig.getvalueint( "system", "uploadingtime");
-    if(uploadingtime<=0 || uploadingtime>3600 ) {
+    if(uploadingtime<=0 || uploadingtime>43200 ) {
         uploadingtime=1800 ;
     }
 
     archivetime = dvrconfig.getvalueint( "system", "archivetime");
-    if(archivetime<=0 || archivetime>3600 ) {
+    if(archivetime<=0 || archivetime>7200 ) {
         archivetime=1800 ;
     }
+
+    smartftp_arch = dvrconfig.getvalueint( "system", "archive_upload");
 
     pidf = fopen( pidfile, "w" );
     if( pidf ) {
@@ -3124,8 +3130,11 @@ int appinit()
 // app finish, clean up
 void appfinish()
 {
-    int lastuser ;
 
+#ifdef PWII_APP    
+    zoomcam_close();
+#endif
+        
     if( watchdogenabled ) {
         mcu_watchdogdisable();
     }
@@ -3139,26 +3148,84 @@ void appfinish()
     p_dio_mmap->iopid = 0 ;
     p_dio_mmap->usage-- ;
     
-    if( p_dio_mmap->usage <= 0 ) {
-        lastuser=1 ;
-    }
-    else {
-        lastuser=0;
-    }
-    
     // clean up shared memory
     munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
     
-    if( lastuser ) {
-        unlink( dvriomap );         // remove map file.
-    }
-
-#ifdef PWII_APP    
-    zoomcam_close();
-#endif
-        
     // delete pid file
     unlink( pidfile );
+}
+
+unsigned int modeendtime ;
+void mode_run()
+{
+    dio_lock();
+    p_dio_mmap->devicepower=0xffff ;    // turn on all devices power
+    p_dio_mmap->iomsg[0]=0 ;
+    p_dio_mmap->iomode=IOMODE_RUN ;    // back to run normal
+    dio_unlock();
+    dvr_log("Power on switch, set to running mode. (mode %d)", p_dio_mmap->iomode);
+}
+
+void mode_archive()
+{
+    dio_lock();
+    strcpy( p_dio_mmap->iomsg, "Archiving files, Do not remove CF Card.");
+    p_dio_mmap->dvrstatus |= DVR_ARCH ;
+    p_dio_mmap->iomode=IOMODE_ARCHIVE  ;
+    dio_unlock();
+    modeendtime = runtime+archivetime*1000 ;   
+    dvr_log("Enter archiving mode. (mode %d).", p_dio_mmap->iomode);
+#ifdef PWII_APP    
+    zoomcam_close();        // close ttyUSB to restore USB performance.
+#endif                        
+}
+
+void mode_detectwireless()
+{
+    wifi_up();                                      // turn on wifi
+    dio_lock();
+    p_dio_mmap->smartserver=0 ;         // smartserver detected
+    p_dio_mmap->iomode = IOMODE_DETECTWIRELESS ;
+    strcpy( p_dio_mmap->iomsg, "Detecting Smart Server!");
+    dio_unlock();
+    modeendtime = runtime + wifidetecttime * 1000 ;    
+    dvr_log("Start detecting smart server. (mode %d).", p_dio_mmap->iomode);
+}
+
+void mode_upload()
+{
+    // check video lost report to smartftp.
+    if( (p_dio_mmap->dvrstatus & (DVR_VIDEOLOST|DVR_ERROR) )==0 )
+    {
+        smartftp_reporterror = 0 ;
+    }
+    else {
+        smartftp_reporterror=1 ;
+    }
+    smartftp_retry=3 ;
+    smartftp_start() ;
+    dio_lock();
+    strcpy( p_dio_mmap->iomsg, "Uploading Video to Smart Server!");
+    p_dio_mmap->iomode = IOMODE_UPLOADING ;
+    dio_unlock();
+    modeendtime = runtime+uploadingtime*1000 ; 
+    dvr_log("Enter uploading mode. (mode %d).", p_dio_mmap->iomode);
+    buzzer( 3, 250, 250);
+}
+
+void mode_standby()
+{
+    dio_lock();
+#ifdef PWII_APP    
+    // standby pwii
+    p_dio_mmap->pwii_output &= ~0x800 ;         // LCD off
+    p_dio_mmap->pwii_output |= 0x1000 ;         // STANDBY mode
+#endif
+    p_dio_mmap->iomsg[0]=0 ;
+    p_dio_mmap->iomode=IOMODE_STANDBY ;
+    dio_unlock();
+    modeendtime = runtime+standbytime*1000 ;   
+    dvr_log("Enter standby mode. (mode %d)", p_dio_mmap->iomode);
 }
 
 int main(int argc, char * argv[])
@@ -3166,7 +3233,6 @@ int main(int argc, char * argv[])
     int i;
     int hdpower=0 ;                             // assume HD power is off
     int hdkeybounce = 0 ;                       // assume no hd
-    unsigned int modeendtime = 0;
     unsigned int gpsavailable = 0 ;
     
     if( appinit()==0 ) {
@@ -3417,23 +3483,55 @@ int main(int argc, char * argv[])
                 if( p_dio_mmap->poweroff ) {
                     mcu_poweroffdelay() ;
                     if( runtime>modeendtime  ) {
-                        // enter archiving mode
-                        dio_lock();
-                        strcpy( p_dio_mmap->iomsg, "Archiving files, Do not remove CF Card.");
-                        p_dio_mmap->dvrstatus |= DVR_ARCH ;
-                        p_dio_mmap->iomode=IOMODE_ARCHIVE  ;
-                        dio_unlock();
-                        modeendtime = runtime+archivetime*1000 ;   
-                        dvr_log("Enter archiving mode. (mode %d).", p_dio_mmap->iomode);
-#ifdef PWII_APP    
-                        zoomcam_close();        // close ttyUSB to restore USB performance.
-#endif                        
+                        // start wifi detecting
+                        mode_detectwireless();
                     }
                 }
                 else {
-                    p_dio_mmap->iomsg[0]=0 ;
-                    p_dio_mmap->iomode=IOMODE_RUN ;                        // back to run normal
-                    dvr_log("Power on switch, set to running mode. (mode %d)", p_dio_mmap->iomode);
+                    mode_run();                                     // back to run normal
+                }
+            }
+            else if( p_dio_mmap->iomode==IOMODE_DETECTWIRELESS ) {  // close recording and run smart ftp
+                if( p_dio_mmap->poweroff == 0 ) {
+                    wifi_down();
+                    mode_run();                                     // back to run normal
+                }
+                else {
+                    mcu_poweroffdelay ();               // keep system alive
+
+                    if( p_dio_mmap->smartserver ) {
+                        if( smartftp_disable==0 ) {
+                            mode_upload();
+                        }
+                    }
+                    else if( runtime>modeendtime ) {
+                        dvr_log( "No smartserver detected!" );
+                        // enter standby mode
+                        mode_standby();
+                        wifi_down();
+                    }
+                }
+            }
+            else if( p_dio_mmap->iomode==IOMODE_UPLOADING ) {                  // file uploading
+                if( p_dio_mmap->poweroff==0 ) {
+                    if( pid_smartftp > 0 ) {
+                        smartftp_kill();
+                    }
+                    wifi_down();
+                    mode_run();                                     // back to run normal
+                }
+                else {
+                    mcu_poweroffdelay ();                       // keep power on
+                    // continue wait for smartftp
+                    smartftp_wait() ;
+                    if( runtime>=modeendtime || pid_smartftp==0 ) {
+                        if( pid_smartftp > 0 ) {
+                            smartftp_kill();
+                        }
+                        wifi_down();
+                        // enter archiving mode
+                        mode_archive();
+                    }
                 }
             }
             else if( p_dio_mmap->iomode==IOMODE_ARCHIVE ) {   // archiving, For pwii, copy file to CF in CDC
@@ -3445,133 +3543,25 @@ int main(int argc, char * argv[])
                             (p_dio_mmap->dvrstatus & DVR_ARCH )==0 ) ||
                         runtime>modeendtime )
                     {
-                        // start wifi detecting
-                        wifi_up();                                      // turn on wifi
-                        dio_lock();
-                        p_dio_mmap->smartserver=0 ;         // smartserver detected
-                        strcpy( p_dio_mmap->iomsg, "Detecting Smart Server!");
-                        p_dio_mmap->iomode = IOMODE_DETECTWIRELESS ;
-                        dio_unlock();
-                        modeendtime = runtime + wifidetecttime * 1000 ;    
-                        dvr_log("Start detecting smart server. (mode %d).", p_dio_mmap->iomode);
-                    }
-                }
-                else {
-                    p_dio_mmap->iomsg[0]=0 ;
-                    p_dio_mmap->iomode=IOMODE_RUN ;                        // back to run normal
-                    dvr_log("Power on switch, set to running mode. (mode %d)", p_dio_mmap->iomode);
-                }
-            }
-            else if( p_dio_mmap->iomode==IOMODE_DETECTWIRELESS ) {  // close recording and run smart ftp
-                if( p_dio_mmap->poweroff == 0 ) {
-                    dio_lock();
-                    p_dio_mmap->iomsg[0]=0 ;
-                    p_dio_mmap->iomode=IOMODE_RUN ;    // back to run normal
-                    dio_unlock();
-                    wifi_down();
-                    dvr_log("Power on switch, set to running mode. (mode %d)", p_dio_mmap->iomode);
-                }
-                else {
-                    mcu_poweroffdelay ();               // keep system alive
-
-                    if( p_dio_mmap->smartserver ) {
-                        if( smartftp_disable==0 ) {
-                            // check video lost report to smartftp.
-                            if( (p_dio_mmap->dvrstatus & (DVR_VIDEOLOST|DVR_ERROR) )==0 )
-                            {
-                                smartftp_reporterror = 0 ;
-                            }
-                            else {
-                                smartftp_reporterror=1 ;
-                            }
-                            smartftp_retry=3 ;
-                            smartftp_start() ;
-                            dio_lock();
-                            strcpy( p_dio_mmap->iomsg, "Uploading Video to Smart Server!");
-                            p_dio_mmap->iomode = IOMODE_UPLOADING ;
-                            dio_unlock();
-                            modeendtime = runtime+uploadingtime*1000 ; 
-                            dvr_log("Enter uploading mode. (mode %d).", p_dio_mmap->iomode);
-                            buzzer( 3, 250, 250);
-                        }
-                    }
-                    else if( runtime>modeendtime ) {
-                        dvr_log( "No smartserver detected!" );
                         // enter standby mode
-                        dio_lock();
-                        // standby pwii
-                        p_dio_mmap->pwii_output &= ~0x800 ;         // LCD off
-                        p_dio_mmap->pwii_output |= 0x1000 ;         // STANDBY mode
-                        p_dio_mmap->iomsg[0]=0 ;
-                        p_dio_mmap->iomode=IOMODE_STANDBY ;
-                        dio_unlock();
-                        modeendtime = runtime+standbytime*1000 ;   
-                        dvr_log("Enter standby mode. (mode %d)", p_dio_mmap->iomode);
-                        wifi_down();
+                        mode_standby();
                     }
-                }
-            }
-            else if( p_dio_mmap->iomode==IOMODE_UPLOADING ) {                  // file uploading
-                if( p_dio_mmap->poweroff==0 ) {
-                    if( pid_smartftp > 0 ) {
-                        smartftp_kill();
-                    }
-                    dio_lock();
-                    p_dio_mmap->iomsg[0]=0 ;
-                    p_dio_mmap->iomode=IOMODE_RUN ;    // back to run normal
-                    dio_unlock();
-                    wifi_down();
-                    dvr_log("Power on switch, set to running mode. (mode %d)", p_dio_mmap->iomode);
                 }
                 else {
-                    mcu_poweroffdelay ();                       // keep power on
-                    // continue wait for smartftp
-                    smartftp_wait() ;
-                    if( runtime>=modeendtime || pid_smartftp==0 ) {
-                        if( pid_smartftp > 0 ) {
-                            smartftp_kill();
-                        }
-                        // enter standby mode
-                        dio_lock();
-                        // standby pwii
-                        p_dio_mmap->pwii_output &= ~0x800 ;         // LCD off
-                        p_dio_mmap->pwii_output |= 0x1000 ;         // STANDBY mode
-                        p_dio_mmap->iomsg[0]=0 ;
-                        p_dio_mmap->iomode=IOMODE_STANDBY ;
-                        dio_unlock();
-                        modeendtime = runtime+standbytime*1000 ;   
-                        dvr_log("Enter standby mode. (mode %d)", p_dio_mmap->iomode);
-                        wifi_down();
-                    }
+                    mode_run();                                     // back to run normal
                 }
             }
-            else if( p_dio_mmap->iomode==IOMODE_SUSPEND ) {                    // suspend io, for file copying process
-                if( p_dio_mmap->poweroff != 0 ) {
-                    mcu_poweroffdelay ();
-                }
-                p_dio_mmap->suspendtimer -= 3 ;
-                if( p_dio_mmap->suspendtimer <= 0 ) {
-                    dvr_log( "Suspend mode timeout!" );
-                    dio_lock();
-                    p_dio_mmap->iomsg[0]=0 ;
-                    p_dio_mmap->iomode=IOMODE_RUN ;    // back to run normal
-                    dio_unlock();
-                }
-            }
-            else if( p_dio_mmap->iomode==IOMODE_STANDBY ) {                    // standby
+            else if( p_dio_mmap->iomode==IOMODE_STANDBY ) {         // standby
                 if( p_dio_mmap->poweroff == 0 ) {      
-                    dio_lock();
 #ifdef PWII_APP
                     // pwii jump out of standby
+                    dio_lock();
                     p_dio_mmap->pwii_output |= 0x800 ;      // LCD on                   
                     p_dio_mmap->pwii_output &= ~0x1000 ;    // standby off
-#endif                    
-                    p_dio_mmap->devicepower=0xffff ;    // turn on all devices power
-                    p_dio_mmap->iomode=IOMODE_RUN ;    // back to run normal
                     dio_unlock();
+#endif                    
                     wifi_down();
-                    dvr_log("Power on switch, set to running mode. (mode %d)", p_dio_mmap->iomode);
-
+                    mode_run();
                     if( disk_mounted==0 ) {
                         mountdisks();
                     }
@@ -3608,11 +3598,21 @@ int main(int argc, char * argv[])
                     if( runtime>modeendtime  ) {
                         // start shutdown
                         p_dio_mmap->devicepower=0 ;    // turn off all devices power
-                        modeendtime = runtime+90000 ;
                         p_dio_mmap->iomode=IOMODE_SHUTDOWN ;    // turn off mode
+                        modeendtime = runtime+90000 ;
                         dvr_log("Standby timeout, system shutdown. (mode %d).", p_dio_mmap->iomode );
                         buzzer( 5, 250, 250 );
                     }
+                }
+            }
+            else if( p_dio_mmap->iomode==IOMODE_SUSPEND ) {                    // suspend io, for file copying process
+                if( p_dio_mmap->poweroff != 0 ) {
+                    mcu_poweroffdelay ();
+                }
+                p_dio_mmap->suspendtimer -= 3 ;
+                if( p_dio_mmap->suspendtimer <= 0 ) {
+                    dvr_log( "Suspend mode timeout!" );
+                    mode_run();                                     // back to run normal
                 }
             }
             else if( p_dio_mmap->iomode==IOMODE_SHUTDOWN ) {                    // turn off mode, no keep power on 

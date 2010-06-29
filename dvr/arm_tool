@@ -6,3 +6,5 @@ CROSS_COMPILE_PREFIX=~/proj/eagle32/hik_toolchain/bin/arm-linux-
 # debugging folder
 debug_folder=~/nfsroot/eagletest
 
+EAGLE=eagle32
+#EAGLE=eagle34

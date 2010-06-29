@@ -1,6 +1,11 @@
 
 #include "dvr.h"
+#ifdef EAGLE32
 #include "eagle32/davinci_sdk.h"
+#endif
+#ifdef EAGLE34
+#include "eagle34/davinci_sdk.h"
+#endif
 
 int    eagle32_channels = 0 ;
 //static WORD eagle32_tsadjust = 0 ;
@@ -55,6 +60,7 @@ static int motionanalyze( unsigned int * mddata, int line )
 }
 
 // stream call back
+#ifdef EAGLE32
 static void StreamReadCallBack(	int handle,
                                void * buf,
                                int size,
@@ -65,6 +71,19 @@ static void StreamReadCallBack(	int handle,
         eagle_capture_array[handle-1]->streamcallback( buf, size, frame_type );
     }
 }		
+#endif
+
+#ifdef EAGLE34
+// stream call back
+static void StreamReadCallBack(CALLBACK_DATA CallBackData,void* context)
+{
+    if( eagle_capture_array[CallBackData.channel-1] ) {
+        eagle_capture_array[CallBackData.channel-1]->streamcallback(CallBackData.pBuf, 
+                                                                    CallBackData.size, 
+                                                                    CallBackData.frameType );
+    }
+}
+#endif
 
 void eagle_capture::streamcallback( 
                                    void * buf,
@@ -73,7 +92,8 @@ void eagle_capture::streamcallback(
 {
     int xframetype = FRAMETYPE_UNKNOWN ;
     struct cap_frame capframe;
-    
+
+#ifdef EAGLE32    
     if( frame_type==FRAME_TYPE_AUDIO ) {
         xframetype = FRAMETYPE_AUDIO ;
     }
@@ -87,6 +107,13 @@ void eagle_capture::streamcallback(
     else if( frame_type==FRAME_TYPE_VIDEO_SUB_I || 
             frame_type==FRAME_TYPE_VIDEO_I ) 
     {
+        struct hd_frame * pframe = (struct hd_frame *)buf;
+        if( (((pframe->width_height)>>16)&0xfff)%40 == 0 ) {
+            m_signal_standard = 1 ;         // assume NTSC when height would be 120, 320, 240, 480
+        }
+        else {
+            m_signal_standard = 2 ;         // PAL mode video
+        }
         xframetype = FRAMETYPE_KEYVIDEO ;
         if( m_motion>0 ) {
             if( --m_motion==0 ) {
@@ -113,6 +140,45 @@ void eagle_capture::streamcallback(
         }
         return ;
     }
+#endif
+
+#ifdef EAGLE34    
+    switch(frame_type){
+    case FRAME_TYPE_AUDIO_PS:
+        xframetype = FRAMETYPE_AUDIO ; 
+        break;
+    case FRAME_TYPE_VIDEO_P_PS:
+        xframetype = FRAMETYPE_VIDEO ;
+        break;
+    case FRAME_TYPE_VIDEO_I_PS:
+        xframetype = FRAMETYPE_KEYVIDEO ;
+        if( m_motion>0 ) {
+            if( --m_motion==0 ) {
+                m_motionupd=1 ;
+            }
+        }
+        break;
+    case FRAME_TYPE_HEADER:
+    case FRAME_TYPE_SUB_HEADER:
+        m_headerlen = size ;
+        memcpy( m_header, buf, size );
+        if( frame_type==FRAME_TYPE_HEADER ) {
+            memcpy( Dvr264Header, buf, size );
+        }
+        return;
+    case FRAME_TYPE_MD_RESULT:
+       // analyze motion data
+        if(  motionanalyze( (unsigned int *)buf, size/sizeof(unsigned int) ) > 2 ) {
+            if( m_motion==0 ) {
+                m_motionupd = 1 ;
+            }
+            m_motion=2 ;
+        }
+        return ;
+    default:
+        return;
+    }
+#endif
     
     capframe.channel = m_channel ;
     capframe.framesize = size ;
@@ -123,6 +189,7 @@ void eagle_capture::streamcallback(
         return ;
     }
     mem_cpy32(capframe.framedata, buf, size ) ;
+
 /*
     if( xframetype == FRAMETYPE_AUDIO ||
         xframetype == FRAMETYPE_KEYVIDEO ||

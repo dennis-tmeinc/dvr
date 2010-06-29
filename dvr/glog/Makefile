@@ -15,7 +15,7 @@ HEADERS=
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
-LDFLAGS= -lpthread -lstdc++ -L../dvrsvr/eagle32 -lsdk -ldadsp ../dvrsvr/eagle32/dsplink.lib
+LDFLAGS= -lpthread -lstdc++ -L../dvrsvr/$(EAGLE) -lsdk -ldadsp ../dvrsvr/$(EAGLE)/dsplink.lib
 
 CFLAGS=-I../dvrsvr -g -Wall
 
