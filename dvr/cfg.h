@@ -19,6 +19,4 @@
 // to enable power cycling test firmware
 // #define POWERCYCLETEST
 
-
 #endif
-

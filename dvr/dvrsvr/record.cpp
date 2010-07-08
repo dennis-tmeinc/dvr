@@ -20,12 +20,12 @@ enum REC_STATE {
 };
 
 struct rec_fifo {
-    struct rec_fifo *next;
     struct dvrtime time;        // captured time
     int key;                    // a key frame
-    char *buf;
     int bufsize;
     REC_STATE rectype;          // recording type
+    char *buf;
+    struct rec_fifo *next;
 };
 
 #define MAX_TRIGGERSENSOR   (32)
@@ -75,12 +75,12 @@ class rec_channel {
         struct rec_fifo *m_fifohead;
         struct rec_fifo *m_fifotail;
         int	   m_fifosize ;
-        pthread_mutex_t m_fifo_mutex;
-        void    fifo_lock() {
-            pthread_mutex_lock(&m_fifo_mutex);
+        pthread_mutex_t m_mutex;
+        void    lock() {
+            pthread_mutex_lock(&m_mutex);
         }
-        void    fifo_unlock() {
-            pthread_mutex_unlock(&m_fifo_mutex);
+        void    unlock() {
+            pthread_mutex_unlock(&m_mutex);
         }
         // allocate new fifo block and buffer
         rec_fifo *  newfifo( char *fifobuf, int bufsize );
@@ -185,11 +185,11 @@ rec_channel::rec_channel(int channel)
     char cameraname[80] ;
 
     // initialize fifo lock
-    memcpy( &m_fifo_mutex, &mutex_init, sizeof(mutex_init));
-    fifo_lock();
+    memcpy( &m_mutex, &mutex_init, sizeof(mutex_init));
+    lock();
     m_fifohead = m_fifotail = NULL;
     m_fifosize = 0 ;
-    fifo_unlock();
+    unlock();
 
     m_channel = channel;
     sprintf(cameraname, "camera%d", m_channel+1 );
@@ -290,7 +290,7 @@ rec_channel::~rec_channel()
 	m_recstate = REC_STOP;
 	closefile();
 	clearfifo();
-    pthread_mutex_destroy(&m_fifo_mutex);
+    pthread_mutex_destroy(&m_mutex);
 }
 
 // start record
@@ -321,8 +321,9 @@ void rec_channel::onframe(cap_frame * pframe)
     struct rec_fifo *nfifo;
 
     if( m_recstate == REC_STOP ||
+        pframe == NULL ||
         rec_pause ||
-        dio_iorun == 0 ||
+        dio_record == 0 ||
         rec_basedir.length()<=0 )
     {
         clearfifo();
@@ -402,7 +403,7 @@ void  rec_channel::deletefifo( rec_fifo * rf )
 void rec_channel::putfifo(rec_fifo * fifo)
 {
     if( fifo!=NULL ){
-        fifo_lock();
+        lock();
         fifo->next = NULL ;
         if (m_fifohead == NULL) {
             m_fifotail = m_fifohead = fifo;
@@ -415,7 +416,7 @@ void rec_channel::putfifo(rec_fifo * fifo)
                 rec_busy=1 ;
             }
         }
-        fifo_unlock();
+        unlock();
     }
 }
 
@@ -423,12 +424,12 @@ void rec_channel::putfifo(rec_fifo * fifo)
 struct rec_fifo *rec_channel::getfifo()
 {
     struct rec_fifo *head;
-    fifo_lock();
+    lock();
     if ( (head = m_fifohead) != NULL) {
         m_fifohead = head->next;
         m_fifosize-= head->bufsize ;
     }
-    fifo_unlock();
+    unlock();
     return head;
 }
 
@@ -883,7 +884,8 @@ void *rec_thread(void *param)
 void rec_channel::update()
 {
     int i;
-    if( m_recstate == REC_STOP ) {
+    if( m_recstate == REC_STOP || dio_record==0 ) {
+        onframe(NULL);
         return ;
     }
 
@@ -1086,10 +1088,7 @@ void rec_init()
 
 void rec_uninit()
 {
-    int i;
     rec_run = 0;
-    i=rec_channels ;
-    rec_channels=0;
     if( recchannel ) {
         // stop rec_thread
         rec_stop() ;
@@ -1109,11 +1108,10 @@ void rec_uninit()
             pthread_join(rec_threadid, NULL);
             rec_threadid = 0 ;
         }
-        
-        for (i--; i>=0; i--) {
-            delete recchannel[i] ;
+
+        while( rec_channels>0 ) {
+            delete recchannel[--rec_channels] ;
         }
-        
         delete recchannel ;
         recchannel=NULL ;
         dvr_log("Record uninitialized.");

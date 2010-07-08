@@ -17,9 +17,14 @@
 #define _OSD_SECOND		_OSD_BASE+10
 #define _OSD_DEGREESIGN '\xf8'
 
+// for Eagle34 boards, OSD support exp
+int _osd_vert_exp = 4 ;
+int _osd_hori_exp = 4 ;
+
 int cap_channels;
 capture ** cap_channel;
 
+#ifdef EAGLE32
 char Dvr264Header[40] = 
 {
     '\x34', '\x48', '\x4B', '\x48', '\xFE', '\xB3', '\xD0', '\xD6',
@@ -28,6 +33,19 @@ char Dvr264Header[40] =
     '\x80', '\x3E', '\x00', '\x00', '\x10', '\x02', '\x40', '\x01',
     '\x11', '\x10', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00'
 };
+
+#endif
+
+#ifdef EAGLE34
+char Dvr264Header[40] =
+{
+    '\x49', '\x4d', '\x4b', '\x48', '\x01', '\x01', '\x01', '\x00',
+    '\x02', '\x00', '\x01', '\x00', '\x21', '\x72', '\x01', '\x0e',
+    '\x80', '\x3e', '\x00', '\x00', '\x00', '\x7d', '\x00', '\x00',
+    '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00',
+    '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00'
+};
+#endif
 
 // return true for ok
 int dvr_getchannelsetup(int ch, struct DvrChannel_attr * pchannel,  int attrsize)
@@ -273,6 +291,115 @@ void capture::onframe(cap_frame * pcapframe)
     rec_onframe(pcapframe);
     net_onframe(pcapframe);
     screen_onframe(pcapframe); 
+
+#ifdef EAGLE34    
+//     NET_DPRINT( "frame on channel %d\n", pcapframe->channel ) ;
+
+    // try analyze frames 
+    if( pcapframe->channel==0 ) {
+        static float tsref, tref=0 ;
+        static float t1=0 ;
+        static unsigned int count=0 ;
+        
+        char * ps=(char *)pcapframe->framedata ;
+        int  si = pcapframe->framesize ;
+//        NET_DPRINT( "frame type : %d frame size: %d\n", pcapframe->frametype, si ) ;
+        while( si>0 ) {
+            unsigned int sync ;
+            sync = (((unsigned int)ps[0])<<24)
+                +(((unsigned int)ps[1])<<16)
+                +(((unsigned int)ps[2])<<8)
+                +(((unsigned int)ps[3])) ;
+            if( sync==0x000001ba ) {            // PS header
+                int marker ;
+                unsigned int systemclock ;
+//                NET_DPRINT( "PS Stream Pack header: sync (%08x)\n", sync );
+                marker = (ps[4]>>6) & 3 ;
+                if( marker != 1 ) {
+                    NET_DPRINT( "First marker bits error!\n");
+                }
+                systemclock = ((((unsigned int)ps[4])&0x38)>>3);
+                marker = (ps[4]>>2) & 1 ;
+                if( marker != 1 ) {
+                    NET_DPRINT( "Second marker bits error!\n");
+                }
+                systemclock<<=15 ;
+                systemclock|= 
+                    ((((unsigned int)ps[4])&0x3)<<13) |
+                    ((((unsigned int)ps[5])&0xff)<<5) |
+                    ((((unsigned int)ps[6])&0xf8)>>3) ;
+                marker = ((((unsigned int)ps[6])&0x4)>>2) ; 
+                if( marker != 1 ) {
+                    NET_DPRINT( "Third marker bits error!\n");
+                }
+//                systemclock<<=15 ;
+                systemclock<<=14 ;
+                systemclock|= 
+                    ((((unsigned int)ps[6])&0x3)<<12) |
+                    ((((unsigned int)ps[7])&0xff)<<4) |
+                    ((((unsigned int)ps[8])&0xf8)>>4) ;
+
+                struct dvrtime dvt ;
+                t1 = (float)(time_now( &dvt)) ;
+                t1+= dvt.milliseconds/1000.0 ;
+                NET_DPRINT( "%d %02d:%02d:%02d.%03d ", pcapframe->frametype, dvt.hour, dvt.minute, dvt.second, dvt.milliseconds );
+                NET_DPRINT( "stream clock: %d", systemclock );
+
+                if( (count%200)==0 ) {
+                    tref = t1 ;
+                    tsref = (float)systemclock ;
+                }
+                else {
+                    float a = (float)(systemclock)-tsref ;
+                    float b = t1-tref;
+                    NET_DPRINT( "rate %f , count :%d\n", a/b, count );
+                }
+                count++;
+                
+                marker = ((((unsigned int)ps[8])&0x4)>>2) ;
+                if( marker != 1 ) {
+                    NET_DPRINT( "Third marker bits error!\n");
+                }
+                systemclock= 
+                    ((((unsigned int)ps[8])&0x3)<<7) |
+                    ((((unsigned int)ps[9])&0xfe)>>1) ;
+//                NET_DPRINT( "System clock ext: %d\n", systemclock );
+                marker = ((((unsigned int)ps[9])&1)) ;
+                if( marker != 1 ) {
+                    NET_DPRINT( "4th marker bits error!\n");
+                }
+                systemclock= 
+                    ((((unsigned int)ps[10]))<<14) |
+                    ((((unsigned int)ps[11]))<<6) |
+                    ((((unsigned int)ps[12])&0xfc)>>2) ;
+//                NET_DPRINT( "Bit rate: %d\n", systemclock );
+                marker = ((((unsigned int)ps[12])&3)) ;
+                if( marker != 3 ) {
+                    NET_DPRINT( "5th marker bits error!\n");
+                }
+                int stuffing = ((((unsigned int)ps[13])&7)) ;
+//                NET_DPRINT( "Stuffing %d bytes\n", stuffing );
+                stuffing += 14 ;
+                si -= stuffing ;
+                ps += stuffing ;
+            }
+            else {
+                unsigned int packsize ;
+                packsize = (((unsigned int)ps[4])<<8)
+                    +(((unsigned int)ps[5])) ;
+//                NET_DPRINT( "Stream header: sync (%08x) pack size (%d)\n", sync, packsize );
+                si-= 4+2+packsize ;
+                ps+= 4+2+packsize ;
+            }
+            if( si==0 ) {
+//                NET_DPRINT( "pack well done!\n") ;
+                break;
+            }
+        }
+        net_sendmsg( "192.168.247.100", 15119, pcapframe->framedata, pcapframe->framesize );
+    }
+#endif
+
 }
 
 // periodic update procedure.
@@ -283,7 +410,7 @@ void capture::update(int updosd)
         updateOSD();
     }
     if( m_oldsignal!=m_signal ) {
-        if(dio_iorun ) {				// don't record video lost event in standby mode. (Requested by Harrison)
+        if(dio_record ) {				// don't record video lost event in standby mode. (Requested by Harrison)
             dvr_log("Camera %d video signal %s.", m_channel, m_signal?"on":"lost");
         }
         m_oldsignal=m_signal ;
@@ -479,6 +606,11 @@ void capture::updateOSD()
     osd.brightness = osdbrightness ;
     osd.translucent = osdtranslucent ;
     osd.twinkle = osdtwinkle  ;
+#ifdef EAGLE34
+// for Eagle34 boards, OSD support exp
+    osd.twinkle |= (_osd_vert_exp<<16) ;
+    osd.twinkle |= (_osd_hori_exp<<24) ;
+#endif    
     line=0 ;
     
     // prepare first line, Date/time and sensor ( always display )
@@ -706,6 +838,11 @@ void capture::updateOSD()
     osd.brightness = osdbrightness ;
     osd.translucent = osdtranslucent ;
     osd.twinkle = osdtwinkle  ;
+#ifdef EAGLE34
+// for Eagle34 boards, OSD support exp
+    osd.twinkle |= (_osd_vert_exp<<16) ;
+    osd.twinkle |= (_osd_hori_exp<<24) ;
+#endif    
     line=0 ;
     
     // prepare first line, Date/time

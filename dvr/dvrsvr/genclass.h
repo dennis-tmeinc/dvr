@@ -266,12 +266,12 @@ class array {
             }
             m_size=newsize ;
         }
-        T * at(int index) {
-            if( index>=m_size ) {
-                setsize(index+1);
-            }
-            return m_array[index] ;
-        }
+//        T * at(int index) {
+//            if( index>=m_size ) {
+//                setsize(index+1);
+//            }
+//            return m_array[index] ;
+//        }
         T & operator [] (int index) {
             if( index>=m_size ) {
                 setsize(index+1);

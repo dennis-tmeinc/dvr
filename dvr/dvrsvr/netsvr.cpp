@@ -1,11 +1,10 @@
 
 #include <errno.h>
-#include "dvr.h"
 #include <netinet/ip.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
 
-#define DVRPORT 15111
+#include "dvr.h"
 
 int multicast_en;				// multicast enabled?
 struct sockad multicast_addr;	// multicast address
@@ -171,12 +170,25 @@ int net_addr(char *netname, int port, struct sockad *addr)
 }
 
 // send out UDP message use msgfd
-int net_sendmsg( char * dest, int port, void * msg, int msgsize )
+int net_sendmsg( char * dest, int port, const void * msg, int msgsize )
 {
     struct sockad destaddr ;
     net_addr(dest, port, &destaddr);
     return (int)sendto( msgfd, msg, (size_t)msgsize, 0, &(destaddr.addr), destaddr.addrlen );
 }
+
+#ifdef NETDBG
+int net_dprint( char * fmt, ... ) 
+{
+    char msg[1024] ;
+    va_list ap ;
+    va_start( ap, fmt );
+    vsprintf(msg, fmt, ap );
+    net_sendmsg( "192.168.247.100", 15118, msg, strlen(msg) );
+    va_end( ap );
+    return 0 ;
+}
+#endif
 
 int net_broadcast(char * interface, int port, void * msg, int msgsize )
 {

@@ -354,10 +354,10 @@ void playback::getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * 
     }
 }
 
-int playback::getdaylist( int * * daylist )
+int  playback::getdaylist( array <int> & daylist )
 {
     if( m_daylist.size()>0 ) {
-        *daylist = m_daylist.at(0);
+        daylist=m_daylist ;
         return m_daylist.size();
     }
     return 0 ;

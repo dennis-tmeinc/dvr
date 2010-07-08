@@ -5,8 +5,6 @@
 
 #include "dvr.h"
 
-#define DVRPORT 15111
-
 dvrsvr *dvrsvr::m_head = NULL;
 
 // KEY support
@@ -1211,6 +1209,7 @@ void dvrsvr::ReqStreamDayInfo()
 {
     struct dvrtime * pday ;
     struct dvr_ans ans ;
+    int i ;
     
     array <struct dayinfoitem> dayinfo ;
 
@@ -1231,17 +1230,17 @@ void dvrsvr::ReqStreamDayInfo()
 #endif  
         
         if( ans.anssize>0 ) {
-            Send( dayinfo.at(0), ans.anssize);
+            for( i=0; i<dayinfo.size(); i++ ) {
+                Send( &dayinfo[i], sizeof(struct dayinfoitem));
 #ifdef NETDBG
-            int x ;
-            for( x=0; x<dayinfo.size(); x++ ) {
-                printf("%d - %d\n", dayinfo[x].ontime, dayinfo[x].offtime );
-            }
+                printf("%d - %d\n", dayinfo[i].ontime, dayinfo[i].offtime );
 #endif  
+            }
         }
-        return ;
     }
-    DefaultReq();
+    else {
+        DefaultReq();
+    }
 }
 
 void dvrsvr::ReqStreamMonthInfo()
@@ -1278,20 +1277,23 @@ void dvrsvr::ReqStreamMonthInfo()
 
 void dvrsvr::ReqStreamDayList()
 {
-    int * daylist ;
+    array <int> daylist ;
     int   daylistsize ;
     struct dvr_ans ans ;
-    
+    int i;
+
     if( m_req.data == DVRSTREAMHANDLE(m_playback) && 
        m_playback!=NULL ) 
     {
-        daylistsize = m_playback->getdaylist(&daylist);
+        daylistsize = m_playback->getdaylist(daylist);
         ans.anscode = ANSSTREAMDAYLIST ;
         ans.data = daylistsize ;
         ans.anssize = daylistsize * sizeof(int) ;
         Send( &ans, sizeof(ans));
         if( ans.anssize>0 ) {
-            Send( (void *)daylist, ans.anssize );
+            for(i=0; i<daylistsize; i++ ) {
+                Send( &daylist[i], sizeof(int));
+            }
         }
         return ;
     }
@@ -1302,6 +1304,7 @@ void dvrsvr::ReqLockInfo()
 {
     struct dvrtime * pday ;
     struct dvr_ans ans ;
+    int i;
     array <struct dayinfoitem> dayinfo ;
 
     if( m_req.data == DVRSTREAMHANDLE(m_playback) && 
@@ -1322,17 +1325,15 @@ void dvrsvr::ReqLockInfo()
         printf("Stream Lock DayInfo %04d-%02d-%02d\n",
                pday->year, pday->month, pday->day );
 #endif  
-        
+
         if( ans.anssize>0 ) {
-            Send( dayinfo.at(0), ans.anssize);
-        }
+            for( i=0; i<dayinfo.size(); i++ ) {
+                Send( &dayinfo[i], sizeof(struct dayinfoitem));
 #ifdef NETDBG
-        int x ;
-        for( x=0; x<dayinfo.size(); x++ ) {
-            printf("%d - %d\n", dayinfo[x].ontime, dayinfo[x].offtime );
-        }
+                printf("%d - %d\n", dayinfo[i].ontime, dayinfo[i].offtime );
 #endif  
-            
+            }
+        }
         return ;
     }
     DefaultReq();

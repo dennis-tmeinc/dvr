@@ -7,7 +7,8 @@
 
 struct dio_mmap * p_dio_mmap ;
 unsigned int dio_old_inputmap ;
-int dio_iorun ;
+int dio_record;
+int dio_capture;
 
 /*
    share memory lock implemented use atomic swap
@@ -433,7 +434,7 @@ int dio_check()
             p_dio_mmap->dvrcmd = 0 ;
         }
 
-        dio_iorun = ( p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) ;
+        dio_record = ( p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) ;
         
         res = (dio_old_inputmap != p_dio_mmap->inputmap) ;
 #ifdef    PWII_APP
@@ -615,7 +616,7 @@ void dio_init()
     iomapfile = dvrconfig.getvalue( "system", "iomapfile");
     
     dio_old_inputmap = 0 ;
-    dio_iorun = 1 ;
+    dio_record = 1 ;
 #ifdef PWII_APP
     pwii_event_marker = 0 ;
 #endif        

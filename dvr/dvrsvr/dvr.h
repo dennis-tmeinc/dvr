@@ -42,7 +42,7 @@ void mem_free(void *pmem);
 void *mem_addref(void *pmem);
 int mem_refcount(void *pmem);
 int mem_check(void *pmem);
-int mem_size(void * pmem);
+//int mem_size(void * pmem);
 void mem_cpy32(void *dest, const void *src, size_t count);
 int mem_available();
 void mem_init();
@@ -191,7 +191,7 @@ struct cap_frame {
 	int channel;
 	int framesize;
 	int frametype;
-	char *framedata;
+	char * framedata;
 };
 
 extern char Dvr264Header[];
@@ -216,7 +216,6 @@ class dvrfile {
 	int	   m_fileencrypt ;		// if file is encrypted?
     int    m_autodecrypt ;      // auto - decrypt when reading.
 	int    m_initialsize;
-    char * m_filebuf ;
 
 	string m_filename ;
 	int    m_openmode ;			// 0: read, 1: write
@@ -717,10 +716,10 @@ extern int disk_busy ;
 
 // live video service
 struct net_fifo {
-    struct net_fifo *next;
-    char *buf;
     int bufsize;
     int loc;
+    char *buf;
+    struct net_fifo *next;
 };
 
 class live {
@@ -779,7 +778,7 @@ class playback {
         void getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * pday);
         void getlockinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * pday);
         DWORD getmonthinfo(dvrtime * month);				// return day info in bits, bit 0 as day 1
-        int  getdaylist( int * * daylist ) ;
+        int  getdaylist( array <int> & daylist );
 
         int getcurrentcliptime(struct dvrtime * begin, struct dvrtime * end) ;
         int getnextcliptime(struct dvrtime * begin, struct dvrtime * end) ;
@@ -816,7 +815,13 @@ void net_trigger();
 int net_sendok(int fd, int tout);
 int net_recvok(int fd, int tout);
 void net_message();
-int net_sendmsg( char * dest, int port, void * msg, int msgsize );
+int net_sendmsg( char * dest, int port, const void * msg, int msgsize );
+#ifdef NETDBG
+int net_dprint( char * fmt, ... ) ;
+#define NET_DPRINT net_dprint
+#else
+#define NET_DPRINT
+#endif
 int net_broadcast( char * interface, int port, void * msg, int msgsize );
 int net_listen(int port, int socktype);
 int net_connect(char *ip, int port);
@@ -1083,8 +1088,7 @@ class dvrsvr {
         virtual void ReqNfileOpen();
         virtual void ReqNfileClose();
         virtual void ReqNfileRead();
-        
-        
+
 };
 
 // DVR client side support
@@ -1286,7 +1290,9 @@ void dio_uninit();
 double gps_speed();
 int gps_location( double * latitude, double * longitude, double * speed );
 extern double g_gpsspeed ;
-extern int dio_iorun;
+extern int dio_record;
+extern int dio_capture;
+
 
 //};
 

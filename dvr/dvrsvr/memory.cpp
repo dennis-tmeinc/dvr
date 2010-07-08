@@ -45,8 +45,6 @@ int mem_available()
     return memfree;
 }
 
-#define MEM_ALLOC_MMAP_SIZE (0x4000) 
-
 void *mem_alloc(int size)
 {
     int *pmemblk;
@@ -54,18 +52,17 @@ void *mem_alloc(int size)
     if (size < 0) {
         size=0 ;
     }
-    size+=12 ;
+    size += 8 ;
     pmemblk = (int *) malloc(size);
     if (pmemblk == NULL) {
         // no enough memory error
         dvr_log("!!!!!mem_alloc failed!");
         return NULL;
     }
-    pmemblk[0] = size ;		    // block size
+    pmemblk[0] = MEMTAG	; 		// memory tag
     pmemblk[1] = 1 ;			// reference counter
-    pmemblk[2] = MEMTAG	; 		// memory tag
     g_memused++;
-    return (void *)(&pmemblk[3]);
+    return (void *)(&pmemblk[2]);
 }
 
 void mem_free(void *pmem)
@@ -76,30 +73,15 @@ void mem_free(void *pmem)
 
     mem_lock();
     pmemblk = (int *)pmem ;
-    pmemblk-=3 ;
-    if( pmemblk[2]==MEMTAG ) {
+    pmemblk-=2 ;
+    if( pmemblk[0]==MEMTAG ) {
         if( --(pmemblk[1]) <=0 ) {	// reference counter = 0
             g_memused--;
-            pmemblk[2]=0;		// clear memory tag
+            pmemblk[0]=0;		// clear memory tag
             free( (void *)pmemblk );
         }
     }
     mem_unlock();
-}
-
-// return memory block size
-int mem_size(void * pmem)
-{
-    int *pmemblk;
-    if (pmem == NULL)
-        return 0 ;
-    
-    pmemblk = (int *)pmem ;
-    pmemblk-=3 ;
-    if( pmemblk[2]!=MEMTAG ) {
-        return 0 ;
-    }
-    return pmemblk[0]-12 ;
 }
 
 void *mem_addref(void *pmem)
@@ -110,28 +92,31 @@ void *mem_addref(void *pmem)
     }
     
     mem_lock();
-    pmemblk = (int *) pmem;
-    if (*--pmemblk != MEMTAG){
+    pmemblk = ((int *)pmem)-2 ;
+    if (pmemblk[0] == MEMTAG){
+        pmemblk[1]++ ;
+        mem_unlock();
+        return pmem;
+    }
+    else {
         mem_unlock();
         return NULL;			// not an allocated memory block
     }
-    (*--pmemblk)++;
-    mem_unlock();
-    return pmem;
 }
 
 int mem_refcount(void *pmem)
 {
     int *pmemblk;
+    int refcount=0 ;
     if (pmem == NULL)
         return 0 ;
-    
-    pmemblk = (int *)pmem ;
-    pmemblk-=3 ;
-    if( pmemblk[2]!=MEMTAG ) {
-        return 0 ;
+    mem_lock();
+    pmemblk = ((int *)pmem)-2 ;
+    if (pmemblk[0] == MEMTAG){
+        refcount=pmemblk[1] ;
     }
-    return pmemblk[1] ;
+    mem_unlock();
+    return refcount ;
 }
 
 // check if this memory is allock by mem_alloc
@@ -139,7 +124,7 @@ int mem_check(void *pmem)
 {
     if (pmem == NULL)
         return 0;
-    return *(((int *)pmem)-1) == MEMTAG ;
+    return *(((int *)pmem)-2) == MEMTAG ;
 }
 
 // copy aligned 32 bit memory.

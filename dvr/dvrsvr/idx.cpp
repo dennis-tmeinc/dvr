@@ -21,7 +21,6 @@ void rec_index::savefile(char *filename)
     FILE *idxfile=NULL;
     struct dvrtime dvrt ;
     struct dvrtime filetime ;
-    struct rec_index_item * pidx;
     
     int onoff;
     int i;
@@ -35,17 +34,16 @@ void rec_index::savefile(char *filename)
     f264time(filename, &filetime);
     
     for (i = 0; i < m_array.size(); i++) {
-        pidx = m_array.at(i);
-        if (pidx->onoff == 0){
+        if (m_array[i].onoff == 0){
             onoff = 'C';
         }
-        else if (pidx->onoff == 1){
+        else if (m_array[i].onoff == 1){
             onoff = 'O';
         }
         else {
             break;
         }
-        dvrt = filetime + pidx->onofftime;
+        dvrt = filetime + m_array[i].onofftime;
         dvr_lock();
         fprintf(idxfile, "%c%04d%02d%02d%02d%02d%02d\n", onoff,
                 dvrt.year,

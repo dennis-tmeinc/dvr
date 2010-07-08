@@ -1388,6 +1388,13 @@ int disk_archive_basedisk(string & archbase)
                 if( diskstat.st_dev != basestat.st_dev) {	// found a mount point
                     if( disk_testwritable( diskname ) ) {
                         archbase = diskname ;
+                        if( disk_archdiskfile.length()>0 ) {
+                            FILE * f = fopen(disk_archdiskfile.getstring(), "w"); 
+                            if( f ) {
+                                fputs(diskname, f);
+                                fclose(f);
+                            }
+                        }
                         return 1 ;
                     }
                 }
@@ -1604,7 +1611,7 @@ void disk_uninit()
     unlink( disk_curdiskfile.getstring() );
 
     // un-mark archieving disk
-    unlink( disk_curdiskfile.getstring() );
+    unlink( disk_archdiskfile.getstring() );
 
     sync();
 

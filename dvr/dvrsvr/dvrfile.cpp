@@ -14,9 +14,11 @@ unsigned char g_filekey[256] ;
 
 #ifdef EAGLE32
 const char g_264ext[]=".264" ;
+#define H264FILEFLAG  (0x484b4834)
 #endif
 #ifdef EAGLE34
 const char g_264ext[]=".265" ;
+#define H264FILEFLAG  (0x484b4d49)
 #endif
 
 // convert timestamp value to milliseconds
@@ -28,7 +30,6 @@ inline int tstamp2ms(int tstamp )
 dvrfile::dvrfile()
 {
     m_handle = NULL;
-    m_filebuf = NULL;
     m_initialsize=0;
     m_filestamp = 0;
     m_timestamp = 0 ;
@@ -52,7 +53,6 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
     if (m_handle == NULL) {
         return 0;
     }
-    m_filebuf=NULL ;
     m_filename=filename ;
     f264time(filename, &m_filetime);
     m_filelen=f264length(filename);
@@ -63,12 +63,7 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
     if (strchr(mode, 'w')) {
         if( file_bufsize>4096 ) {
             setvbuf(m_handle, NULL, _IOFBF, file_bufsize );
-//            m_filebuf=(char *)mem_alloc(file_bufsize) ;
-//            if( m_filebuf!=NULL ) {
-//                setvbuf(m_handle, m_filebuf, _IOFBF, file_bufsize );
-//            }
         }
-//        file_syncreq = 1;
         if (initialsize > 0) {
             seek(initialsize - 1);
             if (fputc(0, m_handle) == EOF) {
@@ -78,22 +73,19 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
             m_initialsize = initialsize;
         }
         seek(0,SEEK_SET);
+        memcpy( &h264hd, Dvr264Header, sizeof(h264hd));
+        h264hd.flag =  H264FILEFLAG;
         m_fileencrypt=file_encrypt ;
         if( m_fileencrypt ) {
-            memcpy( &h264hd, Dvr264Header, sizeof(h264hd));
             RC4_block_crypt( (unsigned char*)&h264hd, sizeof(h264hd), 0, file_encrypt_RC4_table, 1024);
-            write( &h264hd, sizeof(struct hd_file));				// write header
         }
-        else {
-            write(Dvr264Header, sizeof(struct hd_file));		// write header
-        }
+        write( &h264hd, sizeof(struct hd_file));				// write header
         m_filestart = tell();
         m_openmode=1;
         m_syncsize=0 ;
     }
-    if( strchr(mode, 'r')) {
+    else if( strchr(mode, 'r')) {
         if( fstat( fileno(m_handle), &dvrfilestat)==0 ) {
-//            setvbuf(m_handle, NULL, _IOFBF, dvrfilestat.st_blksize );
             m_filesize=dvrfilestat.st_size ;
             if( m_filesize<128000 ) {
                 close();	
@@ -108,13 +100,13 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
         read(&h264hd, sizeof(h264hd) );
         m_hdflag = h264hd.flag ;
         
-        if( h264hd.flag == 0x484b4834 ) {
+        if( h264hd.flag == H264FILEFLAG ) {
             m_fileencrypt=0 ;								// no encrypted
         }
         else {
             m_fileencrypt = 1 ;
             RC4_block_crypt( (unsigned char*)&h264hd, sizeof(h264hd), 0, file_encrypt_RC4_table, 1024);
-            if( h264hd.flag == 0x484b4834 ) {
+            if( h264hd.flag ==  H264FILEFLAG ) {
                 if( file_nodecrypt ) {
                     m_autodecrypt=0 ;
                 }
@@ -148,26 +140,20 @@ void dvrfile::close()
             if( m_keyarray.size()>0 ) {
                 writekey();
             }
-//            file_syncreq = 1;
             if( file_close(m_handle)!=0 ) {
                 dvr_log("Close file failed : %s",m_filename.getstring());
                 rec_basedir="" ;
             }
-//            sync();
         }
         else {
             file_close(m_handle);
         }
         m_handle = NULL;
-        if( m_filebuf!=NULL  ) {
-            mem_free( m_filebuf );
-        }
     }
     m_keyarray.empty();
     m_initialsize=0;
     m_filestamp = 0;
     m_timestamp = 0 ;
-    m_filebuf=NULL ;
 }
 
 int dvrfile::read(void *buffer, size_t buffersize)
@@ -183,11 +169,6 @@ int dvrfile::read(void *buffer, size_t buffersize)
 int dvrfile::write(void *buffer, size_t buffersize)
 {
     if( isopen() ) {
-//        m_syncsize+=buffersize ;
-//        if(m_syncsize>file_bufsize) {
-//            fdatasync( fileno(m_handle) );
-//            m_syncsize=0 ;
-//        }
         return file_write(buffer, buffersize, m_handle);
     }
     else {
@@ -607,9 +588,7 @@ void dvrfile::writekey()
         keyfile=file_open( pk, "w" );
         if( keyfile ) {
             for( i=0;i<m_keyarray.size();i++) {
-                struct dvr_key_t * pkey ;
-                pkey = m_keyarray.at(i);
-                fprintf(keyfile,"%d,%d\n", pkey->ktime, pkey->koffset);
+                fprintf(keyfile,"%d,%d\n", m_keyarray[i].ktime,  m_keyarray[i].koffset);
             }
             file_close(keyfile);
         }

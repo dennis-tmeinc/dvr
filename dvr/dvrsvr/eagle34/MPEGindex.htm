@@ -1,0 +1,308 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<html><head>
+
+
+
+	<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<meta name="VPSiteProject" 
+content="file:///C|/Bretl%20Site%20copy/BretlSite.vpp">
+<meta name="formatter" content="HyperText Studio from Olson Software 
+(http://www.olsonsoft.com)">
+
+	<meta name="GENERATOR" content="Visual Page 2.0 for Windows">
+	<title>Introduction</title>
+
+	<style type="text/css">
+	<!--
+	P	 {
+			
+		}
+	H1	 {
+			
+		}
+	H2	 {
+			
+		}
+	H3	 {
+			
+		}
+	H4	 {
+			
+		}
+	H5	 {
+			
+		}
+	H6	 {
+			
+		}
+	BODY	 {
+			
+		}
+	.DefaultParagraphFont	 {
+			
+		}
+	-->
+	</style>
+
+</head><body>
+
+<banner>
+<h1 class="Heading1">MPEG2 Tutorial</h1>
+
+<h1 class="Heading1">Introduction and Contents</h1>
+</banner>
+<p><span class="DefaultParagraphFont"><span style="font-size: 10pt;"><font
+ face="Arial">Copyright 1999 Wayne E.
+Bretl and Mark Fimoff.  Posted on www.bretl.com January 15, 2000</font></span></span></p>
+
+<p><span class="DefaultParagraphFont"><span style="font-size: 10pt;"><font
+ face="Arial">This tutorial Covers both
+video compression and data transport aspects of MPEG 2, and also 
+particular constraints and extensions related
+to the US DTV standards, both </font></span></span><a 
+href="http://www.bretl.com/mpeghtml/index107.HTM" target="popup"><span 
+class="DefaultParagraphFont"><span style="font-size: 10pt;"><font 
+face="Arial">FCC</font></span></span></a><span 
+class="DefaultParagraphFont"><span style="font-size: 10pt;"><font 
+face="Arial"> &nbsp;mandated and </font></span></span><a 
+href="http://www.bretl.com/mpeghtml/index97.HTM" target="popup"><span 
+class="DefaultParagraphFont"><span style="font-size: 10pt;"><font 
+face="Arial">ATSC</font></span></span></a><span 
+class="DefaultParagraphFont"><span style="font-size: 10pt;"><font 
+face="Arial"> voluntary.</font></span></span></p>
+<h1 class="Heading1">Contents:</h1>
+<p>Introduction and Contents (this page)</p>
+<p><a href="http://www.bretl.com/mpeghtml/copyr.HTM">Authors' Copyright 
+and Disclaimer</a></p>
+<p><a href="http://www.bretl.com/mpeghtml/version.HTM">Version</a></p>
+<p>&nbsp;</p>
+<h2 class="Heading2"><a 
+href="http://www.bretl.com/mpeghtml/vcbasics.HTM">Video Compression 
+Basics</a></h2>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/vcback.HTM">Background</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/predic.HTM">Prediction</a></h3>
+
+<ul style="list-style-type: disc;" type="DISC">
+	<li><a href="http://www.bretl.com/mpeghtml/predic.HTM"></a>
+	<h4 class="Heading4"><a 
+href="http://www.bretl.com/mpeghtml/cluster.HTM">Example: Coding based 
+on clustering of pixel values</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/cluster.HTM"></a>
+	<h4 class="Heading4"><a 
+href="http://www.bretl.com/mpeghtml/simpdiff.HTM">Simple Differential 
+Predictive Coding</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/simpdiff.HTM"></a>
+	<h4 class="Heading4"><a 
+href="http://www.bretl.com/mpeghtml/framedif.HTM">Frame-Differential 
+Coding</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/framedif.HTM"></a>
+	<h4 class="Heading4"><a 
+href="http://www.bretl.com/mpeghtml/motcomp.HTM">Motion Compensated 
+Prediction</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/motcomp.HTM"></a>
+	<h4 class="Heading4"><a 
+href="http://www.bretl.com/mpeghtml/unpredic.HTM">Unpredictable 
+Information</a></h4>
+</li></ul>
+
+<h3 class="Heading3"><a 
+href="http://www.bretl.com/mpeghtml/xfrmcode.HTM">Transform Coding</a></h3>
+<h3 class="Heading3"><a 
+href="http://www.bretl.com/mpeghtml/lossycod.HTM">Lossy Coding</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/masking.HTM">Masking</a></h3>
+<h3 class="Heading3"><a 
+href="http://www.bretl.com/mpeghtml/varquant.HTM">Variable Quantization</a></h3>
+<h3 class="Heading3"><a 
+href="http://www.bretl.com/mpeghtml/runlevel.HTM">Run-Level Coding</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/enconf.HTM">Encoder
+ Configuration</a></h3>
+
+<ul style="list-style-type: disc;" type="DISC">
+	<li><a href="http://www.bretl.com/mpeghtml/enconf.HTM"></a>
+	<h4 class="Heading4"><a 
+href="http://www.bretl.com/mpeghtml/lossyreq.HTM">Lossy Coding 
+Requirements</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/lossyreq.HTM"></a>
+	<h4 class="Heading4"><a href="http://www.bretl.com/mpeghtml/exam1d.HTM">Example
+ - one-dimensional lossy system</a></h4>
+</li></ul>
+
+<p>&nbsp;</p>
+<h2 class="Heading2"><a href="http://www.bretl.com/mpeghtml/mpeg2vc.HTM">MPEG
+ 2 Video Compression</a></h2>
+<h3 class="Heading3"><a 
+href="http://www.bretl.com/mpeghtml/mpeg2vc1.HTM">Introduction to MPEG 2
+ Video Compression</a></h3>
+<h3 class="Heading3"><a 
+href="http://www.bretl.com/mpeghtml/codecdia1.HTM" target="graphics">MPEG
+ Coder/Decoder Diagram</a></h3>
+<h3 class="Heading3"><a 
+href="http://www.bretl.com/mpeghtml/profiles.HTM" target="graphics">Profiles
+ and Levels</a></h3>
+<h3 class="Heading3"><a 
+href="http://www.bretl.com/mpeghtml/pixtypes.HTM" target="graphics">Frames,
+ Fields, Pictures (I, P, B)</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/reorder.HTM"
+ target="graphics">I P B Picture Reordering</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/pixpos.HTM" 
+target="graphics">Pixel Positioning</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/VCtools.HTM"
+ target="graphics">Compression tools</a></h3>
+
+<ul style="list-style-type: disc;" type="DISC">
+	<li><a href="http://www.bretl.com/mpeghtml/VCtools.HTM" 
+target="graphics"></a>
+	<h4 class="Heading4"><a 
+href="http://www.bretl.com/mpeghtml/quantiz.HTM" target="graphics">MPEG 2
+ Quantization</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/quantiz.HTM" 
+target="graphics"></a>
+	<h4 class="Heading4"><a 
+href="http://www.bretl.com/mpeghtml/mpredic.HTM" target="graphics">MPEG 2
+ Prediction</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/mpredic.HTM" 
+target="graphics"></a>
+	<h4 class="Heading4"><a href="http://www.bretl.com/mpeghtml/DCxfrm.HTM"
+ target="graphics">Discrete Cosine Transform</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/DCxfrm.HTM" 
+target="graphics"></a>
+	<h4 class="Heading4"><a href="http://www.bretl.com/mpeghtml/huffRL.HTM"
+ target="graphics">Huffman/Run-Level Coding</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/huffRL.HTM" 
+target="graphics"></a>
+	<h4 class="Heading4"><a href="http://www.bretl.com/mpeghtml/zigzag.HTM"
+ target="graphics">Zig-Zag Scanning Patterns</a></h4>
+</li></ul>
+
+<h3 class="Heading3"><a 
+href="http://www.bretl.com/mpeghtml/vidstruc.HTM">MPEG 2 Video Data 
+Structures</a></h3>
+
+<ul style="list-style-type: disc;" type="DISC">
+	<li><a href="http://www.bretl.com/mpeghtml/vidstruc.HTM"></a>
+	<h4 class="Heading4"><a href="http://www.bretl.com/mpeghtml/block.HTM">Block</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/block.HTM"></a>
+	<h4 class="Heading4"><a 
+href="http://www.bretl.com/mpeghtml/macroblk.HTM">Macroblock</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/macroblk.HTM"></a>
+	<h4 class="Heading4"><a href="http://www.bretl.com/mpeghtml/fldfrm.HTM">Field
+ DCT Coding and Frame DCT Coding</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/fldfrm.HTM"></a>
+	<h4 class="Heading4"><a href="http://www.bretl.com/mpeghtml/slice.HTM">Slice</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/slice.HTM"></a>
+	<h4 class="Heading4"><a 
+href="http://www.bretl.com/mpeghtml/picture.HTM">Picture</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/picture.HTM"></a>
+	<h4 class="Heading4"><a href="http://www.bretl.com/mpeghtml/GOP.HTM">Group
+ of Pictures (GOP)</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/GOP.HTM"></a>
+	<h4 class="Heading4"><a 
+href="http://www.bretl.com/mpeghtml/sequence.HTM">Sequence</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/sequence.HTM"></a>
+	<h4 class="Heading4"><a 
+href="http://www.bretl.com/mpeghtml/pespckt.HTM">PES Packets and 
+Elementary Streams</a></h4>
+</li></ul>
+
+<h2 class="Heading2">&nbsp;</h2>
+<h2 class="Heading2"><a 
+href="http://www.bretl.com/mpeghtml/dataxprt.HTM">MPEG 2 Data Transport</a></h2>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/xprtpkt.HTM">Transport
+ Packets</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/pktdiag.HTM">Transport
+ Packet Diagram</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/xprthdr.HTM">Transport
+ Header</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/adapfld.HTM">Transport
+ Adaptation Field</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/payload.HTM">Transport
+ Payload</a></h3>
+<h2 class="Heading2">&nbsp;</h2>
+<h2 class="Heading2"><a href="http://www.bretl.com/mpeghtml/timebuf.HTM">Timing
+ and Buffer Control</a></h2>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/timemdl.HTM">Timing
+ Model</a></h3>
+<h3 class="Heading3"><a 
+href="http://www.bretl.com/mpeghtml/timediag.HTM" target="graphics">Timing
+ Model Diagram</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/PCR.HTM" 
+target="graphics">PCR - Program Clock Reference</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/STC.HTM" 
+target="graphics">STC - System Time Clock</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/SCR.HTM" 
+target="graphics">SCR - System Clock Reference</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/PTS.HTM" 
+target="graphics">PTS - Presentation Time Stamp</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/DTS.HTM" 
+target="graphics">DTS - Decode Time Stamp</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/mpxprog.HTM"
+ target="graphics">Multiplexed Programs</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/VBV.HTM" 
+target="graphics">VBV - Video Buffering Verifier</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/bufsync.HTM"
+ target="graphics">Buffer Synchronization and Startup</a></h3>
+
+<ul style="list-style-type: disc;" type="DISC">
+	<li><a href="http://www.bretl.com/mpeghtml/bufsync.HTM" 
+target="graphics"></a>
+	<h4 class="Heading4"><a href="http://www.bretl.com/mpeghtml/conBR.HTM">Constant
+ Bit Rate Operation</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/conBR.HTM"></a>
+	<h4 class="Heading4"><a href="http://www.bretl.com/mpeghtml/VarBRr.HTM">Variable
+ Bit Rate Operation</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/VarBRr.HTM"></a>
+	<h4 class="Heading4"><a 
+href="http://www.bretl.com/mpeghtml/startbuf.HTM">Startup</a></h4>
+</li></ul>
+
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/lodelay.HTM"
+ target="graphics">Low Delay Mode</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/STCsync.HTM"
+ target="graphics">Decoder STC Synchronization</a></h3>
+
+<ul style="list-style-type: disc;" type="DISC">
+	<li><a href="http://www.bretl.com/mpeghtml/STCsync.HTM" 
+target="graphics"></a>
+	<h4 class="Heading4"><a 
+href="http://www.bretl.com/mpeghtml/syncloop.HTM">Synchronization Loop 
+Model</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/syncloop.HTM"></a>
+	<h4 class="Heading4"><a href="http://www.bretl.com/mpeghtml/bufreq.HTM">Decoder
+ Buffer Requirements</a></h4>
+	</li><li><a href="http://www.bretl.com/mpeghtml/bufreq.HTM"></a>
+	<h4 class="Heading4"><a 
+href="http://www.bretl.com/mpeghtml/loopchar.HTM">Loop Characteristics</a></h4>
+</li></ul>
+
+<h2 class="Heading2">&nbsp;</h2>
+<h2 class="Heading2"><a href="http://www.bretl.com/mpeghtml/mpegpsi.HTM">MPEG
+ Program Specific Information (PSI)</a></h2>
+<p>&nbsp;</p>
+<h2 class="Heading2"><a 
+href="http://www.bretl.com/mpeghtml/ATSCPSIP.HTM">ATSC Program and 
+System Information Protocol (PSIP)</a></h2>
+<p>&nbsp;</p>
+<h2 class="Heading2"><a href="http://www.bretl.com/mpeghtml/A53spec.HTM">ATSC
+ Doc A/53 Constraints on MPEG</a></h2>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/A53A.HTM">Annex
+ A - Video Constraints</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/A53B.HTM">Annex
+ B - Audio System</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/A53C.HTM">Annex
+ C - Multiplex and Transport</a></h3>
+<h3 class="Heading3"><a href="http://www.bretl.com/mpeghtml/A53D.HTM">Annex
+ D - RF/Transmission System</a></h3>
+<p>&nbsp;</p>
+<h2 class="Heading2"><a href="http://www.bretl.com/mpeghtml/stds.HTM">Standards</a></h2>
+<h3 class="Heading3"><a 
+href="http://www.bretl.com/mpeghtml/ATSCstds.HTM">ATSC Standards</a></h3>
+<h3 class="Heading3"><a 
+href="http://www.bretl.com/mpeghtml/MPEGstds.HTM">MPEG Standards</a></h3>
+<p>&nbsp;</p>
+<h2 class="Heading2"><a 
+href="http://www.bretl.com/mpeghtml/glossfrm.htm">Glossary</a></h2>
+<h3 class="Heading3">&nbsp;<a href="http://www.bretl.com/index.html"><img
+ src="MPEGindex_files/home1.jpg" height="59" width="51" align="BOTTOM" 
+border="0"></a>
+
+</h3></body></html>

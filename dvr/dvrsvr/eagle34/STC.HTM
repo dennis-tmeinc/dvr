@@ -1,0 +1,58 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+
+
+	<meta name="VPSiteProject" 
+content="file:///C|/Bretl%20Site%20copy/BretlSite.vpp"><meta 
+name="generator" content="HyperText Studio from Olson Software 
+(http://www.olsonsoft.com)">
+<meta name="formatter" content="HyperText Studio from Olson Software 
+(http://www.olsonsoft.com)">
+<title>STC - System Time Clock</title>
+<style><!-- body { }
+H1{}
+H6{}
+H5{}
+H3{}
+H2{}
+P{}
+H4{}
+.DefaultParagraphFont{}
+ --></style>
+</head><body>
+<banner>
+
+<p><font face="Arial" size="5"><span class="DefaultParagraphFont" 
+style="font-size: 16pt;"><b>STC - System Time Clock</b></span></font><font
+ face="Arial" size="3"><span class="DefaultParagraphFont" 
+style="font-size: 10pt;"></span></font></p></banner>
+
+<p><font face="Arial" size="3"><span class="DefaultParagraphFont" 
+style="font-size: 10pt;">The System Time Clock (STC) uses a 27 MHz 
+oscillator with a worst case tolerance of +/- 810 Hz. &nbsp;[Note that 
+this is a looser tolerance than that of the NTSC color subcarrier. 
+&nbsp;The ATSC standard therefore contains a tighter constraint on the 
+transmitted data rate so that it may be used if desired to regenerate 
+the NTSC color carrier in equipment intended to feed an NTSC receiver. 
+&nbsp;As discussed in the section </span></font><a 
+href="http://www.bretl.com/mpeghtml/timemdl.HTM"><font face="Arial" 
+size="3"><span class="DefaultParagraphFont" style="font-size: 10pt;">Timing
+ Model</span></font></a><font face="Arial" size="3"><span 
+class="DefaultParagraphFont" style="font-size: 10pt;"> , the data and 
+STC frequencies are independent.] There is a means provided to signal to
+ the receiver the actual accuracy of the system time clock if it is 
+better than the minimum allowed.</span></font></p>
+<p><font face="Arial" size="3"><span class="DefaultParagraphFont" 
+style="font-size: 10pt;">The STC first divides the the 27MHz by 300, 
+giving a 90kHz clock that is counted by a 33 bit counter to give the 
+base STC value. &nbsp;The remainder is taken as a 9-bit value that may 
+be used as an STC extension.</span></font></p>
+<p><a href="http://www.bretl.com/mpeghtml/PCR.HTM">Previous: PCR - 
+Program Clock Reference</a></p>
+<p><a href="http://www.bretl.com/mpeghtml/SCR.HTM">Next: SCR - System 
+Clock Reference</a></p>
+<p><a href="http://www.bretl.com/mpeghtml/timebuf.HTM">Up to Timing and 
+Buffer Control</a></p>
+<p>&nbsp;</p></body></html>

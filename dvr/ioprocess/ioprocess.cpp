@@ -394,11 +394,14 @@ int serial_open(char * device, int buadrate)
    
     hserial = open( device, O_RDWR | O_NOCTTY );
     if( hserial > 0 ) {
+#ifdef EAGLE32        
         if( strcmp( device, "/dev/ttyS1")==0 ) {    // this is hikvision specific serial port
             // Use Hikvision API to setup serial port (RS485)
             InitRS485(hserial, buadrate, DATAB8, STOPB1, NOPARITY, NOCTRL);
         }
-        else {
+        else 
+#endif            
+        {
             struct termios tios ;
             speed_t baud_t ;
             tcgetattr(hserial, &tios);
@@ -467,17 +470,17 @@ int mcu_dataready(int usdelay=MIN_SERIAL_DELAY, int * usremain=NULL)
     if( mcu_handle<=0 ) {
         return 0;
     }
-    if( mcu_buffer_len > 0 ) {       // buffer available?
+    if( mcu_buffer_len > mcu_buffer_pointer ) {       // buffer available?
         if( usremain ) {
             *usremain = usdelay ;
         }
-        return mcu_buffer_len ;
+        return 1 ;
     }
     if( serial_dataready( mcu_handle, usdelay, usremain ) ) {
         mcu_buffer_pointer=0 ;
         mcu_buffer_len = read(mcu_handle, mcu_buffer, MCU_BUFFER_SIZE);
         if( mcu_buffer_len > 0 ) {       // buffer available?
-            return mcu_buffer_len ;
+            return 1 ;
         }
     }
     if( usremain ) {
@@ -487,17 +490,17 @@ int mcu_dataready(int usdelay=MIN_SERIAL_DELAY, int * usremain=NULL)
     return 0;
 }
 
-char mcu_readdata()
+// read one byte from mcu
+int mcu_readbyte(char * b, int timeout=MIN_SERIAL_DELAY)
 {
-    mcu_buffer_len-- ;
+    if( mcu_dataready(timeout) ) {
+        *b = mcu_buffer[mcu_buffer_pointer++];
 #ifdef MCU_DEBUG
-    char d ;
-    d = mcu_buffer[mcu_buffer_pointer++];
-    printf("%02x ", (int)d );
-    return d ;
-#else        
-    return mcu_buffer[mcu_buffer_pointer++] ;
+        printf( "%02x ", (int)*b );
 #endif
+        return 1 ;
+    }
+    return 0 ;
 }
 
 int mcu_read(char * sbuf, size_t bufsize, int wait=MIN_SERIAL_DELAY, int interval=MIN_SERIAL_DELAY)
@@ -505,26 +508,24 @@ int mcu_read(char * sbuf, size_t bufsize, int wait=MIN_SERIAL_DELAY, int interva
     size_t nread=0 ;
     if( mcu_dataready(wait) ) {
         while( nread<bufsize ) {
-            if( mcu_dataready(interval) ) {
-                sbuf[nread++] = mcu_readdata();
+            if( mcu_readbyte(sbuf+nread, interval) ) {
+                nread++;
             }
             else {
-                break ;
+                break;
             }
         }
     }
     return nread ;
 }
 
-int mcu_write(void * buf, size_t bufsize)
+int mcu_write(void * buf, int bufsize)
 {
     if( mcu_handle>0 ) {
 #ifdef MCU_DEBUG
-        size_t i ;
-        char * cbuf ;
-        cbuf = (char *)buf ;
-        for( i=0; i<bufsize ; i++ ) {
-            printf("%02x ", (int)cbuf[i] );
+        int i;
+        for(i=0;i<bufsize;i++) {
+            printf( "%02x ", (int)(((char *)buf)[i]) );
         }
 #endif
         return write( mcu_handle, buf, bufsize);
@@ -540,21 +541,14 @@ void mcu_clear(int delay=MIN_SERIAL_DELAY)
     printf("clear: ");
 #endif     
     for(i=0;i<10000;i++) {
-        if( mcu_dataready(delay, &delay) ) {
-#ifdef MCU_DEBUG
-            mcu_readdata();
-#else
-            mcu_buffer_len=0;
-#endif            
-        }
-        else {
+        char c ;
+        if( mcu_readbyte(&c, delay)==0 ) {
             break;
         }
     }
 #ifdef MCU_DEBUG
     printf("\n");
 #endif                
-    mcu_buffer_len = 0 ;
 }
 
 // initialize serial port

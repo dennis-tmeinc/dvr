@@ -179,36 +179,39 @@ void eagle_capture::streamcallback(
         return;
     }
 #endif
-    
-    capframe.channel = m_channel ;
-    capframe.framesize = size ;
-    capframe.frametype = xframetype ;
-    
-    capframe.framedata = (char *) mem_alloc( capframe.framesize );
-    if( capframe.framedata == NULL ) {
-        return ;
-    }
-    mem_cpy32(capframe.framedata, buf, size ) ;
 
-/*
-    if( xframetype == FRAMETYPE_AUDIO ||
-        xframetype == FRAMETYPE_KEYVIDEO ||
-        xframetype == FRAMETYPE_VIDEO ) 
-    {
-        // replace hik time stamp.
-        struct hd_frame * pframe  = (struct hd_frame *) capframe.framedata ;
-        if( eagle32_tsadjust ==0 ) {
-            struct timeval tv ;
-            gettimeofday(&tv, NULL);
-            eagle32_tsadjust = (tv.tv_sec%86400)*64 + tv.tv_usec * 64 / 1000000 - pframe->timestamp ;
+        
+    if( dio_record || net_active ) {            // record or send frame only when necessary. 
+        capframe.channel = m_channel ;
+        capframe.framesize = size ;
+        capframe.frametype = xframetype ;
+
+        capframe.framedata = (char *) mem_alloc( capframe.framesize );
+        if( capframe.framedata == NULL ) {
+            return ;
         }
-        pframe->timestamp += eagle32_tsadjust ;
-    }
-*/
-    // send frame
-    onframe(&capframe);
-    mem_free(capframe.framedata);
+        mem_cpy32(capframe.framedata, buf, size ) ;
 
+        /* // change time stamp
+        if( xframetype == FRAMETYPE_AUDIO ||
+            xframetype == FRAMETYPE_KEYVIDEO ||
+            xframetype == FRAMETYPE_VIDEO ) 
+        {
+            // replace hik time stamp.
+            struct hd_frame * pframe  = (struct hd_frame *) capframe.framedata ;
+            if( eagle32_tsadjust ==0 ) {
+                struct timeval tv ;
+                gettimeofday(&tv, NULL);
+                eagle32_tsadjust = (tv.tv_sec%86400)*64 + tv.tv_usec * 64 / 1000000 - pframe->timestamp ;
+            }
+            pframe->timestamp += eagle32_tsadjust ;
+        }
+        */
+            
+        // send frame
+        onframe(&capframe);
+        mem_free(capframe.framedata);
+    }
 }
 
 void eagle_capture::start()

@@ -2008,8 +2008,7 @@ int main()
 
         if( app_state==1 && 
             gps_port_disable==0 &&
-            p_dio_mmap->iomode >= IOMODE_RUN &&
-            p_dio_mmap->iomode <= IOMODE_SHUTDOWNDELAY )
+            (p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) )
         {
             r=gps_readdata(&gpsdata) ;
             if( r==1 ) {      // read a GPRMC sentence?
