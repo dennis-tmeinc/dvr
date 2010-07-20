@@ -2,7 +2,7 @@
 echo Start update mDVR firmware...
 echo Kill processes...
 if [ -f /var/dvr/dvrsvr.pid ] ; then
-  kill `cat /var/dvr/dvrsvr.pid` 
+  kill -USR1 `cat /var/dvr/dvrsvr.pid` 
 fi
 
 if [ -f /var/dvr/glog.pid ] ; then
@@ -32,13 +32,13 @@ if [ -f /var/dvr/mcuversion ] ; then
 
 fi
 
-for i in 1 2 3 4 5 6 7 8 9 10 ; do
-  if [ -f /var/dvr/dvrsvr.pid ] ; then
-    sleep 2
-  else
-    break;
-  fi
-done
+#for i in 1 2 3 4 5 6 7 8 9 10 ; do
+#  if [ -f /var/dvr/dvrsvr.pid ] ; then
+#    sleep 2
+#  else
+#    break;
+#  fi
+#done
 
 for i in 1 2 3 4 5 6 7 8 9 10 ; do
   if [ -f /var/dvr/glog.pid ] ; then

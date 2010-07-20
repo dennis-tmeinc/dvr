@@ -22,7 +22,11 @@ LDFLAGS= -lpthread -lstdc++
 #CFLAGS=-I../dvrsvr -g -Wall
 CFLAGS=-g -Wall
 
-all : gentest
+all : v4ltest
+
+v4ltest : v4ltest.cpp
+	$(CC) $(CFLAGS) -o v4ltest v4ltest.cpp $(LDFLAGS)
+	cp v4ltest  $(debug_folder)
 
 serialtest : $(OBJS) $(HEADERS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)

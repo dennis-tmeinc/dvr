@@ -11,12 +11,18 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <linux/fb.h>
-#include "eagle32/davinci_sdk.h"
+
 #include "dvr.h"
 
 #include "fbwindow.h"
 
-extern int eagle32_channels ;
+#ifdef EAGLE32
+#include "eagle32/davinci_sdk.h"
+#endif
+
+#ifdef EAGLE34
+#include "eagle34/davinci_sdk.h"
+#endif
 
 #define MAIN_OUTPUT  (0)
 
@@ -185,6 +191,7 @@ void dio_pwii_standby( int standby );
 
 #define MAXPOLICIDLISTLINE (6)
 
+#ifdef PWII_APP
 // status window on video screen
 class pwii_menu : public window {
         int m_level ;           // 0: top level, 1: Enter Officer ID, 2: Enter classification number
@@ -412,6 +419,8 @@ class pwii_menu : public window {
         }
 };
 
+#endif
+
 class video_screen : public window {
 
     protected:
@@ -476,15 +485,17 @@ class video_screen : public window {
             if( m_videomode <= VIDEO_MODE_PLAYBACK ) {
                 startliveview(m_playchannel);
             }
+#ifdef PWII_APP        
             startmenu() ;
-
             pwii_menu * pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN ) ;
             if( pmenu ) {
                 pmenu->level(level);
             }
+#endif      // PWII_APP        
+            
             updatestatus();
         }
-
+        
         // select audio 
         void select(int s) {
             if( m_select != s ) {
@@ -502,7 +513,9 @@ class video_screen : public window {
         // stop every thing?
         void stop() {
             stopdecode();
+#ifdef PWII_APP        
             stopmenu();
+#endif            
             stopliveview();
         }
         
@@ -531,7 +544,9 @@ class video_screen : public window {
 
         virtual void oncommand( int id, void * param ) {	// children send command to parent
             if( id == CMD_MENUOFF ) {
+#ifdef PWII_APP        
                 stopmenu();
+#endif  // PWII_APP                
             }
     	}
 
@@ -552,10 +567,10 @@ class video_screen : public window {
                 m_playchannel == channel ) 
             {
                 if( m_select ) {
-                    SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_liveaudio);
+                    SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),screen_liveaudio);
                 }
                 else {
-                    SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,0);
+                    SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),0);
                 }
                 return ;
             }
@@ -563,12 +578,12 @@ class video_screen : public window {
 
             if( channel < eagle32_channels ) {
                 m_playchannel = channel ;
-                SetPreviewScreen(MAIN_OUTPUT,m_playchannel+1,1);
+                SetPreviewScreen(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),1);
                 if( m_select ) {
-                    SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_liveaudio);
+                    SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),screen_liveaudio);
                 }
                 else {
-                    SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,0);
+                    SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),0);
                 }
                 m_videomode = VIDEO_MODE_LIVE ;
             }
@@ -578,19 +593,20 @@ class video_screen : public window {
         void stopliveview() {
             if( m_videomode == VIDEO_MODE_LIVE ) 
             {
-                SetPreviewScreen(MAIN_OUTPUT,m_playchannel+1,0);
-                SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,0);
+                SetPreviewScreen(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),0);
+                SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),0);
                 m_videomode = VIDEO_MODE_NONE ; 
             }
         }
 
+#ifdef PWII_APP        
         void startmenu() {
 //            stop();
             new pwii_menu(this, ID_MENU_SCREEN, 0, 0, m_pos.w, m_pos.h);
             m_videomode= VIDEO_MODE_MENU ;
             updatestatus();
         }
-        
+
         void stopmenu() {
             if( m_videomode == VIDEO_MODE_MENU ) 
             {
@@ -603,6 +619,7 @@ class video_screen : public window {
                 updatestatus();
             }
         }
+#endif  // PWII_APP        
         
         void restartdecoder() {
             StopDecode( m_decode_handle );
@@ -1007,7 +1024,7 @@ class video_screen : public window {
                     }
                     else if( m_videomode == VIDEO_MODE_LIVE ) { // live mode
                         screen_liveaudio = !screen_liveaudio ;
-						SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_liveaudio);
+						SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),screen_liveaudio);
 					}
                     //                    m_decode_runmode = DECODE_MODE_FORWARD ;
                 }
@@ -1028,11 +1045,13 @@ class video_screen : public window {
                         }
                     }
                     else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
+#ifdef PWII_APP        
                         pwii_menu * pmenu ;                // menu
                         pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
                         if( pmenu ) {
                             pmenu->cancel();
                         }
+#endif                        
                     }
                 }
                 else if( keycode == VK_MEDIA_STOP ) {      // stop playback if in playback mode, enter menu mode if in live view mode
@@ -1045,15 +1064,19 @@ class video_screen : public window {
                         settimer( 5000, keycode );
 #endif
 */
+#ifdef PWII_APP        
                         // bring up menu mode
                         startmenu();
+#endif      /// PWII_APP        
                     }
                     else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
+#ifdef PWII_APP        
                         pwii_menu * pmenu ;                // menu
                         pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
                         if( pmenu ) {
                             pmenu->enter();
                         }
+#endif      // PWII_APP        
                     }
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
                         m_icon->seticon( "stop.pic" );   
@@ -1078,7 +1101,7 @@ class video_screen : public window {
                     if( m_videomode==VIDEO_MODE_LIVE ) {   // live, black LCD
                         // switch live view channel
                         int ch = m_playchannel-1 ;
-                        if( ch<0 ) ch=1 ;
+                        if( ch<0 ) ch=cap_channels-1 ;
                         startliveview(ch);
                     }
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
@@ -1086,18 +1109,20 @@ class video_screen : public window {
                         m_icon->seticon( "rwd.pic" );
                     }
                     else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
+#ifdef PWII_APP        
                         pwii_menu * pmenu ;                // menu
                         pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
                         if( pmenu ) {
                             pmenu->prev();
                         }
+#endif      // PWII_APP        
                     }
                 }
                 else if( keycode == VK_NEXT ) { //  jump forward.
                     if( m_videomode==VIDEO_MODE_LIVE ) {   // live, black LCD
                         // switch live view channel
                         int ch = m_playchannel+1 ;
-                        if( ch>=2 ) ch = 0 ;
+                        if( ch>=cap_channels ) ch = 0 ;
                         startliveview(ch);
                     }
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
@@ -1105,11 +1130,13 @@ class video_screen : public window {
                         m_icon->seticon( "fwd.pic" );
                     }
                     else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
+#ifdef PWII_APP        
                         pwii_menu * pmenu ;                // menu
                         pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
                         if( pmenu ) {
                             pmenu->next();
                         }
+#endif      // PWII_APP        
                     }
                 }
 //                else if( keycode == VK_EM ) { //  event marker key
@@ -1141,7 +1168,7 @@ class video_screen : public window {
 				else if( keycode == VK_SILENCE ) { //  switch audio on <--> off 
 					if( m_videomode == VIDEO_MODE_LIVE ) { // live mode
                         screen_liveaudio = !screen_liveaudio ;
-						SetPreviewAudio(MAIN_OUTPUT,m_playchannel+1,screen_liveaudio);
+						SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),screen_liveaudio);
 					}
 //					else {
 //						SetDecodeAudio(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 1);
@@ -1669,6 +1696,8 @@ void screen_init()
     screen_liveview_channel = -1 ;
     screen_liveview_handle = 0 ;
 
+//    void MenuApiTest();
+//    MenuApiTest();
 }
 
 // screen finish, clean up
@@ -1699,3 +1728,138 @@ void screen_uninit()
 
     draw_finish();
 }
+
+#ifdef EAGLE34
+
+void MenuApiTest()
+{
+    unsigned char * pDstY;
+    unsigned char * pDstUV;
+    struct SDK_MENU_BUF_PARAM MenuBufParam;
+    struct SDK_MENU_DISP_PARAM  MenuParam;
+    struct SDK_MENU_REFRESH_PARAM MenuRefresh;
+
+    GetMenuBufParam(&MenuBufParam);
+    pDstY = MenuBufParam.pMenuY;
+    pDstUV = MenuBufParam.pMenuU;
+
+    int x, y ;
+    for( y=0; y<128; y++) {
+        for( x=0; x<128; x++ ) {
+            pDstY[(y+80)*MenuBufParam.MenuBufW+x+80]=60+x ;
+            if( x%2==0 ) {
+                pDstUV[(y+80)*MenuBufParam.MenuBufW/2+(x+80)/2]=0x10 ;
+            }
+        }
+    }
+    
+    memset((unsigned char *)&MenuParam,0,sizeof(MenuParam));
+    MenuParam.index = MAIN_OUTPUT;
+    MenuParam.bFilter = 1;
+    MenuParam.bFullScreen = 0;
+    MenuParam.DispParam[0].bEnable = 1;
+    MenuParam.DispParam[0].menuAlpha = SDK_ALPHA_MENU_BACK_NONE;
+    MenuParam.DispParam[0].x = 80;
+    MenuParam.DispParam[0].y = 80;
+    MenuParam.DispParam[0].w = 128;
+    MenuParam.DispParam[0].h = 128;
+    SetMenuDispParam(&MenuParam);
+    
+    MenuRefresh.index = MAIN_OUTPUT;
+    MenuRefresh.bFullScreenRefresh = 0;
+    MenuRefresh.x = 80;
+    MenuRefresh.y = 80;
+    MenuRefresh.w = 128;
+    MenuRefresh.h = 128;
+    RefreshMenuDisp(&MenuRefresh);
+
+}    
+
+#endif  // EAGLE34
+
+/*
+void MenuApiTest()
+{
+    int MenuX = 16 ;
+    int MenuY = 16 ;
+    int	fd,size;
+    unsigned char * p420Y = NULL;
+    unsigned char * p420UV = NULL;
+    int picW = 92;
+    int picH = 92;
+    unsigned char * pDstY;
+    unsigned char * pDstUV;
+    int ret;
+    struct SDK_MENU_BUF_PARAM MenuBufParam;
+
+    fd = open("/dav/92_92.yuv",O_RDONLY);
+    if(fd<=0)
+    {
+        printf("open the picture file fail\n");
+        return ;
+    }
+    size = picH *picW;//length of y
+    p420Y = (UINT8 *)malloc(size);
+    if(p420Y == NULL)
+    {
+        printf("malloc fail!\n");
+        return;
+    }
+
+    size = picW*picH/2;//length of uv (uv pack)
+
+    p420UV = (UINT8 *)malloc(size);
+    if(p420UV == NULL)
+    {
+        printf("malloc fail!\n");
+        free(p420Y);
+        return;
+    }
+    lseek(fd,0,SEEK_SET);
+    ret = read(fd,p420Y,picW*picH);//read y data
+    if(ret != picW*picH)
+    {
+        printf("read y data fail !\n");
+        free(p420Y);
+        free(p420UV);
+        return;
+    }
+    ret = read(fd,p420UV,picW*picH/2);//read uv data(uv pack)
+    if(ret != picW*picH/2)
+    {
+        printf("read uv data fail !\n");
+        free(p420Y);
+        free(p420UV);
+        return;
+    }
+    GetMenuBufParam(&MenuBufParam);
+    pDstY = MenuBufParam.pMenuY + MenuY*MenuBufParam.MenuBufW + MenuX;
+    pDstUV = MenuBufParam.pMenuU + (MenuY>>1)*MenuBufParam.MenuBufW + MenuX;
+    CopyData(p420Y,picW,pDstY,MenuBufParam.MenuBufW,picW,picH);
+    CopyData(p420UV,picW,pDstUV,MenuBufParam.MenuBufW,picW,picH/2);
+    free(p420Y);
+    free(p420UV);
+    close(fd);
+    struct SDK_MENU_DISP_PARAM  MenuParam;
+    memset((unsigned char *)&MenuParam,0,sizeof(MenuParam));
+    MenuParam.index = MAIN_OUTPUT;
+    MenuParam.bFilter = 1;
+    MenuParam.bFullScreen = 0;
+    MenuParam.DispParam[0].bEnable = 1;
+    MenuParam.DispParam[0].menuAlpha = SDK_ALPHA_MENU_BACK_NONE;
+    MenuParam.DispParam[0].x = MenuX;
+    MenuParam.DispParam[0].y = MenuY;
+    MenuParam.DispParam[0].w = picW;
+    MenuParam.DispParam[0].h = picH;
+    SetMenuDispParam(&MenuParam);
+    struct SDK_MENU_REFRESH_PARAM MenuRefresh;
+    MenuRefresh.index = MAIN_OUTPUT;
+    MenuRefresh.bFullScreenRefresh = 0;
+    MenuRefresh.x = MenuX;
+    MenuRefresh.y = MenuY;
+    MenuRefresh.w = (picW+7)&(~7);
+    MenuRefresh.h = picH;
+    RefreshMenuDisp(&MenuRefresh);
+    printf("buf W=%d H=%d\n",MenuBufParam.MenuBufW,MenuBufParam.MenuBufH);
+}
+*/

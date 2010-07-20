@@ -1,0 +1,266 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html><head><meta content="text/html; charset=ISO-8859-1" http-equiv="content-type"><title>PS Stream Format</title></head><body><br>
+Key Frame Format<br>
+&nbsp;&nbsp;&nbsp; &nbsp;&nbsp; Key frame contain one PS pack header and multiple packs<br>
+&nbsp;
+<table style="text-align: left; width: 100%;" border="1" cellpadding="2" cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">Name<br>
+      </td>
+      <td style="vertical-align: top;">Number of Bytes<br>
+      </td>
+      <td style="vertical-align: top;">Description<br>
+      </td>
+      <td style="vertical-align: top;">Example<br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Sync Bytes<br>
+      </td>
+      <td style="vertical-align: top;">4<br>
+      </td>
+      <td style="vertical-align: top;">PS pack header mark (ba)<br>
+      </td>
+      <td style="vertical-align: top;">00 00 01 ba<br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">PS Pack Header<br>
+      </td>
+      <td style="vertical-align: top;">16<br>
+      </td>
+      <td style="vertical-align: top;">Contain System Clock(time stamp) and marker bits<br>
+Ref: http://en.wikipedia.org/wiki/MPEG_program_stream<br>
+      </td>
+      <td style="vertical-align: top;">Always 16 bytes from Eagle34 board</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Sync Bytes<br>
+      </td>
+      <td style="vertical-align: top;">4<br>
+      </td>
+      <td style="vertical-align: top;">Pack mark (bc)<br>
+      </td>
+      <td style="vertical-align: top;">00 00 01 bc<br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Pack size<br>
+      </td>
+      <td style="vertical-align: top;">2<br>
+      </td>
+      <td style="vertical-align: top;">Size of pack<br>
+      </td>
+      <td style="vertical-align: top;">00 52<br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Pack payload<br>
+      </td>
+      <td style="vertical-align: top;">(Pack size)<br>
+      </td>
+      <td style="vertical-align: top;">Contents of pack<br>
+      </td>
+      <td style="vertical-align: top;"><br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Sync Bytes<br>
+      </td>
+      <td style="vertical-align: top;">4<br>
+      </td>
+      <td style="vertical-align: top;">Pack mark (e0)<br>
+      </td>
+      <td style="vertical-align: top;">00 00 01 e0<br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Pack size<br>
+      </td>
+      <td style="vertical-align: top;">2<br>
+      </td>
+      <td style="vertical-align: top;">Size of pack<br>
+      </td>
+      <td style="vertical-align: top;">50 8e<br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Pack payload<br>
+      </td>
+      <td style="vertical-align: top;">(Pack size)<br>
+      </td>
+      <td style="vertical-align: top;">Contents of pack<br>
+      </td>
+      <td style="vertical-align: top;"><br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">...<br>
+      </td>
+      <td style="vertical-align: top;"><br>
+      </td>
+      <td style="vertical-align: top;">Multiple packs (e0)<br>
+      </td>
+      <td style="vertical-align: top;"><br>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+<br>
+
+Video P Frame Format<br>
+
+&nbsp;&nbsp;&nbsp; &nbsp;&nbsp; P frame contain one PS pack header and multiple packs (e0 only)<br>
+
+&nbsp;
+<table style="text-align: left; width: 100%;" border="1" cellpadding="2" cellspacing="0">
+
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">Name<br>
+      </td>
+      <td style="vertical-align: top;">Number of Bytes<br>
+      </td>
+      <td style="vertical-align: top;">Description<br>
+      </td>
+      <td style="vertical-align: top;">Example<br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Sync Bytes<br>
+      </td>
+      <td style="vertical-align: top;">4<br>
+      </td>
+      <td style="vertical-align: top;">PS pack header mark (ba)<br>
+      </td>
+      <td style="vertical-align: top;">00 00 01 ba<br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">PS Pack Header<br>
+      </td>
+      <td style="vertical-align: top;">16<br>
+      </td>
+      <td style="vertical-align: top;">Contain System Clock(time stamp) and marker bits<br>
+</td>
+      <td style="vertical-align: top;">Always 16 bytes from Eagle34 board
+      </td>
+    </tr>
+    
+    
+    
+    <tr>
+      <td style="vertical-align: top;">Sync Bytes<br>
+      </td>
+      <td style="vertical-align: top;">4<br>
+      </td>
+      <td style="vertical-align: top;">Pack mark (e0)<br>
+      </td>
+      <td style="vertical-align: top;">00 00 00 e0<br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Pack size<br>
+      </td>
+      <td style="vertical-align: top;">2<br>
+      </td>
+      <td style="vertical-align: top;">Size of pack<br>
+      </td>
+      <td style="vertical-align: top;">50 8e<br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Pack payload<br>
+      </td>
+      <td style="vertical-align: top;">(Pack size)<br>
+      </td>
+      <td style="vertical-align: top;">Contents of pack<br>
+      </td>
+      <td style="vertical-align: top;"><br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">...<br>
+      </td>
+      <td style="vertical-align: top;"><br>
+      </td>
+      <td style="vertical-align: top;">Multiple packs (e0)<br>
+      </td>
+      <td style="vertical-align: top;"><br>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<br>
+<br>
+
+Audio Frame Format<br>
+
+
+&nbsp;&nbsp;&nbsp; &nbsp;&nbsp; Audio frame contain one pack (c0 only)<br>
+
+
+&nbsp;
+<table style="text-align: left; width: 100%;" border="1" cellpadding="2" cellspacing="0">
+
+
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">Name<br>
+      </td>
+      <td style="vertical-align: top;">Number of Bytes<br>
+      </td>
+      <td style="vertical-align: top;">Description<br>
+      </td>
+      <td style="vertical-align: top;">Example<br>
+      </td>
+    </tr>
+    
+    
+    
+    
+    
+    <tr>
+      <td style="vertical-align: top;">Sync Bytes<br>
+      </td>
+      <td style="vertical-align: top;">4<br>
+      </td>
+      <td style="vertical-align: top;">Pack mark (c0)<br>
+      </td>
+      <td style="vertical-align: top;">00 00 00 c0<br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Pack size<br>
+      </td>
+      <td style="vertical-align: top;">2<br>
+      </td>
+      <td style="vertical-align: top;">Size of pack<br>
+      </td>
+      <td style="vertical-align: top;">50 8e<br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">Pack payload<br>
+      </td>
+      <td style="vertical-align: top;">(Pack size)<br>
+      </td>
+      <td style="vertical-align: top;">Contents of pack<br>
+      </td>
+      <td style="vertical-align: top;"><br>
+      </td>
+    </tr>
+    
+  </tbody>
+</table>
+
+
+<br>
+
+<br>
+<br>
+<br>
+</body></html>

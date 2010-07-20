@@ -20,10 +20,10 @@ enum REC_STATE {
 };
 
 struct rec_fifo {
+    REC_STATE rectype;          // recording type
     struct dvrtime time;        // captured time
     int key;                    // a key frame
     int bufsize;
-    REC_STATE rectype;          // recording type
     char *buf;
     struct rec_fifo *next;
 };
@@ -171,7 +171,7 @@ class rec_channel {
 
 };
 
-static rec_channel **recchannel;
+static rec_channel * recchannel[MAXCHANNEL];
 static int rec_channels;
 
 int rec_maxfilesize;
@@ -187,9 +187,9 @@ rec_channel::rec_channel(int channel)
     // initialize fifo lock
     memcpy( &m_mutex, &mutex_init, sizeof(mutex_init));
     lock();
+    
     m_fifohead = m_fifotail = NULL;
     m_fifosize = 0 ;
-    unlock();
 
     m_channel = channel;
     sprintf(cameraname, "camera%d", m_channel+1 );
@@ -282,7 +282,8 @@ rec_channel::rec_channel(int channel)
         m_trigger_starttime = g_timetick ;
     }
 #endif
-    
+
+    unlock();
 }
 
 rec_channel::~rec_channel()
@@ -457,7 +458,6 @@ void *rec_filecopy(void *param)
     struct file_copy_struct * fc=(struct file_copy_struct *)param;
     FILE * source ;
     FILE * dest ;
-    char * buf ;
     int  rdsize ;
     int totalsize ;
     dvrtime starttime, endtime ;
@@ -477,12 +477,12 @@ void *rec_filecopy(void *param)
     dvr_log("filecopy: dest-%s", fc->destname );
     fc->start=1;
     totalsize = 0 ;
-    buf = (char *)mem_alloc(1024) ;
-    while( (rdsize=file_read(buf, 1024, source))>0 ) {
+
+    char buf[4096] ;
+    while( (rdsize=file_read(buf, sizeof(buf), source))>0 ) {
         totalsize+=file_write(buf, rdsize, dest);
         sleep(1);
     }
-    mem_free( buf );
     file_close( source );
     file_close( dest );
     time_now(&endtime);
@@ -1060,7 +1060,11 @@ void rec_init()
     
     rec_threadid=0 ;
     rec_channels=0 ;
-    recchannel=NULL ;
+
+    for (i = 0; i < MAXCHANNEL; i++) {
+        recchannel[i]=NULL ;
+    }
+
     if( dvrconfig.getvalueint("system", "norecord")>0 ) {
         dvr_log( "Dvr no recording mode."); 
     }
@@ -1069,8 +1073,10 @@ void rec_init()
         if( rec_channels<=0 ) {
             rec_channels = cap_channels ;
         }
+        if( rec_channels>MAXCHANNEL ) {
+            rec_channels = MAXCHANNEL ;
+        }
         if( rec_channels > 0 ) {
-            recchannel =  new rec_channel * [ rec_channels ];
             for (i = 0; i < rec_channels; i++) {
                 recchannel[i]=new rec_channel( i ) ;
             }
@@ -1089,33 +1095,34 @@ void rec_init()
 void rec_uninit()
 {
     rec_run = 0;
-    if( recchannel ) {
-        // stop rec_thread
-        rec_stop() ;
-        
-        // wait for pre-lock threads to finish
-        int delay;
-        for( delay=0; delay<3000; delay++ ) {
-            if( rec_prelock_lock ) {
-                usleep(100000);
-            }
-            else {
-                break;
-            }
-        }
-        
-        if( rec_threadid ) {
-            pthread_join(rec_threadid, NULL);
-            rec_threadid = 0 ;
-        }
+    // stop rec_thread
+    rec_stop() ;
 
-        while( rec_channels>0 ) {
-            delete recchannel[--rec_channels] ;
+    // wait for pre-lock threads to finish
+    int delay;
+    for( delay=0; delay<3000; delay++ ) {
+        if( rec_prelock_lock ) {
+            usleep(100000);
         }
-        delete recchannel ;
-        recchannel=NULL ;
-        dvr_log("Record uninitialized.");
+        else {
+            break;
+        }
     }
+
+    if( rec_threadid ) {
+        pthread_join(rec_threadid, NULL);
+        rec_threadid = 0 ;
+    }
+
+    while( rec_channels>0 ) {
+        --rec_channels ;
+        if( recchannel[rec_channels] ) {
+            delete recchannel[rec_channels] ;
+            recchannel[rec_channels] = 0 ;
+        }
+    }
+    dvr_log("Record uninitialized.");
+
 }
 
 void rec_onframe(cap_frame * pframe)
@@ -1217,9 +1224,6 @@ void rec_alarm()
 // open new created file for reading. new vidoe file copying support
 FILE * rec_opennfile(int channel, struct nfileinfo * nfi )
 {
-    if (channel>=0 && channel < rec_channels) {
-        return NULL;
-    }
     return NULL ;
 }
 
@@ -1230,7 +1234,7 @@ extern int pwii_rear_ch ;          // pwii real camera channel
 
 void rec_pwii_toggle_rec_front()
 {
-    if( rec_channels > 1 ) {
+    if( rec_channels > pwii_front_ch && rec_channels > pwii_front_ch ) {
         screen_setliveview(pwii_front_ch);                              // start live view front camera
         int state1 = recchannel[pwii_front_ch]->getforcerecording() ;
         if( state1 == 0 ) {
@@ -1255,7 +1259,7 @@ void rec_pwii_toggle_rec_front()
             
 void rec_pwii_toggle_rec_rear() 
 {
-    if( rec_channels > 1 ) {
+    if( rec_channels > pwii_rear_ch ) {
         screen_setliveview(pwii_rear_ch);                              // start live view rear camera
         int state1 = recchannel[pwii_rear_ch]->getforcerecording() ;
         if( state1 == 0 ) {

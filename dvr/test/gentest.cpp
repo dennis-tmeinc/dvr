@@ -28,117 +28,66 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-pthread_mutex_t mutex_init=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP ;
-static pthread_mutex_t mem_mutex;
-static void mem_lock()
+unsigned short map[576][720] ;
+
+unsigned rgb2y( int r, int g, int b )
 {
-    pthread_mutex_lock(&mem_mutex);
+    return (unsigned)((0.257 * r) + (0.504 * g) + (0.098 * b) + 16) ;
 }
 
-static void mem_unlock()
+unsigned rgb2u( int r, int g, int b )
 {
-    pthread_mutex_unlock(&mem_mutex);
+    return (unsigned)(-(0.148 * r) - (0.291 * g) + (0.439 * b) + 128) ;
 }
 
-void mem_init()
+unsigned rgb2v( int r, int g, int b )
 {
-    // initial mutex
-    memcpy( &mem_mutex, &mutex_init, sizeof(mutex_init));
-    return;
+    return (unsigned)((0.439 * r) - (0.368 * g) - (0.071 * b) + 128) ;
 }
 
-void mem_uninit()
+int test_722_logo()
 {
-    pthread_mutex_destroy(&mem_mutex);
-    return ;
-}
+    FILE * f422 ;
+    f422 = fopen("720.422.org", "r");
+    fread( map, 1, sizeof( map ), f422 );
+    fclose( f422 );
 
-
-int toddiff(struct timeval *tod1, struct timeval *tod2)
-{
-    long long t1, t2;
-    t1 = tod1->tv_sec * 1000000 + tod1->tv_usec;
-    t2 = tod2->tv_sec * 1000000 + tod2->tv_usec;
-    return (int)(t1 - t2);
-}
-
-static int run ;
-static pthread_t threadid1;
-static pthread_t threadid2;
-
-void f1(){};
-void func()
-{
-    int i;
-    for(i=0; i<100000; i++) {
-        f1();
+    int x, y ;
+    unsigned int v ;
+    v=0 ;
+    for( y=0; y<576; y++) {
+        for( x=0; x<720; x++ ) {
+            if( y>=100 && y<(100+256) && x>=100 && x<(100+2*256) ) {
+                int r, g, b ;
+                r=y-100 ;
+                g=0 ;
+                b=(x-100)/2 ;
+                unsigned Y, U, V ;
+                Y=rgb2y(r,g,b);
+                U=rgb2u(r,g,b);
+                V=rgb2v(r,g,b);
+                if( x%2==0 ) {
+//                    map[y][x]= (y-100)*256 + 128;
+                    map[y][x]= Y*256+U ;
+                }
+                else { 
+//                    map[y][x]= (y-100)*256 + (x-100)/2;
+                    map[y][x]= Y*256+V ;
+                }
+            }
+        }
     }
-}
-
-void *thread1(void *param)
-{
-    int * p = (int *)param ;
-    while(run) {
-        (*p)=(*p)+1 ;
-        func();
-    }
-    return NULL ;
-}
-
-void *thread2(void *param)
-{
-    int * p = (int *)param ;
-    while(run) {
-        (*p)=(*p)+1 ;
-        func();
-    }
-    return NULL ;
+    
+    f422 = fopen( "720.422", "w");
+    fwrite( map, 1, sizeof( map ), f422 );
+    fclose( f422 );
+    return 0 ;
 }
 
 int main()
 {
-   struct timeval tod1, tod2;
-   clock_t t1, t2;
-    int k = 0 ;
-
-    t1 = clock();
-   // Slurp CPU for 1 second. 
-   gettimeofday(&tod1, NULL);
-    gettimeofday(&tod2, NULL);
-
-    int count1=0, count2=0 ;
-    run=1 ;
-   pthread_create(&threadid1, NULL, thread1, &count1);
-
-    int policy ;
-    struct sched_param param ;
-    int r = pthread_getschedparam(threadid1, &policy, &param );
-
     
-    sched_
+    test_722_logo();
     
-   pthread_create(&threadid2, NULL, thread2, &count2);
-
-    sleep(100);
-/*
-    do 
-   {
-       k++ ;
-       if( k%1000000 == 0 )
-      gettimeofday(&tod2, NULL);
-   } while(toddiff(&tod2, &tod1) < 1000000);
-*/
-
-    run=0 ;
-    pthread_join(threadid1, NULL);
-    pthread_join(threadid2, NULL);
-    
-   t2 = clock();
-   gettimeofday(&tod2, NULL);
-    float df = toddiff(&tod2, &tod1)  ;
-    df/=1000000.0 ;
-   printf("timeofday %5.2f seconds, clock %5.2f seconds k=%d\n", df, (t2-t1)/(double)CLOCKS_PER_SEC, k);
-   printf("count1 %d, count2 %d\n", count1, count2 );
-
-   return 0;
+    return 0;
 }

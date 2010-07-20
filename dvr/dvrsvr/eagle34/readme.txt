@@ -1,2 +1,1 @@
-1. Add option of D1 (720*480) recording resolution
-2. Update kernel
+New library is compatible with both 720MHz and 594MHz TI6467

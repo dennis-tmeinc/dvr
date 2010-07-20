@@ -29,13 +29,38 @@ SOURCES=main.cpp \
 		screen.cpp \
 		md5.cpp
 
+EAGLESRS=eaglesvr.cpp \
+		dvrtime.cpp \
+		dvrsvr.cpp \
+		netsvr.cpp \
+		msg.cpp \
+		ptz.cpp \
+		record.cpp \
+		capture.cpp \
+		eaglecapture.cpp \
+		ipcapture.cpp \
+		memory.cpp \
+		dvrfile.cpp \
+		playback.cpp \
+		string.cpp \
+		disk.cpp \
+		idx.cpp \
+		config.cpp \
+		event.cpp \
+		live.cpp \
+		crypt.cpp \
+		dio.cpp \
+		screen.cpp \
+		md5.cpp
+
 HEADERS=dvr.h \
 		genclass.h \
 		cfg.h \
 		fbwindow.h \
 		crypt.h \
-        ../ioprocess/diomap.h
-
+        ../ioprocess/diomap.h \
+        ../cfg.h
+        
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
 # LIBRARY=libdio.so
@@ -53,6 +78,10 @@ dvrsvr : $(OBJS) ../fb/libfbdraw.so
 
 ../fb/libfbdraw.so : 
 	cd ../fb ; make
+
+eaglesvr : $(EAGLESRS)
+	$(CC)  $(CCFLAGS) -o $@ $(EAGLESRS) ../fb/libfbdraw.so $(LDFLAGS)
+	cp eaglesvr  $(debug_folder)
 
 eagleinit : eagleinit.cpp
 	$(CC) $(CCFLAGS) -o $@ eagleinit.cpp $(LDFLAGS)

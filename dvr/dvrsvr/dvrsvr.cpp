@@ -328,10 +328,6 @@ int dvrsvr::onframe(cap_frame * pframe)
 
 void dvrsvr::onrequest()
 {
-#ifdef NETDBG
-    printf( "Receive cmd : %d - payload : %d\n", m_req.reqcode, m_recvlen );
-#endif    
-    
     switch (m_req.reqcode) {
         case REQOK:
             ReqOK();
@@ -591,11 +587,6 @@ void dvrsvr::ReqOK()
     ans.data=0;
     ans.anssize=0;
     Send(&ans, sizeof(ans));
-    
-#ifdef NETDBG
-    printf( "ReqOK\n");
-#endif    
-    
 }
 
 void dvrsvr::ReqEcho()
@@ -608,11 +599,6 @@ void dvrsvr::ReqEcho()
     if( m_recvlen>0 ) {
         Send(m_recvbuf, m_recvlen);
     }
-    
-#ifdef NETDBG
-    printf( "ReqEcho\n");
-#endif    
-    
 }
 
 void dvrsvr::ReqRealTime()
@@ -839,7 +825,7 @@ void dvrsvr::GetChannelState()
     ans.data = cap_channels ;
     Send( &ans, sizeof(ans));
     for( i=0; i<cap_channels; i++ ) {
-        if( cap_channel !=NULL && cap_channel[i]!=NULL ) {
+        if( cap_channel[i]!=NULL ) {
             cs.sig = ( cap_channel[i]->getsignal()==0 ) ;                   // signal lost?
             cs.rec =  rec_state(i);                                         // channel recording?
             cs.mot = cap_channel[i]->getmotion() ;                          // motion detections
@@ -989,11 +975,6 @@ void dvrsvr::ReqStreamOpen()
             ans.anssize = 0;
             ans.data = DVRSTREAMHANDLE(m_playback) ;
             Send( &ans, sizeof(ans) );
-
-#ifdef NETDBG
-            printf( "Stream Open : %d\n", ans.data);
-#endif    
-
             return ;
         }
     }
@@ -1052,9 +1033,6 @@ void dvrsvr::ReqStreamClose()
         if( m_playback ) {
             delete m_playback ;
             m_playback=NULL ;
-#ifdef NETDBG
-            printf( "Stream Close: %d\n", m_req.data);
-#endif    
         }
         return ;
     }
@@ -1086,7 +1064,7 @@ void dvrsvr::ReqStreamSeek()
         Send( &ans, sizeof(ans));
         
 #ifdef NETDBG
-        printf("Stream seek, %04d-%02d-%02d %02d:%02d:%02d\n", 
+        NET_DPRINT("Stream seek, %04d-%02d-%02d %02d:%02d:%02d\n", 
                ((struct dvrtime *) m_recvbuf)->year,
                ((struct dvrtime *) m_recvbuf)->month,
                ((struct dvrtime *) m_recvbuf)->day,
@@ -1145,11 +1123,6 @@ void dvrsvr::ReqStreamGetData()
             ans.data = frametype;
             Send( &ans, sizeof( struct dvr_ans ) );
             Send( pbuf, ans.anssize );
-
-#ifdef NETDBG
-            printf( "Stream Data: %d\n", ans.anssize);
-#endif
-
             if( m_playback ) {
                 m_playback->preread();
             }
@@ -1190,7 +1163,7 @@ void dvrsvr::ReqStreamTime()
             Send( &ans, sizeof(ans));
             Send( &streamtime, ans.anssize);
 #ifdef NETDBG
-        printf("Stream time, %04d-%02d-%02d %02d:%02d:%02d.%03d\n", 
+        NET_DPRINT("Stream time, %04d-%02d-%02d %02d:%02d:%02d.%03d\n", 
                streamtime.year,
                streamtime.month,
                streamtime.day,
@@ -1223,18 +1196,9 @@ void dvrsvr::ReqStreamDayInfo()
         ans.data = dayinfo.size();
         ans.anssize = dayinfo.size()*sizeof(struct dayinfoitem);
         Send( &ans, sizeof(ans));
-
-#ifdef NETDBG
-        printf("Stream DayInfo %04d-%02d-%02d\n",
-               pday->year, pday->month, pday->day );
-#endif  
-        
         if( ans.anssize>0 ) {
             for( i=0; i<dayinfo.size(); i++ ) {
                 Send( &dayinfo[i], sizeof(struct dayinfoitem));
-#ifdef NETDBG
-                printf("%d - %d\n", dayinfo[i].ontime, dayinfo[i].offtime );
-#endif  
             }
         }
     }
@@ -1259,17 +1223,6 @@ void dvrsvr::ReqStreamMonthInfo()
         ans.anssize = 0;
         ans.data = (int)monthinfo;;
         Send(&ans, sizeof(ans));
-#ifdef NETDBG
-        printf("Stream Month Info %04d-%02d-%02d ",
-               pmonth->year, pmonth->month, pmonth->day );
-        int x ;
-        for( x=0; x<32; x++ ) {
-            if( monthinfo&(1<<x) ) {
-                printf(" %d", x+1 );
-            }
-        }
-        printf("\n");
-#endif          
         return ;
     }
     DefaultReq();
@@ -1320,18 +1273,9 @@ void dvrsvr::ReqLockInfo()
         ans.data = dayinfo.size();
         ans.anssize = dayinfo.size()*sizeof(struct dayinfoitem);
         Send( &ans, sizeof(ans));
-        
-#ifdef NETDBG
-        printf("Stream Lock DayInfo %04d-%02d-%02d\n",
-               pday->year, pday->month, pday->day );
-#endif  
-
         if( ans.anssize>0 ) {
             for( i=0; i<dayinfo.size(); i++ ) {
                 Send( &dayinfo[i], sizeof(struct dayinfoitem));
-#ifdef NETDBG
-                printf("%d - %d\n", dayinfo[i].ontime, dayinfo[i].offtime );
-#endif  
             }
         }
         return ;
@@ -1736,6 +1680,7 @@ void dvrsvr::ReqGetData()
 
 void dvrsvr::ReqCheckKey()
 {
+#if defined (TVS_APP) || defined (PWII_APP)
     struct key_data * key ;
     struct dvr_ans ans ;
     if( m_recvbuf && m_recvlen>=(int)sizeof( struct key_data ) ) {
@@ -1757,6 +1702,7 @@ void dvrsvr::ReqCheckKey()
             return ;
         }
     }
+#endif
     DefaultReq();
 }
 
@@ -2095,6 +2041,7 @@ int dvr_openlive(int sockfd, int channel)
     }
     return 0 ;
 }
+
 /*
 int dvr_openlive(int sockfd, int channel, struct hd_file * hd264)
 {

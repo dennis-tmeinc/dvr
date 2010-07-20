@@ -1319,11 +1319,11 @@ void mcu_camera_zoom( int zoomin )
 {
     if( zoomin ) {
         zoomcam_zoomin();
-//        mcu_cmd( MCU_CMD_CAMERA_ZOOMIN ) ;
+        mcu_cmd( MCU_CMD_CAMERA_ZOOMIN ) ;
     }
     else {
         zoomcam_zoomout();
-//        mcu_cmd( MCU_CMD_CAMERA_ZOOMOUT ) ;
+        mcu_cmd( MCU_CMD_CAMERA_ZOOMOUT ) ;
     }
 }
 

@@ -536,7 +536,7 @@ void firmwareupload_page()
             dup2(fd, 1);
             dup2(fd, 2);
 
-            // if dvrsvr running, kill it
+            // if dvrsvr running, kill it, (Suspend it)
             FILE * dvrpidfile ;
             pid_t dvrpid ;
             dvrpidfile=fopen("/var/dvr/dvrsvr.pid", "r");
@@ -545,7 +545,7 @@ void firmwareupload_page()
                 fscanf(dvrpidfile, "%d", &dvrpid);
                 fclose( dvrpidfile );
                 if( dvrpid>0 ) {
-                    kill( dvrpid, SIGTERM );
+                    kill( dvrpid, SIGUSR1 );
                 }
             }
 

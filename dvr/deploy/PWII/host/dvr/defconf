@@ -319,6 +319,10 @@ output7_inverted=0
 output8_inverted=0
 output9_inverted=0
 
+zoomcam_port=/dev/ttyUSB0
+zoomcam_baudrate=115200
+zoomcam_enable=0
+
 # sensor number start from 1
 [sensor1]
 name=MIC

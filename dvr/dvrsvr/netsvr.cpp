@@ -518,7 +518,9 @@ void *net_thread(void *param)
                 }
                 if( dvrsvr::head() == NULL ) {
                     net_active = 0 ;
+#if defined (TVS_APP) || defined (PWII_APP)
                     dvr_logkey( 0, NULL );
+#endif                    
                 }
             }
         }

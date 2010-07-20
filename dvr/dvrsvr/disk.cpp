@@ -1277,9 +1277,11 @@ static int disk_archive_cplogfile( char * srcdir, char * destdir)
 
     extern string logfile ;
 // copy dvrlog file
-    sprintf(srcfile, "%s/_%s_/%s", srcdir, g_hostname, logfile.getstring());
-    sprintf(destfile, "%s/_%s_/%s", destdir, g_hostname, logfile.getstring());
-    disk_archive_copyfile(srcfile, destfile ) ;
+    if( logfile.length()>0 ) {
+        sprintf(srcfile, "%s/_%s_/%s", srcdir, g_hostname, logfile.getstring());
+        sprintf(destfile, "%s/_%s_/%s", destdir, g_hostname, logfile.getstring());
+        disk_archive_copyfile(srcfile, destfile ) ;
+    }
     return 1 ;
 }
 

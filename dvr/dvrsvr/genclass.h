@@ -328,7 +328,6 @@ class array {
         }
         array <T> & operator = ( array <T> & a ) {
             int i;
-            empty();
             setsize( a.size() );
             for( i=0; i<m_size; i++) {
                 *m_array[i] = a[i] ;

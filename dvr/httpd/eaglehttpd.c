@@ -46,6 +46,7 @@ static char * mime_type[][2] =
 
 char * document_root="/home/www" ;
 
+#define MAX_KEEPALIVE       (100)
 #define KEEP_ALIVE_TIMEOUT  (60)
 #define CACHE_MAXAGE        (900)
 
@@ -1372,6 +1373,7 @@ void sigpipe(int sig)
 
 int main(int argc, char * argv[])
 {
+    int keepalive_cycle ;
     if( argc>1 ) {
         document_root=argv[1] ;
     }
@@ -1380,8 +1382,11 @@ int main(int argc, char * argv[])
     signal(SIGPIPE,  sigpipe );
 
     keep_alive=1 ;
-    while( keep_alive ) 
+    for( keepalive_cycle=0; keepalive_cycle<MAX_KEEPALIVE; keepalive_cycle++) {
         http();
+        if( keep_alive==0 )
+            break;
+    }
     return 0 ;
 }
 

@@ -6,15 +6,67 @@
 
 // time functions
 
-static struct timeval app_time;
+static struct timeval time_uptime;
+static struct timeval time_prevt ;
+int g_timetick ;            // global time tick ;
 
 void time_init()
 {
-    gettimeofday(&app_time, NULL);
+    time_inittimezone();
+    gettimeofday(&time_uptime, NULL);
+    g_timetick = 0 ;
+
+    // adjust startup time by system uptime (/proc/uptime)
+    FILE * uptimefile ;
+    uptimefile = fopen( "/proc/uptime", "r" );
+    if( uptimefile ) {
+        float uptime ;
+        fscanf( uptimefile, "%f", &uptime );
+        time_uptime.tv_sec -= (int) uptime ;
+        fclose( uptimefile );
+        g_timetick = (int) uptime * 1000 ;       
+    }
+
 }
 
 void time_uninit()
 {
+}
+
+void time_inittimezone()
+{
+    char * p ;
+    config dvrconfig(dvrconfigfile);
+    string tz ;
+    string tzi ;
+    FILE * tzfile ;
+    tz=dvrconfig.getvalue( "system", "timezone" );
+    if( tz.length()>0 ) {
+        tzi=dvrconfig.getvalue( "timezones", tz.getstring() );
+        if( tzi.length()>0 ) {
+            p=strchr(tzi.getstring(), ' ' ) ;
+            if( p ) {
+                *p=0;
+            }
+            p=strchr(tzi.getstring(), '\t' ) ;
+            if( p ) {
+                *p=0;
+            }
+            setenv("TZ", tzi.getstring(), 1);
+        }
+        else {
+            setenv("TZ", tz.getstring(), 1);
+        }
+        p = getenv("TZ") ;
+        if( p ) {
+            tzfile = fopen( "/var/dvr/TZ", "w" );
+            if( tzfile ) {
+                fprintf(tzfile, "%s", p );
+                fclose( tzfile );
+            }
+            dvr_log("Set timezone : %s", tz.getstring() );
+        }
+    }
 }
 
 void time_settimezone(char * timezone)
@@ -40,6 +92,10 @@ void time_settimezone(char * timezone)
     *endtz=0 ;
     if( strlen(tz)>0 && time_gettimezone (oldtz) ) {
         if( strcmp( tz, oldtz )!=0 ) {
+            config dvrconfig(dvrconfigfile);
+            dvrconfig.setvalue( "system", "timezone", tz );
+            dvrconfig.save();
+            time_inittimezone();
         }
     }
 }
@@ -49,10 +105,18 @@ int time_gettimezone(char * tz)
 {
     string tzstr ;
     char * tzenv ;
-    tzenv = getenv("TZ" );
-    if( tzenv && strlen(tzenv)>1 ) {
-         strncpy( tz, tzenv, 250 );
-         return 1 ;
+    config dvrconfig(dvrconfigfile);
+    tzstr = dvrconfig.getvalue("system", "timezone");
+    if( tzstr.length()>0 ) {
+        strncpy( tz, tzstr.getstring(), 250 );
+        return 1 ;
+    }
+    else {
+        tzenv = getenv("TZ" );
+        if( tzenv && strlen(tzenv)>1 ) {
+            strncpy( tz, tzenv, 250 );
+            return 1 ;
+        }
     }
     return 0 ;
 }
@@ -401,31 +465,30 @@ time_t time_timeutc( struct dvrtime * dvrt)
     return timegm( &stm );
 }
 
-// appliction up time in seconds
-int time_uptime()
-{
-    struct timeval current_time;
-    gettimeofday(&current_time, NULL);
-    return (current_time.tv_sec - app_time.tv_sec);
-}
-
 // return ticks (milli-seconds) from time_init()
 int time_tick()
 {
     struct timeval current_time;
     gettimeofday(&current_time, NULL);
-    return (current_time.tv_sec - app_time.tv_sec) * 1000 + (current_time.tv_usec - app_time.tv_usec)/1000 ;
+    if( current_time.tv_sec < time_prevt.tv_sec ) {     // these code is to make sure time tick alway go up
+        // need to adjust start time ;
+        FILE * uptimefile ;
+        uptimefile = fopen( "/proc/uptime", "r" );
+        if( uptimefile ) {
+            float uptime ;
+            fscanf( uptimefile, "%f", &uptime );
+            time_uptime.tv_sec = current_time.tv_sec - (int) uptime ;
+            fclose( uptimefile );
+        }
+    }
+    time_prevt.tv_sec = current_time.tv_sec ;
+    g_timetick = ((int)(current_time.tv_sec - time_uptime.tv_sec)) * 1000 + ((int)current_time.tv_usec)/1000 ;
+    return g_timetick ;
 }
 
 // update onboard rtc to system time
 int time_setrtc()
 {
+    dio_syncrtc ();                             // update time to RTC on MCU
     return 1;
-}
-
-DWORD time_hiktimestamp()
-{
-    struct timeval tv ;
-    gettimeofday(&tv, NULL);
-    return (tv.tv_sec%(86400*10))*64 + tv.tv_usec * 64 / 1000000 ;
 }

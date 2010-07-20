@@ -3,14 +3,14 @@
 [system]
 keycheck=1
 serial=900001
-hostname=PWII001
-id1=PWII001
-id2=ID
+hostname=PW34
+id1=PW34
+id2=PW34
 mfid=MF0001
 
 keylogfile=tvslog.txt
 
-totalcamera=2
+totalcamera=4
 
 # IO shared memory mapping file
 iomapfile=/var/dvr/dvriomap
@@ -67,7 +67,7 @@ lowmemory=15000
 shutdowndelay=180
 
 # percentage of locked file
-lockfile_percentage = 30
+lockfile_percentage = 99
 
 standbytime=1800
 
@@ -86,7 +86,7 @@ wifi_on=0
 pwii_policeidlistfile=/davinci/dvr/policeidlist
 
 [network]
-port=15111
+port=15112
 livefifo=20000
 multicast_en = 1
 multicast_addr=228.229.230.231
@@ -102,7 +102,8 @@ protocol=D
 
 
 # camera number start from 1
-[camera2]
+[camera1]
+channel=4
 show_gforce=1
 # force recording on
 forcerecordontime = 7200
@@ -195,8 +196,8 @@ recordmode=1
 disableaudio=0
 
 # camera name
-name=Rear
-channel=1
+name=Front
+
 # enable this camera
 enable=1
 # enable GPS message on OSD
@@ -208,7 +209,11 @@ show_policeid=1
 #PTZ address
 ptzaddr=2
 
-[camera1]
+[camera2]
+name=Rear
+channel=3
+enable=1
+
 show_gforce=1
 forcerecordontime = 7200
 forcerecordofftime = 0
@@ -255,8 +260,115 @@ framerate=30
 resolution=3
 recordmode=1
 
-name=Front
+ptzaddr=2
+
+#special setup
+gpsen=1
+
+[camera3]
+show_gforce=1
+forcerecordontime = 7200
+forcerecordofftime = 0
+showgpslocation=1
+disableaudio=0
+videotype=0
+motionsensitivity=4
+motionalarm=2
+motionalarmpattern=0
+motionalarmen=0
+videolostalarm=1
+videolostalarmpattern=2
+videolostalarmen=2
+recordalarm=0
+recordalarmpattern=1
+recordalarmen=1
+gpsunit=0
+showgps=1
+show_vri=1
+show_policeid=1
+postrecordtime=150
+prerecordtime=150
+sensorosd1=1
+trigger1=1
+sensorosd2=1
+trigger2=1
+sensorosd3=1
+trigger3=1
+sensorosd4=1
+trigger4=12
+sensorosd5=1
+trigger5=12
+sensorosd6=1
+trigger6=12
+quality=7
+brightness=5
+contrast=5
+saturation=5
+hue=5
+bitrate=1750000
+bitratemode=0
+bitrateen=1
+framerate=30
+resolution=3
+recordmode=1
+
+name=Camera3
 channel=2
+enable=1
+ptzaddr=2
+
+#special setup
+gpsen=1
+
+[camera4]
+show_gforce=1
+forcerecordontime = 7200
+forcerecordofftime = 0
+showgpslocation=1
+disableaudio=0
+videotype=0
+motionsensitivity=4
+motionalarm=2
+motionalarmpattern=0
+motionalarmen=0
+videolostalarm=1
+videolostalarmpattern=2
+videolostalarmen=2
+recordalarm=0
+recordalarmpattern=1
+recordalarmen=1
+gpsunit=0
+showgps=1
+show_vri=1
+show_policeid=1
+postrecordtime=150
+prerecordtime=150
+sensorosd1=1
+trigger1=1
+sensorosd2=1
+trigger2=1
+sensorosd3=1
+trigger3=1
+sensorosd4=1
+trigger4=12
+sensorosd5=1
+trigger5=12
+sensorosd6=1
+trigger6=12
+quality=7
+brightness=5
+contrast=5
+saturation=5
+hue=5
+bitrate=1750000
+bitratemode=0
+bitrateen=1
+framerate=30
+resolution=3
+recordmode=1
+
+name=Camera4
+channel=1
 enable=1
 ptzaddr=2
 
@@ -318,6 +430,10 @@ output6_inverted=0
 output7_inverted=0
 output8_inverted=0
 output9_inverted=0
+
+zoomcam_port=/dev/ttyUSB0
+zoomcam_baudrate=115200
+zoomcam_enable=0
 
 # sensor number start from 1
 [sensor1]
@@ -388,8 +504,8 @@ maxjumptime=120
 doublejumptimer=5
 cliptime=86400
 startchannel=1
-resource=/davinci/dvr/resource
+resource=/dav/dvr/resource
 
 [pwii]
-front=1
-rear=0
+front=0
+rear=1

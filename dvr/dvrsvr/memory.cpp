@@ -68,7 +68,7 @@ void *mem_alloc(int size)
 void mem_free(void *pmem)
 {
     int *pmemblk;
-    if (pmem == NULL)
+    if (pmem == NULL || (((int)pmem)&3)!=0 )
         return;
 
     mem_lock();
@@ -87,7 +87,7 @@ void mem_free(void *pmem)
 void *mem_addref(void *pmem)
 {
     int *pmemblk;
-    if (pmem == NULL){
+    if (pmem == NULL || (((int)pmem)&3)!=0 ){
         return NULL;
     }
     
@@ -108,7 +108,7 @@ int mem_refcount(void *pmem)
 {
     int *pmemblk;
     int refcount=0 ;
-    if (pmem == NULL)
+    if (pmem == NULL || (((int)pmem)&3)!=0 )
         return 0 ;
     mem_lock();
     pmemblk = ((int *)pmem)-2 ;
@@ -122,7 +122,7 @@ int mem_refcount(void *pmem)
 // check if this memory is allock by mem_alloc
 int mem_check(void *pmem)
 {
-    if (pmem == NULL)
+    if (pmem == NULL || (((int)pmem)&3)!=0 )
         return 0;
     return *(((int *)pmem)-2) == MEMTAG ;
 }

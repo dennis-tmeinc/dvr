@@ -2,7 +2,7 @@
 echo Start update mDVR firmware...
 echo Kill processes...
 if [ -f /var/dvr/dvrsvr.pid ]; then
-  kill `cat /var/dvr/dvrsvr.pid` 
+  kill -USR1 `cat /var/dvr/dvrsvr.pid` 
 fi
 
 if [ -f /var/dvr/glog.pid ]; then
@@ -28,13 +28,13 @@ sleep 1
 # flashing panel leds
 ./dvr/panelled 07
 
-for i in 1 2 3 4 5 6 7 8 9 10 ; do
-  if [ -f /var/dvr/dvrsvr.pid ]; then
-    sleep 2
-  else
-    break;
-  fi
-done
+#for i in 1 2 3 4 5 6 7 8 9 10 ; do
+#  if [ -f /var/dvr/dvrsvr.pid ]; then
+#    sleep 2
+#  else
+#    break;
+#  fi
+#done
 
 for i in 1 2 3 4 5 6 7 8 9 10 ; do
   if [ -f /var/dvr/glog.pid ]; then
@@ -45,6 +45,9 @@ for i in 1 2 3 4 5 6 7 8 9 10 ; do
 done
 
 # remove old files
+rm -f /dav/dvr/dvrsvr
+rm -f /dav/dvr/ioprocess
+rm -f /dav/dvr/glog
 
 # start copying files
 echo Copying file to /dav, please wait.

@@ -136,6 +136,7 @@ int playback::opennextfile()
 
 void playback::readframe()
 {
+    // remove previous frame buffer
     if( m_framebuf ) {
         mem_free( m_framebuf );
         m_framebuf=NULL ;
@@ -152,6 +153,7 @@ void playback::readframe()
         }
         m_frametype = m_file.frametype();
         m_framebuf=mem_alloc( m_framesize );
+        m_streamtime = m_file.frametime();
         if( m_file.readframe(m_framebuf, m_framesize)!=m_framesize ) {
             mem_free( m_framebuf );
             m_framesize = 0 ;
@@ -159,7 +161,6 @@ void playback::readframe()
             // error !
             dvr_log( "Read frame data error!");
         }
-        m_streamtime = m_file.frametime();
     }
 }
 

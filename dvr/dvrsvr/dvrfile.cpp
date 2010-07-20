@@ -1,5 +1,4 @@
 
-
 #include "dvr.h"
 
 #define FILETRUNCATINGSIZE (2*1024*1024)
@@ -15,10 +14,12 @@ unsigned char g_filekey[256] ;
 #ifdef EAGLE32
 const char g_264ext[]=".264" ;
 #define H264FILEFLAG  (0x484b4834)
+#define FRAMESYNC   (0x00000001)
 #endif
 #ifdef EAGLE34
 const char g_264ext[]=".265" ;
 #define H264FILEFLAG  (0x484b4d49)
+#define FRAMESYNC   (0xBA010000)
 #endif
 
 // convert timestamp value to milliseconds
@@ -30,12 +31,7 @@ inline int tstamp2ms(int tstamp )
 dvrfile::dvrfile()
 {
     m_handle = NULL;
-    m_initialsize=0;
-    m_filestamp = 0;
-    m_timestamp = 0 ;
-    m_syncsize=0 ;
-    m_framepos=0 ;
-    m_autodecrypt=0 ;
+    m_framepos=0;
 }
 
 dvrfile::~dvrfile()
@@ -56,8 +52,6 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
     m_filename=filename ;
     f264time(filename, &m_filetime);
     m_filelen=f264length(filename);
-    m_filestamp=0;
-    m_timestamp=0;
     m_filestart=(int)sizeof(struct hd_file);	// first data frame
     m_openmode=0;
     if (strchr(mode, 'w')) {
@@ -65,7 +59,7 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
             setvbuf(m_handle, NULL, _IOFBF, file_bufsize );
         }
         if (initialsize > 0) {
-            seek(initialsize - 1);
+            seek(initialsize - 1, SEEK_SET );
             if (fputc(0, m_handle) == EOF) {
                 close();
                 return 0;
@@ -82,7 +76,6 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
         write( &h264hd, sizeof(struct hd_file));				// write header
         m_filestart = tell();
         m_openmode=1;
-        m_syncsize=0 ;
     }
     else if( strchr(mode, 'r')) {
         if( fstat( fileno(m_handle), &dvrfilestat)==0 ) {
@@ -117,13 +110,20 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
             }
         }
 
-        readkey();											// read key frame index
+        readkey();				                        // read key frame index
         if( m_keyarray.size()>0 ) {
-            seek( m_keyarray[0].koffset );
+            seek( m_keyarray[0].koffset, SEEK_SET );
         }
-        framesize();									// update frame time stamp
         m_filestart=tell();
-        m_filestamp=m_timestamp ;
+        m_framepos=0;
+        m_reftstamp = 0 ;
+        m_reftime = 0 ;
+        m_frame_kindex=0 ;
+        getframe();                                     // advance to first frame
+    }
+    else {
+        file_close(m_handle);
+        m_handle = NULL;
     }
     return 1;
 }
@@ -137,12 +137,12 @@ void dvrfile::close()
             if (m_initialsize > size) {
                 truncate(size);
             }
-            if( m_keyarray.size()>0 ) {
-                writekey();
-            }
             if( file_close(m_handle)!=0 ) {
                 dvr_log("Close file failed : %s",m_filename.getstring());
                 rec_basedir="" ;
+            }
+            if( m_keyarray.size()>0 ) {
+                writekey();
             }
         }
         else {
@@ -151,9 +151,7 @@ void dvrfile::close()
         m_handle = NULL;
     }
     m_keyarray.empty();
-    m_initialsize=0;
-    m_filestamp = 0;
-    m_timestamp = 0 ;
+    m_framepos=0;
 }
 
 int dvrfile::read(void *buffer, size_t buffersize)
@@ -215,9 +213,9 @@ int dvrfile::readheader(void * buffer, size_t headersize)
     
     // save old file pointer
     framepos = tell();
-    seek(0);
+    seek(0, SEEK_SET);
     read( buffer, sizeof(struct hd_file));
-    seek( framepos );
+    seek( framepos, SEEK_SET );
     return sizeof( struct hd_file );
 }
 
@@ -231,16 +229,18 @@ int dvrfile::writeheader(void * buffer, size_t headersize)
     
     // save old file pointer
     framepos = tell();
-    seek(0);
+    seek(0, SEEK_SET);
     write( buffer, sizeof(struct hd_file));
-    seek( framepos );
+    seek( framepos, SEEK_SET );
     return sizeof( struct hd_file );
 }
 
 // write a new frame, return 1 success, 0: failed
 int dvrfile::writeframe(void *buffer, size_t size, int keyframe, dvrtime * frametime)
 {
-    char * wbuf = (char *)buffer ;
+    unsigned char * wbuf = (unsigned char *)buffer ;
+    char encbuf[1024] ;
+    unsigned int esize ;
     if( keyframe ) {
         dvr_key_t keytime ;
         keytime.koffset = tell();
@@ -251,47 +251,95 @@ int dvrfile::writeframe(void *buffer, size_t size, int keyframe, dvrtime * frame
         }
     }
     if( m_fileencrypt ) {
+#ifdef EAGLE32
         struct hd_frame * pframe = (struct hd_frame *)buffer ;
-        int esize ;
-        char encbuf[1024] ;
         if( pframe->flag==1 && size > sizeof( hd_frame )) {
             write( wbuf, sizeof(hd_frame) );
             wbuf+=sizeof(hd_frame);
             size-=sizeof(hd_frame);
-            if( pframe->framesize>1024 ) {
+            esize=pframe->framesize ;
+            if( esize>1024 ) {
                 esize=1024 ;
             }
-            else {
-                esize=pframe->framesize ;
+            if( esize>size ) {
+                esize=size ;
             }
             mem_cpy32( encbuf, wbuf, esize );
             RC4_block_crypt( (unsigned char *)encbuf, esize, 0, file_encrypt_RC4_table, 1024);
-            if( write( encbuf, esize)!=esize ) {
-                return 0 ;
-            }
+            write( encbuf, esize);
             wbuf+=esize ;
             size-=esize ;
-            if( size<0 ) {
-                return 0 ;
-            }
-            else if( size==0 ) {
-                return 1 ;
-            }
         }
+#endif
+
+#ifdef EAGLE34
+        while( size>0 ) {
+            unsigned int si ;
+            if( wbuf[0] == 0 &&
+                wbuf[1] == 0 &&
+                wbuf[2] == 1 )
+            {
+                if( wbuf[3]==0xba ) {               // PS header
+                    si=20 ;                         // always 20 bytes from eagle34
+                }
+                else {
+                    si = (((unsigned int)wbuf[4])<<8) +
+                        +(((unsigned int)wbuf[5])) + 
+                        6 ;                         // sync (4b) + size (2b)
+                    esize=0;
+                    if( wbuf[3]==0xe0 ) {           // video frame
+                        if( si==size ) {            // last pack 
+                            write( wbuf, 17 );      //  17 ? a strange number? ok, it must follow a byte value of 0x41 or 0x65
+                            wbuf+=17 ;
+                            size-=17 ;
+                            esize=size ;
+                        }
+                    }
+                    else if( wbuf[3]==0xc0 ) {      // audio frame
+                        if( si==size ) {            // last pack
+                            write( wbuf, 16 );      // by pass audio frame header,
+                            wbuf+=16 ;
+                            size-=16 ;
+                            esize=size ;
+                        }
+                    }      
+                    if( esize ) {                           // do encrypt
+                        if( esize>1024 ) {
+                            esize=1024 ;
+                        }
+                        if( esize>size ) {
+                            esize=size ;
+                        }
+                        mem_cpy32( encbuf, wbuf, esize );
+                        RC4_block_crypt( (unsigned char *)encbuf, esize, 0, file_encrypt_RC4_table, 1024);
+                        write( encbuf, esize);
+                        wbuf+=esize ;
+                        size-=esize ;
+                        break ;
+                    }
+                }
+            }
+            else {
+                dvr_log( "Un-recognized frame detected!" );
+                break;
+            }
+            write( wbuf, si );
+            wbuf+=si ;
+            size-=si ;
+        }
+#endif          // EAGLE34
     }
-    if( write( wbuf, size )==(int)size ) {
-        return 1;
+    if( size>0 ) {
+        return ( write( wbuf, size )==(int)size ) ;
     }
-    return 0;
+    return 1;
 }
 
 // read one frame
 int dvrfile::readframe(void * framebuf, size_t bufsize)
 {
     int frsize ;
-    int encsize ;
     int rsize=0 ;
-    struct hd_frame * pframe;
     frsize = framesize() ;
     if( frsize<=0 ) {
         return 0 ;
@@ -299,6 +347,9 @@ int dvrfile::readframe(void * framebuf, size_t bufsize)
     else if( (int)bufsize>=frsize ) {
         rsize=read(framebuf, frsize);
         if( m_autodecrypt ) {
+#ifdef EAGLE32
+            struct hd_frame * pframe;
+            int encsize ;
             pframe = (struct hd_frame *)framebuf ;
             if( pframe->flag==1 && m_fileencrypt ) {
                 encsize = pframe->framesize ;
@@ -307,6 +358,54 @@ int dvrfile::readframe(void * framebuf, size_t bufsize)
                 }
                 RC4_block_crypt( ((unsigned char *)framebuf)+sizeof(struct hd_frame), encsize, 0, file_encrypt_RC4_table, 1024);		// decrypt frame
             }
+#endif            
+#ifdef EAGLE34
+            unsigned char * wbuf = (unsigned char *)framebuf ;
+            unsigned int size=rsize ;
+            while( size>0 ) {
+                unsigned int sync ;
+                unsigned int si ;
+                unsigned int esize ;
+                sync = (((unsigned int)wbuf[0])<<24)
+                    +(((unsigned int)wbuf[1])<<16)
+                    +(((unsigned int)wbuf[2])<<8)
+                    +(((unsigned int)wbuf[3])) ;
+                si = (((unsigned int)wbuf[4])<<8) +
+                    +(((unsigned int)wbuf[5])) + 
+                    6 ;
+                esize = 0 ;
+                if( sync==0x000001ba ) {            // PS header
+                    si=20 ;                         // always 20 bytes from eagle34
+                }
+                else if( sync==0x000001e0 ) {       // video frame
+                    if( si==size ) {                // last pack 
+                        wbuf+=17 ;                  // 17?, see whats on writeframe
+                        size-=17 ;
+                        esize=size ;
+                    }
+                }
+                else if( sync==0x000001c0 ) {           // audio frame
+                    if( si==size ) {                    // last pack
+                        wbuf+=16 ;
+                        size-=16 ;
+                        esize=size ;
+                    }
+                }
+                else if( (sync&0xffffff00)!=0x00000100 ) {      // other pack could be 0x000001bc, a key frame tag
+                    dvr_log( "Un-recogized frame detected!" );
+                    return 0 ;
+                }
+                if( esize ) {
+                    if( esize>1024 ) {
+                        esize=1024 ;
+                    }
+                    RC4_block_crypt(wbuf, esize, 0, file_encrypt_RC4_table, 1024);		// decrypt frame
+                    break ;
+                }
+                wbuf+=si ;
+                size-=si ;
+            }
+#endif            
         }
     }
     else if( bufsize>0 ) {
@@ -318,19 +417,16 @@ int dvrfile::readframe(void * framebuf, size_t bufsize)
     return rsize ;
 }
 
-// read one frame, return 0 for error, 
-int dvrfile::readframe(struct cap_frame *pframe)
+// current frame size
+// return 0 : end of file
+int dvrfile::framesize()
 {
-    pframe->frametype = frametype() ;
-    pframe->framesize = framesize();
-    if( pframe->framesize<=0 ) {
-        pframe->framesize = 4096 ;
+    if( isopen() ) {
+        getframe();
+        return m_framesize;
     }
-    pframe->framedata = (char *) mem_alloc(pframe->framesize);
-    if (pframe->framedata == NULL)
-        return 0;
-    return readframe (pframe->framedata, pframe->framesize);
-}
+    return 0;
+}    
 
 // return frame type
 //      0 - no frame
@@ -338,149 +434,332 @@ int dvrfile::readframe(struct cap_frame *pframe)
 //     >1 - other frame
 int dvrfile::frametype()
 {
-    struct hd_frame frame;
-    int readbytes;
-    int framepos ;
-    
-    framepos = tell();
-    
-    if( framepos >= m_filesize ) {
-        framepos = tell();
-    }        
-    
-    if( framepos < m_filestart ) {
-        framepos=m_filestart ;
-    }
-    if ((framepos & 3) != 0) {
-        return FRAMETYPE_UNKNOWN ;
-    }
-    
-    readbytes = read((char *) &frame, sizeof(frame));
-    
-    seek(framepos);				// set back old position
-    if (readbytes == sizeof(frame) && 
-        frame.flag == 1 && 
-        HD264_FRAMESUBFRAME(frame) < 10 &&
-        frame.framesize < 1000000) 
-    {
-        switch ( HD264_FRAMETYPE(frame) ) {
-            case 3 :
-                return FRAMETYPE_KEYVIDEO;
-            case 4:
-                return FRAMETYPE_VIDEO ;
-            case 1:
-                return FRAMETYPE_AUDIO ;
-            default:
-                return FRAMETYPE_UNKNOWN;
-        }
+    if( isopen() ) {
+        getframe();
+        return m_frametype;
     }
     return FRAMETYPE_UNKNOWN;
 }
 
-// current frame size
-int dvrfile::framesize()
-{
-    struct hd_frame frame;
-    struct hd_subframe subframe;
-    int framepos ;
-    int subframes;
-    int frsize;
-    
-    frsize=0;
-    if (frametype() > 0) {
-        framepos = tell();
-        if( read(&frame, sizeof(frame)) != sizeof(frame)){
-            seek(framepos);	
-            return 0;
-        }
-        m_timestamp=frame.timestamp ;								// assign time stamp
-        subframes =  HD264_FRAMESUBFRAME(frame) ;
-        seek(frame.framesize, SEEK_CUR);
-        while (--subframes > 0) {
-            subframe.d_flag = 0;
-            if( read(&subframe, sizeof(subframe))!= sizeof(subframe) ) {
-                seek( framepos );
-                return 0;
-            }
-            if (HD264_SUBFLAG(subframe)!= 0x1001 && HD264_SUBFLAG(subframe)!= 0x1005) {
-                break;
-            }
-            seek(subframe.framesize, SEEK_CUR);
-        }
-        if (subframes == 0)  {
-            frsize=tell()-framepos ;
-        }
-        seek(framepos);
-    }
-    return frsize;	
-}
-
-// return current frame time
 dvrtime dvrfile::frametime()
 {
     dvrtime t=m_filetime ;
     if( isopen() ) {
-        if( m_timestamp>=m_filestamp ) {
-            time_dvrtime_addms(&t, tstamp2ms(m_timestamp-m_filestamp) );
-        }
+        getframe();
+        time_dvrtime_addms(&t, m_frametime);
     }
     return t;
 }	
 
-#define SEARCHBUFSIZE	(0x10000)
-
-int dvrfile::nextframe()
+// get frame informations
+int dvrfile::getframe()
 {
-    int frsize;
-    int pos;
-    int readbytes;
-    int j, i ;
-    int *searchbuf;
-    frsize=framesize() ;
-    if (frsize>0) {
-        seek(frsize, SEEK_CUR );
-        return tell();
-    } 
-    else {					// not a frame structure
-        pos = tell();
-        pos &= (~3);
-        seek(pos, SEEK_SET);
-        searchbuf = (int *) mem_alloc(SEARCHBUFSIZE);	// 64Kbytes
-        for (j = 0; j < 16; j++) {	// search 16 blocks, 1Mbytes
-            pos = tell();
-            readbytes = read(searchbuf, SEARCHBUFSIZE);
-            if (readbytes < 16 ) {
-                mem_free(searchbuf);
-                return 0;		// file ends
+    if( !isopen() ) {
+        m_framepos=0;
+        m_frametype=FRAMETYPE_UNKNOWN;
+        m_framesize=0;
+        m_frametime=0;
+        return 0 ;
+    }
+    int framepos = tell();
+    if( framepos >= m_filesize ) {
+        m_framepos = framepos ;
+        m_frametype=FRAMETYPE_UNKNOWN;
+        m_framesize=0;
+        return 0 ;
+    }
+    if( framepos < m_filestart ) {
+        framepos=m_filestart ;
+        seek(framepos);
+        m_frame_kindex=0 ;
+    }
+
+//    if( framepos&3 ) {          // frame position is not dword aligned
+//        ;;;
+//    }
+    
+    if( m_framepos != framepos ) {
+        m_framesize = 0 ;
+        m_frametype = FRAMETYPE_UNKNOWN ;
+
+        // adjust key frame index
+        int ksize = m_keyarray.size() ;
+        if( ksize > 0 ) {
+            if( m_frame_kindex<0 || m_frame_kindex>=ksize ) {
+                m_frame_kindex=0 ;
             }
-            for (i = 0; i < (readbytes / (int)(sizeof(int))); i++) {
-                if (searchbuf[i] == 1) {
-                    // find it
-                    seek(pos+ i * (sizeof(int)), SEEK_SET );
-                    if( frametype() ) {		// find a correct frame
-                        mem_free(searchbuf);
-                        return tell();
+            while( 1 ) {
+                int kpos = m_keyarray[m_frame_kindex].koffset ;
+                if( framepos == kpos ) {
+                    m_frametime =  m_keyarray[m_frame_kindex].ktime ;       // may be not necessory here
+                    break;
+                }
+                else if( framepos>kpos ) {
+                    if( m_frame_kindex>=ksize-1 ||
+                        framepos < m_keyarray[m_frame_kindex+1].koffset ) 
+                    {
+                        break;
                     }
-                    seek(pos+SEARCHBUFSIZE, SEEK_SET );
+                    m_frame_kindex++ ;
+                }
+                else { // framepos<kpos
+                    if( m_frame_kindex == 0 ) {
+                        break;
+                    }
+                    m_frame_kindex--;
                 }
             }
         }
-        mem_free(searchbuf);
-        return 0;				// could not find, file error!
+
+#ifdef EAGLE32
+        struct hd_frame frame;
+        struct hd_subframe subframe;
+        int subframes;
+        int rbytes ;
+
+        rbytes = read((char *) &frame, sizeof(frame));
+        if (rbytes == sizeof(frame) && 
+            frame.flag == 1 && 
+            HD264_FRAMESUBFRAME(frame) < 10 &&
+            frame.framesize < 1000000) 
+        {
+            switch ( HD264_FRAMETYPE(frame) ) {
+                case 3 :
+                    m_frametype = FRAMETYPE_KEYVIDEO;
+                    break ;
+                case 4:
+                    m_frametype = FRAMETYPE_VIDEO;
+                    break ;
+                case 1:
+                    m_frametype = FRAMETYPE_AUDIO;
+                    break ;
+                default:
+                    break ;
+            }
+
+
+            if (m_frametype != FRAMETYPE_UNKNOWN ) {
+                // update ref time
+                if( ksize > 0 ) {
+                    if( m_keyarray[m_frame_kindex].koffset == framepos ) {
+                        // match key frame recorded, reload referrent time stamp
+                        m_reftstamp = frame.timestamp ;
+                        m_reftime = m_keyarray[m_frame_kindex].ktime ;
+                    }
+                }
+                else if( framepos == m_filestart ) {    // reading first frame
+                    m_reftstamp = frame.timestamp ;
+                    m_reftime = 0 ;
+                }
+                // update frame time
+                if( frame.timestamp > m_reftstamp ) {
+                    m_frametime = m_reftime+tstamp2ms(frame.timestamp-m_reftstamp) ;
+                }
+                else {
+                    m_frametime = m_reftime ;
+                }
+                subframes =  HD264_FRAMESUBFRAME(frame) ;
+                seek(frame.framesize, SEEK_CUR);
+                while (--subframes > 0) {
+                    subframe.d_flag = 0;
+                    if( read(&subframe, sizeof(subframe))!= sizeof(subframe) ) {
+                        break ;
+                    }
+                    if (HD264_SUBFLAG(subframe)!= 0x1001 && HD264_SUBFLAG(subframe)!= 0x1005) {
+                        break ;
+                    }
+                    seek(subframe.framesize, SEEK_CUR);
+                }
+                if (subframes == 0)  {
+                    m_framesize=tell()-framepos ;
+                }
+            }
+        }
+#endif
+
+#ifdef EAGLE34
+        unsigned char ps_sync[4] ;
+        int fpos = tell();
+        while (fpos<=m_filesize && read(ps_sync, 4)==4) 
+        {
+            if( ps_sync[0]==0 && 
+                ps_sync[1]==0 && 
+                ps_sync[2]==1 ) 
+            {
+                if( ps_sync[3]==0xba ) {            // PS stream header
+                    unsigned char ps_header[16] ;
+                    if( m_frametype!=FRAMETYPE_UNKNOWN ) {  // hit the next header
+                        break;
+                    }
+                    if( read(ps_header,16)==16 ) {             // read rest of PS header, (total 20 bytes )
+                        // calculate time stamp ;
+                        unsigned int systemclock ;
+                        int marker ;
+                        marker = (ps_header[0]>>6) & 3 ;
+                        if( marker != 1 ) {
+                            NET_DPRINT( "First marker bits error!\n");
+                            break;
+                        }
+                        systemclock = ((((unsigned int)ps_header[0])&0x38)>>3);
+                        marker = (ps_header[0]>>2) & 1 ;
+                        if( marker != 1 ) {
+                            NET_DPRINT( "Second marker bits error!\n");
+                            break;
+                        }
+                        systemclock<<=15 ;
+                        systemclock|= 
+                            ((((unsigned int)ps_header[0])&0x3)<<13) |
+                            ((((unsigned int)ps_header[1])&0xff)<<5) |
+                            ((((unsigned int)ps_header[2])&0xf8)>>3) ;
+                        marker = ((((unsigned int)ps_header[2])&0x4)>>2) ; 
+                        if( marker != 1 ) {
+                            NET_DPRINT( "Third marker bits error!\n");
+                            break;
+                        }
+                        //                systemclock<<=15 ;
+                        systemclock<<=14 ;
+                        systemclock|= 
+                            ((((unsigned int)ps_header[2])&0x3)<<12) |
+                            ((((unsigned int)ps_header[3])&0xff)<<4) |
+                            ((((unsigned int)ps_header[4])&0xf8)>>4) ;
+                        marker = ((((unsigned int)ps_header[4])&0x4)>>2) ;
+                        if( marker != 1 ) {
+                            NET_DPRINT( "Third marker bits error!\n");
+                            break;
+                        }
+                        marker = ((((unsigned int)ps_header[5])&1)) ;
+                        if( marker != 1 ) {
+                            NET_DPRINT( "4th marker bits error!\n");
+                            break;
+                        }
+                        marker = ((((unsigned int)ps_header[8])&3)) ;
+                        if( marker != 3 ) {
+                            NET_DPRINT( "5th marker bits error!\n");
+                            break;
+                        }
+                        // update ref time stamp
+                        if( ksize > 0 ) {
+                            if( m_keyarray[m_frame_kindex].koffset == framepos ) {
+                                // match key frame recorded, reload referrent time stamp
+                                m_reftstamp = systemclock ;
+                                m_reftime = m_keyarray[m_frame_kindex].ktime ;
+                            }
+                        }
+                        else if( framepos == m_filestart ) {    // reading first frame
+                            m_reftstamp = systemclock ;
+                            m_reftime = 0 ;
+                        }
+                        // update frame time
+                        if( systemclock > m_reftstamp ) {
+                            m_frametime = m_reftime+(systemclock-m_reftstamp)/45 ;  // system clock has been shifted, it is 45000Hz
+                        }
+                        else {
+                            m_frametime = m_reftime ;
+                        }
+#ifdef NETDBG              
+                        NET_DPRINT( "getframe: m_reftstamp=%d m_reftime=%d systemclock=%d m_frametime=%d\n",
+                            m_reftstamp,
+                            m_reftime,
+                            systemclock,
+                            m_frametime );
+#endif
+                    }
+                    else {
+                        break;
+                    }
+                }
+                else {                              // PS pack header
+                    unsigned char ps_si[2] ;
+                    if( read(ps_si, 2)==2 ) {
+                        unsigned int si ;
+                        if( ps_sync[3]==0xc0 ) {                // audio frame
+                            if( m_frametype != FRAMETYPE_UNKNOWN ) {
+                                break ;
+                            }
+                            m_frametype = FRAMETYPE_AUDIO ;
+                        }
+                        else if( ps_sync[3]==0xe0 ) {
+                            if( m_frametype == FRAMETYPE_UNKNOWN ) {
+                                m_frametype = FRAMETYPE_VIDEO ; 
+                            }
+                        }
+                        else if( ps_sync[3]==0xbc ) {           // pack 0x000001bc belong to key frames
+                            m_frametype = FRAMETYPE_KEYVIDEO ; 
+                        }
+                        si = (((unsigned int)ps_si[0])<<8) +
+                            +(((unsigned int)ps_si[1])) ;
+                        seek( si, SEEK_CUR );
+                    }
+                    else {
+                        break;
+                    }
+                }
+            }
+            else {
+                break ;
+            }
+            fpos = tell();
+        }
+        m_framesize = fpos-framepos ;
+#endif          // EAGLE34
+        
+        if( m_framesize<=0 || m_frametype ==  FRAMETYPE_UNKNOWN ){
+            m_framesize = 0 ;
+            m_frametype =  FRAMETYPE_UNKNOWN ;
+        }
+        m_framepos = framepos ;
+        seek(m_framepos);
     }
-    return 0;
+    return m_framepos ;
+}
+
+#define SEARCHBUFSIZE	(0x2000)
+#define MAXSEARCH       (SEARCHBUFSIZE*64)
+
+int dvrfile::nextframe()
+{
+    int pos;
+    int readbytes;
+    int j, i ;
+    if (framesize()>0 ) {
+        seek(m_framesize, SEEK_CUR );
+        return tell();
+    } 
+    else {					// no correct frame structure
+        unsigned int searchbuf[SEARCHBUFSIZE];
+        pos = tell();
+        pos &= (~3);
+        seek(pos, SEEK_SET);
+        for (j = 0; j < (MAXSEARCH/SEARCHBUFSIZE); j++) {	
+            pos = tell();
+            readbytes = read(searchbuf, SEARCHBUFSIZE);
+            if (readbytes < 16 ) {
+                return 0;		// file ends
+            }
+            for (i = 0; i < (readbytes / (int)(sizeof(int))); i++) {
+                if (searchbuf[i] == FRAMESYNC) {
+                    // find it
+                    seek(pos+ i * (sizeof(int)), SEEK_SET );
+                    if( frametype()!=FRAMETYPE_UNKNOWN ) {	// find a correct frame
+                        return tell();
+                    }
+                    seek(pos+SEARCHBUFSIZE, SEEK_SET);
+                }
+            }
+        }
+    }
+    return 0;                   // could not find, file error!
 }
 
 int dvrfile::prevframe()
 {
     int pos ;
     int j, i, readbytes;
-    int *searchbuf;
+    unsigned int searchbuf[SEARCHBUFSIZE];
     pos = tell();
     pos &= (~3);
     seek(pos, SEEK_SET);
-    searchbuf = (int *) mem_alloc(SEARCHBUFSIZE);	// 64Kbytes
-    for (j = 0; j < 32; j++) {	// search 32 blocks, 2Mbytes
+    for (j = 0; j < (MAXSEARCH/SEARCHBUFSIZE); j++) {	
         pos -= SEARCHBUFSIZE;
         if (pos < m_filestart) {
             break;
@@ -491,17 +770,15 @@ int dvrfile::prevframe()
             break;
         }
         for (i = readbytes / (sizeof(int)) - 1; i >= 0; i--) {
-            if (searchbuf[i] == 1) {
+            if (searchbuf[i] == FRAMESYNC) {
                 // find it
                 seek(pos+ i * (sizeof(int)), SEEK_SET );
-                if( framesize() ) {		// find a correct frame
-                    mem_free(searchbuf);
+                if( frametype()!=FRAMETYPE_UNKNOWN ) {	// find a correct frame
                     return tell();
                 }
             }
         }
     }
-    mem_free(searchbuf);
     seek(0, SEEK_SET);
     return 0;					// could not find, file error!
 }
@@ -510,7 +787,7 @@ int dvrfile::nextkeyframe()
 {
     int i ;
     int pos ;
-    if( m_keyarray.size()>0 ) {                         // key frame index available
+    if( m_keyarray.size()>1 ) {                         // key frame index available
         pos = tell();
         for( i=0; i<m_keyarray.size(); i++ ) {
             if( m_keyarray[i].koffset>pos ) {
@@ -532,7 +809,7 @@ int dvrfile::prevkeyframe()
 {
     int i ;
     int pos ;
-    if( m_keyarray.size()>0 ) {                         // key frame index available
+    if( m_keyarray.size()>1 ) {                         // key frame index available
         pos = tell();
         for( i=m_keyarray.size()-1; i>0; i--) {
             if( m_keyarray[i].koffset<=pos ) {
@@ -563,8 +840,14 @@ void dvrfile::readkey()
         keyfile=file_open( pk, "r" );
         if( keyfile ) {
             struct dvr_key_t key;
+            struct dvr_key_t skey;
+            skey.ktime=0;
+            skey.koffset=0;
             while(fscanf(keyfile,"%d,%d\n", &(key.ktime), &(key.koffset))==2){
-                m_keyarray.add(key);
+                if( key.ktime > skey.ktime && key.koffset > skey.koffset ) {
+                    skey = key ;
+                    m_keyarray.add(key);
+                }
             }
             file_close(keyfile);
         }
@@ -622,7 +905,7 @@ int dvrfile::seek( dvrtime * seekto )
     }
 
     seekms = seeks*1000 ;
-    if( m_keyarray.size()>0 ) {                         // key frame index available
+    if( m_keyarray.size()>1 ) {                         // key frame index available
         for( i=m_keyarray.size()-1; i>=0; i-- ) {
             if( m_keyarray[i].ktime <= seekms ) {
                 break;
@@ -632,6 +915,8 @@ int dvrfile::seek( dvrtime * seekto )
         seek(m_keyarray[i].koffset, SEEK_SET );
         return 1 ;
     }
+
+    // no key file available
     
     // seek to end of file
     seek(0, SEEK_END);
@@ -645,13 +930,13 @@ int dvrfile::seek( dvrtime * seekto )
         seek(0, SEEK_END );                  // seek to end of file
         return 1 ;
     }
-    
-    framesize();                                        // this will get current frame timestamp
-    if( tstamp2ms(m_timestamp - m_filestamp) > seekms ) {
+
+    getframe();                              // update current frame time
+    if( m_frametime > seekms ) {
         // go backward
         while( prevkeyframe() ) {
-            framesize();	// update timestamp
-            if( tstamp2ms(m_timestamp - m_filestamp) <= seekms ) {
+            getframe() ;    // update frame time
+            if( m_frametime <= seekms ) {
                 // got it
                 return 1 ;
             }
@@ -662,8 +947,8 @@ int dvrfile::seek( dvrtime * seekto )
         // go forward
         pos = tell();
         while( nextkeyframe() ) {
-            framesize();
-            if( tstamp2ms(m_timestamp - m_filestamp) > seekms ) {
+            getframe() ;    // update frame time
+            if( m_frametime > seekms ) {
                 // got it
                 break;
             }
@@ -671,11 +956,13 @@ int dvrfile::seek( dvrtime * seekto )
         }
         seek(pos, SEEK_SET );
     } 
+    getframe();                          // update current frame time
     return 1 ;
 }
 
 // repair a .264 file, return 1 for success, 0 for failed
-int dvrfile::repair()
+/*
+int dvrfile::repair1()
 {
     struct hd_frame frame;
     int filepos, filelength;
@@ -765,6 +1052,74 @@ int dvrfile::repair()
     }
     return 0;
 }
+*/
+
+int dvrfile::repair()
+{
+    int framecount;
+    dvr_key_t keyt ;
+	array <struct dvr_key_t> keyarray ;
+    
+    if( m_filesize < (file_repaircut+512000) ) {        // file too small, not worth to repair
+        return 0 ;
+    }
+    
+    // pre-truncate bad files, to repair file system error ?
+    m_initialsize=m_filesize ;
+    m_filesize-=file_repaircut ;
+
+    if( m_keyarray.size()>0 ) {
+        m_keyarray.setsize(1);
+        if( m_keyarray[0].ktime<0 ||
+            m_keyarray[0].ktime>1000 ||
+            m_keyarray[0].koffset<0 ||
+            m_keyarray[0].koffset>(int)sizeof( hd_file ) ) 
+        {
+            m_keyarray[0].ktime = m_keyarray[0].ktime % 1000 ;
+            m_keyarray[0].koffset = sizeof( hd_file ) ;
+            m_filestart = sizeof( hd_file ) ;
+        }
+    }
+    m_framepos = 0 ;            // to refresh reference time stamp
+    framecount = 0;
+    
+    while( framesize()>0 ) {
+        if( m_frametype == FRAMETYPE_KEYVIDEO ) {
+            keyt.koffset = m_framepos;
+            keyt.ktime = m_frametime;
+            keyarray.add( keyt ) ;
+        }
+        nextframe();
+        framecount++;
+    }
+    
+    if (framecount < 5 || 
+        m_framepos < 0x10000 ||
+        m_frametime < 1000 ) 
+    {
+        return 0 ;                                          // file too small, failed
+    }
+    
+    m_openmode = 1 ;                    // set open mode to write, so close() would save key file and set correct file size
+    m_keyarray = keyarray ;
+    close();                            // close file, so we can rename it.
+    
+    // rename file to include new length
+    char newfilename[512] ;
+    char * rn ;
+    char * tail ;
+
+    strcpy( newfilename, m_filename.getstring() );
+    rn = strstr(newfilename, "_0_");
+    if( rn ) {
+        tail = strstr(m_filename.getstring(), "_0_")+3 ;
+        sprintf( rn, "_%d_%s", m_frametime/1000, tail );
+        if( rename( m_filename.getstring(), newfilename )>=0 ) {         // success
+            return 1;
+        }
+    }
+    return 0;
+}
 
 int dvrfile::repairpartiallock()
 {
@@ -816,7 +1171,7 @@ int dvrfile::repairpartiallock()
     
     readheader( (void *)lockfilehead, 40 );
     lockfile.writeheader( lockfilehead, 40 );
-    lockfile.m_fileencrypt=0 ;
+    lockfile.m_fileencrypt=0 ;                      // do not enc again
     
     for( i=breakindex ; i<m_keyarray.size(); i++ ) {
         // if rec_busy, delay for 10 s
@@ -842,6 +1197,8 @@ int dvrfile::repairpartiallock()
         else {
             framesize = m_filesize - m_keyarray[i].koffset ;
         }
+        if( framesize<=0 ) 
+            break;
 
         frametime = m_filetime ;
         time_dvrtime_addms( &frametime, m_keyarray[i].ktime );

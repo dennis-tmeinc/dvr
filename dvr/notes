@@ -35,4 +35,6 @@ release 10.0519.14
       User settings on setup page only modify the user configuration file, in case this file corrupted, system would work on default setting instead of work on unknown state.
    Add disk space usage on CDC status screen (menu screen), ex: "Video length 2:30 Remain 6:13", this message means there are videos total of 2 hour and 30 minute on disk and available disk space to record 6 hours and 13 minutes.
    
-
+release 10.0720.14
+  Add PW34 support
+  

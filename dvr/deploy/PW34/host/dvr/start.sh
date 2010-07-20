@@ -1,5 +1,8 @@
 #!/bin/sh
 
+#EAGLE34
+ln -sf /dav /davinci
+
 PATH=/bin:/davinci:/davinci/dvr
 export PATH
 
@@ -9,7 +12,6 @@ fi
 
 #clean some ram disk space. (hikvison files)
 rm -r /opt/*
-rm /bin/chat /bin/pppd /bin/pppoe /bin/t1 /bin/update
 
 # make working directory
 mount -t ramfs ramfs /var
@@ -17,16 +19,16 @@ mkdir /var/dvr
 mkdir /var/dvr/disks
 
 # install davinci drivers
-cd /davinci
-insmod dsplinkk.ko ddr_start=0x83100080 ddr_size=0x00efff80
+#cd /davinci
+#insmod dsplinkk.ko ddr_start=0x83100080 ddr_size=0x00efff80
 
-rm -f /dev/dsplink
-mknod /dev/dsplink c `/bin/awk "\\$2==\"dsplink\" {print \\$1}" /proc/devices` 0
+#rm -f /dev/dsplink
+#mknod /dev/dsplink c `/bin/awk "\\$2==\"dsplink\" {print \\$1}" /proc/devices` 0
 
-rm -f /dev/hikgpio
-mknod /dev/hikgpio c `/bin/awk "\\$2==\"hikgpio\" {print \\$1}" /proc/devices` 0
+#rm -f /dev/hikgpio
+#mknod /dev/hikgpio c `/bin/awk "\\$2==\"hikgpio\" {print \\$1}" /proc/devices` 0
 
-check_rs232
+#check_rs232
 
 fmupdate=0 
 
@@ -73,7 +75,7 @@ for gw in `ls gateway*` ; do
 done
 
 #telnet support
-cp /davinci/dvr/passwd /etc
+cp /davinci/dvr/passwd /etc 
 
 # restart inetd
 echo "Restart inetd."
@@ -81,27 +83,27 @@ inetdpid=`ps | awk '$5 ~ /inetd/ {print $1}'`
 kill -TERM ${inetdpid}
 sleep 1
 cp ./inetd.conf /etc/inetd.conf
-/bin/inetd  < /dev/null > /dev/null 2> /dev/null
+/bin/inetd  < /dev/null > /dev/null 2> /dev/null &
 
 # ext3 file system modules
 insmod /davinci/jbd.ko
 insmod /davinci/mbcache.ko
-insmod /davinci/ext2.ko
+#insmod /davinci/ext2.ko
 insmod /davinci/ext3.ko
 
 # mount debugging disks
-mount -t nfs 192.168.247.100:/home/dennis/nfsroot /mnt/nfs0 -o nolock
+#mount -t nfs 192.168.247.100:/home/dennis/nfsroot /mnt/nfs0 -o nolock
 
 # see if I want to debug it
-if [ -f /mnt/nfs0/eagletest/debugon ]; then
-    echo Enter debugging mode.
-    exit ;
-fi
+#if [ -f /mnt/nfs0/eagletest/debugon ]; then
+#    echo Enter debugging mode.
+#    exit ;
+#fi
 
 mkdir /etc/dvr
 
 # setup DVR configure file
-ln -sf /davinci/dvr/dvrsvr.conf /etc/dvr/dvr.conf
+ln -sf /dav/dvr/dvrsvr.conf /etc/dvr/dvr.conf
 
 cd /davinci/dvr
 

@@ -155,6 +155,7 @@ struct hd_file {
 	DWORD res2[2];
 };
 
+#ifdef EAGLE32
 struct hd_frame {
 	DWORD flag;					// 1
 	DWORD serial;
@@ -167,7 +168,6 @@ struct hd_frame {
 	DWORD res5[3];
 	DWORD framesize;
 };
-
 #define HD264_FRAMEWIDTH(hd)  	  ( ((hd).width_height) & 0x0ffff)
 #define HD264_FRAMEHEIGHT(hd)     ( (((hd).width_height)>>16)&0x0ffff)
 #define HD264_FRAMESUBFRAME(hd)   ( ((hd).d_frames)&0x0ff)
@@ -180,6 +180,8 @@ struct hd_subframe {
 };
 
 #define HD264_SUBFLAG(subhd)      ( ((subhd).d_flag)&0x0ffff )
+
+#endif
 
 #define FRAMETYPE_UNKNOWN	(0)
 #define FRAMETYPE_KEYVIDEO	(1)
@@ -221,23 +223,21 @@ class dvrfile {
 	int    m_openmode ;			// 0: read, 1: write
     DWORD  m_hdflag ;           // file header flag when reading
 
-    struct dvrtime m_filetime ;	// file start time
-    int   m_filesize ;
+    struct dvrtime m_filetime ;	// file start time (as from file name)
+    int   m_filesize ;          // file size in bytes
 	int   m_filelen ;			// file length in seconds
-    DWORD m_filestamp ;			// first frame time stamp
 	int	  m_filestart ;			// first frame offset
-        
-    int   m_syncsize ;
 
-    int   m_framepos ;
-    int   m_framesize ;
-    int   m_frametime ;
-    int   m_frametype ;
-    int   m_frame_kindex ;
-        
     // current frame info
-	DWORD m_timestamp ;			// current time stamp ;
+    DWORD m_reftstamp ;			// referent frame time stamp
+    int   m_reftime ;			// referent frame time (milliseconds from file time)
         
+    int   m_framepos ;          // current frame position
+    int   m_framesize ;         // current frame size
+    int   m_frametype ;         // current frame type
+    int   m_frametime ;         // current frame time (milliseconds from file time)
+    int   m_frame_kindex ;
+
 	array <struct dvr_key_t> m_keyarray ;
 
     int nextframe();
@@ -261,15 +261,14 @@ class dvrfile {
 	//   return 1 if seek inside the file.
 	//	return 0 if seek outside the file, pointer set to begin or end of file
 	int seek( dvrtime * seekto );
-    int frameinfo();                // read frame info
-        
+
+    int getframe();                 // advance to next frame and retrive frame info
 	dvrtime frametime();			// return current frame time
 	int frametype();                // return current frame type
 	int framesize();                // return current frame size
         
 	int prevkeyframe();
 	int nextkeyframe();
-	int readframe(struct cap_frame *pframe);
 	int readframe(void * framebuf, size_t bufsize);
 	int writeframe(void * buffer, size_t size, int keyframe, dvrtime * frametime);
 	int isopen() {
@@ -458,8 +457,8 @@ class capture {
    	virtual void setosd( struct hik_osd_type * posd )=0;
 
 	void alarm();                   	// update alarm relate to capture channel
-	virtual void start(){};				// start capture
-	virtual void stop(){};				// stop capture
+	virtual void start(){m_started=1;}	// start capture
+	virtual void stop(){m_started=0;}	// stop capture
 	virtual void restart(){				// restart capture
 		stop();
 		if( m_enable ) {
@@ -474,9 +473,10 @@ class capture {
     char * getheader(){return m_header;}
 };
 
-extern capture ** cap_channel;
+extern capture * cap_channel[];
 
-
+extern int eagle32_channels ;
+int eagle32_hikhandle(int channel);
 int  eagle32_init();
 void eagle32_uninit();
 
@@ -787,8 +787,12 @@ class playback {
 };
 
 // network service
-
+#ifdef EAGLE32
 #define DVRPORT 15111
+#endif
+#ifdef EAGLE34
+#define DVRPORT 15112
+#endif
 #define REQDVREX	0x7986a348
 #define REQDVRTIME	0x7986a349
 #define DVRSVREX	0x95349b63
@@ -798,7 +802,6 @@ class playback {
 #define DVRMSG		0x774f9a31
 #define REQMCMSG	0x4351de75
 #define ANSMCMSG	0x43518967
-
 
 struct sockad {
     struct sockaddr addr;

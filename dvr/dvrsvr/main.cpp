@@ -594,7 +594,12 @@ void sig_check()
     if( sigmap & (1<<SIGTERM) ) 
     {
         dvr_log("Signal <SIGTERM> captured.");
+#ifdef EAGLE32        
         app_state = APPQUIT ;
+#endif        
+#ifdef EAGLE32        
+        app_state = APPDOWN ;       // APPQUIT make system reset in eagle34 board, so we just APPDOWN
+#endif        
     }
     else if( sigmap & (1<<SIGQUIT) ) 
     {
@@ -689,10 +694,10 @@ void app_init()
     }
 
 #ifdef MDVR_APP   
-    hostname=dvrconfig.getvalue("system", "hostname" );
-    if( hostname.length()>0 ){
+    t=dvrconfig.getvalue("system", "hostname" );
+    if( t.length()>0 ){
         // setup hostname
-        strncpy( g_hostname, hostname.getstring(), 127 );
+        strncpy( g_hostname, t.getstring(), 127 );
         sethostname( g_hostname, strlen(g_hostname)+1);
         gethostname( g_hostname, 128 );
         dvr_log("Setup hostname: %s", g_hostname);
@@ -826,9 +831,9 @@ void do_init()
     event_init();
     disk_init();
     file_init();
-    rec_init();
     play_init();
     cap_init();
+    rec_init();
     ptz_init();
     screen_init();	
     msg_init();
@@ -847,9 +852,9 @@ void do_uninit()
     msg_uninit();
     screen_uninit();
     ptz_uninit();
+    rec_uninit();
     cap_uninit();
     play_uninit();
-    rec_uninit();
     file_uninit();
     disk_uninit();
 
