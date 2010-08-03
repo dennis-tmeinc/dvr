@@ -56,6 +56,9 @@ filebuffersize=512k
 # low memory. (minimum free memory required. ) (kb)
 lowmemory=15000
 
+uploadingtime=1800
+archivetime=1800
+
 #shutdown delay time in seconds
 shutdowndelay=7200
 

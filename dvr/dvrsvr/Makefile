@@ -27,7 +27,8 @@ SOURCES=main.cpp \
 		crypt.cpp \
 		dio.cpp \
 		screen.cpp \
-		md5.cpp
+		md5.cpp \
+		draw.cpp
 
 EAGLESRS=eaglesvr.cpp \
 		dvrtime.cpp \
@@ -57,6 +58,7 @@ HEADERS=dvr.h \
 		genclass.h \
 		cfg.h \
 		fbwindow.h \
+		draw.h \
 		crypt.h \
         ../ioprocess/diomap.h \
         ../cfg.h
@@ -72,8 +74,12 @@ LDFLAGS= -lpthread -lstdc++ -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib -
 all : dvrsvr
 
 # dvrsvr : $(OBJS) $(LIBRARY)
-dvrsvr : $(OBJS) ../fb/libfbdraw.so
-	$(CC)  $(CCFLAGS) -o $@  $(OBJS) ../fb/libfbdraw.so $(LDFLAGS)
+#dvrsvr : $(OBJS) ../fb/libfbdraw.so
+#	$(CC)  $(CCFLAGS) -o $@  $(OBJS) ../fb/libfbdraw.so $(LDFLAGS)
+#	cp dvrsvr  $(debug_folder)
+
+dvrsvr : $(OBJS) ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c
+	$(CC)  $(CCFLAGS) -o $@  $(OBJS) ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c $(LDFLAGS)
 	cp dvrsvr  $(debug_folder)
 
 ../fb/libfbdraw.so : 

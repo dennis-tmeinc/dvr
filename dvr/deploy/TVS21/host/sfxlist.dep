@@ -2,7 +2,6 @@
 ./dvr/firmwareid
 ./dvr/start.sh
 ./dvr/dvrsvr
-./dvr/libfbdraw.so
 ./dvr/dvrtime
 ./dvr/glog
 ./dvr/ioprocess

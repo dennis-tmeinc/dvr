@@ -11,7 +11,8 @@ static int    logfilesize ;	// maximum logfile size
 string logfile ;
 
 char g_hostname[128] ;
-pthread_mutex_t mutex_init=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP ;
+
+// pthread_mutex_t mutex_init=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP ;
 
 char g_mfid[32] ;
 int  g_keycheck ;           // tvs : tvskeycheck
@@ -19,7 +20,7 @@ char g_serial[64] ;        // tvs: tvcs, pwii: unit#
 char g_id1[64] ;           // tvs: medallion, pwii: vehicle id
 char g_id2[64] ;            // tvs: licenseplate#, pwii: district
 
-static pthread_mutex_t dvr_mutex;
+// static pthread_mutex_t dvr_mutex;
 int system_shutdown;
 
 int app_state;				// APPQUIT, APPUP, APPDOWN, APPRESTART
@@ -29,16 +30,6 @@ int g_lowmemory ;
 char g_vri[128] ;           // VRI (video recording id) for PWII
 string g_policeidlistfile ; // Police ID list filename
 char g_policeid[32];        // Police ID for PWII
-
-void dvr_lock()
-{
-    pthread_mutex_lock(&dvr_mutex);
-}
-
-void dvr_unlock()
-{
-    pthread_mutex_unlock(&dvr_mutex);
-}
 
 // get a random number 
 unsigned dvr_random()
@@ -82,26 +73,24 @@ void dvr_cleanlog1(FILE * flog)
 void dvr_cleanlog(FILE * flog)
 {
     int pos1, pos2, rsize ;
-    char * fbuf ;
     fseek( flog, 0, SEEK_END );
     pos1 = ftell(flog);
     if( pos1>logfilesize ) {
-        fbuf = (char *)mem_alloc( 32*1024 ) ;
+        char fbuf[4096] ;
         fseek( flog, logfilesize/4, SEEK_SET );         // cut first 1/4 log data
         // skip one line
         fgets( fbuf, 4096, flog );	// skip this line.
         pos2 = 0 ;
-        while( (rsize=file_read(fbuf, 32*1024, flog))>0 ) {
+        while( (rsize=file_read(fbuf, 4096, flog))>0 ) {
             pos1 = ftell(flog) ;
             fseek( flog, pos2, SEEK_SET );
             file_write( fbuf, rsize, flog );
             pos2 = ftell(flog) ;
-            if( rsize<32*1024 ) {
+            if( rsize<4096 ) {
                 break;
             }
             fseek( flog, pos1, SEEK_SET );
         }
-        mem_free( fbuf );
         fseek( flog, pos2, SEEK_SET );
         file_flush( flog );
         ftruncate( fileno(flog), pos2 );
@@ -135,13 +124,11 @@ int dvr_log(char *fmt, ...)
     if (flog) {
         ftmplog = fopen(tmplogfile.getstring(), "r");	// copy temperary log to logfile        
         if (ftmplog) {
-            dvr_lock();
             fputs("\n", flog);
             while (fgets(lbuf, 512, ftmplog)) {
                 fputs(lbuf, flog);
             }
             fputs("\n", flog);
-            dvr_unlock();
             fclose(ftmplog);
             unlink(tmplogfile.getstring());
         }
@@ -211,7 +198,6 @@ static void dvr_logkey_settings()
     if( flog==NULL ) {
         return ;
     }
-    dvr_lock();
     if( g_usbid[0] == 'I' && g_usbid[1] == 'N' ) {		// log installer only 
         //			write down some settings changes
         string v ;
@@ -272,7 +258,6 @@ static void dvr_logkey_settings()
         }
         keylogsettings = 0 ;
     }
-    dvr_unlock();
     file_close( flog );
     return ;
 }
@@ -301,9 +286,7 @@ void dvr_logkey( int op, struct key_data * key )
             }
             flog = dvr_logkey_file();
             if( flog ) {
-                dvr_lock();
                 fprintf(flog, "%s:Viewer connection closed, key ID: %s\n", lbuf, g_usbid );
-                dvr_unlock();
                 file_close( flog );
             }
         }
@@ -320,10 +303,8 @@ void dvr_logkey( int op, struct key_data * key )
             }
             flog = dvr_logkey_file();
             if( flog ) {
-                dvr_lock();
                 fprintf(flog, "\n%s:Viewer connected, key ID: %s\n%s", 
                     lbuf, key->usbid, ((char *)&(key->size))+key->keyinfo_start );
-                dvr_unlock();
                 l = ftell(flog) ;
                 if( l>logfilesize ) {
                     dvr_cleanlog( flog );
@@ -596,8 +577,8 @@ void sig_check()
         dvr_log("Signal <SIGTERM> captured.");
 #ifdef EAGLE32        
         app_state = APPQUIT ;
-#endif        
-#ifdef EAGLE32        
+#endif
+#ifdef EAGLE34
         app_state = APPDOWN ;       // APPQUIT make system reset in eagle34 board, so we just APPDOWN
 #endif        
     }
@@ -885,7 +866,7 @@ int main()
     int app_ostate;				// application status. ( APPUP, APPDOWN )
 
     // initial mutex
-    memcpy( &dvr_mutex, &mutex_init, sizeof(mutex_init));
+//    memcpy( &dvr_mutex, &mutex_init, sizeof(mutex_init));
     
     mem_init();
     
@@ -920,7 +901,6 @@ int main()
                 do_uninit();
             }
             sleep(1);                               // will wake up on signal.
-//            usleep( 12500 );
         }
         else if (app_state == APPRESTART ) {
             app_state = APPUP ;
@@ -941,7 +921,7 @@ int main()
     app_exit();
     mem_uninit ();
 
-    pthread_mutex_destroy(&dvr_mutex);
+//    pthread_mutex_destroy(&dvr_mutex);
 
     if (system_shutdown) {              // requested system shutdown
         // dvr_log("Reboot system.");

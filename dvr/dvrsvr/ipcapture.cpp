@@ -159,7 +159,6 @@ void ipeagle32_capture::streamthread()
             }
         }
         if( m_streamfd<=0 ) {
-            sleep(1);
             continue ;
         }
 

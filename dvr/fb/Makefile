@@ -22,7 +22,7 @@ libfbdraw.so : fbdraw.c ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c
 	$(CC) $(CFLAGS) -fPIC -c -Wall ../lzmasdk/dec.c
 	$(CC) $(CFLAGS) -fPIC -c -Wall ../lzmasdk/LzmaDec.c
 	$(CC) $(CFLAGS) -shared -Wl,-soname,libfbdraw.so -o $@ fbdraw.o dec.o LzmaDec.o
-	cp libfbdraw.so ~/nfsroot/	
+	cp libfbdraw.so $(debug_folder)
 
 clean :
 	rm -f *.o

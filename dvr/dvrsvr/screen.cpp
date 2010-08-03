@@ -77,12 +77,16 @@ static void screen_setmode()
 
     res=SetDisplayParams(MAIN_OUTPUT, ScreenNum);       //  set screen format, support 1 , 2, 4 (2x2), 6 (3x3), 8 (?), 9 (3x3 ), 16 (4x4)
 
+    for( i=0; i<eagle32_channels ; i++ ) {
+        displayorder[i]=eagle32_hikhandle(i)-1 ;
+    }
+
     res=SetDisplayOrder(MAIN_OUTPUT, displayorder );    // select screen channel order, also turn on all preview channels
 
     // turn off all preview channel opened by "SetDisplayOrder"
-    for(i=4; i>0; i--) {
-        res=SetPreviewScreen(MAIN_OUTPUT,i,0);          // third  parameter turn on/off specified channel
-        res=SetPreviewAudio(MAIN_OUTPUT,i,0);           // turn on/off audio ?
+    for( i=0; i<eagle32_channels ; i++ ) {
+        res=SetPreviewScreen(MAIN_OUTPUT,eagle32_hikhandle(i),0);          // third  parameter turn on/off specified channel
+        res=SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(i),0);           // turn on/off audio ?
     }
 }
 
@@ -97,11 +101,7 @@ class video_icon : public window {
     {
     }
 
-        ~video_icon()
-    {
-    }
-
-        void seticon( char * iconfile )
+    void seticon( char * iconfile )
     {
         if( iconfile==NULL ) {
             if( m_icon.valid() ) {
@@ -121,7 +121,15 @@ class video_icon : public window {
             fillrect ( 0, 0, m_pos.w, m_pos.h );	
             if( m_icon.valid() ) {
                 drawbitmap( m_icon, 0, 0, 0, 0, m_pos.w, m_pos.h );
+#ifdef EAGLE34                
+                draw_show();	
+#endif                
             }
+#ifdef EAGLE34                
+            else {
+                draw_hide();	
+            }
+#endif                
         }
 };
 
@@ -134,7 +142,7 @@ class video_status : public window {
     {
     }
 
-        void setstatus( char * status )
+    void setstatus( char * status )
     {
         if( strcmp( status, m_status.getstring())!=0 ) {
             m_status = status ;
@@ -143,14 +151,24 @@ class video_status : public window {
     }
         // event handler
     protected:
-        virtual void paint() {
-            setcolor (COLOR(0,0,0,0)) ;	// full transparent
-            setpixelmode (DRAW_PIXELMODE_COPY);
-            fillrect ( 0, 0, m_pos.w, m_pos.h );	
-            resource font("mono32b.font");
-            setcolor(COLOR(240,240,80,200));
-            drawtext( 0, 0, m_status.getstring(), font );
+    virtual void paint() 
+    {
+        setcolor (COLOR(0,0,0,0)) ;	// full transparent
+        setpixelmode (DRAW_PIXELMODE_COPY);
+        fillrect ( 0, 0, m_pos.w, m_pos.h );	
+        resource font("mono32b.font");
+        setcolor(COLOR(240,240,80,200));
+        drawtext( 0, 0, m_status.getstring(), font );
+#ifdef EAGLE34
+        int l = m_status.length();
+        if( l>0 ) {
+            draw_show(0,0, l*font.fontwidth(), font.fontheight());
         }
+        else {
+            draw_hide();
+        }
+#endif       
+    }
 };
 
 #define DECODE_MODE_QUIT    (0)
@@ -388,6 +406,9 @@ class pwii_menu : public window {
                     drawtext( 80, 280, sbuf, font );
                     drawbitmap(ball, (80-20), (280+15));
                 }
+#ifdef EAGLE34
+                draw_show(50, 80, m_pos.w-100, m_pos.h-160);
+#endif       
             }
             else if( m_level==2 ) {
                 int i ;
@@ -408,6 +429,9 @@ class pwii_menu : public window {
                     }
                     y+=40 ;
                 }
+#ifdef EAGLE34
+                draw_show(50, 80, m_pos.w-100, m_pos.h-160);
+#endif       
             }
         }
         
@@ -623,7 +647,12 @@ class video_screen : public window {
         
         void restartdecoder() {
             StopDecode( m_decode_handle );
+#ifdef EAGLE32            
             m_decode_handle = StartDecode(MAIN_OUTPUT, (m_playchannel%ScreenNum)+1, 1,  Dvr264Header);
+#endif            
+#ifdef EAGLE34
+            m_decode_handle = StartDecode(MAIN_OUTPUT, (m_playchannel%ScreenNum)+1, 1,  NULL);
+#endif            
             if( m_decode_runmode == DECODE_MODE_PLAY ) {
                 m_decode_speed = DECODE_SPEED_NORMAL ; 
                 SetDecodeSpeed(m_decode_handle, m_decode_speed);
@@ -677,8 +706,12 @@ class video_screen : public window {
             int diff_stream, diff_ref ;
 
             playback * ply = new playback( m_playchannel, 1 ) ;
-
+#ifdef EAGLE32            
             m_decode_handle = StartDecode(MAIN_OUTPUT, (m_playchannel%ScreenNum)+1, 1,  Dvr264Header);
+#endif            
+#ifdef EAGLE34
+            m_decode_handle = StartDecode(MAIN_OUTPUT, (m_playchannel%ScreenNum)+1, 1,  NULL);
+#endif            
             m_decode_speed = DECODE_SPEED_NORMAL ;
             res = SetDecodeSpeed(m_decode_handle, m_decode_speed);
 
@@ -700,7 +733,7 @@ class video_screen : public window {
                 if( m_decode_runmode == DECODE_MODE_PLAY ) {
                     ply->getstreamdata(&buf, &bufsize, &frametype );
                     if( bufsize<=0 ) {
-                        usleep(100000);
+                        usleep(20000);
                         continue;
                     }
                     ply->getstreamtime(&streamtime);
@@ -1005,6 +1038,12 @@ class video_screen : public window {
                         m_decode_runmode = DECODE_MODE_BACKWARD ;  //  jump backward.
                         m_icon->seticon( "rwd.pic" );
                     }
+                    else if( m_videomode == VIDEO_MODE_LIVE ) { // live mode
+                        // testing features !!!!!!
+//                        if( cap_channel[m_playchannel] ) {
+//                            cap_channel[m_playchannel]->captureJPEG();
+//                        }
+                    }
                     //                    m_decode_runmode = DECODE_MODE_BACKWARD ;
                 }
                 else if( keycode == VK_MEDIA_NEXT_TRACK ) { //  jump forward.
@@ -1098,10 +1137,12 @@ class video_screen : public window {
                     }
                 }
                 else if( keycode == VK_PRIOR ) { //  previous video clip
-                    if( m_videomode==VIDEO_MODE_LIVE ) {   // live, black LCD
+                    if( m_videomode==VIDEO_MODE_LIVE ) {   // live
                         // switch live view channel
-                        int ch = m_playchannel-1 ;
-                        if( ch<0 ) ch=cap_channels-1 ;
+                        int ch = m_playchannel-ScreenNum ;
+                        while( ch<0 ) {
+                            ch+=eagle32_channels ;
+                        }
                         startliveview(ch);
                     }
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
@@ -1121,8 +1162,10 @@ class video_screen : public window {
                 else if( keycode == VK_NEXT ) { //  jump forward.
                     if( m_videomode==VIDEO_MODE_LIVE ) {   // live, black LCD
                         // switch live view channel
-                        int ch = m_playchannel+1 ;
-                        if( ch>=cap_channels ) ch = 0 ;
+                        int ch = m_playchannel+ScreenNum ;
+                        while( ch>=eagle32_channels ) {
+                            ch-=eagle32_channels ;
+                        }
                         startliveview(ch);
                     }
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
@@ -1326,7 +1369,7 @@ class iomsg : public window {
             hide();
         }
     }
-        
+
         // event handler
     protected:
         virtual void paint() {
@@ -1339,6 +1382,14 @@ class iomsg : public window {
             fillrect ( 0, 0, w*l, h );	
             setcolor(COLOR(240,240,80,200));
             drawtext( 0, 0, m_iomsg, font );
+#ifdef EAGLE34
+            if( l>0 ) {
+                draw_show(0, 0, w*l, h);
+            }
+            else {
+                draw_hide();
+            }
+#endif       
         }
         virtual void ontimer( int id ) {
             if( dio_getiomsg( m_iomsg ) ) {
@@ -1638,9 +1689,10 @@ void screen_init()
     string v ;
     ScreenNum = dvrconfig.getvalueint("VideoOut", "screennum" );
     if( ScreenNum!=4 && ScreenNum!=2 ) {		// support 4, 2, 1 screen mode
-        ScreenNum=1 ;			// set to two screen mode by default
+        ScreenNum=1 ;			// set to one screen mode by default
     }
 
+    // NTSC : 1  , PAL : 2 
     ScreenStandard = dvrconfig.getvalueint("VideoOut", "standard" );
     if( ScreenStandard != STANDARD_PAL ) {
         ScreenStandard = STANDARD_NTSC ;
@@ -1696,8 +1748,6 @@ void screen_init()
     screen_liveview_channel = -1 ;
     screen_liveview_handle = 0 ;
 
-//    void MenuApiTest();
-//    MenuApiTest();
 }
 
 // screen finish, clean up
@@ -1729,137 +1779,3 @@ void screen_uninit()
     draw_finish();
 }
 
-#ifdef EAGLE34
-
-void MenuApiTest()
-{
-    unsigned char * pDstY;
-    unsigned char * pDstUV;
-    struct SDK_MENU_BUF_PARAM MenuBufParam;
-    struct SDK_MENU_DISP_PARAM  MenuParam;
-    struct SDK_MENU_REFRESH_PARAM MenuRefresh;
-
-    GetMenuBufParam(&MenuBufParam);
-    pDstY = MenuBufParam.pMenuY;
-    pDstUV = MenuBufParam.pMenuU;
-
-    int x, y ;
-    for( y=0; y<128; y++) {
-        for( x=0; x<128; x++ ) {
-            pDstY[(y+80)*MenuBufParam.MenuBufW+x+80]=60+x ;
-            if( x%2==0 ) {
-                pDstUV[(y+80)*MenuBufParam.MenuBufW/2+(x+80)/2]=0x10 ;
-            }
-        }
-    }
-    
-    memset((unsigned char *)&MenuParam,0,sizeof(MenuParam));
-    MenuParam.index = MAIN_OUTPUT;
-    MenuParam.bFilter = 1;
-    MenuParam.bFullScreen = 0;
-    MenuParam.DispParam[0].bEnable = 1;
-    MenuParam.DispParam[0].menuAlpha = SDK_ALPHA_MENU_BACK_NONE;
-    MenuParam.DispParam[0].x = 80;
-    MenuParam.DispParam[0].y = 80;
-    MenuParam.DispParam[0].w = 128;
-    MenuParam.DispParam[0].h = 128;
-    SetMenuDispParam(&MenuParam);
-    
-    MenuRefresh.index = MAIN_OUTPUT;
-    MenuRefresh.bFullScreenRefresh = 0;
-    MenuRefresh.x = 80;
-    MenuRefresh.y = 80;
-    MenuRefresh.w = 128;
-    MenuRefresh.h = 128;
-    RefreshMenuDisp(&MenuRefresh);
-
-}    
-
-#endif  // EAGLE34
-
-/*
-void MenuApiTest()
-{
-    int MenuX = 16 ;
-    int MenuY = 16 ;
-    int	fd,size;
-    unsigned char * p420Y = NULL;
-    unsigned char * p420UV = NULL;
-    int picW = 92;
-    int picH = 92;
-    unsigned char * pDstY;
-    unsigned char * pDstUV;
-    int ret;
-    struct SDK_MENU_BUF_PARAM MenuBufParam;
-
-    fd = open("/dav/92_92.yuv",O_RDONLY);
-    if(fd<=0)
-    {
-        printf("open the picture file fail\n");
-        return ;
-    }
-    size = picH *picW;//length of y
-    p420Y = (UINT8 *)malloc(size);
-    if(p420Y == NULL)
-    {
-        printf("malloc fail!\n");
-        return;
-    }
-
-    size = picW*picH/2;//length of uv (uv pack)
-
-    p420UV = (UINT8 *)malloc(size);
-    if(p420UV == NULL)
-    {
-        printf("malloc fail!\n");
-        free(p420Y);
-        return;
-    }
-    lseek(fd,0,SEEK_SET);
-    ret = read(fd,p420Y,picW*picH);//read y data
-    if(ret != picW*picH)
-    {
-        printf("read y data fail !\n");
-        free(p420Y);
-        free(p420UV);
-        return;
-    }
-    ret = read(fd,p420UV,picW*picH/2);//read uv data(uv pack)
-    if(ret != picW*picH/2)
-    {
-        printf("read uv data fail !\n");
-        free(p420Y);
-        free(p420UV);
-        return;
-    }
-    GetMenuBufParam(&MenuBufParam);
-    pDstY = MenuBufParam.pMenuY + MenuY*MenuBufParam.MenuBufW + MenuX;
-    pDstUV = MenuBufParam.pMenuU + (MenuY>>1)*MenuBufParam.MenuBufW + MenuX;
-    CopyData(p420Y,picW,pDstY,MenuBufParam.MenuBufW,picW,picH);
-    CopyData(p420UV,picW,pDstUV,MenuBufParam.MenuBufW,picW,picH/2);
-    free(p420Y);
-    free(p420UV);
-    close(fd);
-    struct SDK_MENU_DISP_PARAM  MenuParam;
-    memset((unsigned char *)&MenuParam,0,sizeof(MenuParam));
-    MenuParam.index = MAIN_OUTPUT;
-    MenuParam.bFilter = 1;
-    MenuParam.bFullScreen = 0;
-    MenuParam.DispParam[0].bEnable = 1;
-    MenuParam.DispParam[0].menuAlpha = SDK_ALPHA_MENU_BACK_NONE;
-    MenuParam.DispParam[0].x = MenuX;
-    MenuParam.DispParam[0].y = MenuY;
-    MenuParam.DispParam[0].w = picW;
-    MenuParam.DispParam[0].h = picH;
-    SetMenuDispParam(&MenuParam);
-    struct SDK_MENU_REFRESH_PARAM MenuRefresh;
-    MenuRefresh.index = MAIN_OUTPUT;
-    MenuRefresh.bFullScreenRefresh = 0;
-    MenuRefresh.x = MenuX;
-    MenuRefresh.y = MenuY;
-    MenuRefresh.w = (picW+7)&(~7);
-    MenuRefresh.h = picH;
-    RefreshMenuDisp(&MenuRefresh);
-    printf("buf W=%d H=%d\n",MenuBufParam.MenuBufW,MenuBufParam.MenuBufH);
-}
-*/

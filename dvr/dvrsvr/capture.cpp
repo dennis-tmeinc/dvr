@@ -90,7 +90,7 @@ capture::capture( int channel )
     loadconfig();
 
     m_headerlen = 40 ;
-    mem_cpy32( m_header, Dvr264Header, 40 );
+    memcpy( m_header, Dvr264Header, 40 );
 }
 
 void capture::loadconfig()
@@ -286,7 +286,7 @@ void capture::onframe(cap_frame * pcapframe)
     m_streambytes+=pcapframe->framesize ;               // for bitrate calculation
     if( pcapframe->frametype == FRAMETYPE_264FILEHEADER ) {
         m_headerlen = pcapframe->framesize ;
-        mem_cpy32( m_header, pcapframe->framedata, m_headerlen );
+        memcpy( m_header, pcapframe->framedata, m_headerlen );
         return ;
     }
     rec_onframe(pcapframe);

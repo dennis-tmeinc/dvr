@@ -78,4 +78,5 @@ clean:
 	$(MAKE) -C test clean
 	cd deploy/TVS21 ; ./mkdeploy clean 0
 	cd deploy/PWII ; ./mkdeploy clean 0
+	cd deploy/PW34 ; ./mkdeploy clean 0
 	find -name \*~ -delete

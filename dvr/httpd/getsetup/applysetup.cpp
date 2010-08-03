@@ -260,6 +260,13 @@ int main()
             dvrconfig.setvalueint( "system", "standbytime", i );
         }
 
+        v = getsetvalue ("uploadingtime");
+        if( v ) {
+            sscanf( v, "%d", &i);
+            if( i<0 ) i=0 ;
+            if( i>36000 ) i=36000 ;
+            dvrconfig.setvalueint( "system", "uploadingtime", i );
+        }
         
         v = getsetvalue ("file_size");
         if( v ) {

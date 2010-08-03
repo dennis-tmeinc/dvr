@@ -13,6 +13,10 @@ subsys=${subsys#/}
 subsys=${subsys#*/}
 subsys=${subsys%%/*}
 
+if [ ${devclass} != "block" -a ${devclass} != "class"  ] ; then
+   exit
+fi
+
 lockfile=/var/dvr/lock_${devclass}_${subsys}_${devname}_$1
 if [ -f ${lockfile} ]; then
     exit

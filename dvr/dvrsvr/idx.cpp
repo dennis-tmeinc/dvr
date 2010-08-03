@@ -44,7 +44,6 @@ void rec_index::savefile(char *filename)
             break;
         }
         dvrt = filetime + m_array[i].onofftime;
-        dvr_lock();
         fprintf(idxfile, "%c%04d%02d%02d%02d%02d%02d\n", onoff,
                 dvrt.year,
                 dvrt.month,
@@ -52,7 +51,6 @@ void rec_index::savefile(char *filename)
                 dvrt.hour,
                 dvrt.minute,
                 dvrt.second );
-        dvr_unlock();
     }
     
     file_close(idxfile);
@@ -81,7 +79,6 @@ void rec_index::readfile(char *filename)
     state = 0 ;
     while (!feof(idxfile)) {
         memset( &dvrt, 0, sizeof(dvrt));
-        dvr_lock();
         i = fscanf(idxfile, "%c%04d%02d%02d%02d%02d%02d\n", 
                    &onoff,
                    &(dvrt.year),
@@ -90,7 +87,6 @@ void rec_index::readfile(char *filename)
                    &(dvrt.hour),
                    &(dvrt.minute),
                    &(dvrt.second) );
-        dvr_unlock();
         if (i < 7)
             break;
         t=(int)(dvrt-filetime) ;

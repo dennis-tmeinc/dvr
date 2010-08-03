@@ -195,11 +195,10 @@ void RC4_crypt_table( unsigned char * crypt_table, int table_size, unsigned char
 //    textoffset: offset of data from start of file (0 for start of file or independent data)
 //    crypt_table: cryption table
 //    table_size: cryption table size
-void RC4_block_crypt( unsigned char * text, int textsize, int textoffset, unsigned char * crypt_table, int table_size)
+void RC4_block_crypt( unsigned char * dest, unsigned char * src, int textsize, int textoffset, const unsigned char * crypt_table, int table_size)
 {
-    int i;
-    for(i=0; i<textsize; i++) {
-        text[i]^=crypt_table[(i+textoffset)%table_size] ;
+    while( textsize-->0 ) {
+        *dest++  = (*(src++)) ^ crypt_table[(textoffset++)%table_size] ;
     }
 }
 

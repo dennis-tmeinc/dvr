@@ -37,7 +37,7 @@ eagle_capture::eagle_capture( int channel, int hikchannel )
     m_enable = 1 ;
 #else    
     m_enable = m_attr.Enable ;
-#endif    
+#endif
 }
 
 eagle_capture::~eagle_capture()
@@ -82,6 +82,7 @@ static void StreamReadCallBack(	int handle,
     }
 }		
 #endif
+
 
 #ifdef EAGLE34
 static void StreamReadCallBack(CALLBACK_DATA CallBackData,void* context)
@@ -166,6 +167,53 @@ void eagle_capture::streamcallback(
                 xframetype = FRAMETYPE_VIDEO ;
                 break;
             case FRAME_TYPE_VIDEO_I_PS:
+
+/*  not neccessory, API GetVideoParam did this job already 
+                 
+                // to detect video size, and signal standard (NTSC/PAL)
+                unsigned char * fbuf = (unsigned char *)buf ;
+                int fsz = (unsigned) size ;
+                while( fsz>20 ) {
+                    if( fbuf[0]==0 &&
+                        fbuf[1]==0 &&
+                        fbuf[2]==1 )        // start code
+                    {
+                        if( fbuf[3]==0xba ) {   // packet start
+                            fsz-=20 ;
+                            fbuf+=20 ;
+                        }
+                        else {
+                            if( fbuf[3]==0xbc ) {   // stream map (key frame)
+                                fsz = (((unsigned int)fbuf[8])<<8) +
+                                +(((unsigned int)fbuf[9])) ;
+                                fbuf+=fsz+10 ;          // bypass program descriptor
+                                if( fbuf[3]==0xe0 ) {   // descriptor for 0xe0 (video)
+                                    int vsize = (((unsigned int)fbuf[12])<<8) +
+                                        +(((unsigned int)fbuf[13])) ;
+                                    int hsize = (((unsigned int)fbuf[14])<<8) +
+                                        +(((unsigned int)fbuf[15])) ;
+                                    if( hsize%40 == 0 ) {
+                                        m_signal_standard = 1 ;         // assume NTSC when height would be 120, 320, 240, 480
+                                    }
+                                    else {
+                                        m_signal_standard = 2 ;         // PAL mode video
+                                    }
+                                }
+                                break;
+                            }
+                            int pksize = (((unsigned int)fbuf[4])<<8) +
+                                +(((unsigned int)fbuf[5])) + 
+                                6 ;                         // sync (4b) + size (2b)
+                            fsz-=pksize ;
+                            fbuf+=pksize ;
+                        }
+                    }
+                    else {
+                        break;
+                    }
+                }
+*/
+                
                 xframetype = FRAMETYPE_KEYVIDEO ;
                 if( m_motion>0 ) {
                     if( --m_motion==0 ) {
@@ -191,6 +239,7 @@ void eagle_capture::streamcallback(
                 }
                 return ;
             default:
+                dvr_log( "Unknown frame captured!" );
                 return;
         }
 #endif
@@ -200,11 +249,9 @@ void eagle_capture::streamcallback(
         capframe.frametype = xframetype ;
 
         capframe.framedata = (char *) mem_alloc( capframe.framesize );
-        if( capframe.framedata == NULL ) {
-            return ;
-        }
-        mem_cpy32(capframe.framedata, buf, size ) ;
-
+        if( capframe.framedata ) {
+            mem_cpy32(capframe.framedata, buf, size ) ;
+            
         /* 
 #ifdef EAGLE32         
         // change time stamp
@@ -223,10 +270,11 @@ void eagle_capture::streamcallback(
         }
 #endif  // EAGLE32            
         */
-            
-        // send frame
-        onframe(&capframe);
-        mem_free(capframe.framedata);
+
+            // send frame
+            onframe(&capframe);
+            mem_free(capframe.framedata);
+        }
     }
 }
 
@@ -354,7 +402,33 @@ void eagle_capture::stop()
 
 void eagle_capture::captureIFrame()
 {
-    CaptureIFrame( m_hikhandle, m_chantype );
+    if( m_hikhandle>0 ) {
+        CaptureIFrame( m_hikhandle, m_chantype );
+    }
+}
+
+int jpeg_quality ;
+int jpeg_mode ;
+int jpeg_size ;
+
+// to capture one jpeg frame
+void eagle_capture::captureJPEG()
+{
+    if( m_hikhandle>0 ) {
+        unsigned int imgsize = jpeg_size ;
+        unsigned char * img = (unsigned char *)mem_alloc( imgsize );
+        if( img ) {
+            if( GetJPEGImage(m_hikhandle, jpeg_quality, jpeg_mode, img, &imgsize )==0 ) {
+                struct cap_frame capframe;
+                capframe.channel = m_channel ;
+                capframe.framesize = imgsize ;
+                capframe.frametype = FRAMETYPE_JPEG ;
+                capframe.framedata = (char *) img ;
+                onframe( &capframe );
+            }
+        }
+        mem_free( img );
+    }
 }
 
 void eagle_capture::setosd( struct hik_osd_type * posd )
@@ -405,11 +479,12 @@ void eagle_capture::update(int updosd)
 int eagle_capture::getsignal()
 {
     int res ;
-//    int sig ;
+    int sig ;
     if( m_started ) {
-//        sig = m_signal ;
+        sig = m_signal ;
         res=GetVideoSignal(m_hikhandle, &m_signal);
-/* this method doesn't work, can't get signal standard by GetVideoParam()        
+// this method doesn't work (on Eagle32, but works on Eagle34), can't get signal standard by GetVideoParam()        
+#ifdef EAGLE34
         if( sig!=m_signal ) {
             int b, c, s, h ;
             video_standard v ;
@@ -417,7 +492,7 @@ int eagle_capture::getsignal()
             m_signal_standard = (int)v ;
             updateOSD();
         }
-*/         
+#endif        
     }
     return m_signal ;
 }
@@ -440,6 +515,9 @@ int eagle32_init()
 {
     int res ;
     int i;
+    
+    config dvrconfig(dvrconfigfile);
+    
     struct board_info binfo ;
     if( eagle32_sysinit==0 ) {
         res = InitSystem();
@@ -458,6 +536,7 @@ int eagle32_init()
 
     if( GetBoardInfo(&binfo)==0 ) {
         eagle32_channels = (int)binfo.enc_chan ;
+
         if( eagle32_channels<0 ) {
             eagle32_channels=0;
         }
@@ -468,6 +547,15 @@ int eagle32_init()
             res=RegisterStreamDataCallback(StreamReadCallBack,NULL);
         }
     }
+
+
+    jpeg_quality = dvrconfig.getvalueint( "system", "jpeg_quality" );
+    jpeg_mode = dvrconfig.getvalueint( "system", "jpeg_mode" );
+    jpeg_size = dvrconfig.getvalueint( "system", "jpeg_size" );
+    if( jpeg_size<=0 ) {
+        jpeg_size=500000 ;
+    }
+    
     return eagle32_channels ;
 }
 

@@ -39,9 +39,9 @@
 // memory allocation
 void *mem_alloc(int size);
 void mem_free(void *pmem);
-void *mem_addref(void *pmem);
+void *mem_ref(void *pmem, int size);
 int mem_refcount(void *pmem);
-int mem_check(void *pmem);
+//int mem_check(void *pmem);
 //int mem_size(void * pmem);
 void mem_cpy32(void *dest, const void *src, size_t count);
 int mem_available();
@@ -98,8 +98,8 @@ extern char g_policeid[32];
 
 int  dvr_log(char *str, ...);
 void dvr_logkey( int op, struct key_data * key ) ;
-void dvr_lock();
-void dvr_unlock();
+//void dvr_lock();
+//void dvr_unlock();
 
 unsigned dvr_random();
 
@@ -187,6 +187,7 @@ struct hd_subframe {
 #define FRAMETYPE_KEYVIDEO	(1)
 #define FRAMETYPE_VIDEO		(2)
 #define FRAMETYPE_AUDIO		(3)
+#define FRAMETYPE_JPEG		(4)
 #define FRAMETYPE_264FILEHEADER	(10)
 
 struct cap_frame {
@@ -270,7 +271,7 @@ class dvrfile {
 	int prevkeyframe();
 	int nextkeyframe();
 	int readframe(void * framebuf, size_t bufsize);
-	int writeframe(void * buffer, size_t size, int keyframe, dvrtime * frametime);
+	int writeframe(void * buffer, size_t size, int frametype, dvrtime * frametime);
 	int isopen() {
 		return m_handle != NULL;
 	}
@@ -300,7 +301,6 @@ int file_write(const void *ptr, int size, FILE *stream);
 int file_close(FILE *fp);
 int file_flush(FILE *stream);
 
-void file_sync();
 void file_init();
 void file_uninit();
 
@@ -467,6 +467,8 @@ class capture {
 	}
     virtual void captureIFrame(){        // force to capture I frame
     }
+    virtual void captureJPEG(){         // to capture one jpeg frame
+    }
     virtual int getsignal(){return m_signal;}	// get signal available status, 1:ok,0:signal lost
     virtual int getmotion(){return m_motion;}	// get motion detection status
     int getheaderlen(){return m_headerlen;}
@@ -510,6 +512,7 @@ class eagle_capture : public capture {
 	virtual void start();
 	virtual void stop();
     virtual void captureIFrame();       // force to capture I frame
+    virtual void captureJPEG();         // to capture one jpeg frame
     virtual int getsignal();        // get signal available status, 1:ok,0:signal lost
 };
 
@@ -1002,7 +1005,8 @@ class dvrsvr {
         }
         int  read();
         int  write();
-        void send_fifo(char *buf, int bufsize);
+        void send_fifo(char *buf, int bufsize, int loc = 0);
+        void cleanfifo();
 		virtual void Send(void *buf, int bufsize);
         void close();
         int isclose();

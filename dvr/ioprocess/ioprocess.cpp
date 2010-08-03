@@ -3500,8 +3500,8 @@ int main(int argc, char * argv[])
                     }
                     else if( runtime>modeendtime ) {
                         dvr_log( "No smartserver detected!" );
-                        // enter standby mode
-                        mode_standby();
+                        // enter archiving mode
+                        mode_archive();
                         wifi_down();
                     }
                 }

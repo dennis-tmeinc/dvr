@@ -2064,6 +2064,7 @@ int main()
             }
         }
         else {
+            p_dio_mmap->gps_valid = 0 ;
             gps_close();
             gps_logclose();
             usleep(10000);

@@ -69,6 +69,8 @@ shutdowndelay=180
 # percentage of locked file
 lockfile_percentage = 99
 
+uploadingtime=1800
+archivetime=1800
 standbytime=1800
 
 norecplayback=0
@@ -102,7 +104,13 @@ protocol=D
 
 
 # camera number start from 1
-[camera2]
+[camera1]
+# camera name
+name=Front
+channel=2
+# enable this camera
+enable=1
+
 show_gforce=1
 # force recording on
 forcerecordontime = 7200
@@ -180,13 +188,13 @@ bitrateen=1
 # Bitrate mode, 0: VBR, 1:CBR
 bitratemode=0
 # bitrate, bps
-bitrate=768000
+bitrate=1750000
 
 # frame rate
-framerate=15
+framerate=30
 
 # resolution, 0:CIF, 1:2CIF, 2:DCIF, 3:4CIF
-resolution=2
+resolution=3
 
 # recordmode, // 0: Continue, 1: Trigger by sensor, 2: triger by motion, 3, trigger by sensor&motion, 4: schedule, -1: norecording
 recordmode=1
@@ -194,11 +202,6 @@ recordmode=1
 # disable audio
 disableaudio=0
 
-# camera name
-name=Rear
-channel=1
-# enable this camera
-enable=1
 # enable GPS message on OSD
 gpsen=1
 # show VRI
@@ -208,7 +211,7 @@ show_policeid=1
 #PTZ address
 ptzaddr=2
 
-[camera1]
+[camera2]
 show_gforce=1
 forcerecordontime = 7200
 forcerecordofftime = 0
@@ -248,15 +251,15 @@ brightness=5
 contrast=5
 saturation=5
 hue=5
-bitrate=1750000
+bitrate=768000
 bitratemode=0
 bitrateen=1
-framerate=30
-resolution=3
+framerate=15
+resolution=2
 recordmode=1
 
-name=Front
-channel=2
+name=Rear
+channel=1
 enable=1
 ptzaddr=2
 
@@ -391,9 +394,9 @@ jumptime=5
 maxjumptime=120
 doublejumptimer=5
 cliptime=86400
-startchannel=1
+startchannel=0
 resource=/davinci/dvr/resource
 
 [pwii]
-front=1
-rear=0
+front=0
+rear=1

@@ -9,7 +9,6 @@
 int multicast_en;				// multicast enabled?
 struct sockad multicast_addr;	// multicast address
 
-static int net_fifos;
 static int serverfd;
 int msgfd;
 static struct sockad loopback;
@@ -22,12 +21,12 @@ int    net_active = 0 ;
 int    net_activetime ;
 
 static pthread_mutex_t net_mutex;
-void net_lock()
+static void net_lock()
 {
     pthread_mutex_lock(&net_mutex);
 }
 
-void net_unlock()
+static void net_unlock()
 {
     pthread_mutex_unlock(&net_mutex);
 }
@@ -35,10 +34,7 @@ void net_unlock()
 // trigger a new network wait cycle
 void net_trigger()
 {
-    if( net_fifos<=0) {
-        net_fifos=1 ;
-        sendto(msgfd, &net_fifos, 1, 0, &(loopback.addr), loopback.addrlen);
-    }
+    sendto(msgfd, "", 1, 0, &(loopback.addr), loopback.addrlen);
 }
 
 // wait for socket ready to send (timeout in micro-seconds)
@@ -428,7 +424,6 @@ void *net_thread(void *param)
     fd_set exceptfds;
     int sres ;
     int fd;
-    int fifos;					// total sockets with fifo pending
     int flag ;
     dvrsvr *pconn;
     dvrsvr *pconn1;
@@ -443,7 +438,6 @@ void *net_thread(void *param)
         FD_ZERO(&writefds);
         FD_ZERO(&exceptfds);
         
-        fifos = 0;
         pconn = dvrsvr::head();
         while (pconn != NULL) {
             pconn1 = pconn->next();
@@ -453,7 +447,6 @@ void *net_thread(void *param)
                 FD_SET(pconn->socket(), &readfds);
                 if (pconn->isfifo()) {
                     FD_SET(pconn->socket(), &writefds);
-                    fifos++;
                 }
                 FD_SET(pconn->socket(), &exceptfds);
             }
@@ -466,7 +459,6 @@ void *net_thread(void *param)
         timeout.tv_sec = 3;		// 3 second time out
         timeout.tv_usec = 0 ;
 
-        net_fifos = fifos;
         net_unlock();
         sres = select(FD_SETSIZE, &readfds, &writefds, &exceptfds, &timeout) ;
         net_lock();
@@ -509,6 +501,7 @@ void *net_thread(void *param)
             }
         }
         else if( sres == 0 ) {
+            rec_pause = 0 ;
             // time out
             if( net_active ) {
                 if( (g_timetick-net_activetime)>(15*60*1000) ) {            // 15 minutes time out for network activity
@@ -539,8 +532,7 @@ void net_init()
 {
     config dvrconfig(dvrconfigfile);
     // initial mutex
-    memcpy( &net_mutex, &mutex_init, sizeof(mutex_init));
-
+    pthread_mutex_init(&net_mutex, NULL);
     net_run = 0;				// assume not running
     net_port = dvrconfig.getvalueint("network", "port");
     if (net_port == 0)

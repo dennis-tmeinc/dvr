@@ -65,12 +65,7 @@ void live::onframe(cap_frame * pframe )
             }
         }
         nfifo = (net_fifo *) mem_alloc(sizeof(net_fifo));
-        if (mem_check(pframe->framedata)) {
-            nfifo->buf = (char *) mem_addref(pframe->framedata);
-        } else {
-            nfifo->buf = (char *) mem_alloc(pframe->framesize);
-            memcpy(nfifo->buf, pframe->framedata, pframe->framesize);
-        }
+        nfifo->buf = (char *)mem_ref(pframe->framedata, pframe->framesize);
         nfifo->next = NULL;
         nfifo->bufsize = pframe->framesize;
         nfifo->loc = 0;

@@ -6,27 +6,15 @@
 
 // time functions
 
-static struct timeval time_uptime;
-static struct timeval time_prevt ;
-int g_timetick ;            // global time tick ;
+static int timetick_ref ;
+int g_timetick=0 ;            // global time tick , to maintain a always up time counter in ms (even between restart)
 
 void time_init()
 {
     time_inittimezone();
-    gettimeofday(&time_uptime, NULL);
-    g_timetick = 0 ;
-
-    // adjust startup time by system uptime (/proc/uptime)
-    FILE * uptimefile ;
-    uptimefile = fopen( "/proc/uptime", "r" );
-    if( uptimefile ) {
-        float uptime ;
-        fscanf( uptimefile, "%f", &uptime );
-        time_uptime.tv_sec -= (int) uptime ;
-        fclose( uptimefile );
-        g_timetick = (int) uptime * 1000 ;       
-    }
-
+    struct timeval t ;
+    gettimeofday(&t, NULL);
+    timetick_ref = ((int)(t.tv_sec)&0xfffff) * 1000 ;
 }
 
 void time_uninit()
@@ -468,23 +456,18 @@ time_t time_timeutc( struct dvrtime * dvrt)
 // return ticks (milli-seconds) from time_init()
 int time_tick()
 {
-    struct timeval current_time;
-    gettimeofday(&current_time, NULL);
-    if( current_time.tv_sec < time_prevt.tv_sec ) {     // these code is to make sure time tick alway go up
-        // need to adjust start time ;
-        FILE * uptimefile ;
-        uptimefile = fopen( "/proc/uptime", "r" );
-        if( uptimefile ) {
-            float uptime ;
-            fscanf( uptimefile, "%f", &uptime );
-            time_uptime.tv_sec = current_time.tv_sec - (int) uptime ;
-            fclose( uptimefile );
-        }
+    int tick ;
+    struct timeval t ;
+    gettimeofday(&t, NULL);
+    tick = ((int)(t.tv_sec)&0xfffff) * 1000 + ((int)t.tv_usec)/1000 ;   // make tick a positive number
+    // to gaurantee g_timetick always going up
+    if( tick > timetick_ref ) {
+        g_timetick += (tick-timetick_ref) ;
     }
-    time_prevt.tv_sec = current_time.tv_sec ;
-    g_timetick = ((int)(current_time.tv_sec - time_uptime.tv_sec)) * 1000 + ((int)current_time.tv_usec)/1000 ;
+    timetick_ref = tick ;
     return g_timetick ;
 }
+
 
 // update onboard rtc to system time
 int time_setrtc()

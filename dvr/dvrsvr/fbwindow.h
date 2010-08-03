@@ -4,7 +4,7 @@
 #ifndef __FBWINDOW_H__
 #define __FBWINDOW_H__
 
-#include "fbdraw.h"
+#include "draw.h"
 
 struct rect {
 	int x, y, w, h ;
@@ -158,6 +158,7 @@ public:
 
 	virtual ~window()
 	{
+        hide();
 		while( m_child ) {
 			delete m_child ;
 		}
@@ -445,6 +446,12 @@ public:
                 }
             }
             m_redraw=0 ;
+#ifdef EAGLE34            
+            if(parentdrawarea==NULL&&drawrect.w>0&&drawrect.h>0){
+                draw_refresh();
+            }
+#endif            
+
 		}
         if( m_brother ) {
 			m_brother->draw(parentdrawarea) ;
@@ -455,6 +462,20 @@ public:
 		return m_show ;
 	}
 
+#ifdef EAGLE34
+    void draw_show( int x=0, int y=0, int w=-1, int h=-1 ) 
+    {
+        if( w==-1 ) w=m_pos.w ;
+        if( h==-1 ) h=m_pos.h ;
+        ::draw_show( this, m_screen_x+x, m_screen_y+y, w, h );
+    }
+
+    void draw_hide()
+    {
+        ::draw_hide( this );
+    }
+#endif
+    
 	int getid() {
 		return m_id;
 	}
@@ -519,10 +540,6 @@ public:
 
 	UINT32 getpixel( int x, int y ) {
 		return draw_getpixel( m_screen_x+x, m_screen_y+y );
-	}
-
-	void blendpixel( int x, int y, UINT32 color ) {
-		draw_blendpixel( m_screen_x+x, m_screen_y+y, color );
 	}
 
 	void drawline( int x1, int y1, int x2, int y2 ) {
@@ -667,7 +684,7 @@ public:
 	{
 		draw_text_ex( m_screen_x+dx, m_screen_y+dy, text, font.bitmap(), fontw, fonth);
 	}
-
+    
 	// overrideable
 public:
 	virtual int show() {			// return old show status
@@ -682,6 +699,9 @@ public:
 	}
 
 	virtual int hide() {			// return old show status
+#ifdef EAGLE34
+        draw_hide();
+#endif        
 		if( m_show ) {
 			if( m_parent ) {
 				m_parent->redraw();

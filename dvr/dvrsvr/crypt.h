@@ -57,7 +57,8 @@ void RC4_crypt_table( unsigned char * crypt_table, int table_size, unsigned char
 //    textoffset: offset of data from start of file (0 for start of file or indipenddant data)
 //    crypt_table: cryption table
 //    table_size: cryption table size
-void RC4_block_crypt( unsigned char * text, int textsize, int textoffset, unsigned char * crypt_table, int table_size);
+//void RC4_block_crypt( unsigned char * text, int textsize, int textoffset, unsigned char * crypt_table, int table_size);
+void RC4_block_crypt( unsigned char * dest, unsigned char * src, int textsize, int textoffset, const unsigned char * crypt_table, int table_size);
 
 //XTEA
 

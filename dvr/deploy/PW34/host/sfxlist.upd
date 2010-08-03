@@ -44,7 +44,6 @@ sfxrun.upd sfxrun
 ./dvr/volumeid
 ./dvr/tmefile
 ./dvr/eaglehost
-./dvr/libfbdraw.so
 ./dvr/passwd
 ./dvr/wifi_down
 ./dvr/dvrsvr

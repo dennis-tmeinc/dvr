@@ -48,7 +48,6 @@ sfxrun.dep sfxrun
 ./dvr/volumeid
 ./dvr/tmefile
 ./dvr/eaglehost
-./dvr/libfbdraw.so
 ./dvr/passwd
 ./dvr/wifi_down
 ./dvr/eth_ip

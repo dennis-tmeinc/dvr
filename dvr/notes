@@ -38,3 +38,11 @@ release 10.0519.14
 release 10.0720.14
   Add PW34 support
   
+Release 10.0803.16
+    FULL features PW34
+    PWII / PW34 add maximum uploading time option on setup
+    PW34 bitrate setting up to 4Mbits
+    Fix no archiving after no wifi-detected
+    "glog" to fix reuse invalid GPS time on standby mode.
+    Remove libfbdraw.so, source code of screen display are compiled into "dvrsvr". since EAGLE34 use HIK API to do the screen jobs.
+    

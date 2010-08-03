@@ -57,17 +57,11 @@ dvrsvr::~dvrsvr()
 
 void dvrsvr::close()
 {
-    net_fifo *pfifo;
     if (m_sockfd > 0) {
         ::closesocket(m_sockfd);
         m_sockfd = -1;
     }
-    while (m_fifo != NULL) {
-        pfifo = m_fifo->next;
-        mem_free(m_fifo->buf);
-        mem_free(m_fifo);
-        m_fifo = pfifo;
-    }
+    cleanfifo();
     if( m_playback!=NULL ) {
         delete m_playback ;
         m_playback=NULL;
@@ -165,6 +159,20 @@ int dvrsvr::read()
     return 0 ;                      // don't continue
 }
 
+void dvrsvr::cleanfifo()
+{
+    net_fifo * nfifo ;
+    while( m_fifo ) {
+        if (m_fifo->buf != NULL) {
+            mem_free(m_fifo->buf);
+        }
+        nfifo=m_fifo->next ;
+        delete m_fifo ;
+        m_fifo = nfifo;
+    }
+    m_fifosize=0;        
+}
+
 // send out data from fifo
 // return 0: no more data
 //        1: more data in fifo
@@ -173,97 +181,93 @@ int dvrsvr::write()
 {
 	int n;
     net_fifo * nfifo ;
-    if( m_sockfd <= 0 ){
-        return 0 ;
+        
+    if( isclose() ) {
+        return 0;
     }
+
     while( m_fifo ) {
         if (m_fifo->buf == NULL) {
             nfifo=m_fifo->next ;
-            mem_free(m_fifo);
+            delete m_fifo ;
             m_fifo = nfifo;
-            continue;
         }
-        if (m_fifo->loc >= m_fifo->bufsize) {
+        else if(m_fifo->loc >= m_fifo->bufsize) {
             nfifo=m_fifo->next ;
             mem_free(m_fifo->buf);
-            mem_free(m_fifo);
+            delete m_fifo ;
             m_fifo = nfifo;
-            continue;
         }
-        n =::send(m_sockfd,
-            &(m_fifo->buf[m_fifo->loc]),
-            m_fifo->bufsize - m_fifo->loc, 0);
-        if( n<0 ) {
-            if(errno == EWOULDBLOCK ) {
-                return 1 ;
+        else {
+            n =::send(m_sockfd,
+                &(m_fifo->buf[m_fifo->loc]),
+                m_fifo->bufsize - m_fifo->loc, 0);
+            if( n<0 ) {
+                if(errno == EWOULDBLOCK ) {
+                    return 1 ;
+                }
+                else {
+                    close();
+                    return -1 ;      // other error!
+                }
             }
-            else {
-                close();
-                return -1 ;      // other error!
-            }
+            m_fifosize -= n ;
+            m_fifo->loc += n;
         }
-        m_fifosize -= n ;
-        m_fifo->loc += n;
     }
     m_fifosize=0;
     return 0 ;
 }
 
-void dvrsvr::send_fifo(char *buf, int bufsize)
+void dvrsvr::send_fifo(char *buf, int bufsize, int loc)
 {
     net_fifo *nfifo;
     
     if( isclose() ) {
         return ;
     }
-    
-    nfifo = (net_fifo *) mem_alloc(sizeof(net_fifo));
-    if (mem_check(buf)) {
-        nfifo->buf = (char *) mem_addref(buf);
-    } else {
-        nfifo->buf = (char *) mem_alloc(bufsize);
-        mem_cpy32(nfifo->buf, buf, bufsize);
-    }
-    nfifo->next = NULL;
+
+    nfifo = new net_fifo ;
+    nfifo->buf = (char *)mem_ref( buf, bufsize );
     nfifo->bufsize = bufsize;
-    nfifo->loc = 0;
+    nfifo->loc = loc;
+    nfifo->next = NULL;
     
-    if (m_fifo == NULL) {
+    if (m_fifo == NULL) {           // current fifo is empty
         m_fifo = m_fifotail = nfifo;
 		m_fifosize = bufsize ;
-        net_trigger();				// trigger sending
     } else {
         m_fifotail->next = nfifo ;
         m_fifotail = nfifo ;
 		m_fifosize += bufsize ;
     }
+    net_trigger();
 }
 
 void dvrsvr::Send(void *buf, int bufsize)
 {
-    int n ;
-    char * cbuf = (char *)buf; 
-    if( m_fifo ) {
-        write();
+    if( isclose() ) {
+        return ;
     }
-    if ( m_fifo || mem_check (buf)) {
-        send_fifo(cbuf, bufsize);
-        write();
+    
+    if ( m_fifo ) {
+        send_fifo((char *)buf, bufsize);
     }
     else {
-        while( bufsize>0 ) {
-            n = ::send(m_sockfd, cbuf, bufsize, 0);
+        int loc = 0 ;
+        int n ;
+        while( loc<bufsize ) {
+            n = ::send(m_sockfd, ((char *)buf)+loc, bufsize-loc, 0);
             if( n<0 ) {
                 if( errno==EWOULDBLOCK ) {
-                    send_fifo(cbuf, bufsize);
+                    send_fifo(((char *)buf), bufsize, loc);
                 }
                 else {
                     close();							// net work error!
                 }
                 return ;
             }
-            cbuf+=n ;
-            bufsize-=n ;
+            loc+=n ;
         }
     }
 }
@@ -275,26 +279,14 @@ int dvrsvr::isclose()
 
 int dvrsvr::onframe(cap_frame * pframe)
 {
-    net_fifo *pfifo, *tfifo;
     if( isclose() ) {
         return 0;
     }
     if (m_conntype == CONN_REALTIME && m_connchannel == pframe->channel) {
-        if (pframe->frametype == FRAMETYPE_KEYVIDEO ) {	// for keyframes
-            if(m_fifo != NULL &&
-               m_fifosize > (net_livefifosize+pframe->framesize) )
-            {
-                pfifo = m_fifo->next;
-                m_fifo->next = NULL;
-                
-                while (pfifo != NULL) {
-                    tfifo = pfifo->next;
-                    mem_free(pfifo->buf);
-                    m_fifosize-=pfifo->bufsize;
-                    mem_free(pfifo);
-                    pfifo = tfifo;
-                }
-            }
+        if ( pframe->frametype == FRAMETYPE_KEYVIDEO &&	// for keyframes
+            m_fifosize > (net_livefifosize+pframe->framesize) )
+        {
+            cleanfifo();
         }
         Send(pframe->framedata, pframe->framesize);
         return 1;
@@ -1376,100 +1368,51 @@ void dvrsvr::Req2GetZoneInfo()
 {
     struct dvr_ans ans ;
     char * zoneinfobuf ;
-    int i, zisize;
+    int i;
     array <string> zoneinfo ;
     string s ;
     char * p ;
-    readtxtfile ( "/usr/share/zoneinfo/zone.tab", zoneinfo );
-    if( zoneinfo.size()>1 ) {
-        zoneinfobuf = (char *)mem_alloc(100000);	// 100kbytes
-        zisize=0 ;
-        for( i=0; i<zoneinfo.size(); i++ ) {
-            p=zoneinfo[i].getstring();
-            while(*p==' ' ||
-                  *p=='\t' ||
-                  *p=='\r' ||
-                  *p=='\n' ) p++ ;
-            if( *p=='#' )						// a comment line
-                continue ;
-            
-            // skip 2 colume
-            while( *p!='\t' &&
-                  *p!=' ' &&
-                  *p!=0 ) p++ ;
-            if( *p==0 ) continue ;
-            
-            while( *p=='\t' ||
-                  *p==' ') p++ ;
-            
-            while( *p!='\t' &&
-                  *p!=' ' &&
-                  *p!=0 ) p++ ;
-            if( *p==0 ) continue ;
-            
-            while( *p=='\t' ||
-                  *p==' ') p++ ;
-            if( *p==0 ) continue ;
-            
-            strcpy( &zoneinfobuf[zisize], p);
-            zisize+=strlen(p);
-            zoneinfobuf[zisize++]='\n' ;
+
+    config_enum enumkey ;
+    config dvrconfig(dvrconfigfile);
+    string tzi ;
+
+    // initialize enumkey
+    enumkey.line=0 ;
+    while( (p=dvrconfig.enumkey("timezones", &enumkey))!=NULL ) {
+        tzi=dvrconfig.getvalue("timezones", p );
+        if( tzi.length()<=0 ) {
+            s=p ;
+            zoneinfo.add(s);
         }
-        zoneinfobuf[zisize++]=0;
-        int sendsize = sizeof(struct dvr_ans)+zisize;
-        char * sendbuf = (char *)mem_alloc( sendsize);
-        char * senddata = sendbuf+sizeof(struct dvr_ans);
-        struct dvr_ans * pans = (struct dvr_ans *)sendbuf ;
-        memcpy( senddata, zoneinfobuf, zisize);
-        mem_free(zoneinfobuf);
-        pans->anscode = ANS2ZONEINFO;
-        pans->anssize = zisize ;
-        pans->data = 0 ;
-        Send( sendbuf, sendsize );
-        mem_free( sendbuf );
-        return ;
+        else {
+            zoneinfobuf=tzi.getstring();
+            while( *zoneinfobuf != ' ' && 
+                *zoneinfobuf != '\t' &&
+                *zoneinfobuf != 0 ) 
+            {
+                zoneinfobuf++ ;
+            }
+            s.setbufsize( strlen(p)+strlen(zoneinfobuf)+10 ) ;
+            sprintf( s.getstring(), "%s -%s", p, zoneinfobuf );
+            zoneinfo.add(s);
+        }
     }
-    else {
-        config_enum enumkey ;
-        config dvrconfig(dvrconfigfile);
-        string tzi ;
-        
-        // initialize enumkey
-        enumkey.line=0 ;
-        while( (p=dvrconfig.enumkey("timezones", &enumkey))!=NULL ) {
-            tzi=dvrconfig.getvalue("timezones", p );
-            if( tzi.length()<=0 ) {
-                s=p ;
-                zoneinfo.add(s);
-            }
-            else {
-                zoneinfobuf=tzi.getstring();
-                while( *zoneinfobuf != ' ' && 
-                      *zoneinfobuf != '\t' &&
-                      *zoneinfobuf != 0 ) {
-                          zoneinfobuf++ ;
-                      }
-                s.setbufsize( strlen(p)+strlen(zoneinfobuf)+10 ) ;
-                sprintf( s.getstring(), "%s -%s", p, zoneinfobuf );
-                zoneinfo.add(s);
-            }
+    if( zoneinfo.size()>0 ) {
+        ans.anscode = ANS2ZONEINFO;
+        ans.anssize = 0 ;
+        ans.data = 0 ;
+        for( i=0; i<zoneinfo.size(); i++ ) {
+            ans.anssize+=zoneinfo[i].length()+1 ;
         }
-        if( zoneinfo.size()>0 ) {
-            ans.anscode = ANS2ZONEINFO;
-            ans.anssize = 0 ;
-            ans.data = 0 ;
-            for( i=0; i<zoneinfo.size(); i++ ) {
-                ans.anssize+=zoneinfo[i].length()+1 ;
-            }
-            ans.anssize+=1 ;	// count in null terminate char
-            Send(&ans, sizeof(ans));
-            for( i=0; i<zoneinfo.size(); i++ ) {
-                Send(zoneinfo[i].getstring(), zoneinfo[i].length());
-                Send((void *)"\n", 1);
-            }
-            Send((void *)"\0", 1);		// send null char
-            return ;
+        ans.anssize+=1 ;	// count in null terminate char
+        Send(&ans, sizeof(ans));
+        for( i=0; i<zoneinfo.size(); i++ ) {
+            Send(zoneinfo[i].getstring(), zoneinfo[i].length());
+            Send((void *)"\n", 1);
         }
+        Send((void *)"\0", 1);		// send null char
+        return ;
     }
     DefaultReq();	
 }
@@ -1987,19 +1930,21 @@ void dvrsvr::ReqNfileRead()
         readsize = *(int *)m_recvbuf ;
         if( readsize>0 && readsize<=4*1024*1024 ) {
             char * buf = (char *)mem_alloc(readsize) ;
-            readsize=fread( buf, 1, readsize, m_nfilehandle );
-            if( readsize<=0 ) {
-                readsize=0 ;
+            if( buf ) {
+                readsize=fread( buf, 1, readsize, m_nfilehandle );
+                if( readsize<=0 ) {
+                    readsize=0 ;
+                }
+                ans.anscode = ANSNFILEREAD ;
+                ans.anssize = readsize ;
+                ans.data = 0 ;
+                Send( &ans, sizeof(ans));
+                if( ans.anssize>0 ) {
+                    Send(buf, readsize) ;
+                }
+                mem_free( buf );
+                return ;
             }
-            ans.anscode = ANSNFILEREAD ;
-            ans.anssize = readsize ;
-            ans.data = 0 ;
-            Send( &ans, sizeof(ans));
-            if( ans.anssize>0 ) {
-                Send(buf, readsize) ;
-            }
-            mem_free( buf );
-            return ;
         }
     }
     DefaultReq();

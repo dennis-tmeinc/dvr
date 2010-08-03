@@ -71,7 +71,7 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
         h264hd.flag =  H264FILEFLAG;
         m_fileencrypt=file_encrypt ;
         if( m_fileencrypt ) {
-            RC4_block_crypt( (unsigned char*)&h264hd, sizeof(h264hd), 0, file_encrypt_RC4_table, 1024);
+            RC4_block_crypt( (unsigned char*)&h264hd, (unsigned char*)&h264hd, sizeof(h264hd), 0, file_encrypt_RC4_table, 1024);
         }
         write( &h264hd, sizeof(struct hd_file));				// write header
         m_filestart = tell();
@@ -98,7 +98,7 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
         }
         else {
             m_fileencrypt = 1 ;
-            RC4_block_crypt( (unsigned char*)&h264hd, sizeof(h264hd), 0, file_encrypt_RC4_table, 1024);
+            RC4_block_crypt( (unsigned char*)&h264hd, (unsigned char*)&h264hd, sizeof(h264hd), 0, file_encrypt_RC4_table, 1024);
             if( h264hd.flag ==  H264FILEFLAG ) {
                 if( file_nodecrypt ) {
                     m_autodecrypt=0 ;
@@ -236,12 +236,12 @@ int dvrfile::writeheader(void * buffer, size_t headersize)
 }
 
 // write a new frame, return 1 success, 0: failed
-int dvrfile::writeframe(void *buffer, size_t size, int keyframe, dvrtime * frametime)
+int dvrfile::writeframe(void *buffer, size_t size, int frametype, dvrtime * frametime)
 {
     unsigned char * wbuf = (unsigned char *)buffer ;
     char encbuf[1024] ;
     unsigned int esize ;
-    if( keyframe ) {
+    if( frametype == FRAMETYPE_KEYVIDEO ) {
         dvr_key_t keytime ;
         keytime.koffset = tell();
         keytime.ktime = time_dvrtime_diffms(frametime, &m_filetime);
@@ -264,8 +264,7 @@ int dvrfile::writeframe(void *buffer, size_t size, int keyframe, dvrtime * frame
             if( esize>size ) {
                 esize=size ;
             }
-            mem_cpy32( encbuf, wbuf, esize );
-            RC4_block_crypt( (unsigned char *)encbuf, esize, 0, file_encrypt_RC4_table, 1024);
+            RC4_block_crypt( (unsigned char *)encbuf, wbuf, esize, 0, file_encrypt_RC4_table, 1024);
             write( encbuf, esize);
             wbuf+=esize ;
             size-=esize ;
@@ -310,8 +309,7 @@ int dvrfile::writeframe(void *buffer, size_t size, int keyframe, dvrtime * frame
                         if( esize>size ) {
                             esize=size ;
                         }
-                        mem_cpy32( encbuf, wbuf, esize );
-                        RC4_block_crypt( (unsigned char *)encbuf, esize, 0, file_encrypt_RC4_table, 1024);
+                        RC4_block_crypt( (unsigned char *)encbuf, wbuf, esize, 0, file_encrypt_RC4_table, 1024);
                         write( encbuf, esize);
                         wbuf+=esize ;
                         size-=esize ;
@@ -356,7 +354,8 @@ int dvrfile::readframe(void * framebuf, size_t bufsize)
                 if( encsize>1024 ) {
                     encsize=1024 ;
                 }
-                RC4_block_crypt( ((unsigned char *)framebuf)+sizeof(struct hd_frame), encsize, 0, file_encrypt_RC4_table, 1024);		// decrypt frame
+                unsigned char * ebuf =  ((unsigned char *)pframe)+sizeof(struct hd_frame) ;
+                RC4_block_crypt( ebuf, ebuf, encsize, 0, file_encrypt_RC4_table, 1024);		// decrypt frame
             }
 #endif            
 #ifdef EAGLE34
@@ -399,7 +398,7 @@ int dvrfile::readframe(void * framebuf, size_t bufsize)
                     if( esize>1024 ) {
                         esize=1024 ;
                     }
-                    RC4_block_crypt(wbuf, esize, 0, file_encrypt_RC4_table, 1024);		// decrypt frame
+                    RC4_block_crypt(wbuf, wbuf, esize, 0, file_encrypt_RC4_table, 1024);		// decrypt frame
                     break ;
                 }
                 wbuf+=si ;
@@ -833,7 +832,6 @@ void dvrfile::readkey()
     char * pk = keyfilename.getstring() ;
     int l=strlen(pk);
     FILE * keyfile = NULL;
-    dvr_lock();
     m_keyarray.empty();
     if( strcmp( &pk[l-4], g_264ext)==0 ) {
         strcpy(&pk[l-4],".k");
@@ -852,7 +850,6 @@ void dvrfile::readkey()
             file_close(keyfile);
         }
     }
-    dvr_unlock();
 }
 
 void dvrfile::writekey()
@@ -865,7 +862,6 @@ void dvrfile::writekey()
     if( m_keyarray.size()==0 ) {
         return;
     }
-    dvr_lock();
     if( strcmp( &pk[l-4], g_264ext)==0 ) {
         strcpy(&pk[l-4],".k");
         keyfile=file_open( pk, "w" );
@@ -876,7 +872,6 @@ void dvrfile::writekey()
             file_close(keyfile);
         }
     }
-    dvr_unlock();
 }
 
 // return 1: seek success, 0: out of range
@@ -1202,12 +1197,13 @@ int dvrfile::repairpartiallock()
 
         frametime = m_filetime ;
         time_dvrtime_addms( &frametime, m_keyarray[i].ktime );
-        
-        framebuf = (char *) mem_alloc ( framesize ) ;
+
         seek( framepos );
+        
+        framebuf = new char [framesize] ;
         read( framebuf, framesize );
         lockfile.writeframe( framebuf, framesize, 1, &frametime );
-        mem_free( framebuf );
+        delete framebuf ;
         
     }
     
@@ -1261,19 +1257,18 @@ int dvrfile::rename(const char * oldfilename, const char * newfilename)
     int res ;
     char oldkfile[512], newkfile[512] ;
     int  lo, ln ;
-    dvr_lock();
     res = ::rename( oldfilename, newfilename );
     strcpy( oldkfile, oldfilename );
     strcpy( newkfile, newfilename );
     lo = strlen( oldkfile );
     ln = strlen( newkfile );
     if( strcmp( &oldkfile[lo-4], g_264ext )== 0 &&
-       strcmp( &newkfile[ln-4], g_264ext )== 0 ) {
-           strcpy( &oldkfile[lo-4], ".k" );
-           strcpy( &newkfile[ln-4], ".k" );
-           ::rename( oldkfile, newkfile );
-       }
-    dvr_unlock();
+       strcmp( &newkfile[ln-4], g_264ext )== 0 )
+    {
+        strcpy( &oldkfile[lo-4], ".k" );
+        strcpy( &newkfile[ln-4], ".k" );
+        ::rename( oldkfile, newkfile );
+    }
     return res;
 }
 
@@ -1283,7 +1278,6 @@ int dvrfile::remove(const char * filename)
     int res ;
     char kfile[256] ;
     int l ;
-    dvr_lock();
     res = ::remove( filename );
     strcpy( kfile, filename );
     l = strlen( kfile );
@@ -1291,7 +1285,6 @@ int dvrfile::remove(const char * filename)
         strcpy( &kfile[l-4], ".k" ) ;
         ::remove( kfile );
     }
-    dvr_unlock();
     return res ;
 }
 
@@ -1324,54 +1317,27 @@ int dvrfile::lock(const char * filename)
 
 FILE * file_open(const char *path, const char *mode)
 {
-    FILE * f ;
-    dvr_lock();
-    f = fopen(path, mode);
-    dvr_unlock();
-    return f ;
+    return fopen(path, mode);
 }
 
 int file_read(void *ptr, int size, FILE *stream)
 {
-    int r ;
-    dvr_lock();
-    r = (int)fread( ptr, 1, (size_t)size, stream );
-    dvr_unlock();
-    return r ;
+    return (int)fread( ptr, 1, (size_t)size, stream );
 }
 
 int file_write(const void *ptr, int size, FILE *stream)
 {
-    int r ;
-    dvr_lock();
-    r = (int)fwrite( ptr, 1, (size_t)size, stream );
-    dvr_unlock();
-    return r ;
+    return (int)fwrite( ptr, 1, (size_t)size, stream );
 }
 
 int file_close(FILE *fp)
 {
-    int r ;
-    dvr_lock();
-    r = fclose( fp );
-    dvr_unlock();
-    return r ;
+    return fclose( fp );
 }
 
 int file_flush(FILE *stream)
 {
-    int r ;
-    dvr_lock();
-    r = fflush( stream );
-    dvr_unlock();
-    return r ;
-}
-
-void file_sync()
-{
-    dvr_lock();
-    disk_sync();
-    dvr_unlock();
+    return fflush( stream );
 }
 
 void file_init()
@@ -1415,5 +1381,4 @@ void file_init()
 
 void file_uninit()
 {
-    file_sync();
 }

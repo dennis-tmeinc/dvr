@@ -167,7 +167,12 @@ int main()
             fprintf(fvalue, "\"standbytime\":\"%s\",", value.getstring() );
         }
 
-        
+        // uploading time
+        value = dvrconfig.getvalue( "system", "uploadingtime");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"uploadingtime\":\"%s\",", value.getstring() );
+        }
+
         // file_size
         value = dvrconfig.getvalue("system", "maxfilesize");
         if( value.length()>0 ) {

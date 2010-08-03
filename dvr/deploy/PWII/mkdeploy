@@ -36,7 +36,7 @@ if [ ${appid} = "clean" ]; then
 # clean host firmware filesa
     cd ${DEPROOT}/host/dvr
     rm -f httpd.sfx firmwareid
-    rm -f dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer libfbdraw.so tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
+    rm -f dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
     
     cd ${DEPROOT}/host/ID
     rm -f BOARDNUM APPID BOARDID
@@ -107,7 +107,6 @@ echo Building Host deploy firmware.
 cd ${DEPROOT}/host/dvr
 echo copy dvr host files
 cp -v ${APPROOT}/dvrsvr/dvrsvr .
-cp -v ${APPROOT}/fb/libfbdraw.so .
 cp -v ${APPROOT}/dvrtime/dvrtime .
 cp -v ${APPROOT}/eaglehost/eaglehost .
 cp -v ${APPROOT}/glog/glog .
@@ -123,7 +122,7 @@ cp -v ${APPROOT}/volumeid/md5check .
 cp -v ${APPROOT}/volumeid/volumeid .
 cp -v ${APPROOT}/cfg/cfg .
 
-arm-linux-strip dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer libfbdraw.so tdevd tdevmount usbcheck tmefile md5check volumeid cfg
+arm-linux-strip dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg
 cd ${DEPROOT}/host
 echo ${firmwareid} > dvr/firmwareid
 ${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.dep ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW

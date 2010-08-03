@@ -42,9 +42,7 @@ class dir_find {
         // close dir handle
         void close() {
             if( m_pdir ) {
-                dvr_lock();
                 closedir( m_pdir );
-                dvr_unlock();
                 m_pdir=NULL ;
             }
         }
@@ -60,9 +58,7 @@ class dir_find {
                     m_pathname[m_dirlen]='\0';
                 }
             }
-            dvr_lock();
             m_pdir = opendir(m_pathname);
-            dvr_unlock();
         }
         ~dir_find() {
             close();
@@ -79,7 +75,6 @@ class dir_find {
         //        0: end of file. (or error)
         int find() {
             int r=0 ;
-            dvr_lock();
             if( m_pdir ) {
                 while( (m_pent=readdir(m_pdir))!=NULL  ) {
                     // skip . and .. directory
@@ -104,13 +99,11 @@ class dir_find {
                     break ;
                 }
             }
-            dvr_unlock();
             return r ;
         }
 
         int find(char * pattern) {
             int r=0 ;
-            dvr_lock();
             if( m_pdir ) {
                 while( (m_pent=readdir(m_pdir))!=NULL  ) {
                     if( fnmatch(pattern, m_pent->d_name, 0 )==0 ) {
@@ -131,7 +124,6 @@ class dir_find {
                     }
                 }
             }
-            dvr_unlock();
             return r ;
         }
         
@@ -277,15 +269,11 @@ void disk_rmdir(const char *dir)
             disk_rmdir( pathname );
         }
         else {
-            dvr_lock();
             unlink(pathname);
-            dvr_unlock();
         }
     }
     dfind.close();
-    dvr_lock();
     rmdir(dir);
-    dvr_unlock();
 }
 
 // remove empty directories
@@ -306,9 +294,7 @@ int disk_rmemptydir(char *dir)
     }
     dfind.close();
     if( files==0 ) {
-        dvr_lock();
         rmdir(dir);
-        dvr_unlock();
     }
     return files ;
 }
@@ -337,9 +323,7 @@ static int disk_removefile( const char * file264 )
     string f264 ;
     char * extension ;
     f264 = file264 ;
-    dvr_lock();
     if( unlink(file264 )!=0 ) {
-        dvr_unlock();
         dvr_log( "Delete file failed : %s", basename(file264) );
         return -1;
     }
@@ -351,7 +335,6 @@ static int disk_removefile( const char * file264 )
         unlink( f264.getstring() );
     }
     disk_rmemptytree(file264);
-    dvr_unlock();
     return 0 ;
 }
 
@@ -747,7 +730,6 @@ int disk_renew( char * filename, int add )
 //    int l ;
 //    char * base ;
 
-    dvr_lock();
     if( add ) {
         disk_tlen += f264length(filename);
         disk_llen += f264locklength(filename);
@@ -762,7 +744,6 @@ int disk_renew( char * filename, int add )
             disk_llen=0;
         }
     }
-    dvr_unlock();
     
     disk_archive_start();
 /*    
@@ -1026,11 +1007,9 @@ int disk_maxdirty ;
 void disk_sync()
 {
     if( g_memdirty > disk_maxdirty ) {
-        dvr_lock();
         disk_busy = 1 ;
         sync();
         disk_busy = 0 ;
-        dvr_unlock();
     }
     return ;
 }
@@ -1135,7 +1114,6 @@ int disk_archive_copyfile( char * srcfile, char * destfile )
     res = 1 ;
     while( (r=file_read( filebuf, ARCH_BUFSIZE, fsrc ))>0 ) {
         file_write( filebuf, r, fdest ) ;
-        disk_sync();
         while( rec_busy || disk_busy || g_cpu_usage>0.6 ) {
             usleep( 100000 );
             if( disk_archive_run == 0 ) {
@@ -1459,6 +1437,8 @@ void disk_check()
         disk_tlen = 0 ;
         goto disk_check_finish ;
     }
+
+    disk_sync();
     
     if (rec_basedir.length()==0 || disk_freespace(rec_basedir.getstring()) <= disk_minfreespace ) {
 

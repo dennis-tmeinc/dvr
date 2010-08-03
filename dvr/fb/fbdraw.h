@@ -40,7 +40,7 @@ struct BITMAP {
 // r, g, b, a all range from 0-255 
 #define COLOR( r, g, b, a ) 	 ( ((UINT32)(b)) | (((UINT32)(g))<<8) | (((UINT32)(r))<<16) | (((UINT32)(a))<<24) )
 
-// r, g, b, a componet
+// r, g, b, a component
 #define COLOR_R( color ) ( (UINT8)( (color)>>16 ) )
 #define COLOR_G( color ) ( (UINT8)( (color)>>8  ) )
 #define COLOR_B( color ) ( (UINT8)( (color)     ) )
@@ -87,6 +87,10 @@ int draw_fontheight(struct BITMAP * font);
 void draw_text( int dx, int dy, char * text, struct BITMAP * font);
 void draw_text_ex( int dx, int dy, char * text, struct BITMAP * font, int fontw, int fonth);
 
+#ifdef EAGLE34    
+    void draw_refresh( int x, int y, int w, int h ) ;
+#endif    
+    
 #ifdef __cplusplus
 }
 #endif 
