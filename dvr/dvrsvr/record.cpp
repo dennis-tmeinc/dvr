@@ -10,11 +10,11 @@ int    rec_pause = 0 ;             // 1: to pause recording, while network playb
 static int rec_fifo_size = 4000000 ;
 int    rec_fifobusy ;
 int    rec_lock_all = 0 ;			// all files save as locked file
-struct dvrtime  rec_cliptime ;      // clip starting time. (pre-recording mode only)
 
 static pthread_mutex_t rec_mutex;
 static pthread_cond_t  rec_cond;
-static int rec_sig;
+static int rec_sig ;
+static int rec_lowmemory ;
 
 inline void rec_lock() {
     pthread_mutex_lock(&rec_mutex);
@@ -78,6 +78,9 @@ static char rec_stname(enum REC_STATE recst)
     else return 'P' ;
 }
 
+#define REC_FORCEON     (1)
+#define REC_FORCEOFF    (0)
+
 class rec_channel {
     protected:
         int     m_channel;
@@ -99,11 +102,6 @@ class rec_channel {
 
         dvrfile m_file;						// recording file
 		
-        int     m_forcerecording ;        // 0: no force, 1: force recording, 2: force no recording. (added for pwii project)
-        int     m_forcerecordontime ;     // force recording turn on time
-        int     m_forcerecordofftime ;    // force recording trun off time
-        int     m_force_starttime ;	        // force recording start time
-        
         struct rec_fifo *m_fifohead;
         struct rec_fifo *m_fifotail;
         int	   m_fifosize ;
@@ -116,8 +114,8 @@ class rec_channel {
         void putfifo(rec_fifo * fifo);
         int  clearfifo();
         
-        int m_lock_starttime ;	        // record state start time
-        int m_trigger_starttime ;	    // triggering start time
+        int m_lock_endtime ;	        // lock end time
+        int m_rec_endtime ;	            // recording end time
             
         // pre-record variables
         int m_prerecord_time ;				// allowed pre-recording time
@@ -134,7 +132,6 @@ class rec_channel {
         dvrtime m_fileendtime;
         dvrtime m_keytime ;
         int m_fileday;						// day of opened file, used for breaking file across midnight
-//        DWORD m_lastkeytimestamp ;
         
         int m_reqbreak;				// reqested for file break
 
@@ -156,13 +153,21 @@ class rec_channel {
         void stop();				// stop recording, frame data discarded
 
 #ifdef  PWII_APP
-        int getforcerecording() {
-            return m_forcerecording ;
-        }
+        
+        int     m_forcerecordontime ;     // force recording turn on time
+        int     m_forcerecordofftime ;    // force recording trun off time
+
+        // force recording feature for PWII
         void setforcerecording(int force){
-            m_forcerecording = force ;
-            m_force_starttime = g_timetick ;
-            update();
+            if( force == REC_FORCEON ) {
+                m_recstate = REC_LOCK ;
+                m_lock_endtime = g_timetick+1000*m_forcerecordontime ;
+                m_rec_endtime = m_lock_endtime ;
+            }
+            else {
+                m_recstate = REC_PRERECORD ;
+                m_rec_endtime = m_lock_endtime = g_timetick ;
+            }
         }
 #endif
 
@@ -229,7 +234,6 @@ rec_channel::rec_channel(int channel)
     m_recstate=REC_STOP ;
     m_filerecstate=REC_STOP ;
 	m_prevfilerecstate=REC_STOP ;
-    m_forcerecording = 0 ;
     
     // initialize pre-record variables
     m_prerecord_time = dvrconfig.getvalueint(cameraname, "prerecordtime");
@@ -247,9 +251,11 @@ rec_channel::rec_channel(int channel)
     if( m_postrecord_time>(3600*12) )
         m_postrecord_time=(3600*12) ;
 
+#ifdef PWII_APP    
 // pwii, force on/off recording
     m_forcerecordontime = dvrconfig.getvalueint( cameraname, "forcerecordontime" ) ;
     m_forcerecordofftime = dvrconfig.getvalueint( cameraname, "forcerecordofftime" ) ;
+#endif
     
     // go for each trigger sensor setting time
 /*    
@@ -289,9 +295,8 @@ rec_channel::rec_channel(int channel)
 //    m_lastkeytimestamp = 0 ;
     m_reqbreak = 0 ;
 
-    m_lock_starttime = 0 ;
-    m_trigger_starttime = 0 ;
-    m_force_starttime = 0 ;
+    m_lock_endtime=0;
+    m_rec_endtime=0;
 
     // start recording	
     start();
@@ -300,8 +305,8 @@ rec_channel::rec_channel(int channel)
     // for tvs, required by nelson, 2010-04-13. All camera start recording wile power on
     if( m_recstate == REC_PRERECORD ) {
         m_recstate = REC_LOCK ;
-        m_lock_starttime = g_timetick ;
-        m_trigger_starttime = g_timetick ;
+        m_lock_endtime = g_timetick + 1000*m_postlock_time ;
+        m_rec_endtime = g_timetick + 1000*m_prerecord_time ;
     }
 #endif
 
@@ -317,7 +322,6 @@ rec_channel::~rec_channel()
 // start record
 void rec_channel::start()
 {
-    time_now( &rec_cliptime ) ;
     if( m_recordmode == 0 ) {			// continue recording mode
         m_recstate = REC_RECORD ;
     }
@@ -338,7 +342,6 @@ void rec_channel::stop()
 
 void rec_channel::onframe(cap_frame * pframe)
 {
-    int s ;
     struct rec_fifo *nfifo;
 
     if( m_recstate == REC_STOP ||
@@ -357,22 +360,12 @@ void rec_channel::onframe(cap_frame * pframe)
         }
     }
     else {
-        // check fifo size.
-        if(  pframe->frametype == FRAMETYPE_KEYVIDEO && m_fifosize>rec_fifo_size ) {			// fifo maximum size 4Mb per channel
-            s=clearfifo();
-            m_reqbreak = 1 ;
-            dvr_log("Recording fifo too big, frames dropped! (CH%02d)-(%d)", m_channel, s ); 
-        }
-
         // build new fifo frame
         nfifo = newfifo( pframe->framedata, pframe->framesize, pframe->frametype );
         if( nfifo ) {
             // set frame recording type
             nfifo->rectype = m_recstate ;
             putfifo( nfifo );
-            if( m_fifosize>rec_fifobusy ) {
-                rec_busy=1 ;
-            }
         }
     }
     rec_signal();
@@ -835,7 +828,8 @@ int rec_channel::dorecord()
 {
     rec_fifo *fifo;
     fifo = getfifo();
-    if (fifo == NULL)	{	// no fifos pending
+    if (fifo == NULL)	{	
+        // no fifos pending
 		if( m_recording && (g_timetick-m_activetime)>5000 ) {  // inactive for 5 seconds
 			closefile();
 			m_recording = 0 ;
@@ -844,17 +838,31 @@ int rec_channel::dorecord()
     }
     else {
         m_recording = recorddata( fifo ) ;
+        m_activetime=g_timetick;
         // release buffer
         deletefifo( fifo );
-        m_activetime=g_timetick;
+        if( m_fifosize>rec_fifobusy ) {
+            rec_busy=1 ;
+        }
+        // check fifo size.
+        if( g_memfree < rec_lowmemory ) {			// total memory available is critical 
+            m_reqbreak = 1 ;
+            int s=clearfifo();
+            dvr_log("Memory too low, frames dropped! (CH%02d)-(%d)", m_channel, s ); 
+        }
+        if( m_fifosize>rec_fifo_size ) {			// fifo maximum size 4Mb per channel
+            m_reqbreak = 1 ;
+            int s=clearfifo();
+            dvr_log("Recording fifo too big, frames dropped! (CH%02d)-(%d)", m_channel, s ); 
+        }
         return 1 ;
     }
 }
 
 void *rec_thread(void *param)
 {
-    int rtick=0 ;
-	int ch=0;
+    int disktick=0 ;
+	int ch;
 
     while (rec_run) {
         int w=0 ;
@@ -868,9 +876,9 @@ void *rec_thread(void *param)
             rec_wait();
         }
         // check disk space every 3 seconds, moved from main thread, so main thread can be more responsive to IO input.
-        if( (g_timetick-rtick)>3000 ) {
+        if( g_timetick>disktick ) {
             disk_check();
-            rtick = g_timetick ;
+            disktick = g_timetick+3000 ;
         }
     }        
     for (ch = 0; ch < rec_channels; ch++) {
@@ -890,27 +898,6 @@ void rec_channel::update()
         onframe(NULL);
         return ;
     }
-
-#ifdef    PWII_APP    
-
-    // force recording feature for PWII
-    if( m_forcerecording ) {
-        if( m_forcerecording == 1 ) {
-            if( (g_timetick-m_force_starttime )/1000 > m_forcerecordontime ) {     // force recording timeout
-                m_forcerecording = 0 ;
-            }
-            m_recstate = REC_LOCK ;             // REC button make locked file
-        }
-        else if( m_forcerecording==2 ) {
-            if( (g_timetick-m_force_starttime )/1000 > m_forcerecordofftime ) {     // force recording off timeout
-                m_forcerecording = 0 ;
-            }
-            m_recstate = REC_PRERECORD ;
-        }
-        return ;                    // dont continue checking ;
-    }
-
-#endif
 
     // triggering
     int trigger = 0 ;           // trigger 0: no trigger, 1: N trigger, 2: L trigger
@@ -974,29 +961,44 @@ void rec_channel::update()
         }
 #endif
         m_recstate = REC_LOCK ;
-        m_lock_starttime = g_timetick ;
-        m_trigger_starttime = g_timetick ;
+
+        i = g_timetick + 1000*m_postlock_time ;
+        if( m_lock_endtime<i ) {
+            m_lock_endtime = i ;
+        }
+        i = g_timetick + 1000*m_prerecord_time ;
+        if( m_rec_endtime<i ) {
+            m_rec_endtime = i ;
+        }
     }
     else if( trigger == 1 ) {
         if( m_recstate == REC_PRERECORD ) {
             m_recstate = REC_RECORD ;
         }
-        m_trigger_starttime = g_timetick ;
+        i = g_timetick + 1000*m_prerecord_time ;
+        if( m_rec_endtime<i ) {
+            m_rec_endtime = i ;
+        }
     }
 
     // check if LOCK mode finished
     if( m_recstate == REC_LOCK ) {
-        if( (g_timetick - m_lock_starttime)/1000 > m_postlock_time ){
+        if( g_timetick > m_lock_endtime ) {
             m_recstate = REC_RECORD ;
         }
     }
    
     // check if RECORD mode finished
     if( m_recstate == REC_RECORD ) {
-        if( (g_timetick - m_trigger_starttime)/1000 > m_postrecord_time ){
+        if( g_timetick > m_rec_endtime ) {
             m_recstate = REC_PRERECORD ;
         }
     }
+
+    if( m_recstate == REC_PRERECORD ) {
+        m_lock_endtime = m_rec_endtime = g_timetick ;
+    }
+    
 }
 
  
@@ -1005,9 +1007,10 @@ void rec_channel::alarm()
 {
     if( recstate() &&
         m_recordalarmpattern > 0 && 
-        m_recordalarm>=0 && m_recordalarm<num_alarms ) {
-            alarms[m_recordalarm]->setvalue(m_recordalarmpattern);
-        }
+        m_recordalarm>=0 && m_recordalarm<num_alarms ) 
+    {
+        alarms[m_recordalarm]->setvalue(m_recordalarmpattern);
+    }
 }
 
 void rec_init()
@@ -1064,6 +1067,11 @@ void rec_init()
     }
     else if( rec_fifobusy > rec_fifo_size/2 ) {
         rec_fifobusy = rec_fifo_size/2 ;
+    }
+
+    rec_lowmemory = dvrconfig.getvalueint("system", "record_lowmemory");
+    if( rec_lowmemory  < ( g_lowmemory+2000 ) ) {
+        rec_lowmemory = g_lowmemory+2000 ;
     }
     
     rec_threadid=0 ;
@@ -1251,25 +1259,16 @@ extern int pwii_rear_ch ;          // pwii real camera channel
 
 void rec_pwii_toggle_rec_front()
 {
-    if( rec_channels > pwii_front_ch && rec_channels > pwii_front_ch ) {
+    if( rec_channels > pwii_front_ch ) {
         screen_setliveview(pwii_front_ch);                              // start live view front camera
-        int state1 = recchannel[pwii_front_ch]->getforcerecording() ;
-        if( state1 == 0 ) {
-            state1 = recchannel[pwii_front_ch]->recstate();
-            if( state1 ) {
-                recchannel[pwii_front_ch]->setforcerecording(2) ;       // force stop recording
-                recchannel[pwii_rear_ch]->setforcerecording(2) ;       // force stop recording
+        if( recchannel[pwii_front_ch]->recstate() ) {
+            int ch ;
+            for( ch=0; ch<rec_channels ; ch++) {
+                recchannel[ch]->setforcerecording(REC_FORCEOFF) ;       // force stop recording
             }
-            else {
-                recchannel[pwii_front_ch]->setforcerecording(1) ;       // force start recording
-            }
-        }
-        else if( state1 ==1 ) {
-                recchannel[pwii_front_ch]->setforcerecording(2) ;       // force stop recording
-                recchannel[pwii_rear_ch]->setforcerecording(2) ;       // force stop recording
         }
         else {
-                recchannel[pwii_front_ch]->setforcerecording(1) ;       // force start recording
+            recchannel[pwii_front_ch]->setforcerecording(REC_FORCEON) ;       // force start recording
         }
     }
 }
@@ -1278,21 +1277,11 @@ void rec_pwii_toggle_rec_rear()
 {
     if( rec_channels > pwii_rear_ch ) {
         screen_setliveview(pwii_rear_ch);                              // start live view rear camera
-        int state1 = recchannel[pwii_rear_ch]->getforcerecording() ;
-        if( state1 == 0 ) {
-            state1 = recchannel[pwii_rear_ch]->recstate();
-            if( state1 ) {
-                recchannel[pwii_rear_ch]->setforcerecording(2) ;       // force stop recording
-            }
-            else {
-                recchannel[pwii_rear_ch]->setforcerecording(1) ;       // force start recording
-            }
-        }
-        else if( state1 ==1 ) {
-                recchannel[pwii_rear_ch]->setforcerecording(2) ;       // force stop recording
+        if( recchannel[pwii_rear_ch]->recstate() ) {
+            recchannel[pwii_rear_ch]->setforcerecording(REC_FORCEOFF) ;       // force stop recording
         }
         else {
-                recchannel[pwii_rear_ch]->setforcerecording(1) ;       // force start recording
+            recchannel[pwii_rear_ch]->setforcerecording(REC_FORCEON) ;       // force start recording
         }
     }
 }

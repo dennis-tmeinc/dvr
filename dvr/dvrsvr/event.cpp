@@ -136,10 +136,12 @@ void event_check()
     int i ;
     int videolost, videodata, diskready ;
     static int timer_1s ;
-
-    screen_io(20000);           	// do screen io
-
-    if( dio_check() || g_timetick<timer_1s || g_timetick-timer_1s > 1000 ) {
+    
+    if( screen_io() ||
+        dio_check() || 
+        g_timetick<timer_1s || 
+        g_timetick-timer_1s > 1000 ) 
+    {
         // check sensors
         for(i=0; i<num_sensors; i++ ) {
             sensors[i]->check();
@@ -285,8 +287,9 @@ void event_check()
             cpu_usage();
 
             // check memory
-            if( mem_available () < g_lowmemory && rec_basedir.length()>1 ) {
-                dvr_log("Memory low. reload DVR.");
+            mem_check();
+            if( g_memfree < g_lowmemory ) {
+                dvr_log("Memory low. restart DVR.");
                 app_state = APPRESTART ;
             }
         }

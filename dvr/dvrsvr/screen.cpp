@@ -1039,10 +1039,6 @@ class video_screen : public window {
                         m_icon->seticon( "rwd.pic" );
                     }
                     else if( m_videomode == VIDEO_MODE_LIVE ) { // live mode
-                        // testing features !!!!!!
-//                        if( cap_channel[m_playchannel] ) {
-//                            cap_channel[m_playchannel]->captureJPEG();
-//                        }
                     }
                     //                    m_decode_runmode = DECODE_MODE_BACKWARD ;
                 }
@@ -1566,13 +1562,13 @@ static int readok(int fd, int usdelay)
 
 static int getmouseevent( struct mouse_event * mev, int usdelay )
 {
-    static int mouseeventtime ;
-    
-    int offsetx=0, offsety=0;
-    int x=mousex, y=mousey ;
-    int buttons=mousebuttons ;
-    UINT8 mousebuf[8] ;
     if( mousedev>0 && Screen_cursor ) {
+        static int mouseeventtime ;
+        int offsetx=0, offsety=0;
+        int x=mousex, y=mousey ;
+        int buttons=mousebuttons ;
+        UINT8 mousebuf[8] ;
+        
         if( readok(mousedev, usdelay) ) {
             if( read(mousedev, mousebuf, 8) >=3 && 
                ( (mousebuf[0] & 0xc8 )==0x8 ) ) 
@@ -1619,12 +1615,9 @@ static int getmouseevent( struct mouse_event * mev, int usdelay )
 
             return 1 ;
         }
-    }
-    else {
-        usleep(usdelay);
-    }
-    if( (g_timetick-mouseeventtime) > 60000 ) {
-        Screen_cursor->hide();
+        if( (g_timetick-mouseeventtime) > 60000 ) {     // mouse idling for 1 min
+            Screen_cursor->hide();
+        }
     }
     return 0 ;
 }

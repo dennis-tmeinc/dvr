@@ -197,9 +197,9 @@ int dvrfile::seek(int pos, int from)
 int dvrfile::truncate( int tsize )
 {
     int res ;
-    file_flush(m_handle);
+    fflush(m_handle);
     res=ftruncate(fileno(m_handle), tsize);
-    file_flush(m_handle);
+    fflush(m_handle);
     return res ;
 }
 
@@ -1333,11 +1333,6 @@ int file_write(const void *ptr, int size, FILE *stream)
 int file_close(FILE *fp)
 {
     return fclose( fp );
-}
-
-int file_flush(FILE *stream)
-{
-    return fflush( stream );
 }
 
 void file_init()

@@ -92,7 +92,7 @@ void dvr_cleanlog(FILE * flog)
             fseek( flog, pos1, SEEK_SET );
         }
         fseek( flog, pos2, SEEK_SET );
-        file_flush( flog );
+        fflush( flog );
         ftruncate( fileno(flog), pos2 );
     }
 }
@@ -817,7 +817,6 @@ void do_init()
     rec_init();
     ptz_init();
     screen_init();	
-    msg_init();
     net_init();
 
     cap_start();	// start capture 
@@ -830,7 +829,6 @@ void do_uninit()
     cap_stop();		// stop capture
     
     net_uninit();
-    msg_uninit();
     screen_uninit();
     ptz_uninit();
     rec_uninit();
@@ -874,6 +872,9 @@ int main()
     app_state = APPUP ;
     
     while( app_state!=APPQUIT ) {
+
+        usleep( 1000 );                             // make a minimum delay
+        
         if( app_state == APPUP ) {					// application up
             serial++ ;
             if( app_ostate != APPUP ) {
@@ -881,18 +882,6 @@ int main()
                 app_ostate = APPUP ;
             }
             time_tick();
-/*            
-            if( (serial%80)==3 ){					// every 1 second
-                gettimeofday(&time2, NULL);
-                t_diff = (int)(int)(time2.tv_sec - time1.tv_sec) ;
-                if( t_diff<-100 || t_diff>100 )
-                {
-                    dvr_log("System time changing detected!");
-                    rec_break ();
-                }
-                time1.tv_sec = time2.tv_sec ;
-            }
-*/        
             event_check();
         }
         else if (app_state == APPDOWN ) {			// application down
@@ -908,7 +897,6 @@ int main()
                 do_uninit();
                 app_ostate = APPDOWN ;
             }
-            usleep( 100 );
         }
         sig_check();
     }

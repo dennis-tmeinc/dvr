@@ -106,7 +106,6 @@ void eagle_capture::streamcallback(
 {
     int xframetype ;
     struct cap_frame capframe;
-
     if( dio_record || net_active ) {            // record or send frame only when necessary. 
         xframetype = FRAMETYPE_UNKNOWN ;
 #ifdef EAGLE32    
@@ -412,23 +411,30 @@ int jpeg_mode ;
 int jpeg_size ;
 
 // to capture one jpeg frame
-void eagle_capture::captureJPEG()
+int eagle_capture::captureJPEG(unsigned char * img, int * imgsize, int quality, int pic)
 {
     if( m_hikhandle>0 ) {
-        unsigned int imgsize = jpeg_size ;
-        unsigned char * img = (unsigned char *)mem_alloc( imgsize );
-        if( img ) {
-            if( GetJPEGImage(m_hikhandle, jpeg_quality, jpeg_mode, img, &imgsize )==0 ) {
+        int overhead = 200 ;
+        unsigned int isize = (unsigned int)*imgsize-overhead ;
+        if( img && isize>0 ) {
+            if( GetJPEGImage(m_hikhandle, quality, pic, img+overhead, &isize )==0 ) {
+/*
                 struct cap_frame capframe;
                 capframe.channel = m_channel ;
                 capframe.framesize = imgsize ;
                 capframe.frametype = FRAMETYPE_JPEG ;
                 capframe.framedata = (char *) img ;
                 onframe( &capframe );
+*/
+                // adjust/add mjpeg tag
+                 
+                
+                
+                return overhead ;
             }
         }
-        mem_free( img );
     }
+    return -1 ;
 }
 
 void eagle_capture::setosd( struct hik_osd_type * posd )

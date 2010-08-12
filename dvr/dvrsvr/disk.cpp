@@ -1464,11 +1464,11 @@ void disk_check()
             }
         }
     }
-    disk_check_finish:
-        if( rec_basedir.length()<1 ) {
-            // un-mark current disk
-            unlink( disk_curdiskfile.getstring() );
-        }
+disk_check_finish:
+    if( rec_basedir.length()<1 ) {
+        // un-mark current disk
+        unlink( disk_curdiskfile.getstring() );
+    }
 }
 
 

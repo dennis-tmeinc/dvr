@@ -44,7 +44,7 @@ int mem_refcount(void *pmem);
 //int mem_check(void *pmem);
 //int mem_size(void * pmem);
 void mem_cpy32(void *dest, const void *src, size_t count);
-int mem_available();
+void mem_check();
 void mem_init();
 void mem_uninit();
 
@@ -75,6 +75,7 @@ extern int app_state;
 extern int system_shutdown;
 extern float g_cpu_usage ;
 extern int g_lowmemory;
+extern int g_memfree;
 extern int g_memdirty;
 extern int g_memused;
 extern char g_hostname[] ;
@@ -467,7 +468,10 @@ class capture {
 	}
     virtual void captureIFrame(){        // force to capture I frame
     }
-    virtual void captureJPEG(){         // to capture one jpeg frame
+    // to capture one jpeg frame
+    virtual int captureJPEG(unsigned char * img, int * imgsize, int quality, int pic)
+    {
+        return -1 ;                      // not supported 
     }
     virtual int getsignal(){return m_signal;}	// get signal available status, 1:ok,0:signal lost
     virtual int getmotion(){return m_motion;}	// get motion detection status
@@ -512,7 +516,7 @@ class eagle_capture : public capture {
 	virtual void start();
 	virtual void stop();
     virtual void captureIFrame();       // force to capture I frame
-    virtual void captureJPEG();         // to capture one jpeg frame
+    virtual int captureJPEG(unsigned char * img, int * imgsize, int quality, int pic);
     virtual int getsignal();        // get signal available status, 1:ok,0:signal lost
 };
 
@@ -564,7 +568,7 @@ struct dvrtimesync {
 	char tz[128] ;
 } ;
 
-time_t time_now(struct dvrtime *dvrt);
+void time_now(struct dvrtime *dvrt);
 int time_tick();
 time_t time_utctime(struct dvrtime *dvrt);
 int time_setlocaltime(struct dvrtime *dvrt);
@@ -899,6 +903,7 @@ enum reqcode_type { REQOK =	1,
     REQ2GETSETUPPAGE,
     REQ2GETSTREAMBYTES,
     REQ2GETSTATISTICS,
+    REQ2GETJPEG,
     
     REQ3BEGIN = 300,
     REQSENDDATA,
@@ -929,6 +934,7 @@ enum anscode_type { ANSERROR =1, ANSOK,
     ANSSTREAMDAYINFO, ANSSTREAMMONTHINFO, ANSLOCKINFO, ANSSTREAMDAYLIST,
     ANS2RES1, ANS2RES2, ANS2RES3,                        	// reserved, don't use
     ANS2TIME, ANS2ZONEINFO, ANS2TIMEZONE, ANS2CHSTATE, ANS2SETUPPAGE, ANS2STREAMBYTES,
+    ANS2JPEG,
     
     ANS3BEGIN = 300,
     ANSSENDDATA,
@@ -965,10 +971,19 @@ class dvrsvr {
         static dvrsvr *m_head;
         dvrsvr *m_next;				// dvr list
         int m_sockfd;				// socket
+        int m_shutdown;             // shutdown flag
         struct net_fifo *m_fifo;
         struct net_fifo *m_fifotail;
         int m_fifosize ;			// size of fifo
         int m_fifodrop ;            // drop fifo
+        pthread_mutex_t m_mutex;
+        void lock() {
+            pthread_mutex_lock(&m_mutex);
+        }
+
+        void unlock() {
+            pthread_mutex_unlock(&m_mutex);
+        }
         
         playback * m_playback ;
         live	 * m_live ;
@@ -986,6 +1001,8 @@ class dvrsvr {
         
         // TVS support
         int  m_keycheck ;           // 1: key has been checked
+
+        void send_fifo(char *buf, int bufsize, int loc = 0);
         
     public:
         dvrsvr(int fd);
@@ -1005,11 +1022,14 @@ class dvrsvr {
         }
         int  read();
         int  write();
-        void send_fifo(char *buf, int bufsize, int loc = 0);
         void cleanfifo();
 		virtual void Send(void *buf, int bufsize);
-        void close();
-        int isclose();
+        void down() {
+            m_shutdown=1 ;
+        }
+        int isdown() {
+            return (m_shutdown);
+        }
         int onframe(cap_frame * pframe);
         
         // request handlers
@@ -1095,6 +1115,7 @@ class dvrsvr {
         virtual void ReqNfileOpen();
         virtual void ReqNfileClose();
         virtual void ReqNfileRead();
+        virtual void Req2GetJPEG();
 
 };
 
@@ -1354,7 +1375,7 @@ extern int num_alarms ;
 
 void screen_init();
 void screen_uninit();
-int screen_io(int usdelay);
+int screen_io(int usdelay=0);
 int screen_setliveview( int channel );
 int screen_menu(int level);
 

@@ -12,7 +12,10 @@ int net_keyactive ;
 
 dvrsvr::dvrsvr(int fd)
 {
+    pthread_mutex_init(&m_mutex, NULL);
+    
     m_sockfd = fd;
+    m_shutdown = 0 ;
     m_fifo = NULL;
     m_recvbuf = NULL;
     m_recvlen = 0;
@@ -38,13 +41,13 @@ dvrsvr::dvrsvr(int fd)
 
 dvrsvr::~dvrsvr()
 {
-    dvrsvr *walk;
-    this->close();
+    lock();
+
     // remove from dvr queue
     if (m_head == this) {
         m_head = m_next;
     } else {
-        walk = m_head;
+        dvrsvr *walk = m_head;
         while (walk->m_next != NULL) {
             if (walk->m_next == this) {
                 walk->m_next = this->m_next;
@@ -53,31 +56,27 @@ dvrsvr::~dvrsvr()
             walk = walk->m_next;
         }
     }
-}
 
-void dvrsvr::close()
-{
-    if (m_sockfd > 0) {
-        ::closesocket(m_sockfd);
-        m_sockfd = -1;
-    }
+    m_shutdown=0 ;
+
+    ::closesocket(m_sockfd);
+    
     cleanfifo();
     if( m_playback!=NULL ) {
         delete m_playback ;
-        m_playback=NULL;
     }
     if( m_live!=NULL ) {
         delete m_live ;
-        m_live=NULL;
     }
     if( m_nfilehandle!=NULL ) {
         fclose( m_nfilehandle );
-        m_nfilehandle=NULL ;
     }
     if( m_recvbuf ) {
         mem_free( m_recvbuf ) ;
-        m_recvbuf = NULL;
-    }
+    }  
+    unlock();
+
+    pthread_mutex_destroy(&m_mutex);
 }
 
 // return 0: no data, 1: may have more data
@@ -85,7 +84,7 @@ int dvrsvr::read()
 {
     int n;
     char *preq;
-    if( m_sockfd <= 0 ){
+    if( isdown() ) {
         return 0;
     }
     if (m_recvbuf == NULL) {	// receiving req struct
@@ -96,12 +95,12 @@ int dvrsvr::read()
         }
         n = ::recv(m_sockfd, &preq[m_recvloc], m_recvlen - m_recvloc, 0);
         if (n == 0) {			// error or connection closed by peer
-            close();
+            down() ;            // indicate socket is down
 	        return 0 ;
         }
 		else if( n<0 ) {
 			if( errno!=EWOULDBLOCK ) {
-				close();
+                down() ;        // indicate socket is down
 			}
 	        return 0 ;
 		}
@@ -118,7 +117,8 @@ int dvrsvr::read()
         else if (m_req.reqsize>0 ){	// wait for extra data
             m_recvbuf = (char *)mem_alloc(m_req.reqsize);
             if (m_recvbuf == NULL) {
-                close();		// no enough memory
+                // no enough memory
+                down();             // indicate socket is down
                 return 0 ;
             }
             else {
@@ -130,12 +130,12 @@ int dvrsvr::read()
     } else {
         n = ::recv(m_sockfd, &m_recvbuf[m_recvloc], m_recvlen - m_recvloc, 0);
 		if (n == 0) {			// connection closed by peer
-            close();
+            down();             // indicate socket is down
 	        return 0 ;
         }
 		else if( n<0 ) {
 			if( errno!=EWOULDBLOCK ) {		// error!
-				close();
+                down();         // mark socket down
 			}
 	        return 0 ;
 		}
@@ -179,13 +179,15 @@ void dvrsvr::cleanfifo()
 //       -1: error
 int dvrsvr::write()
 {
+    int res=0;
 	int n;
     net_fifo * nfifo ;
         
-    if( isclose() ) {
+    if( isdown() ) {
         return 0;
     }
 
+    lock();
     while( m_fifo ) {
         if (m_fifo->buf == NULL) {
             nfifo=m_fifo->next ;
@@ -204,29 +206,31 @@ int dvrsvr::write()
                 m_fifo->bufsize - m_fifo->loc, 0);
             if( n<0 ) {
                 if(errno == EWOULDBLOCK ) {
-                    return 1 ;
+                    res = 1 ;
+                    break ;
                 }
                 else {
-                    close();
-                    return -1 ;      // other error!
+                    res = -1 ;          // other error!
+                    down();             // mark socket down
+                    break;
                 }
             }
             m_fifosize -= n ;
             m_fifo->loc += n;
         }
     }
-    m_fifosize=0;
-    return 0 ;
+    if( m_fifo==NULL ) {
+        m_fifosize=0;
+        res=0 ;
+    }
+    unlock();
+    return res ;
 }
 
 void dvrsvr::send_fifo(char *buf, int bufsize, int loc)
 {
     net_fifo *nfifo;
     
-    if( isclose() ) {
-        return ;
-    }
-
     nfifo = new net_fifo ;
     nfifo->buf = (char *)mem_ref( buf, bufsize );
     nfifo->bufsize = bufsize;
@@ -236,20 +240,21 @@ void dvrsvr::send_fifo(char *buf, int bufsize, int loc)
     if (m_fifo == NULL) {           // current fifo is empty
         m_fifo = m_fifotail = nfifo;
 		m_fifosize = bufsize ;
+        net_trigger();
     } else {
         m_fifotail->next = nfifo ;
         m_fifotail = nfifo ;
 		m_fifosize += bufsize ;
     }
-    net_trigger();
 }
 
 void dvrsvr::Send(void *buf, int bufsize)
 {
-    if( isclose() ) {
+    if( isdown() ) {
         return ;
     }
     
+    lock();
     if ( m_fifo ) {
         send_fifo((char *)buf, bufsize);
     }
@@ -263,23 +268,20 @@ void dvrsvr::Send(void *buf, int bufsize)
                     send_fifo(((char *)buf), bufsize, loc);
                 }
                 else {
-                    close();							// net work error!
+                    // network error!
+                    down();         // mark socket down
                 }
-                return ;
+                break ;
             }
             loc+=n ;
         }
     }
-}
-
-int dvrsvr::isclose()
-{
-    return (m_sockfd <= 0);
+    unlock();
 }
 
 int dvrsvr::onframe(cap_frame * pframe)
 {
-    if( isclose() ) {
+    if( isdown() ) {
         return 0;
     }
     if (m_conntype == CONN_REALTIME && m_connchannel == pframe->channel) {
@@ -562,6 +564,9 @@ void dvrsvr::onrequest()
             break;
         case REQ2GETSTREAMBYTES:
             Req2GetStreamBytes();
+            break;
+        case REQ2GETJPEG:
+            Req2GetJPEG();
             break;
         case REQECHO:
             ReqEcho();
@@ -1607,6 +1612,33 @@ void dvrsvr::Req2GetStreamBytes()
         ans.anscode = ANS2STREAMBYTES ;
         Send( &ans, sizeof(ans));
         return ;
+    }
+    DefaultReq();
+}
+
+void dvrsvr::Req2GetJPEG()
+{
+    struct dvr_ans ans ;
+    int ch, jpeg_quality, jpeg_pic ;
+    ch = m_req.data & 0xff  ;
+    jpeg_quality = (m_req.data>>8) & 0xff  ;        //0-best, 1-better, 2-average
+    jpeg_pic = (m_req.data>>16) & 0xff  ;           // 0-cif , 1-qcif, 2-4cif
+    if( ch >=0 && ch < cap_channels ) {
+        int imgsize = 300000 ;
+        unsigned char * img = new unsigned char [imgsize] ;
+        ch = cap_channel[ch]->captureJPEG(img, &imgsize, jpeg_quality, jpeg_pic);
+        if( ch>0 ) {
+            ans.anssize = imgsize-ch ;
+            if( ans.anssize>0 ) {
+                ans.data = 0 ;
+                ans.anscode = ANS2JPEG ;
+                Send( &ans, sizeof(ans));
+                Send( img+ch, ans.anssize );
+                delete img ;
+                return ;
+            }
+        }
+        delete img ;
     }
     DefaultReq();
 }

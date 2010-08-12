@@ -254,6 +254,7 @@ void dio_setchstat( int channel, int ch_state )
 int pwii_event_marker ;     // event marker for PWII rear view mirror
 int pwii_front_ch ;         // pwii front camera channel
 int pwii_rear_ch ;          // pwii real camera channel
+int pwii_rkeyevent ;        // pwii REC, C2, TM key event 
 
 // return 1 : key event, 0: no key event 
 int dio_getpwiikeycode( int * keycode, int * keydown)
@@ -331,6 +332,7 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
             if ( pwii_event_marker ){
                 dvr_log("TraceMark pressed!");
             }
+            pwii_rkeyevent = 1 ;
 			return 1 ;
         }
         if( xkey & 0x100 ) {        // bit 8: front camera rec
@@ -338,12 +340,14 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
                 rec_pwii_toggle_rec_front() ;
                 dvr_log("REC pressed!");
             }
+            pwii_rkeyevent = 1 ;
         }
         if( xkey & 0x200 ) {        // bit 9: back camera rec
             if( (pwiikey & 0x200 )==0 ) {
                 rec_pwii_toggle_rec_rear() ;
                 dvr_log("C2 pressed!");
             }
+            pwii_rkeyevent = 1 ;
         }
         pwiikey = nkey ;
     }
@@ -438,7 +442,8 @@ int dio_check()
         
         res = (dio_old_inputmap != p_dio_mmap->inputmap) ;
 #ifdef    PWII_APP
-        res = ( res || pwii_event_marker );
+        res = ( res || pwii_event_marker || pwii_rkeyevent );
+        pwii_rkeyevent = 0 ;
 #endif
         dio_old_inputmap = p_dio_mmap->inputmap ;
         dio_unlock();

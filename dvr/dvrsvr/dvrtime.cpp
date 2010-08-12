@@ -7,7 +7,7 @@
 // time functions
 
 static int timetick_ref ;
-int g_timetick=0 ;            // global time tick , to maintain a always up time counter in ms (even between restart)
+int g_timetick=0 ;            // global time tick , to maintain a always count up time counter in ms (even between restart)
 
 void time_init()
 {
@@ -109,7 +109,27 @@ int time_gettimezone(char * tz)
     return 0 ;
 }
 
-time_t time_now(struct dvrtime *dvrt)
+// return ticks (milli-seconds) from time_init()
+int time_tick()
+{
+    int tick ;
+    struct timeval t ;
+    gettimeofday(&t, NULL);
+    tick = ((int)(t.tv_sec)&0xfffff) * 1000 + ((int)t.tv_usec)/1000 ;   // make tick a positive number
+    // to gaurantee g_timetick always going up
+    if( tick > timetick_ref ) {
+        g_timetick += (tick-timetick_ref) ;
+        if( g_timetick<0 ) {                                             // timer overflow
+            dvr_log("Reach timer limit, restarting.");
+            g_timetick=0;
+            app_state = APPRESTART ;
+        }
+    }
+    timetick_ref = tick ;
+    return g_timetick ;
+}
+
+void time_now(struct dvrtime *dvrt)
 {
     time_t t ;
     struct timeval current_time;
@@ -127,7 +147,6 @@ time_t time_now(struct dvrtime *dvrt)
         dvrt->milliseconds=current_time.tv_usec/1000 ;
         dvrt->tz=0;
     }
-    return t ;
 }
 
 time_t time_utctime(struct dvrtime *dvrt)
@@ -452,22 +471,6 @@ time_t time_timeutc( struct dvrtime * dvrt)
     stm.tm_isdst=0 ;
     return timegm( &stm );
 }
-
-// return ticks (milli-seconds) from time_init()
-int time_tick()
-{
-    int tick ;
-    struct timeval t ;
-    gettimeofday(&t, NULL);
-    tick = ((int)(t.tv_sec)&0xfffff) * 1000 + ((int)t.tv_usec)/1000 ;   // make tick a positive number
-    // to gaurantee g_timetick always going up
-    if( tick > timetick_ref ) {
-        g_timetick += (tick-timetick_ref) ;
-    }
-    timetick_ref = tick ;
-    return g_timetick ;
-}
-
 
 // update onboard rtc to system time
 int time_setrtc()

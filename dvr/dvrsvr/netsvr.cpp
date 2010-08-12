@@ -15,7 +15,8 @@ static struct sockad loopback;
 static pthread_t net_threadid;
 static int net_run;
 static int net_port;
-int     net_livefifosize=100000 ;
+
+int    net_livefifosize=100000 ;
 static int noreclive=1 ;
 int    net_active = 0 ;
 int    net_activetime ;
@@ -80,14 +81,16 @@ int net_onframe(cap_frame * pframe)
     //    }
     
     net_lock();
-    pconn = dvrsvr::head();
-    while (pconn != NULL) {
-        sends += pconn->onframe(pframe);
-        pconn = pconn->next();
-    }
-    
-    if( noreclive && sends>0 ) {
-        rec_pause = 50 ;            // temperary pause recording, for 5 seconds
+    if( net_run == 1 ) {
+        pconn = dvrsvr::head();
+        while (pconn != NULL) {
+            sends += pconn->onframe(pframe);
+            pconn = pconn->next();
+        }
+
+        if( noreclive && sends>0 ) {
+            rec_pause = 50 ;            // temperary pause recording, for 5 seconds
+        }
     }
     net_unlock();
     return sends;
@@ -430,7 +433,7 @@ void *net_thread(void *param)
 
     net_lock();
     while (net_run == 1) {		// running?
-        
+
         msg_clean();			// clearn dvr_msg
         
         // setup select()
@@ -441,7 +444,7 @@ void *net_thread(void *param)
         pconn = dvrsvr::head();
         while (pconn != NULL) {
             pconn1 = pconn->next();
-            if (pconn->isclose()) {
+            if (pconn->isdown()) {
                 delete pconn;
             } else {
                 FD_SET(pconn->socket(), &readfds);
@@ -452,13 +455,11 @@ void *net_thread(void *param)
             }
             pconn = pconn1;
         }
-
+        
         FD_SET(serverfd, &readfds);
         FD_SET(msgfd, &readfds);
-        
-        timeout.tv_sec = 3;		// 3 second time out
+        timeout.tv_sec = 10 ;
         timeout.tv_usec = 0 ;
-
         net_unlock();
         sres = select(FD_SETSIZE, &readfds, &writefds, &exceptfds, &timeout) ;
         net_lock();
@@ -488,7 +489,7 @@ void *net_thread(void *param)
                 fd = pconn->socket();
                 if( fd>0 ) {
                     if (FD_ISSET(fd, &exceptfds)) {
-                        pconn->close();
+                        pconn->down();
                     }
                     else {
                         if (FD_ISSET(fd, &readfds)) {
@@ -522,7 +523,6 @@ void *net_thread(void *param)
     while (dvrsvr::head() != NULL) {
         delete dvrsvr::head();
     }
-
     net_unlock();
     return NULL;
 }
@@ -579,6 +579,8 @@ void net_init()
 
     net_addr(NULL, net_port, &loopback);	// get loopback addr
 
+    msg_init();
+    
     net_active = 0 ;
     net_run = 1;
     pthread_create(&net_threadid, NULL, net_thread, NULL);
@@ -597,5 +599,6 @@ void net_uninit()
         closesocket(msgfd);
         dvr_log("Network uninitialized.");
     }
+    msg_uninit();
     pthread_mutex_destroy(&net_mutex);
 }

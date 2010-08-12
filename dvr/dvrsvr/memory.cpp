@@ -2,7 +2,8 @@
 #include <sys/mman.h> 
 #include "dvr.h"
 
-int g_memdirty = 0;
+int g_memdirty = 0;             // kb
+int g_memfree = 0;              // kb
 int g_memused = 0 ;
 
 static pthread_mutex_t mem_mutex;
@@ -16,8 +17,7 @@ inline void mem_unlock()
     pthread_mutex_unlock(&mem_mutex);
 }
 
-// return kbytes of available memory (Usable Ram)
-int mem_available()
+void mem_check()
 {
     int memfree=0;
     char buf[256];
@@ -40,7 +40,7 @@ int mem_available()
         }
         fclose(fproc);
     }
-    return memfree;
+    g_memfree = memfree ;
 }
 
 void *mem_alloc(int size)
@@ -51,15 +51,16 @@ void *mem_alloc(int size)
         size=0 ;
     }
     size += 8 ;
+    mem_lock();
     pmemblk = (int *) malloc(size);
     if (pmemblk == NULL) {
         // no enough memory error
         dvr_log("!!!!!mem_alloc failed!");
+        mem_unlock();
         return NULL;
     }
     pmemblk[0] = (int)(&pmemblk[2]);    // memory tag
     pmemblk[1] = 1 ;			        // reference counter
-    mem_lock();
     g_memused++;                        // for debug
     mem_unlock();
     return (void *)(&pmemblk[2]);
