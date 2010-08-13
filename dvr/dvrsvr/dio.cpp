@@ -6,7 +6,7 @@
 #include "../ioprocess/diomap.h"
 
 struct dio_mmap * p_dio_mmap ;
-unsigned int dio_old_inputmap ;
+static unsigned int dio_inputmap ;
 int dio_record;
 int dio_capture;
 
@@ -76,10 +76,7 @@ int dio_outputnum()
 
 int dio_input( int no )
 {
-    if( p_dio_mmap && p_dio_mmap->iopid ) {
-        return ((p_dio_mmap->inputmap)>>no)&1 ;
-    }
-    return 0 ;
+    return ((dio_inputmap)>>no)&1 ;
 }
 
 void dio_output( int no, int v)
@@ -251,105 +248,53 @@ void dio_setchstat( int channel, int ch_state )
 
 #ifdef    PWII_APP
 
-int pwii_event_marker ;     // event marker for PWII rear view mirror
 int pwii_front_ch ;         // pwii front camera channel
 int pwii_rear_ch ;          // pwii real camera channel
-int pwii_rkeyevent ;        // pwii REC, C2, TM key event 
 
 // return 1 : key event, 0: no key event 
 int dio_getpwiikeycode( int * keycode, int * keydown)
 {
-    void rec_pwii_toggle_rec_front() ;
-    void rec_pwii_toggle_rec_rear() ;
+    static struct key_map_t {
+        unsigned int key_bit ;
+        unsigned int key_code ;
+    } keymap[] = {
+        { PWII_BT_REW, (int) VK_MEDIA_PREV_TRACK },
+        { PWII_BT_PP,  (int) VK_MEDIA_PLAY_PAUSE },
+        { PWII_BT_FF,  (int) VK_MEDIA_NEXT_TRACK },
+        { PWII_BT_ST,  (int) VK_MEDIA_STOP },
+        { PWII_BT_PR,  (int) VK_PRIOR },
+        { PWII_BT_NX,  (int) VK_NEXT},
+        { PWII_BT_C1,  (int) VK_FRONT },
+        { PWII_BT_C2,  (int) VK_REAR },
+        { PWII_BT_TM,  (int) VK_TM },
+        { PWII_BT_LP,  (int) VK_LP},
+        { PWII_BT_BO,  (int) VK_POWER },
+        {0,0}
+    } ;
+    static unsigned int dio_pwii_bt_s ;
 
-    static unsigned int pwiikey = 0 ;
-    unsigned int nkey=0 ;
     unsigned int xkey ;
-
+    unsigned int dio_pwii_bt_n ;
     if( p_dio_mmap ) {
-//    dio_lock();
-        // this is atomic op already
-        nkey=p_dio_mmap->pwii_buttons ;
-//    dio_unlock();
+        dio_pwii_bt_n = p_dio_mmap->pwii_buttons ;
     }
-    
-    xkey=pwiikey^nkey ;
+    else {
+        dio_pwii_bt_n = 0 ;
+    }
+    xkey = dio_pwii_bt_s ^ dio_pwii_bt_n ;
 
     if( xkey ) {
-        
-        if( xkey & 1 ) {                    // bit 0: rew
-            * keycode = (int) VK_MEDIA_PREV_TRACK ;
-            * keydown = ((nkey&1)!=0 );
-            pwiikey ^= 1 ;
-            return 1 ;
-        }
-        if( xkey & 2 ) {                     // bit 1: play/pause
-            * keycode = (int) VK_MEDIA_PLAY_PAUSE ;
-            * keydown = ((nkey&2)!=0 );
-            pwiikey ^= 2 ;
-            return 1 ;
-        }
-        if( xkey & 4 ) {                     // bit 2: ff
-            * keycode = (int) VK_MEDIA_NEXT_TRACK ;
-            * keydown = ((nkey&4)!=0 );
-            pwiikey ^= 4 ;
-            return 1 ;
-        }
-        if( xkey & 8 ) {                     // bit 3: ST/PWR
-            * keycode = (int) VK_MEDIA_STOP ;
-            * keydown = ((nkey&8)!=0 );
-            pwiikey ^= 8 ;
-            return 1 ;
-        }
-        if( xkey & 0x10 ) {                     // bit 4: PR
-            * keycode = (int) VK_PRIOR ;
-            * keydown = ((nkey&0x10)!=0 );
-            pwiikey ^= 0x10 ;
-            return 1 ;
-        }
-        if( xkey & 0x20 ) {                     // bit 5: NX
-            * keycode = (int) VK_NEXT ;
-            * keydown = ((nkey&0x20)!=0 );
-            pwiikey ^= 0x20 ;
-            return 1 ;
-        }
-        if( xkey & 0x800 ) {                            // bit 11: lp
-            * keycode = (int) VK_LP ;
-            * keydown = ((nkey&0x800)!=0 );
-            pwiikey ^= 0x800 ;
-            return 1 ;
-        }
-        if( xkey & 0x1000 ) {        // bit 12: blackout
-			* keycode = (int) VK_POWER ;
-            * keydown = ((nkey&0x1000)!=0 );
-			pwiikey ^= 0x1000 ;
-			return 1 ;
-        }
-        if( xkey & 0x400 ) {                            // bit 10: tm
-			pwiikey ^= 0x400 ;
-			* keycode = (int) VK_EM ;
-            pwii_event_marker = * keydown = ((nkey&0x400)!=0 );
-            if ( pwii_event_marker ){
-                dvr_log("TraceMark pressed!");
+        int i;
+        for( i = 0 ; i<32 ; i++ ) {
+            if( keymap[i].key_bit==0 ) break;
+            if( xkey & keymap[i].key_bit ) {
+                * keycode = keymap[i].key_code ;
+                * keydown = (dio_pwii_bt_n&keymap[i].key_bit)!=0 ;
+                dio_pwii_bt_s ^=  keymap[i].key_bit ;
+                return 1 ;
             }
-            pwii_rkeyevent = 1 ;
-			return 1 ;
         }
-        if( xkey & 0x100 ) {        // bit 8: front camera rec
-            if( (pwiikey & 0x100 )==0 ) {
-                rec_pwii_toggle_rec_front() ;
-                dvr_log("REC pressed!");
-            }
-            pwii_rkeyevent = 1 ;
-        }
-        if( xkey & 0x200 ) {        // bit 9: back camera rec
-            if( (pwiikey & 0x200 )==0 ) {
-                rec_pwii_toggle_rec_rear() ;
-                dvr_log("C2 pressed!");
-            }
-            pwii_rkeyevent = 1 ;
-        }
-        pwiikey = nkey ;
+        dio_pwii_bt_s = dio_pwii_bt_n ;
     }
     return 0 ;
 }
@@ -439,13 +384,12 @@ int dio_check()
         }
 
         dio_record = ( p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) ;
+
+        if( dio_inputmap != p_dio_mmap->inputmap ) {
+            dio_inputmap = p_dio_mmap->inputmap ;
+            res = 1 ;
+        }
         
-        res = (dio_old_inputmap != p_dio_mmap->inputmap) ;
-#ifdef    PWII_APP
-        res = ( res || pwii_event_marker || pwii_rkeyevent );
-        pwii_rkeyevent = 0 ;
-#endif
-        dio_old_inputmap = p_dio_mmap->inputmap ;
         dio_unlock();
     }
 
@@ -620,11 +564,8 @@ void dio_init()
     config dvrconfig(dvrconfigfile);
     iomapfile = dvrconfig.getvalue( "system", "iomapfile");
     
-    dio_old_inputmap = 0 ;
+    dio_inputmap = 0 ;
     dio_record = 1 ;
-#ifdef PWII_APP
-    pwii_event_marker = 0 ;
-#endif        
     p_dio_mmap=NULL ;
     if( iomapfile.length()==0 ) {
         return ;						// no DIO.

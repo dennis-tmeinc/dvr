@@ -565,6 +565,12 @@ void dvrsvr::onrequest()
         case REQ2GETSTREAMBYTES:
             Req2GetStreamBytes();
             break;
+        case REQ2KEYPAD:
+            Req2Keypad();
+            break;
+        case REQ2PANELLIGHTS:
+            Req2PanelLights();
+            break;
         case REQ2GETJPEG:
             Req2GetJPEG();
             break;
@@ -1614,6 +1620,36 @@ void dvrsvr::Req2GetStreamBytes()
         return ;
     }
     DefaultReq();
+}
+
+void dvrsvr::Req2Keypad()
+{
+#if defined (PWII_APP)   
+    struct dvr_ans ans ;
+    ans.data = 0 ;
+    ans.anssize=0;
+    ans.anscode = ANSOK ;
+    Send( &ans, sizeof(ans));
+    screen_key( (int)(ans.data&0xff), (int)(ans.data>>8)&1 );
+    return ;
+#else    
+    DefaultReq();
+#endif
+}
+
+void dvrsvr::Req2PanelLights()
+{
+#if defined (PWII_APP)   
+    struct dvr_ans ans ;
+    if( m_req.data >=0 && m_req.data < cap_channels ) {
+        ans.data = cap_channel[m_req.data]->streambytes() ;
+        ans.anssize=0;
+        ans.anscode = ANS2STREAMBYTES ;
+        Send( &ans, sizeof(ans));
+        return ;
+    }
+#endif    
+    DefaultReq();   
 }
 
 void dvrsvr::Req2GetJPEG()

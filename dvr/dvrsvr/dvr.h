@@ -903,6 +903,8 @@ enum reqcode_type { REQOK =	1,
     REQ2GETSETUPPAGE,
     REQ2GETSTREAMBYTES,
     REQ2GETSTATISTICS,
+    REQ2KEYPAD,
+    REQ2PANELLIGHTS,
     REQ2GETJPEG,
     
     REQ3BEGIN = 300,
@@ -1108,6 +1110,8 @@ class dvrsvr {
         virtual void Req2GetChState();
         virtual void Req2GetSetupPage();
         virtual void Req2GetStreamBytes();
+        virtual void Req2Keypad();
+        virtual void Req2PanelLights();
         virtual void ReqSendData();
         virtual void ReqGetData();
         virtual void ReqCheckKey();
@@ -1205,10 +1209,11 @@ extern int msgfd;
 
 // event 
 void setdio(int onoff);
-void event_check();
+int  event_check();
 void event_init();
 void event_uninit();
 void event_run();
+extern int event_tm ;          // To support PWII Trace Mark 
 
 // system setup
 struct system_stru {
@@ -1267,18 +1272,31 @@ enum e_keycode {
     VK_UP,          // UP ARROW key
     VK_RIGHT,       // RIGHT ARROW key
     VK_DOWN,        // DOWN ARROW key
-        
-  VK_MEDIA_NEXT_TRACK=0xB0, // Next Track key
-  VK_MEDIA_PREV_TRACK,      // Previous Track key
-  VK_MEDIA_STOP,            // Stop Media key
-  VK_MEDIA_PLAY_PAUSE,      // Play/Pause Media key
+
+    VK_MEDIA_NEXT_TRACK=0xB0, // Next Track key
+    VK_MEDIA_PREV_TRACK,      // Previous Track key
+    VK_MEDIA_STOP,            // Stop Media key
+    VK_MEDIA_PLAY_PAUSE,      // Play/Pause Media key
 
     // pwii definition
-    VK_EM   = 0xE0 ,  // EVEMT
-    VK_LP,             // LP
-    VK_POWER,
-	VK_SILENCE
+    VK_EM   = 0xE0 ,    // EVEMT
+    VK_LP,              // PWII, LP key (zoom in)
+    VK_POWER,           // PWII, B/O
+    VK_SILENCE,         // PWII, Mute
+    VK_C1,              // PWII, Camera1
+    VK_C2,              // PWII, Camera2
+    VK_C3,              // PWII, Camera3
+    VK_C4,              // PWII, Camera4
+    VK_C5,              // PWII, Camera5
+    VK_C6,              // PWII, Camera6
+    VK_C7,              // PWII, Camera7
+    VK_C8               // PWII, Camera8
 } ;
+
+#define VK_REC  (VK_C1)
+#define VK_FRONT (VK_C1)
+#define VK_REAR (VK_C2)
+#define VK_TM   (VK_EM)
 
 // digital io functions
 //extern "C" {
@@ -1375,8 +1393,15 @@ extern int num_alarms ;
 
 void screen_init();
 void screen_uninit();
+int screen_key( int keycode, int keydown ) ;
 int screen_io(int usdelay=0);
 int screen_setliveview( int channel );
 int screen_menu(int level);
+
+#ifdef PWII_APP
+extern int pwii_front_ch ;        // pwii front camera channel
+extern int pwii_rear_ch ;         // pwii rear camera channel
+#endif        
+
 
 #endif							// __dvr_h__

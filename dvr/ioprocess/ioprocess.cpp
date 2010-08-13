@@ -1302,8 +1302,8 @@ static unsigned int pwii_keyreltime ;
 // auto release keys REC, C2, TM
 void pwii_keyautorelease()
 {
-    if( (p_dio_mmap->pwii_buttons & 0x700) && runtime>pwii_keyreltime ) {
-        p_dio_mmap->pwii_buttons &= ~0x700 ;
+    if( (p_dio_mmap->pwii_buttons & PWII_BT_AUTORELEASE) && runtime>pwii_keyreltime ) {
+        p_dio_mmap->pwii_buttons &= ~PWII_BT_AUTORELEASE ;
     }
 }
 
@@ -1454,9 +1454,9 @@ int mcu_checkinputbuf(char * ibuf)
        switch( ibuf[3] ) {
        case PWII_INPUT_REC :                        // Front Camera (REC) button
            dio_lock();
-           p_dio_mmap->pwii_buttons &= ~0x700 ;     // Release other bits
-           p_dio_mmap->pwii_buttons |= 0x100 ;      // bit 8: front camera
-           pwii_keyreltime = runtime+1000 ;         // auto release
+           p_dio_mmap->pwii_buttons &= ~PWII_BT_AUTORELEASE ;     // Release other bits
+           p_dio_mmap->pwii_buttons |= PWII_BT_C1 ;               // bit 8: front camera
+           pwii_keyreltime = runtime+1000 ;         // auto release in 1 sec
            dio_unlock();
 //           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&1)!=0) );  // bit 0: c1 led
            mcu_response( ibuf, 1, 0 );                                  // bit 0: c1 led
@@ -1464,58 +1464,58 @@ int mcu_checkinputbuf(char * ibuf)
 
        case PWII_INPUT_C2 :                         // Back Seat Camera (C2) Starts/Stops Recording
            dio_lock();
-           p_dio_mmap->pwii_buttons &= ~0x700 ;     // Release other bits
-           p_dio_mmap->pwii_buttons |= 0x200 ;      // bit 9: back camera
-           pwii_keyreltime = runtime+1000 ;         // auto release
+           p_dio_mmap->pwii_buttons &= ~PWII_BT_AUTORELEASE ;     // Release other bits
+           p_dio_mmap->pwii_buttons |= PWII_BT_C2 ;      // bit 9: back camera
+           pwii_keyreltime = runtime+1000 ;         // auto release in 1 sec
            dio_unlock();
 //           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&2)!=0) );  // bit 1: c2 led
            mcu_response( ibuf, 1, 0 );                                  // bit 1: c2 led
            break;
 
-       case PWII_INPUT_TM :                         // TM Button
+       case PWII_INPUT_TM :                                 // TM Button
            mcu_response( ibuf );
            dio_lock();
            if( ibuf[5] ) {
-               p_dio_mmap->pwii_buttons &= ~0x700 ;     // Release other bits
-               p_dio_mmap->pwii_buttons |= 0x400 ;      // bit 10: tm button
-               pwii_keyreltime = runtime+1000 ;         // auto release
+               p_dio_mmap->pwii_buttons &= ~PWII_BT_AUTORELEASE ;   // Release other bits
+               p_dio_mmap->pwii_buttons |= PWII_BT_TM ;     // bit 10: tm button
+               pwii_keyreltime = runtime+1000 ;             // auto release in 1 sec
            }
 //  ignor TM release, the bit will be auto release after 1 sec           
 //           else {
-//               p_dio_mmap->pwii_buttons &= (~0x400) ;   // bit 10: tm button
+//               p_dio_mmap->pwii_buttons &= (~0x400) ;     // bit 10: tm button
 //           }
            dio_unlock();
            break;
 
-       case PWII_INPUT_LP :                         // LP button
+       case PWII_INPUT_LP :                                 // LP button
            mcu_response( ibuf );
            if( ibuf[5] ) {
                dio_lock();
-               p_dio_mmap->pwii_buttons |= 0x800 ;      // bit 11: LP button
+               p_dio_mmap->pwii_buttons |= PWII_BT_LP ;     // bit 11: LP button
                dio_unlock();
                mcu_camera_zoom( 1 );
            }
            else {
                dio_lock();
-               p_dio_mmap->pwii_buttons &= (~0x800) ;   // bit 11: LP button
+               p_dio_mmap->pwii_buttons &= ~PWII_BT_LP ;    // bit 11: LP button
                dio_unlock();
                mcu_camera_zoom( 0 );
            }
            break;
 
-       case PWII_INPUT_BO :                             // BIT 12:  blackout, 1: pressed, 0: released, auto release
+       case PWII_INPUT_BO :                                 // BIT 12:  blackout, 1: pressed, 0: released, auto release
            dio_lock();
            if( ibuf[5] ) {
-                p_dio_mmap->pwii_buttons |= 0x1000 ;    // bit 12: blackout
+                p_dio_mmap->pwii_buttons |= PWII_BT_BO ;    // bit 12: blackout
            }
            else {
-                p_dio_mmap->pwii_buttons &= (~0x1000) ; // bit 12: blackout
+                p_dio_mmap->pwii_buttons &= ~PWII_BT_BO ;   // bit 12: blackout
            }
            dio_unlock();
            mcu_response( ibuf );
            break;
            
-       case PWII_INPUT_MEDIA :                          // Video play Control
+       case PWII_INPUT_MEDIA :                              // Video play Control
            dio_lock();
            if( (p_dio_mmap->pwii_output & (1<<12))==0 ) {   // pwii not standby
                p_dio_mmap->pwii_buttons &= (~0x3f) ;

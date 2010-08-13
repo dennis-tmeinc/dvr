@@ -947,12 +947,9 @@ void rec_channel::update()
         }
     }
 
-#ifdef PWII_APP    
-    extern int pwii_event_marker ;      // rear mirror event marker button
-    if( pwii_event_marker ) {
+    if( event_tm ) {
         trigger = 2 ;
     }
-#endif
     
     if( trigger == 2 ) {
 #ifdef PWII_APP    
@@ -1254,36 +1251,29 @@ FILE * rec_opennfile(int channel, struct nfileinfo * nfi )
 
 #ifdef    PWII_APP
 
-extern int pwii_front_ch ;         // pwii front camera channel
-extern int pwii_rear_ch ;          // pwii real camera channel
-
-void rec_pwii_toggle_rec_front()
+void rec_pwii_toggle_rec( int ch )
 {
-    if( rec_channels > pwii_front_ch ) {
-        screen_setliveview(pwii_front_ch);                              // start live view front camera
-        if( recchannel[pwii_front_ch]->recstate() ) {
-            int ch ;
-            for( ch=0; ch<rec_channels ; ch++) {
+    if( ch>=0 && ch<rec_channels ) {
+        screen_setliveview(ch);                              // start live view this camera
+        if( recchannel[ch]->recstate() == 0 ) {
+            // turn on recording
+            recchannel[ch]->setforcerecording(REC_FORCEON) ;       // force start recording
+        }
+        else {
+            // turn off recording
+            if( ch == pwii_front_ch ) {                     // first cam
+                // turn off all recording
+                for( ch=0; ch<rec_channels ; ch++) {
+                    recchannel[ch]->setforcerecording(REC_FORCEOFF) ;  // force stop recording
+                }
+            }
+            else {
+                // turn off this camera
                 recchannel[ch]->setforcerecording(REC_FORCEOFF) ;       // force stop recording
             }
         }
-        else {
-            recchannel[pwii_front_ch]->setforcerecording(REC_FORCEON) ;       // force start recording
-        }
     }
 }
-            
-void rec_pwii_toggle_rec_rear() 
-{
-    if( rec_channels > pwii_rear_ch ) {
-        screen_setliveview(pwii_rear_ch);                              // start live view rear camera
-        if( recchannel[pwii_rear_ch]->recstate() ) {
-            recchannel[pwii_rear_ch]->setforcerecording(REC_FORCEOFF) ;       // force stop recording
-        }
-        else {
-            recchannel[pwii_rear_ch]->setforcerecording(REC_FORCEON) ;       // force start recording
-        }
-    }
-}
+
 
 #endif

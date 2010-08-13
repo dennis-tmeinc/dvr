@@ -860,7 +860,6 @@ void do_uninit()
 
 int main()
 {
-    unsigned int serial=0;
     int app_ostate;				// application status. ( APPUP, APPDOWN )
 
     // initial mutex
@@ -872,17 +871,15 @@ int main()
     app_state = APPUP ;
     
     while( app_state!=APPQUIT ) {
-
-        usleep( 1000 );                             // make a minimum delay
-        
         if( app_state == APPUP ) {					// application up
-            serial++ ;
             if( app_ostate != APPUP ) {
                 do_init();
                 app_ostate = APPUP ;
             }
             time_tick();
-            event_check();
+            if(event_check()==0) {
+                usleep(1000);
+            }
         }
         else if (app_state == APPDOWN ) {			// application down
             if( app_ostate == APPUP ) {

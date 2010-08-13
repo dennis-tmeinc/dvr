@@ -130,17 +130,19 @@ static void cpu_usage()
     }
 }
 
+int event_tm ;          // To support PWII Trace Mark 
+
 // main program loop here
-void event_check()
+int event_check()
 {
     int i ;
     int videolost, videodata, diskready ;
     static int timer_1s ;
+    int ev = dio_check() || screen_io() ;
     
-    if( screen_io() ||
-        dio_check() || 
-        g_timetick<timer_1s || 
-        g_timetick-timer_1s > 1000 ) 
+    if( ev ||
+        g_timetick-timer_1s > 1000 ||
+        g_timetick<timer_1s ) 
     {
         // check sensors
         for(i=0; i<num_sensors; i++ ) {
@@ -301,6 +303,8 @@ void event_check()
             alarms[i]->update();
         }
     }
+
+    return ev ;
 }
 
 void event_init()
@@ -339,6 +343,7 @@ void event_init()
     
     g_gpsspeed = 0 ;
     alarm_suspend_timer = 0 ;
+    event_tm = 0 ;
 }
 
 void event_uninit()

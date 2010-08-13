@@ -125,4 +125,20 @@ struct dio_mmap {
 #define IOMODE_REINITAPP       (9)
 #define IOMODE_SUSPEND         (10)
 
+// PWII CDC buttons
+#define  PWII_BT_REW            (1)
+#define  PWII_BT_PP             (1<<1)
+#define  PWII_BT_FF             (1<<2)
+#define  PWII_BT_ST             (1<<3)
+#define  PWII_BT_PR             (1<<4)
+#define  PWII_BT_NX             (1<<5)
+#define  PWII_BT_C1             (1<<8)
+#define  PWII_BT_C2             (1<<9)
+#define  PWII_BT_TM             (1<<10)
+#define  PWII_BT_LP             (1<<11)
+#define  PWII_BT_BO             (1<<12)
+
+// auto release buttons
+#define  PWII_BT_AUTORELEASE    (PWII_BT_C1|PWII_BT_C2|PWII_BT_TM)
+
 #endif

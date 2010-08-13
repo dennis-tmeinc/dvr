@@ -578,13 +578,10 @@ class video_screen : public window {
             if( channel<0 || channel>10 ) {
                 channel = m_playchannel ;
             }
+            screen_liveaudio=1 ;
 #ifdef PWII_APP
-            extern int pwii_rear_ch ;
             if( channel==pwii_rear_ch ) {
                 screen_liveaudio=screen_rearaudio ;
-            }
-            else {
-                screen_liveaudio=1 ;
             }
 #endif            
             if( m_videomode == VIDEO_MODE_LIVE &&
@@ -1517,7 +1514,33 @@ int screen_mouseevent(int x, int y, int buttons)
 
 int screen_key( int keycode, int keydown ) 
 {
-    if( topwindow ) {
+    if( keycode == (int) VK_EM ) {
+        if( keydown ) {
+            dvr_log("TraceMark pressed!");
+            event_tm = 1 ;
+            rec_update();
+        }
+        else {
+            dvr_log("TraceMark released!");
+            event_tm = 0 ;
+         }
+    }
+    else if( keycode>=(int)VK_C1 && keycode<=(int)VK_C8 ) {     // record C1-C8
+        if( keydown ) {
+            void rec_pwii_toggle_rec(int ch) ;
+            rec_pwii_toggle_rec( keycode-(int)VK_C1 ) ;
+            dvr_log("C%d pressed!", keycode-(int)VK_C1+1);
+        }
+    }
+    else if( keycode==(int)VK_LP ) {                            // LP key
+        if( keydown ) {
+            dvr_log("LP pressed!");
+        }
+        else {
+            dvr_log("LP released!");
+        }
+    }
+    else if( topwindow ) {
         topwindow->key( keycode, keydown );
     }
     return 0;
@@ -1643,9 +1666,6 @@ int screen_io(int usdelay)
     struct key_event kev ;
     int event=0 ;
 
-    // window timer
-    topwindow->checktimer();
-    
     // key pad
     while( getkeyevent( &kev ) ) {
         event = 1 ;
@@ -1658,11 +1678,14 @@ int screen_io(int usdelay)
         screen_mouseevent(mev.x, mev.y, mev.buttons );
     }
 
+    // window timer
+    topwindow->checktimer();
+    
     if( event==0 ) {
         screen_draw();
     }
 
-    return 0;
+    return event;
 }
 
 int screen_onframe( cap_frame * capframe )
