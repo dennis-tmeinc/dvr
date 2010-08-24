@@ -286,7 +286,7 @@ void capture::onframe(cap_frame * pcapframe)
     m_streambytes+=pcapframe->framesize ;               // for bitrate calculation
     if( pcapframe->frametype == FRAMETYPE_264FILEHEADER ) {
         m_headerlen = pcapframe->framesize ;
-        memcpy( m_header, pcapframe->framedata, m_headerlen );
+        memcpy( m_header, pcapframe->framedata, pcapframe->framesize );
         return ;
     }
     rec_onframe(pcapframe);

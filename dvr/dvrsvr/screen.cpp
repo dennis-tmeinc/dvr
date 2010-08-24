@@ -69,7 +69,7 @@ static void screen_setmode()
     for(i=0; i<16; i++) {
         displayorder[i]=i ;
     }
-
+    
     SetOutputFormat( ScreenStandard ) ;
 
     // clear display
@@ -80,13 +80,13 @@ static void screen_setmode()
     for( i=0; i<eagle32_channels ; i++ ) {
         displayorder[i]=eagle32_hikhandle(i)-1 ;
     }
-
+    
     res=SetDisplayOrder(MAIN_OUTPUT, displayorder );    // select screen channel order, also turn on all preview channels
 
     // turn off all preview channel opened by "SetDisplayOrder"
     for( i=0; i<eagle32_channels ; i++ ) {
-        res=SetPreviewScreen(MAIN_OUTPUT,eagle32_hikhandle(i),0);          // third  parameter turn on/off specified channel
-        res=SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(i),0);           // turn on/off audio ?
+        res=SetPreviewScreen(MAIN_OUTPUT,i+1,0);          // third  parameter turn on/off specified channel
+        res=SetPreviewAudio(MAIN_OUTPUT,i+1,0);           // turn on/off audio ?
     }
 }
 
@@ -936,7 +936,6 @@ class video_screen : public window {
                 m_playchannel = channel ;
                 res = SetDecodeScreen(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 1);
                 res = SetDecodeAudio(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 1);
-
                 m_videomode = VIDEO_MODE_PLAYBACK ; 
                 m_decode_runmode = DECODE_MODE_PLAY ;
                 pthread_create(&m_decodethreadid, NULL, s_playback_thread, (void *)(this));
@@ -964,7 +963,6 @@ class video_screen : public window {
             // stop decode screen
             res = SetDecodeScreen(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 0);
             res = SetDecodeAudio(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 0);
-
             m_videomode = VIDEO_MODE_NONE ; 
             cap_start();       // start video capture.
 
