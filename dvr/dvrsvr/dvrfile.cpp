@@ -43,6 +43,7 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
 {
     struct hd_file h264hd ;
     struct stat dvrfilestat ;
+    int channel ;
     close();
     m_initialsize = 0;
     m_handle = file_open(filename, mode);
@@ -67,7 +68,8 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
             m_initialsize = initialsize;
         }
         seek(0,SEEK_SET);
-        memcpy( &h264hd, Dvr264Header, sizeof(h264hd));
+        channel = f264channel(filename) ;
+        memcpy( &h264hd, cap_fileheader(channel), sizeof(h264hd) );
         h264hd.flag =  H264FILEFLAG;
         m_fileencrypt=file_encrypt ;
         if( m_fileencrypt ) {
@@ -80,7 +82,7 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
     else if( strchr(mode, 'r')) {
         if( fstat( fileno(m_handle), &dvrfilestat)==0 ) {
             m_filesize=dvrfilestat.st_size ;
-            if( m_filesize<128000 ) {
+            if( m_filesize<=(int)sizeof(h264hd) ) {
                 close();	
                 return 0 ;
             }
@@ -215,22 +217,34 @@ int dvrfile::readheader(void * buffer, size_t headersize)
     framepos = tell();
     seek(0, SEEK_SET);
     read( buffer, sizeof(struct hd_file));
+
+    if( m_fileencrypt ) {
+        RC4_block_crypt( (unsigned char*)buffer, (unsigned char*)buffer, sizeof(struct hd_file), 0, file_encrypt_RC4_table, 1024);
+    }
+
     seek( framepos, SEEK_SET );
     return sizeof( struct hd_file );
 }
 
 int dvrfile::writeheader(void * buffer, size_t headersize) 
 {
+    struct hd_file h264hd ;
     int framepos ;
     
     if( headersize<sizeof(struct hd_file) ) {
         return 0 ;
     }
-    
     // save old file pointer
     framepos = tell();
     seek(0, SEEK_SET);
-    write( buffer, sizeof(struct hd_file));
+
+    if( m_fileencrypt ) {
+        RC4_block_crypt( (unsigned char*)&h264hd, (unsigned char*)buffer, sizeof(h264hd), 0, file_encrypt_RC4_table, 1024);
+        write( &h264hd, sizeof(struct hd_file));				// write header
+    }
+    else {
+        write( buffer, sizeof(struct hd_file));
+    }
     seek( framepos, SEEK_SET );
     return sizeof( struct hd_file );
 }

@@ -182,13 +182,13 @@ bitrateen=1
 # Bitrate mode, 0: VBR, 1:CBR
 bitratemode=0
 # bitrate, bps
-bitrate=2000000
+bitrate=3000000
 
 # frame rate
 framerate=30
 
 # resolution, 0:CIF, 1:2CIF, 2:DCIF, 3:4CIF
-resolution=2
+resolution=3
 
 # recordmode, // 0: Continue, 1: Trigger by sensor, 2: triger by motion, 3, trigger by sensor&motion, 4: schedule, -1: norecording
 recordmode=1
@@ -253,7 +253,7 @@ brightness=5
 contrast=5
 saturation=5
 hue=5
-bitrate=2000000
+bitrate=3000000
 bitratemode=0
 bitrateen=1
 framerate=30
@@ -308,11 +308,11 @@ brightness=5
 contrast=5
 saturation=5
 hue=5
-bitrate=1000000
+bitrate=3000000
 bitratemode=0
 bitrateen=1
-framerate=15
-resolution=2
+framerate=30
+resolution=3
 recordmode=1
 ptzaddr=2
 
@@ -362,11 +362,11 @@ brightness=5
 contrast=5
 saturation=5
 hue=5
-bitrate=1000000
+bitrate=3000000
 bitratemode=0
 bitrateen=1
-framerate=15
-resolution=2
+framerate=30
+resolution=3
 recordmode=1
 ptzaddr=2
 
@@ -502,6 +502,7 @@ maxjumptime=120
 doublejumptimer=5
 cliptime=86400
 startchannel=0
+keepcapture=1
 resource=/dav/dvr/resource
 
 [pwii]

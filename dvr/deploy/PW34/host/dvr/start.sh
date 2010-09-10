@@ -91,15 +91,6 @@ insmod /davinci/mbcache.ko
 #insmod /davinci/ext2.ko
 insmod /davinci/ext3.ko
 
-# mount debugging disks
-#mount -t nfs 192.168.247.100:/home/dennis/nfsroot /mnt/nfs0 -o nolock
-
-# see if I want to debug it
-#if [ -f /mnt/nfs0/eagletest/debugon ]; then
-#    echo Enter debugging mode.
-#    exit ;
-#fi
-
 mkdir /etc/dvr
 
 # setup DVR configure file

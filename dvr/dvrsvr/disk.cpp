@@ -239,7 +239,8 @@ int f264locklength(const char *filename)
 int f264channel(const char *filename)
 {
     int ch ;
-    if( sscanf( F264CHANNEL(filename), "%02d", &ch )==1 ) {
+    char * basename = basefilename( filename );
+    if( basename[0]=='C' && basename[1]=='H' && sscanf( basename+2, "%02d", &ch )==1 ) {
         return ch;
     }
     else {
@@ -744,6 +745,10 @@ int disk_renew( char * filename, int add )
             disk_llen=0;
         }
     }
+
+    if( disk_llen>disk_tlen ) {
+        disk_llen=disk_tlen ;
+    }
     
     disk_archive_start();
 /*    
@@ -842,7 +847,7 @@ int disk_findrecdisk()
         if( disk_tlen<=0 && disk_llen<=0 )        // no video files at all !!!
             return -1 ;
 
-        if( disk_llen > disk_tlen*disk_lockfile_percentage/100 ) //  locked lengh > 30%
+        if( disk_llen >= disk_tlen*disk_lockfile_percentage/100 ) //  locked lengh > 30%
         {
             disk_deloldfile(1);
         }

@@ -1163,8 +1163,8 @@ void mcu_pwii_setc1c2()
    // C1 LED (front)
     dio_lock();
     if( p_dio_mmap->camera_status[pwii_front_ch] & 2 ) {         // front ca
-        if( (p_dio_mmap->pwii_output & 1) == 0 ) {
-            p_dio_mmap->pwii_output |= 1 ;
+        if( (p_dio_mmap->pwii_output & PWII_LED_C1 ) == 0 ) {
+            p_dio_mmap->pwii_output |= PWII_LED_C1 ;
             // turn on zoomcamera led
             zoomcam_led(1) ;
             // turn on mic
@@ -1174,8 +1174,8 @@ void mcu_pwii_setc1c2()
         }
     }
     else {
-        if( (p_dio_mmap->pwii_output & 1) != 0 ) {
-            p_dio_mmap->pwii_output &= (~1) ;
+        if( (p_dio_mmap->pwii_output & PWII_LED_C1) != 0 ) {
+            p_dio_mmap->pwii_output &= (~PWII_LED_C1) ;
             // turn off zoomcamera led
             zoomcam_led(0) ;
             // turn off mic
@@ -1186,11 +1186,11 @@ void mcu_pwii_setc1c2()
     }
     
    // C2 LED
-   if( p_dio_mmap->camera_status[pwii_rear_ch] & 2 ) {         // rear camera recording?
-       p_dio_mmap->pwii_output |= 2 ;
+   if( p_dio_mmap->camera_status[pwii_rear_ch] & PWII_LED_C2 ) {         // rear camera recording?
+       p_dio_mmap->pwii_output |= PWII_LED_C2 ;
    }
     else {
-       p_dio_mmap->pwii_output &= (~2) ;
+       p_dio_mmap->pwii_output &= (~PWII_LED_C2) ;
     }
     dio_unlock();
 }
@@ -1350,10 +1350,10 @@ static void mcu_dinput_help(char * ibuf)
 
 #ifdef      PWII_APP
     if( imap1 & PWII_MIC ) {
-        p_dio_mmap->pwii_output &= ~4 ;      // turn off bit2 , MIC LED
+        p_dio_mmap->pwii_output &= ~PWII_LED_MIC ;      // turn off bit2 , MIC LED
     }
     else {
-        p_dio_mmap->pwii_output |= 4 ;      // turn on bit2 , MIC LED
+        p_dio_mmap->pwii_output |= PWII_LED_MIC ;      // turn on bit2 , MIC LED
     }
 #endif      // PWII_APP
 
@@ -1458,8 +1458,8 @@ int mcu_checkinputbuf(char * ibuf)
            p_dio_mmap->pwii_buttons |= PWII_BT_C1 ;               // bit 8: front camera
            pwii_keyreltime = runtime+1000 ;         // auto release in 1 sec
            dio_unlock();
-//           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&1)!=0) );  // bit 0: c1 led
-           mcu_response( ibuf, 1, 0 );                                  // bit 0: c1 led
+           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&PWII_LED_C1)!=0) );  // bit 0: c1 led
+//           mcu_response( ibuf, 1, 0 );                                  // bit 0: c1 led
            break;
 
        case PWII_INPUT_C2 :                         // Back Seat Camera (C2) Starts/Stops Recording
@@ -1468,8 +1468,8 @@ int mcu_checkinputbuf(char * ibuf)
            p_dio_mmap->pwii_buttons |= PWII_BT_C2 ;      // bit 9: back camera
            pwii_keyreltime = runtime+1000 ;         // auto release in 1 sec
            dio_unlock();
-//           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&2)!=0) );  // bit 1: c2 led
-           mcu_response( ibuf, 1, 0 );                                  // bit 1: c2 led
+           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&PWII_LED_C2)!=0) );  // bit 1: c2 led
+//           mcu_response( ibuf, 1, 0 );                                  // bit 1: c2 led
            break;
 
        case PWII_INPUT_TM :                                 // TM Button
@@ -1488,7 +1488,7 @@ int mcu_checkinputbuf(char * ibuf)
            break;
 
        case PWII_INPUT_LP :                                 // LP button
-           mcu_response( ibuf );
+           mcu_response( ibuf );wst
            if( ibuf[5] ) {
                dio_lock();
                p_dio_mmap->pwii_buttons |= PWII_BT_LP ;     // bit 11: LP button
@@ -3843,10 +3843,10 @@ int main(int argc, char * argv[])
 #ifdef PWII_APP
             // BIT 3: ERROR LED
             if( panelled & 2 ) {
-                p_dio_mmap->pwii_output |= 8 ;
+                p_dio_mmap->pwii_output |= PWII_LED_ERROR ;
             }
             else {
-                p_dio_mmap->pwii_output &= ~8 ;
+                p_dio_mmap->pwii_output &= ~PWII_LED_ERROR ;
             }
 #endif
             

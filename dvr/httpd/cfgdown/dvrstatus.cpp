@@ -93,7 +93,7 @@ int net_recv(int sockfd, void * data, int datasize)
 {
     int r ;
     char * cbuf=(char *)data ;
-    while( net_recvok(sockfd, 5000000) ) {
+    while( net_recvok(sockfd, 2000000) ) {
         r = recv(sockfd, cbuf, datasize, 0);
         if( r<=0 ) {
             break;				// error
@@ -165,40 +165,6 @@ int getchannelstate(struct channelstate * chst, unsigned long * streambytes, int
     }
     return rch ;
 }
-
-/*
-int memory_usage( int * mem_total, int * mem_free)
-{
-    // Parse /proc/meminfo
-    int MemTotal, MemFree, Cached, Buffers, SwapTotal, SwapFree;
-    FILE * fproc=NULL;
-    char buf[256];
-    int rnum = 0;
-    fproc = fopen("/proc/meminfo", "r");
-    if (fproc == NULL)
-        return 0;
-    while (fgets(buf, 256, fproc)) {
-        if (memcmp(buf, "MemTotal:", 9) == 0) {
-            rnum += sscanf(buf + 9, "%d", &MemTotal);
-        } else if (memcmp(buf, "MemFree:", 8) == 0) {
-            rnum += sscanf(buf + 8, "%d", &MemFree);
-        } else if (memcmp(buf, "Cached:", 7) == 0) {
-            rnum += sscanf(buf + 7, "%d", &Cached);
-        } else if (memcmp(buf, "Buffers:", 8) == 0) {
-            rnum += sscanf(buf + 8, "%d", &Buffers);
-        } else if (memcmp(buf, "SwapTotal:", 10) == 0) {
-            rnum += sscanf(buf + 10, "%d", &SwapTotal);
-        } else if (memcmp(buf, "SwapFree:", 9) == 0) {
-            rnum += sscanf(buf + 9, "%d", &SwapFree);
-        }
-    }
-    fclose(fproc);
-
-    *mem_total = MemTotal ;
-    *mem_free = MemFree + Cached + Buffers ;
-    return 1;
-}
-*/
  
 int memory_usage( int * mem_total, int * mem_free)
 {
@@ -274,7 +240,7 @@ struct dvrstat {
     float uptime, idletime ;
     unsigned long streambytes[16] ;
 } savedstat ;
-    
+  
 
 // generate status page
 void print_status()

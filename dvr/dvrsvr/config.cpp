@@ -92,7 +92,7 @@ int config::nextsection(int idx)
     if( idx>=0 ) {
         for (; idx < m_strlist.size(); idx++) {
             if (*str_skipspace(m_strlist[idx].getstring()) == '[') {
-                return idx ;
+				return idx ;
             }
         }
     }
@@ -106,11 +106,11 @@ int config::findsection(char *section)
 	char *line;
 	int l;
 
-    l=strlen(section);
-    if( l<=0 ) {
-        return 0 ;
-    }
-    
+	l=strlen(section);
+	if( l<=0 ) {
+		return 0 ;
+	}
+
 	for (index = 0; index < m_strlist.size(); index++) {
 		line = str_skipspace(m_strlist[index].getstring());
 		if (*line == '[') {

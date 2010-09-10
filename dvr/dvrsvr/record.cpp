@@ -16,6 +16,10 @@ static pthread_cond_t  rec_cond;
 static int rec_sig ;
 static int rec_lowmemory ;
 
+#ifdef PWII_APP
+static int pwii_recnostopall ;
+#endif
+
 inline void rec_lock() {
     pthread_mutex_lock(&rec_mutex);
 }
@@ -837,6 +841,11 @@ int rec_channel::dorecord()
 		return 0;
     }
     else {
+
+        if( fifo->frametype == FRAMETYPE_VIDEO ) {
+            printf("vframe");
+        }
+        
         m_recording = recorddata( fifo ) ;
         m_activetime=g_timetick;
         // release buffer
@@ -1101,6 +1110,11 @@ void rec_init()
     }
 
 	rec_lock_all = dvrconfig.getvalueint("system", "lock_all");
+
+#ifdef PWII_APP
+    pwii_recnostopall = dvrconfig.getvalueint("pwii", "recnostopal");
+#endif    
+    
     rec_busy=0;
 
 }
@@ -1251,6 +1265,24 @@ FILE * rec_opennfile(int channel, struct nfileinfo * nfi )
 
 #ifdef    PWII_APP
 
+void rec_pwii_recon()
+{
+    int ch ;
+    // turn off all recording
+    for( ch=0; ch<rec_channels ; ch++) {
+        recchannel[ch]->setforcerecording(REC_FORCEON) ;  // force stop recording
+    }
+}
+
+void rec_pwii_recoff()
+{
+    int ch;
+    // turn off all recording
+    for( ch=0; ch<rec_channels ; ch++) {
+        recchannel[ch]->setforcerecording(REC_FORCEOFF) ;  // force stop recording
+    }
+}
+
 void rec_pwii_toggle_rec( int ch )
 {
     if( ch>=0 && ch<rec_channels ) {
@@ -1262,9 +1294,12 @@ void rec_pwii_toggle_rec( int ch )
         else {
             // turn off recording
             if( ch == pwii_front_ch ) {                     // first cam
-                // turn off all recording
-                for( ch=0; ch<rec_channels ; ch++) {
+                if( pwii_recnostopall ) {
                     recchannel[ch]->setforcerecording(REC_FORCEOFF) ;  // force stop recording
+                }
+                else {
+                    // turn off all recording
+                    rec_pwii_recoff();
                 }
             }
             else {
@@ -1274,6 +1309,5 @@ void rec_pwii_toggle_rec( int ch )
         }
     }
 }
-
 
 #endif

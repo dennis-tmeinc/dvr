@@ -611,12 +611,12 @@ void dvrsvr::ReqRealTime()
         DefaultReq();
         return ;
     }
-    if (m_req.data >= 0 && m_req.data < MAXCHANNEL) {
+    if (m_req.data >= 0 && m_req.data < cap_channels) {
         ans.anscode = ANSREALTIMEHEADER;
         ans.data = m_req.data;
         ans.anssize = sizeof(struct hd_file);
         Send(&ans, sizeof(ans));
-        Send(Dvr264Header, sizeof(struct hd_file));
+        Send(cap_fileheader(m_req.data), sizeof(struct hd_file));
         m_conntype = CONN_REALTIME;
         m_connchannel = m_req.data;
     }

@@ -6,7 +6,7 @@
 # For davinci
 
 ARCH_TYPE = 0
-HOST = arm-linux-
+HOST = arm_v5t_le-
 PLATFORM = ARM
 #EXTRA_CFLAGS += -DARM_FIX
 

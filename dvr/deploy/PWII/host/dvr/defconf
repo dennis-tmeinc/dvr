@@ -400,3 +400,4 @@ resource=/davinci/dvr/resource
 [pwii]
 front=0
 rear=1
+recnostopall=0

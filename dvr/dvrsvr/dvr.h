@@ -198,8 +198,6 @@ struct cap_frame {
 	char * framedata;
 };
 
-extern char Dvr264Header[];
-
 /*
 	key file format
 		1st_frame_milliseconds, 1st_frame_offset\n
@@ -355,6 +353,7 @@ void cap_start();
 void cap_stop();
 void cap_restart(int channel);
 void cap_capIframe(int channel);
+char * cap_fileheader(int channel);
 void cap_init();
 void cap_uninit();
 
@@ -691,6 +690,7 @@ extern struct dvrtime disk_earliesttime ;
 int f264length(const char *filename);				// get file length from file name
 int f264locklength(const char *filename);			// get file lock length from file name
 int f264time(const char *filename, struct dvrtime *dvrt);
+int f264channel(const char *filename);
 char *basefilename(const char *fullpath);
 
 class f264name : public string {
@@ -790,7 +790,7 @@ class playback {
         int getcurrentcliptime(struct dvrtime * begin, struct dvrtime * end) ;
         int getnextcliptime(struct dvrtime * begin, struct dvrtime * end) ;
         int getprevcliptime(struct dvrtime * begin, struct dvrtime * end) ;
-        
+        int readfileheader(char *hdbuf, int hdsize);
 };
 
 // network service
@@ -1283,6 +1283,8 @@ enum e_keycode {
     VK_LP,              // PWII, LP key (zoom in)
     VK_POWER,           // PWII, B/O
     VK_SILENCE,         // PWII, Mute
+    VK_RECON,           // Turn on all record (force on)
+    VK_RECOFF,          // Turn off all record    
     VK_C1,              // PWII, Camera1
     VK_C2,              // PWII, Camera2
     VK_C3,              // PWII, Camera3
@@ -1293,7 +1295,6 @@ enum e_keycode {
     VK_C8               // PWII, Camera8
 } ;
 
-#define VK_REC  (VK_C1)
 #define VK_FRONT (VK_C1)
 #define VK_REAR (VK_C2)
 #define VK_TM   (VK_EM)

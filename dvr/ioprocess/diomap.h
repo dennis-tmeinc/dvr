@@ -141,4 +141,13 @@ struct dio_mmap {
 // auto release buttons
 #define  PWII_BT_AUTORELEASE    (PWII_BT_C1|PWII_BT_C2|PWII_BT_TM)
 
+// PWII CDC led
+#define PWII_LED_C1             (1)
+#define PWII_LED_C2             (1<<1)
+#define PWII_LED_MIC            (1<<2)
+#define PWII_LED_ERROR          (1<<3)
+#define PWII_LED_POWER          (1<<4)
+#define PWII_LED_BO             (1<<5)
+#define PWII_LED_BACKLIGHT      (1<<6)
+
 #endif

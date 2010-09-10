@@ -89,6 +89,7 @@ capture::capture( int channel )
     m_started = 0 ;
     loadconfig();
 
+    // default file header
     m_headerlen = 40 ;
     memcpy( m_header, Dvr264Header, 40 );
 }
@@ -1145,6 +1146,16 @@ void cap_capIframe(int channel)
 {
     if( channel>=0 && channel<cap_channels ) {
         cap_channel[channel]->captureIFrame();
+    }
+}
+
+char * cap_fileheader(int channel)
+{
+    if( channel>=0 && channel<cap_channels ) {
+        return cap_channel[channel]->getheader() ;
+    }
+    else {
+        return Dvr264Header ;
     }
 }
 

@@ -57,6 +57,7 @@ static int screen_play_jumptime ;
 static int screen_play_cliptime ;
 static int screen_play_maxjumptime ;
 static int screen_play_doublejumptimer ;
+static int screen_keepcapture ;
 
 static void screen_setmode()
 {
@@ -210,6 +211,9 @@ void dio_pwii_standby( int standby );
 #define MAXPOLICIDLISTLINE (6)
 
 #ifdef PWII_APP
+
+static int screen_nostartmenu ;  //  do not show police id input menu on startup
+
 // status window on video screen
 class pwii_menu : public window {
         int m_level ;           // 0: top level, 1: Enter Officer ID, 2: Enter classification number
@@ -484,7 +488,8 @@ class video_screen : public window {
             m_statuswin = new video_status(this, 1, 30, 60, 200, 50 );
             m_icon = new video_icon(this, 2, (m_pos.w-75)/2, (m_pos.h-75)/2, 75, 75 );
 #ifdef PWII_APP
-            if( id == ID_VIDEO_SCREEN ) {
+            if( screen_nostartmenu==0 && id == ID_VIDEO_SCREEN ) {
+                // this timer would open POLICE ID menu
                 settimer( 2000, ID_VIDEO_SCREEN ) ;
             }
 #endif                
@@ -642,13 +647,13 @@ class video_screen : public window {
         }
 #endif  // PWII_APP        
         
-        void restartdecoder() {
+        void restartdecoder(void * fileheader) {
             StopDecode( m_decode_handle );
 #ifdef EAGLE32            
-            m_decode_handle = StartDecode(MAIN_OUTPUT, (m_playchannel%ScreenNum)+1, 1,  Dvr264Header);
+            m_decode_handle = StartDecode(MAIN_OUTPUT, 1, 1,  fileheader);
 #endif            
 #ifdef EAGLE34
-            m_decode_handle = StartDecode(MAIN_OUTPUT, (m_playchannel%ScreenNum)+1, 1,  NULL);
+            m_decode_handle = StartDecode(MAIN_OUTPUT, 1, 1,  NULL);
 #endif            
             if( m_decode_runmode == DECODE_MODE_PLAY ) {
                 m_decode_speed = DECODE_SPEED_NORMAL ; 
@@ -701,13 +706,15 @@ class video_screen : public window {
             dvrtime ref_start ;
             dvrtime ref_time ;
             int diff_stream, diff_ref ;
+            struct hd_file hdfile ;
 
             playback * ply = new playback( m_playchannel, 1 ) ;
 #ifdef EAGLE32            
-            m_decode_handle = StartDecode(MAIN_OUTPUT, (m_playchannel%ScreenNum)+1, 1,  Dvr264Header);
+            ply->readfileheader( (char *)&hdfile, sizeof(hdfile));
+            m_decode_handle = StartDecode(MAIN_OUTPUT, 1, 1,  &hdfile );
 #endif            
 #ifdef EAGLE34
-            m_decode_handle = StartDecode(MAIN_OUTPUT, (m_playchannel%ScreenNum)+1, 1,  NULL);
+            m_decode_handle = StartDecode(MAIN_OUTPUT, 1, 1,  NULL);
 #endif            
             m_decode_speed = DECODE_SPEED_NORMAL ;
             res = SetDecodeSpeed(m_decode_handle, m_decode_speed);
@@ -741,7 +748,8 @@ class video_screen : public window {
                         while( m_decode_runmode==DECODE_MODE_PLAY ) {
                             time_now( &ref_time );
                             if( play==0 ) {
-                                restartdecoder();
+                                ply->readfileheader( (char *)&hdfile, sizeof(hdfile));
+                                restartdecoder(&hdfile);
                                 play=1 ;
                                 streamstart = streamtime ;
                                 ref_start = ref_time ;
@@ -794,7 +802,8 @@ class video_screen : public window {
                 }
                 else if( m_decode_runmode == DECODE_MODE_PLAY_FASTFORWARD ) {
                     if( m_decode_speed != 0 ) {
-                        restartdecoder();
+                        ply->readfileheader( (char *)&hdfile, sizeof(hdfile));
+                        restartdecoder(&hdfile);
                     }
                     ply->getstreamdata(&buf, &bufsize, &frametype );
                     ply->getstreamtime(&streamtime);
@@ -931,11 +940,13 @@ class video_screen : public window {
             stop();
 
             if( channel < eagle32_channels ) {
-                cap_stop();       // stop live codec, so decoder has full DSP power
+                if( !screen_keepcapture ){
+                    cap_stop();       // stop live codec, so decoder has full DSP power
+                }
                 disk_archive_stop();   // stop archiving
                 m_playchannel = channel ;
-                res = SetDecodeScreen(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 1);
-                res = SetDecodeAudio(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 1);
+                res = SetDecodeScreen(MAIN_OUTPUT, 1, 1);
+                res = SetDecodeAudio(MAIN_OUTPUT, 1, 1);
                 m_videomode = VIDEO_MODE_PLAYBACK ; 
                 m_decode_runmode = DECODE_MODE_PLAY ;
                 pthread_create(&m_decodethreadid, NULL, s_playback_thread, (void *)(this));
@@ -961,8 +972,8 @@ class video_screen : public window {
             m_decodethreadid = 0 ;
 
             // stop decode screen
-            res = SetDecodeScreen(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 0);
-            res = SetDecodeAudio(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 0);
+            res = SetDecodeScreen(MAIN_OUTPUT, 1, 0);
+            res = SetDecodeAudio(MAIN_OUTPUT, 1, 0);
             m_videomode = VIDEO_MODE_NONE ; 
             cap_start();       // start video capture.
 
@@ -1512,7 +1523,11 @@ int screen_mouseevent(int x, int y, int buttons)
 
 int screen_key( int keycode, int keydown ) 
 {
-    if( keycode == (int) VK_EM ) {
+    void rec_pwii_toggle_rec(int ch) ;
+    void rec_pwii_recon();
+    void rec_pwii_recoff();
+
+    if( keycode == (int) VK_TM ) {
         if( keydown ) {
             dvr_log("TraceMark pressed!");
             event_tm = 1 ;
@@ -1523,9 +1538,21 @@ int screen_key( int keycode, int keydown )
             event_tm = 0 ;
          }
     }
+#ifdef PWII_APP    
+    else if( keycode==(int)VK_RECON ) {     // record on, (turn on all record)
+        if( keydown ) {
+            rec_pwii_recon();
+            dvr_log("RECON pressed!");
+        }
+    }
+    else if( keycode==(int)VK_RECOFF ) {     // record on, (turn on all record)
+        if( keydown ) {
+            rec_pwii_recoff();
+            dvr_log("RECOFF pressed!");
+        }
+    }
     else if( keycode>=(int)VK_C1 && keycode<=(int)VK_C8 ) {     // record C1-C8
         if( keydown ) {
-            void rec_pwii_toggle_rec(int ch) ;
             rec_pwii_toggle_rec( keycode-(int)VK_C1 ) ;
             dvr_log("C%d pressed!", keycode-(int)VK_C1+1);
         }
@@ -1538,6 +1565,7 @@ int screen_key( int keycode, int keydown )
             dvr_log("LP released!");
         }
     }
+#endif    
     else if( topwindow ) {
         topwindow->key( keycode, keydown );
     }
@@ -1735,6 +1763,8 @@ void screen_init()
 
 #ifdef PWII_APP    
     screen_rearaudio = dvrconfig.getvalueint("VideoOut", "rearaudio" );
+    screen_keepcapture = dvrconfig.getvalueint("VideoOut", "keepcapture" );
+    screen_nostartmenu = dvrconfig.getvalueint("VideoOut", "nostartmenu" );
 #endif
     
     // select Video output format to NTSC

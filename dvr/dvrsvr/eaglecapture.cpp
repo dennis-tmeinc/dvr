@@ -250,9 +250,9 @@ void eagle_capture::start()
         // set frame mode
         if( m_attr.key_interval<=0 ) {
             m_attr.key_interval = 3 * m_attr.FrameRate ;
-        }
-        if( m_attr.key_interval<12 || m_attr.key_interval>400 ) {
-            m_attr.key_interval=12 ;
+            if( m_attr.key_interval<12 || m_attr.key_interval>400 ) {
+                m_attr.key_interval=12 ;
+            }
         }
         
         if( m_attr.b_frames <=0  && m_attr.b_frames > 10 ) {
@@ -428,7 +428,7 @@ int eagle_capture::getsignal()
     if( m_started ) {
         sig = m_signal ;
         res=GetVideoSignal(m_hikhandle, &m_signal);
-// this method doesn't work (on Eagle32, but works on Eagle34), can't get signal standard by GetVideoParam()        
+// this method doesn't work (on Eagle32, but works on Eagle34), can't get signal standard by GetVideoParam()
 #ifdef EAGLE34
         if( sig!=m_signal ) {
             int b, c, s, h ;

@@ -434,6 +434,17 @@ void playback::getlockinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime *
     }
 }
 
+int playback::readfileheader(char *hdbuf, int hdsize)
+{
+    if( m_file.isopen() ) {
+        return m_file.readheader( hdbuf, hdsize );
+    }
+    else {
+        memcpy( hdbuf, cap_fileheader(0), hdsize );
+        return hdsize ;
+    }    
+}
+
 void play_init()
 {
     config dvrconfig(dvrconfigfile);

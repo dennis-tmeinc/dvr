@@ -1,10 +1,10 @@
 
-EAGLE=eagle32
-#EAGLE=eagle34
+#EAGLE=eagle32
+EAGLE=eagle34
 
 # cross compile toolchain
-CROSS_COMPILE_PREFIX=~/proj/eagle32/hik_toolchain/bin/arm-linux-
-#CROSS_COMPILE_PREFIX=~/proj/eagle34/hiktoolchain/bin/arm_v5t_le-
+#CROSS_COMPILE_PREFIX=~/proj/eagle32/hik_toolchain/bin/arm-linux-
+CROSS_COMPILE_PREFIX=~/proj/eagle34/hiktoolchain/bin/arm_v5t_le-
 
 # debugging folder
 debug_folder=~/nfsroot/eagletest
