@@ -462,7 +462,7 @@ eventmarker=0
 # for gps log process
 [glog]
 gpsdisable=0
-serialport=/dev/ttyUSB3
+serialport=/dev/ttyS0
 serialbaudrate=4800
 
 gforce_log_enable=0

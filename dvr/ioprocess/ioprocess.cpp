@@ -1488,7 +1488,7 @@ int mcu_checkinputbuf(char * ibuf)
            break;
 
        case PWII_INPUT_LP :                                 // LP button
-           mcu_response( ibuf );wst
+           mcu_response( ibuf );
            if( ibuf[5] ) {
                dio_lock();
                p_dio_mmap->pwii_buttons |= PWII_BT_LP ;     // bit 11: LP button
