@@ -68,6 +68,8 @@ if [ -f /davinci/dvr/eth_mask ]; then
     ifconfig eth0:1 netmask `cat /davinci/dvr/eth_mask`
 fi
 
+ifconfig lo up 127.0.0.1
+
 # setup router
 cd /davinci/dvr
 for gw in `ls gateway*` ; do 

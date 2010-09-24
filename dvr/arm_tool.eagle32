@@ -1,5 +1,5 @@
 
-EAGLE=eagle34
+EAGLE=eagle32
 
 # cross compile toolchain
 ifeq ($(EAGLE),eagle34)

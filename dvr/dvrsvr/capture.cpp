@@ -3,7 +3,7 @@
 
 // OSD constants
 
-#define _OSD_BASE	0x9000
+#define _OSD_BASE	    0x9000
 #define	_OSD_YEAR4		_OSD_BASE+0
 #define _OSD_YEAR2		_OSD_BASE+1
 #define _OSD_MONTH3		_OSD_BASE+2
@@ -55,7 +55,7 @@ int dvr_getchannelsetup(int ch, struct DvrChannel_attr * pchannel,  int attrsize
         cap_channel[ch]->getattr( pchannel ) ;
         return 1 ;        
     }
-    
+
     return 0 ;
 }
 

@@ -435,8 +435,8 @@ zoomcam_enable=0
 
 # sensor number start from 1
 [sensor1]
-name=MIC
-inverted=1
+name=EMR
+inverted=0
 eventmarker=1
 [sensor2]
 inverted=1

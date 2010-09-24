@@ -136,7 +136,7 @@ int main()
         key_plugin.device[3]= 0;
         strncpy( key_plugin.mountpoint, usbroot, 128 );
 
-        int dvrsocket = net_connect("127.0.0.1", 15111);
+        int dvrsocket = net_connect("127.0.0.1", DVRPORT);
         if( dvrsocket>0 ) {
             struct dvr_req req ;
             struct dvr_ans ans ;

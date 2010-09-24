@@ -1851,7 +1851,7 @@ int PoliceIDCheck( char * iddata, int idsize, char * serialid )
             keydata->usbid[0]=='P' &&
             keydata->usbid[1]=='L' ) 
         {
-            // search for "Office ID" or "Contact Name" from key info part
+            // search for "Officer ID" or "Contact Name" from key info part
             char * info ;
             char * idstr ;
             char officerid[128] ;
@@ -2363,7 +2363,7 @@ int dvr_nfileopen(int sockfd, int channel, struct nfileinfo * nfi)
 
 
 // close nfile on remote dvr
-// return 
+// return
 //       1: success
 //       0: failed
 int dvr_nfileclose(int sockfd, int nfile)

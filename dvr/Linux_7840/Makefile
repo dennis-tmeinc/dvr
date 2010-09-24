@@ -6,7 +6,7 @@
 # For davinci
 
 ARCH_TYPE = 0
-HOST = arm_v5t_le-
+HOST = arm-linux-
 PLATFORM = ARM
 #EXTRA_CFLAGS += -DARM_FIX
 
@@ -24,8 +24,13 @@ usbserial-objs := usb-serial.o generic.o bus.o
 
 obj-m +=mos7840.o 
 
-default:
-	$(MAKE) -C $(KDIR) $(EXTRA_CFLAGS) SUBDIRS=$(PWD) modules
+default: eagle32
+
+eagle34:
+	$(MAKE)  CROSS_COMPILE=arm_v5t_le- -C $(KDIR) $(EXTRA_CFLAGS) SUBDIRS=$(PWD) modules
+
+eagle32:
+	$(MAKE)  CROSS_COMPILE=arm-linux- -C $(KDIR) $(EXTRA_CFLAGS) SUBDIRS=$(PWD) modules
 
 clean:
 	rm -rf .tmp_versions Module.symvers *.mod.c *.o *.ko .*.cmd

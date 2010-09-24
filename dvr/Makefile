@@ -58,18 +58,27 @@ firmware_cycle:
 rel:
 	date +%y.%m%d.%H > release
 
-tvs:
+tvsset:
+	cp arm_tool.eagle32 arm_tool
 	cp cfg.h.tvs cfg.h
+
+tvs:
 	$(MAKE) applications 
 	cd deploy/TVS21 ; ./mkdeploy TVS21 1 
 
-pwii:
+pwiiset:
+	cp arm_tool.eagle32 arm_tool
 	cp cfg.h.pwii cfg.h
+
+pwii:
 	$(MAKE) applications 
 	cd deploy/PWII ; ./mkdeploy PWII 1 
 
-pw34:
+pw34set:
+	cp arm_tool.eagle34 arm_tool
 	cp cfg.h.pw34 cfg.h
+
+pw34:
 	$(MAKE) applications
 	cd deploy/PW34 ; ./mkdeploy PW34 1 
     

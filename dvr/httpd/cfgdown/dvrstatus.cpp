@@ -5,6 +5,57 @@
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 
+// #define NETDBG
+
+#ifdef NETDBG
+
+// debugging procedures
+
+int net_addr(char *netname, int port, struct sockad *addr)
+{
+    struct addrinfo hints;
+    struct addrinfo *res;
+    char service[20];
+    
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = PF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;
+    sprintf(service, "%d", port);
+    res = NULL;
+    if (getaddrinfo(netname, service, &hints, &res) != 0) {
+        return -1;
+    }
+    addr->addrlen = res->ai_addrlen;
+    memcpy(&addr->addr, res->ai_addr, res->ai_addrlen);
+    freeaddrinfo(res);
+    return 0;
+}
+
+int msgfd ;
+
+// send out UDP message use msgfd
+int net_sendmsg( char * dest, int port, const void * msg, int msgsize )
+{
+    struct sockad destaddr ;
+	if( msgfd==0 ) {
+		msgfd = socket( AF_INET, SOCK_DGRAM, 0 ) ;
+	}
+    net_addr(dest, port, &destaddr);
+    return (int)sendto( msgfd, msg, (size_t)msgsize, 0, &(destaddr.addr), destaddr.addrlen );
+}
+
+int net_dprint( char * fmt, ... ) 
+{
+    char msg[1024] ;
+    va_list ap ;
+    va_start( ap, fmt );
+    vsprintf(msg, fmt, ap );
+    net_sendmsg( "192.168.152.61", 15333, msg, strlen(msg) );
+    va_end( ap );
+    return 0 ;
+}
+#endif
+
 // wait for socket ready to read (timeout in micro-seconds)
 int net_recvok(int fd, int tout)
 {
@@ -128,9 +179,25 @@ int getchannelstate(struct channelstate * chst, unsigned long * streambytes, int
     if( portfile==NULL ) {
         return rch;
     }
+
+#ifdef NETDBG
+	net_dprint( "getchannelstate: 1.\n"); 
+#endif	
+	
     port=15111 ;
     fscanf(portfile, "%d", &port);
+
+#ifdef NETDBG
+	net_dprint( "getchannelstate: 2. port = %d\n", port); 
+#endif		
+	
     sockfd = net_connect("127.0.0.1", port);
+
+#ifdef NETDBG
+	net_dprint( "getchannelstate: 3. connectted, sockfd = %d\n", sockfd ); 
+#endif		
+	
+	
     if( sockfd>0 ) {
         req.reqcode=REQGETCHANNELSTATE ;
         req.data=0 ;
@@ -146,7 +213,10 @@ int getchannelstate(struct channelstate * chst, unsigned long * streambytes, int
                 }
             }
         }
-        
+
+#ifdef NETDBG
+	net_dprint( "getchannelstate: 4. state\n" ); 
+#endif				
         // get stream bytes
         for( i=0; i<rch; i++ ) {
             streambytes[i]=0;
@@ -163,6 +233,10 @@ int getchannelstate(struct channelstate * chst, unsigned long * streambytes, int
         }
         close( sockfd );        
     }
+	
+#ifdef NETDBG
+	net_dprint( "getchannelstate: 5. finish\n" ); 
+#endif			
     return rch ;
 }
  
@@ -252,7 +326,11 @@ void print_status()
     int  chno=0 ;
     struct channelstate cs[16] ;
     struct dvrstat stat ;
-    
+
+#ifdef NETDBG
+	net_dprint( "print_status: 1.\n"); 
+#endif	
+	
     memset( &savedstat, 0, sizeof( savedstat ) );
     statfile = fopen( "savedstat", "rb");
     if( statfile ) {
@@ -260,6 +338,10 @@ void print_status()
         fclose( statfile );
     }
 
+#ifdef NETDBG
+	net_dprint( "print_status: 2.\n"); 
+#endif	
+		
     // set timezone
     char tz[128] ;
     FILE * ftz = fopen("tz_env", "r");
@@ -268,7 +350,11 @@ void print_status()
         fclose(ftz);
         setenv("TZ", tz, 1);
     }
-        
+
+#ifdef NETDBG
+	net_dprint( "print_status: 3.\n"); 
+#endif	
+		
     //JSON head
     printf("{");
         
@@ -290,7 +376,11 @@ void print_status()
         timeinc = (double)(stat.checktime.tv_sec-savedstat.checktime.tv_sec) + 
             (double)(stat.checktime.tv_usec - savedstat.checktime.tv_usec)/1000000.0 ;
     }
-    
+
+#ifdef NETDBG
+	net_dprint( "print_status: 4.\n"); 
+#endif	
+		
     // get status from dvrsvr
     memset( cs, 0, sizeof(cs) );
     chno=getchannelstate(cs, stat.streambytes, 16);
@@ -314,7 +404,11 @@ void print_status()
         printf("\"camera_%d_bitrate\":\"%d\",", i, (int)bitrate );
         
     }
-        
+
+#ifdef NETDBG
+	net_dprint( "print_status: 5.\n"); 
+#endif	
+		
     // calculate CPU usage
     FILE * uptimefile = fopen("/proc/uptime", "r" );
     if( uptimefile ) {
@@ -338,7 +432,11 @@ void print_status()
         printf("\"memory_total\":\"%.1f\",", ((float)sttotal)/1000.0 );
         printf("\"memory_free\":\"%.1f\",", ((float)stfree)/1000.0 );
     }
-    
+
+#ifdef NETDBG
+	net_dprint( "print_status: 6.\n"); 
+#endif	
+		
     // print disk usage
     if( disk_usage(&sttotal, &stfree) ) {
         printf("\"disk_total\":\"%d\",", sttotal );
@@ -368,7 +466,11 @@ void print_status()
         printf("\"temperature_disk_c\":\" \"," );
         printf("\"temperature_disk_f\":\" \"," );
     }    
-    
+
+#ifdef NETDBG
+	net_dprint( "print_status: 7.\n"); 
+#endif	
+		
     printf("\"objname\":\"status_value\"}\r\n" );
 
     statfile = fopen( "savedstat", "wb");
@@ -382,11 +484,20 @@ void print_status()
 // return 0: for keep alive
 int main()
 {
+#ifdef NETDBG
+	net_dprint( "dvrstatus started.\n"); 
+#endif
+		
     // printf headers
     printf( "HTTP/1.1 200 OK\r\n" );
     printf( "Content-Type: text/plain\r\n" );
     printf( "Cache-Control: no-cache\r\n" );        // no cache on cgi contents
     printf( "\r\n" );
     print_status();
-    return 1;
+
+#ifdef NETDBG
+	net_dprint( "dvrstatus ended.\n"); 
+#endif
+		
+	return 1;
 }

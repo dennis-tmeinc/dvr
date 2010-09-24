@@ -15,6 +15,8 @@ sfxrun.upd sfxrun
 ./iwpriv
 ./nosignal.bin
 ./dsplinkk.ko
+./mos7840.ko
+./usbserial.ko
 ./ID
 ./ID/APPID
 ./ID/BOARDNUM
