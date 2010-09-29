@@ -194,6 +194,7 @@ case $1 in
                             cd /
                             if umount ${xmountdir}/${devname} ; then
                                 rm -r ${xmountdir}/${devname}
+                                rm ${xmountdir}/mount_${devname}
                             fi
                           
                         fi
@@ -238,7 +239,6 @@ case $1 in
                             cd /
                             if umount ${xmountdir}/${devname} ; then
                                 rm -r ${xmountdir}/${devname}
-                                rm ${xmountdir}/mount_${devname}
                             fi
                            
                         fi
@@ -247,7 +247,6 @@ case $1 in
                     else
                         if umount ${xmountdir}/${devname} ; then
                             rm -r ${xmountdir}/${devname}
-                            rm ${xmountdir}/mount_${devname}
                         fi
                     fi
 
@@ -273,19 +272,95 @@ case $1 in
 
         # check usb wifi
         if [  ${devclass} = "class" -a ${subsys} = "net" -a -d ${devpath}/wireless ]; then
+            echo ${devname} > /var/dvr/wifidev
             /bin/sleep 2
 
-            if [ -f /davinci/dvr/wifi_ip ]; then
-                ifconfig ${devname} `cat /davinci/dvr/wifi_ip`
-            fi
+            wifi_essid=`/davinci/dvr/cfg get network wifi_essid`
+            wifi_enc=`/davinci/dvr/cfg get network wifi_enc`
+            wifi_key=`/davinci/dvr/cfg get network wifi_key`
+            wifi_ip=`/davinci/dvr/cfg get network wifi_ip`
+            wifi_mask=`/davinci/dvr/cfg get network wifi_mask`
+        
+            ifconfig ${devname} up ${wifi_ip}
+            ifconfig ${devname} netmask ${wifi_mask}
 
-            if [ -f /davinci/dvr/wifi_mask ]; then
-                ifconfig ${devname} netmask `cat /davinci/dvr/wifi_mask`
-            fi
+		    case ${wifi_enc} in
+		    "0")
+		        # Disable (no enc)
+		        /davinci/iwpriv ${devname} set NetworkType=Infra
+	            /davinci/iwpriv ${devname} set AuthMode=OPEN
+	            /davinci/iwpriv ${devname} set EncrypType=NONE
+    		    /davinci/iwpriv ${devname} set SSID=${wifi_essid}
+	    	    ;;
+		    "1")
+		        # WEP open
+	            /davinci/iwpriv ${devname} set NetworkType=Infra
+	            /davinci/iwpriv ${devname} set AuthMode=OPEN
+	            /davinci/iwpriv ${devname} set EncrypType=WEP
+	            /davinci/iwpriv ${devname} set Key1=${wifi_key}
+	            /davinci/iwpriv ${devname} set DefaultKeyID=1
+		        /davinci/iwpriv ${devname} set SSID=${wifi_essid}
+		        ;;
+		    "2")
+		        # WEP shared
+	            /davinci/iwpriv ${devname} set NetworkType=Infra
+	            /davinci/iwpriv ${devname} set AuthMode=SHARED
+	            /davinci/iwpriv ${devname} set EncrypType=WEP
+	            /davinci/iwpriv ${devname} set Key1=$wifi_key
+	            /davinci/iwpriv ${devname} set DefaultKeyID=1
+		        /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		        ;;
+		    "3")
+  		        # WEP auto
+	            /davinci/iwpriv ${devname} set NetworkType=Infra
+	            /davinci/iwpriv ${devname} set AuthMode=WEPAUTO
+	            /davinci/iwpriv ${devname} set EncrypType=WEP
+	            /davinci/iwpriv ${devname} set Key1=$wifi_key
+	            /davinci/iwpriv ${devname} set DefaultKeyID=1
+		        /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		        ;;
+		    "4")
+		        # WPA Personal TKIP
+	            /davinci/iwpriv ${devname} set NetworkType=Infra
+		        /davinci/iwpriv ${devname} set AuthMode=WPAPSK
+		        /davinci/iwpriv ${devname} set EncrypType=TKIP
+		        /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		        /davinci/iwpriv ${devname} set WPAPSK=$wifi_key
+		        /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		        ;;
+		    "5")
+		        # WPA Personal AES
+	            /davinci/iwpriv ${devname} set NetworkType=Infra
+	            /davinci/iwpriv ${devname} set AuthMode=WPAPSK
+	            /davinci/iwpriv ${devname} set EncrypType=AES
+		        /davinci/iwpriv ${devname} set SSID=$wifi_essid
+	            /davinci/iwpriv ${devname} set WPAPSK=$wifi_key
+		        /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		        ;;
+		    "6")
+		        # WPA2 Personal TKIP
+	            /davinci/iwpriv ${devname} set NetworkType=Infra
+	            /davinci/iwpriv ${devname} set AuthMode=WPA2PSK
+	            /davinci/iwpriv ${devname} set EncrypType=TKIP
+		        /davinci/iwpriv ${devname} set SSID=$wifi_essid
+	            /davinci/iwpriv ${devname} set WPAPSK=$wifi_key
+		        /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		        ;;
+		    "7")
+		        # WPA2 Personal AES
+	            /davinci/iwpriv ${devname} set NetworkType=Infra
+	            /davinci/iwpriv ${devname} set AuthMode=WPA2PSK
+	            /davinci/iwpriv ${devname} set EncrypType=AES
+		        /davinci/iwpriv ${devname} set SSID=$wifi_essid
+	            /davinci/iwpriv ${devname} set WPAPSK=$wifi_key
+		        /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		        ;;
+		    *)
+		        ;;
+		    esac
 
-            if [ -f /davinci/dvr/wifi_id ]; then
-                /davinci/iwconfig ${devname} `cat /davinci/dvr/wifi_id`
-            fi
+            ifconfig ${devname} up ${wifi_ip}
+            ifconfig ${devname} netmask ${wifi_mask}
 
         fi
 

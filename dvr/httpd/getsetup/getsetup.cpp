@@ -693,124 +693,62 @@ int main()
         fprintf(fvalue, "{" );
 
         // eth_ip
-        sprintf(buf, "%s/eth_ip", dvrworkdir );
-        ipfile = fopen( buf, "r" );
-        if( ipfile ) {
-            i=fread( buf, 1, sizeof(buf), ipfile );
-            if( i>0 ) {
-                while( i>0 ) {
-                    if( buf[i-1]<' ' ) {
-                        i--;
-                    }
-                    else {
-                        break;
-                    }
-                }
-                buf[i]=0;
-                fprintf(fvalue, "\"eth_ip\":\"%s\",", buf );
-            }
-            fclose( ipfile );
+        value = dvrconfig.getvalue("network","eth_ip");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"eth_ip\":\"%s\",", value.getstring() );
         }
 
         // eth_mask
-        sprintf(buf, "%s/eth_mask", dvrworkdir );
-        ipfile = fopen( buf, "r" );
-        if( ipfile ) {
-            i=fread( buf, 1, sizeof(buf), ipfile );
-            if( i>0 ) {
-                while( i>0 ) {
-                    if( buf[i-1]<' ' ) {
-                        i--;
-                    }
-                    else {
-                        break;
-                    }
-                }
-                buf[i]=0;
-                fprintf(fvalue, "\"eth_mask\":\"%s\",", buf );
-            }
-            fclose( ipfile );
-        }
-
-        // wifi_ip
-        sprintf(buf, "%s/wifi_ip", dvrworkdir );
-        ipfile = fopen( buf, "r" );
-        if( ipfile ) {
-            i=fread( buf, 1, sizeof(buf), ipfile );
-            if( i>0 ) {
-                while( i>0 ) {
-                    if( buf[i-1]<' ' ) {
-                        i--;
-                    }
-                    else {
-                        break;
-                    }
-                }
-                buf[i]=0;
-                fprintf(fvalue, "\"wifi_ip\":\"%s\",", buf );
-            }
-            fclose( ipfile );
-        }
-
-        // wifi_mask
-        sprintf(buf, "%s/wifi_mask", dvrworkdir );
-        ipfile = fopen( buf, "r" );
-        if( ipfile ) {
-            i=fread( buf, 1, sizeof(buf), ipfile );
-            if( i>0 ) {
-                while( i>0 ) {
-                    if( buf[i-1]<' ' ) {
-                        i--;
-                    }
-                    else {
-                        break;
-                    }
-                }
-                buf[i]=0;
-                fprintf(fvalue, "\"wifi_mask\":\"%s\",", buf );
-            }
-            fclose( ipfile );
+        value = dvrconfig.getvalue("network","eth_mask");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"eth_mask\":\"%s\",", value.getstring() );
         }
 
         // gateway
-        sprintf(buf, "%s/gateway_1", dvrworkdir );
-        ipfile = fopen( buf, "r" );
-        if( ipfile ) {
-            i=fread( buf, 1, sizeof(buf), ipfile );
-            if( i>0 ) {
-                while( i>0 ) {
-                    if( buf[i-1]<' ' ) {
-                        i--;
-                    }
-                    else {
-                        break;
-                    }
-                }
-                buf[i]=0;
-                fprintf(fvalue, "\"gateway_1\":\"%s\",", buf );
-            }
-            fclose( ipfile );
+        value = dvrconfig.getvalue("network","gateway");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"gateway_1\":\"%s\",", value.getstring() );
+        }
+        
+        // wifi_ip
+        value = dvrconfig.getvalue("network","wifi_ip");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"wifi_ip\":\"%s\",", value.getstring() );
+        }
+        
+        // wifi_mask
+        value = dvrconfig.getvalue("network","wifi_mask");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"wifi_mask\":\"%s\",", value.getstring() );
         }
 
-        // wifi id
-        char essid[10], id[128], enc[10], key[128] ;
-        sprintf(buf, "%s/wifi_id", dvrworkdir );
-        ipfile = fopen( buf, "r" );
-        essid[0]=0;
-        id[0]=0;
-        enc[0]=0;
-        key[0]=0;
-        if( ipfile ) {
-            fscanf(ipfile, "%9s %127s %9s %127s", &essid, &id, &enc, &key ) ;
-            if( strcmp( essid, "essid")==0 ) {
-                fprintf( fvalue, "\"wifi_essid\":\"%s\",", id );
-            }
-            if( strcmp( enc, "enc")==0 ) {
-                fprintf( fvalue, "\"wifi_key\":\"%s\",", key );
-            }
-            fclose( ipfile );
+        // wifi_essid
+        value = dvrconfig.getvalue("network","wifi_essid");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"wifi_essid\":\"%s\",", value.getstring() );
         }
 
+        // wifi_key
+        value = dvrconfig.getvalue("network","wifi_key");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"wifi_key\":\"%s\",", value.getstring() );
+        }
+
+        // wifi enc type. 
+        //        0 : Disable (no enc)
+        //        1 : WEP open
+        //        2 : WEP shared
+        //        3 : WEP auto
+        //        4 : WPA Personal TKIP
+        //        5 : WPA Personal AES
+        //        6 : WPA2 Personal TKIP
+        //        7 : WPA2 Personal AES
+        value = dvrconfig.getvalue("network","wifi_enc");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"wifi_enc\":\"%s\",", value.getstring() );
+        }
+
+        // end of network value
         fprintf(fvalue, "\"objname\":\"network_value\" }" );
         fclose( fvalue );
     }

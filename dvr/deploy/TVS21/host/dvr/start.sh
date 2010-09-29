@@ -16,6 +16,10 @@ mount -t ramfs ramfs /var
 mkdir /var/dvr
 mkdir /var/dvr/disks
 
+# setup DVR configure file
+mkdir /etc/dvr
+ln -sf /davinci/dvr/dvrsvr.conf /etc/dvr/dvr.conf
+
 # install davinci drivers
 cd /davinci
 insmod dsplinkk.ko ddr_start=0x83100080 ddr_size=0x00efff80
@@ -58,19 +62,7 @@ boardid=`cat /davinci/ID/BOARDID`
 ifconfig eth0 192.168.247.${boardid}
 
 # setup network ethernet ip address (as a alias)
-if [ -f /davinci/dvr/eth_ip ]; then
-    ifconfig eth0:1 `cat /davinci/dvr/eth_ip`
-fi
-
-if [ -f /davinci/dvr/eth_mask ]; then
-    ifconfig eth0:1 netmask `cat /davinci/dvr/eth_mask`
-fi
-
-# setup router
-cd /davinci/dvr
-for gw in `ls gateway*` ; do 
-   route add default gw `cat $gw`   
-done
+/davinci/dvr/setnetwork
 
 #telnet support
 cp /davinci/dvr/passwd /etc
@@ -98,11 +90,6 @@ if [ -f /mnt/nfs0/eagletest/debugon ]; then
     exit ;
 fi
 
-mkdir /etc/dvr
-
-# setup DVR configure file
-ln -sf /davinci/dvr/dvrsvr.conf /etc/dvr/dvr.conf
-
 cd /davinci/dvr
 
 # start io module
@@ -110,9 +97,6 @@ cd /davinci/dvr
 
 # start hotplug deamond
 /davinci/dvr/tdevd /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &
-# mount disk already found
-/davinci/dvr/tdevmount /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &
-
 # setup ip network for ipcamera board. (slave boards)
 /davinci/dvr/eaglehost `cat /davinci/ID/BOARDNUM`
 
@@ -120,6 +104,9 @@ sleep 1
 
 # start dvr server
 /davinci/dvr/dvrsvr < /dev/null > /dev/null 2> /dev/null &
+
+# mount disk already found
+/davinci/dvr/tdevmount /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &
 
 sleep 3
 

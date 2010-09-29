@@ -13,7 +13,6 @@
 
 char dvrconfigfile[]="/etc/dvr/dvr.conf" ;
 char tzfile[] = "tz_option" ;
-char * dvrworkdir = "/davinci/dvr" ;
 
 // wait for socket ready to read (timeout in micro-seconds)
 int net_recvok(int fd, int tout)
@@ -747,65 +746,29 @@ int print_cfgreport()
     printf( "Network settings,\n");
 
     // eth_ip
-    sprintf(buf, "%s/eth_ip", dvrworkdir );
-    ifile = fopen( buf, "r" );
-    if( ifile ) {
-        i=fread( buf, 1, sizeof(buf), ifile );
-        if( i>0 ) {
-            while( i>0 ) {
-                if( buf[i-1]<' ' ) {
-                    i--;
-                }
-                else {
-                    break;
-                }
-            }
-            buf[i]=0;
-            printf( "Ethernet IP address : %s\n", buf );
-        }
-        fclose( ifile );
-    }
-
+    value = dvrconfig.getvalue("network", "eth_ip");
+    printf( "Ethernet IP address : %s\n", value.getstring() );
+    
     // eth_mask
-    sprintf(buf, "%s/eth_mask", dvrworkdir );
-    ifile = fopen( buf, "r" );
-    if( ifile ) {
-        i=fread( buf, 1, sizeof(buf), ifile );
-        if( i>0 ) {
-            while( i>0 ) {
-                if( buf[i-1]<' ' ) {
-                    i--;
-                }
-                else {
-                    break;
-                }
-            }
-            buf[i]=0;
-            printf( "Ethernet net mask : %s\n", buf );
-        }
-        fclose( ifile );
-    }
+    value = dvrconfig.getvalue("network", "eth_mask");
+    printf( "Ethernet net mask : %s\n", value.getstring() );
 
     // gateway
-    sprintf(buf, "%s/gateway_1", dvrworkdir );
-    ifile = fopen( buf, "r" );
-    if( ifile ) {
-        i=fread( buf, 1, sizeof(buf), ifile );
-        if( i>0 ) {
-            while( i>0 ) {
-                if( buf[i-1]<' ' ) {
-                    i--;
-                }
-                else {
-                    break;
-                }
-            }
-            buf[i]=0;
-            printf("Gateway : %s\n", buf );
-        }
-        fclose( ifile );
-    }
+    value = dvrconfig.getvalue("network", "gateway");
+    printf( "Gateway : %s\n", value.getstring() );
 
+    // wifi_ip
+    value = dvrconfig.getvalue("network", "wifi_ip");
+    printf( "Wireless IP address : %s\n", value.getstring() );
+
+    // wifi_mask
+    value = dvrconfig.getvalue("network", "wifi_mask");
+    printf( "Wireless net mask : %s\n", value.getstring() );
+
+    // wifi_id
+    value = dvrconfig.getvalue("network", "wifi_essid");
+    printf( "Wireless essid : %s\n", value.getstring() );
+    
     return 0;
 }
 

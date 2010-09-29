@@ -91,6 +91,14 @@ port=15112
 livefifo=20000
 multicast_en = 1
 multicast_addr=228.229.230.231
+eth_ip=192.168.1.100
+eth_mask=255.255.255.0
+gateway=192.168.1.1
+wifi_ip=192.168.3.100
+wifi_mask=255.255.255.0
+wifi_essid=DVRTEST
+wifi_enc=0
+wifi_key=wifi
 
 [ptz]
 #enable ptz

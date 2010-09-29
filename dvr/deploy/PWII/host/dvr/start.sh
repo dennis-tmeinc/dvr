@@ -7,18 +7,21 @@ if [ -d /var/dvr ]; then
 	exit 1
 fi
 
-#clean some ram disk space. (hikvison files)
-rm -r /opt/*
-rm /bin/chat /bin/pppd /bin/pppoe /bin/t1 /bin/update
-
 # make working directory
 mount -t ramfs ramfs /var
 mkdir /var/dvr
 mkdir /var/dvr/disks
 
+#clean some ram disk space. (hikvison files)
+rm -r /opt/*
+rm /bin/chat /bin/pppd /bin/pppoe /bin/t1 /bin/update
+
+# setup DVR configure file
+mkdir /etc/dvr
+ln -sf /davinci/dvr/dvrsvr.conf /etc/dvr/dvr.conf
+
 # install davinci drivers
-cd /davinci
-insmod dsplinkk.ko ddr_start=0x83100080 ddr_size=0x00efff80
+insmod /davinci/dsplinkk.ko ddr_start=0x83100080 ddr_size=0x00efff80
 
 rm -f /dev/dsplink
 mknod /dev/dsplink c `/bin/awk "\\$2==\"dsplink\" {print \\$1}" /proc/devices` 0
@@ -58,19 +61,7 @@ boardid=`cat /davinci/ID/BOARDID`
 ifconfig eth0 192.168.247.${boardid}
 
 # setup network ethernet ip address (as a alias)
-if [ -f /davinci/dvr/eth_ip ]; then
-    ifconfig eth0:1 `cat /davinci/dvr/eth_ip`
-fi
-
-if [ -f /davinci/dvr/eth_mask ]; then
-    ifconfig eth0:1 netmask `cat /davinci/dvr/eth_mask`
-fi
-
-# setup router
-cd /davinci/dvr
-for gw in `ls gateway*` ; do 
-   route add default gw `cat $gw`   
-done
+setnetwork
 
 #telnet support
 cp /davinci/dvr/passwd /etc
@@ -80,8 +71,8 @@ echo "Restart inetd."
 inetdpid=`ps | awk '$5 ~ /inetd/ {print $1}'`
 kill -TERM ${inetdpid}
 sleep 1
-cp ./inetd.conf /etc/inetd.conf
-/bin/inetd  < /dev/null > /dev/null 2> /dev/null
+cp /davinci/dvr/inetd.conf /etc/inetd.conf
+inetd  < /dev/null > /dev/null 2> /dev/null &
 
 # ext3 file system modules
 insmod /davinci/jbd.ko
@@ -98,23 +89,13 @@ insmod /davinci/ext3.ko
 #    exit ;
 #fi
 
-mkdir /etc/dvr
-
-# setup DVR configure file
-ln -sf /davinci/dvr/dvrsvr.conf /etc/dvr/dvr.conf
-
-cd /davinci/dvr
-
 # start io module
-/davinci/dvr/ioprocess < /dev/null > /dev/null 2> /dev/null &
+ioprocess < /dev/null > /dev/null 2> /dev/null &
 
 # start hotplug deamond
-/davinci/dvr/tdevd /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &
+tdevd /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &
 
 sleep 1
-
-# mount disk already found
-/davinci/dvr/tdevmount /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null
 
 # setup ip network for ipcamera board. (slave boards)
 /davinci/dvr/eaglehost `cat /davinci/ID/BOARDNUM`
@@ -128,10 +109,12 @@ sleep 3
 # /davinci/dvr/wifi_up
 
 # install web server
-cd /home
-mkdir www
-cd www
+mkdir /home/www
+cd /home/www
 /davinci/dvr/httpd.sfx
+
+# mount disk already found
+tdevmount /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &
 
 #smartftp support
 ln -sf /davinci/dvr/librt-0.9.28.so /lib/librt.so.0

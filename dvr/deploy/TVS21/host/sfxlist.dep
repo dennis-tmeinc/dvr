@@ -21,12 +21,6 @@
 ./dvr/passwd
 ./dvr/defconf
 ./dvr/dvrsvr.conf
-./dvr/eth_ip
-./dvr/eth_mask
-./dvr/wifi_ip
-./dvr/wifi_id
-./dvr/wifi_mask
-./dvr/gateway_1
 ./dvr/inetd.conf
 ./dvr/setnetwork
 ./dvr/httpd.sfx

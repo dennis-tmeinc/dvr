@@ -1019,7 +1019,7 @@ void disk_sync()
     return ;
 }
 
-static int disk_archive_state = 0 ;
+// 0: not archiving, 1: running, -1: to stop archiving
 static int disk_archive_run = 0 ;
 
 // delete oldest archive video file,
@@ -1121,11 +1121,11 @@ int disk_archive_copyfile( char * srcfile, char * destfile )
         file_write( filebuf, r, fdest ) ;
         while( rec_busy || disk_busy || g_cpu_usage>0.6 ) {
             usleep( 100000 );
-            if( disk_archive_run == 0 ) {
+            if( disk_archive_run != 1 ) {
                 break;
             }
         }
-        if( disk_archive_run == 0 ) {
+        if( disk_archive_run != 1 ) {
             res = 0 ;
             break;
         }
@@ -1340,11 +1340,11 @@ static void disk_archive_round(char * srcdir, char * destdir)
                     }
                 }
 			}
-            if( disk_archive_run == 0 ) break;
+            if( disk_archive_run != 1 ) break;
         }
-        if( disk_archive_run == 0 ) break;
+        if( disk_archive_run != 1 ) break;
     }
-    if( disk_archive_run ) {
+    if( disk_archive_run == 1 ) {
         // copy log files, smartlog files
         disk_archive_cplogfile(srcdir, destdir);
     }
@@ -1392,27 +1392,25 @@ int disk_archive_basedisk(string & archbase)
 void * disk_archive_thread(void * param)
 {
     string archbase ;
-    while( disk_archive_state ) {
-        if( disk_archive_run && dio_mode_archive() ) {
-            if( rec_basedir.length()>0 && disk_archive_basedisk( archbase ) ) {
-                disk_archive_run = 2 ;
-                disk_archive_round(rec_basedir.getstring(), archbase.getstring() );
-            }
-            disk_archive_run = 0 ;
-        }
-        else {
-            usleep(200000);
-        }
+    if( rec_basedir.length()>0 && disk_archive_basedisk( archbase ) ) {
+        disk_archive_round(rec_basedir.getstring(), archbase.getstring() );
     }
+    disk_archive_run = 0 ;
     return NULL ;
 }
 
-static pthread_t disk_archive_threadid ;
-
 void disk_archive_start()
 {
-    if( disk_archive_threadid && disk_archive_run == 0 ) {
-        disk_archive_run=1 ;
+    // archiving thread
+    pthread_t archive_threadid ;    
+    if( disk_archive_run == 0 ) {
+        disk_archive_run = 1 ;
+        if( pthread_create(&archive_threadid, NULL, disk_archive_thread, NULL )==0 ) {
+            pthread_detach( archive_threadid ) ;        // detach archiving thread
+        }
+        else {
+            disk_archive_run = 0 ;
+        }
     }
 }
 
@@ -1423,7 +1421,7 @@ void disk_archive_stop()
 
 int disk_archive_runstate()
 {
-    return (disk_archive_run==2) ;   // arch is actively run
+    return disk_archive_run ;   // arch is actively run
 }
 
 // regular disk check, every 3 seconds
@@ -1561,17 +1559,10 @@ void disk_init()
     }
 
     disk_archive_unlock = dvrconfig.getvalueint( "system", "archive_upload");
+
+    // init archiving variable
+    disk_archive_run = 0 ;
     
-    // start archive thread
-    if( disk_arch.length()>0 ) {
-        disk_archive_run = 0 ;
-        disk_archive_state = 1 ;
-        if( pthread_create(&disk_archive_threadid, NULL, disk_archive_thread, NULL)!=0 ) {
-            disk_archive_threadid=0 ;
-            disk_archive_state = 0 ;
-        }
-    }
-        
     dvr_log("Disk initialized.");
 
 }
@@ -1579,12 +1570,7 @@ void disk_init()
 void disk_uninit()
 {
     // to stop archiving thread 
-    disk_archive_state = 0 ;  
-    if( disk_archive_threadid ) {
-        disk_archive_stop();
-        pthread_join(disk_archive_threadid,NULL);
-        disk_archive_threadid = 0;
-    }
+    disk_archive_run = 0 ;
 
     if( rec_basedir.length()>0 ) {
         ;

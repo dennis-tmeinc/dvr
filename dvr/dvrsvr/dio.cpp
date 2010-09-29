@@ -383,6 +383,15 @@ int dio_check()
             p_dio_mmap->dvrcmd = 0 ;
         }
 
+        if( p_dio_mmap->iomode == IOMODE_ARCHIVE ) {
+            disk_archive_start();
+        }
+        else {
+            if( disk_archive_runstate() ) {
+                disk_archive_stop();
+            }
+        }
+
         dio_record = ( p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) ;
 
         if( dio_inputmap != p_dio_mmap->inputmap ) {

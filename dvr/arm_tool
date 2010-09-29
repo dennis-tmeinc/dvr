@@ -1,5 +1,7 @@
 
-EAGLE=eagle34
+PROJDIR=~/proj/eagle32/dvr/dvr
+
+include $(PROJDIR)/config
 
 # cross compile toolchain
 ifeq ($(EAGLE),eagle34)

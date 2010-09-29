@@ -2,6 +2,8 @@
 # Makefile for Eagle32 DVR projects
 #
 
+include config
+
 SUBDIRS = fb\
        dvrsvr\
        dvrtime\
@@ -54,38 +56,36 @@ firmware_cycle:
 	cd deploy/MDVR5100 ; ./mkdeploy MDVR5104 2 cycle
 	cd deploy/MDVR5100 ; ./mkdeploy MDVR5108 4 cycle
 
-
 rel:
 	date +%y.%m%d.%H > release
 
-tvsset:
-	cp arm_tool.eagle32 arm_tool
-	cp cfg.h.tvs cfg.h
+app_tvs:
+	echo "proj=TVS21" > config
+	echo "EAGLE=eagle32" >> config
+	ln -sf cfg.h.TVS21 cfg.h
 
-tvs:
-	$(MAKE) applications 
-	cd deploy/TVS21 ; ./mkdeploy TVS21 1 
+app_pwii:
+	echo "proj=PWII" > config
+	echo "EAGLE=eagle32" >> config
+	ln -sf cfg.h.PWII cfg.h
+	
+app_pw34:
+	echo "proj=PW34" > config
+	echo "EAGLE=eagle34" >> config
+	ln -sf cfg.h.PW34 cfg.h
 
-pwiiset:
-	cp arm_tool.eagle32 arm_tool
-	cp cfg.h.pwii cfg.h
-
-pwii:
-	$(MAKE) applications 
-	cd deploy/PWII ; ./mkdeploy PWII 1 
-
-pw34set:
-	cp arm_tool.eagle34 arm_tool
-	cp cfg.h.pw34 cfg.h
-
-pw34:
+firmware:
 	$(MAKE) applications
-	cd deploy/PW34 ; ./mkdeploy PW34 1 
-    
+	$(MAKE) -C deploy/$(proj)
+
+tvs: app_tvs firmware
+
+pwii: app_pwii firmware
+
+pw34: app_pw34 firmware
+	
 clean:
 	for dir in $(SUBDIRS); do $(MAKE) -C $$dir clean ; done
 	$(MAKE) -C test clean
-	cd deploy/TVS21 ; ./mkdeploy clean 0
-	cd deploy/PWII ; ./mkdeploy clean 0
-	cd deploy/PW34 ; ./mkdeploy clean 0
+	$(MAKE) -C deploy/$(proj) clean
 	find -name \*~ -delete

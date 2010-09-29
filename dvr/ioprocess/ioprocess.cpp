@@ -3163,7 +3163,7 @@ void mode_run()
 void mode_archive()
 {
     dio_lock();
-    strcpy( p_dio_mmap->iomsg, "Archiving files, Do not remove CF Card.");
+    strcpy( p_dio_mmap->iomsg, "Archiving, Do not remove CF Card.");
     p_dio_mmap->dvrstatus |= DVR_ARCH ;
     p_dio_mmap->iomode=IOMODE_ARCHIVE  ;
     dio_unlock();

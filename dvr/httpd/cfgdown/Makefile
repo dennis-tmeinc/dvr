@@ -16,7 +16,7 @@ OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
 LDFLAGS=
 
-CFLAGS= -g -Wall
+CFLAGS= -g -Wall -Wno-write-strings
 
 all: cfgdown.cgi dvrstatus.cgi cfgreport.cgi
 
