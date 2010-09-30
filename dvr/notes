@@ -45,4 +45,6 @@ Release 10.0803.16
     Fix no archiving after no wifi-detected
     "glog" to fix reuse invalid GPS time on standby mode.
     Remove libfbdraw.so, source code of screen display are compiled into "dvrsvr". since EAGLE34 use HIK API to do the screen jobs.
-    
+
+10.0930
+    Going to add gforce sensor support    
