@@ -1630,7 +1630,7 @@ void dvrsvr::Req2Keypad()
     ans.anssize=0;
     ans.anscode = ANSOK ;
     Send( &ans, sizeof(ans));
-    screen_key( (int)(ans.data&0xff), (int)(ans.data>>8)&1 );
+    screen_key( (int)(m_req.data&0xff), (int)(m_req.data>>8)&1 );
     return ;
 #else    
     DefaultReq();

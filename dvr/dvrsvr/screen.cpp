@@ -1527,6 +1527,8 @@ int screen_key( int keycode, int keydown )
     void rec_pwii_recon();
     void rec_pwii_recoff();
 
+    NET_DPRINT("screen_key  code : %04x  down: %d\n", keycode, keydown );
+    
     if( keycode == (int) VK_TM ) {
         if( keydown ) {
             dvr_log("TraceMark pressed!");

@@ -840,12 +840,7 @@ int rec_channel::dorecord()
 		}
 		return 0;
     }
-    else {
-
-        if( fifo->frametype == FRAMETYPE_VIDEO ) {
-            printf("vframe");
-        }
-        
+    else {    
         m_recording = recorddata( fifo ) ;
         m_activetime=g_timetick;
         // release buffer

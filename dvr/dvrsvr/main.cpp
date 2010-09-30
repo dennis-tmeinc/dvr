@@ -1,4 +1,4 @@
-
+    
 #include "dvr.h"
 #include "../ioprocess/diomap.h"
 
@@ -143,14 +143,16 @@ int dvr_log(char *fmt, ...)
     ctime_r(&ti, lbuf);
     l = strlen(lbuf);
     if (lbuf[l - 1] == '\n')
-        lbuf[l - 1] = '\0';
+        l-- ;
+    lbuf[l]=':' ;
+    l++ ;
     va_start( ap, fmt );
-    printf("DVR:%s:", lbuf);
-    vprintf(fmt, ap );
-    printf("\n");
+    vsprintf( &(lbuf[l]), fmt, ap );
+#ifdef NETDBG
+    NET_DPRINT( "%s\n", lbuf );
+#endif    
     if (flog) {
-        fprintf(flog, "%s:", lbuf);
-        vfprintf(flog, fmt, ap );
+        fprintf(flog, lbuf);
         if( rectemp ) {
             fprintf(flog, " *\n");		
         }
