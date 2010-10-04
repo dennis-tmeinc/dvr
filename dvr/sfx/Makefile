@@ -9,26 +9,27 @@ STRIP=$(CROSS_COMPILE_PREFIX)strip
 
 HEADERS=
 
-OBJS = $(patsubst %.c, %.o, $(SOURCES))
+OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
-LDFLAGS= 
+LDFLAGS=-lstdc++
+
 CCFLAGS=-Os
 
 all: sfx mksfx extractsfx
 
-sfx : sfx.c lzmasfx.c ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c
-	$(CC) $(CCFLAGS) -o $@ sfx.c lzmasfx.c ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c $(LDFLAGS)
+sfx : sfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
+	$(CC) $(CCFLAGS) -o $@ sfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c $(LDFLAGS)
 	$(STRIP) sfx
 
-sfx86 : sfx.c lzmasfx.c ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c 
-	gcc -o $@ sfx.c lzmasfx.c ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c
+sfx86 : sfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c 
+	gcc -o $@ sfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c $(LDFLAGS)
 	strip sfx86
 
-mksfx : mksfx.c ../lzmasdk/enc.c ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c
-	gcc -g -o $@ mksfx.c ../lzmasdk/enc.c ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c
+mksfx : mksfx.cpp ../lzmasdk/enc.cpp ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c
+	gcc -g -o $@ mksfx.cpp ../lzmasdk/enc.cpp ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c $(LDFLAGS)
 
-extractsfx : extractsfx.c lzmasfx.c ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c
-	gcc -o $@ -g extractsfx.c lzmasfx.c ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c
+extractsfx : extractsfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
+	gcc -o $@ -g extractsfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c $(LDFLAGS)
 
 clean :
 	rm -f mksfx

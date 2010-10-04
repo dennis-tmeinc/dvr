@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+#include "../lzmasdk/lzma.h"
+
 #ifndef uint
 #define uint unsigned int
 #endif
@@ -19,18 +21,15 @@ struct file_head {
     uint compsize ;
 } ;
 
-extern int lzmadec( unsigned char * lzmabuf, int lzmasize, unsigned char * lzmaoutbuf, int lzmaoutsize );
-extern int lzmadecsize( unsigned char * lzmabuf );
-
-int extract( char * sfxfile )
+int extract( const char * sfxfile )
 {
     int executesize ;
     struct file_head fhd ;
 
     FILE * fp ;
     FILE * fp_file ;
-    char * bufcomp ;
-    char * buffile ;
+    unsigned char * bufcomp ;
+    unsigned char * buffile ;
     char filename[256] ;
     
     fp = fopen( sfxfile, "r" );
@@ -63,10 +62,10 @@ int extract( char * sfxfile )
                 continue ;
             }
             if( fhd.compsize>0 ) {
-                bufcomp = malloc( fhd.compsize ) ;
+                bufcomp = (unsigned char *)malloc( fhd.compsize ) ;
                 fread( bufcomp, 1, fhd.compsize, fp );
                 if( fhd.compsize<fhd.filesize ) {
-                    buffile = malloc( fhd.filesize ) ;
+                    buffile = (unsigned char *)malloc( fhd.filesize ) ;
                     if( lzmadec( bufcomp, fhd.compsize, buffile, fhd.filesize )==fhd.filesize ) {
                         fwrite( buffile, 1, fhd.filesize, fp_file );
                     }

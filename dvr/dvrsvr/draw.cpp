@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <linux/fb.h>
 
+#include "../lzmasdk/lzma.h"
 #include "../cfg.h"
 #ifdef EAGLE32
 #include "eagle32/davinci_sdk.h"
@@ -63,10 +64,6 @@ struct BITMAPINFOHEADER
 	 UINT32 biClrImportant;	
 } ;
 
-extern "C" {
-int lzmadecsize( unsigned char * lzmabuf );
-int lzmadec( unsigned char * lzmabuf, int lzmasize, unsigned char * lzmaoutbuf, int lzmaoutsize );
-}
 
 #ifndef MAIN_OUTPUT
 #define MAIN_OUTPUT  (0)

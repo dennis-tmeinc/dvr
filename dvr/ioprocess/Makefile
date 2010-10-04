@@ -6,12 +6,11 @@ include ../arm_tool
 
 CC=$(CROSS_COMPILE_PREFIX)gcc
 
-SOURCES=ioprocess.cpp
-
 EXTHEADERS=../cfg.h ../dvrsvr/cfg.h ../dvrsvr/genclass.h
 EXTSOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp
 
-HEADERS=diomap.h 
+SOURCES=ioprocess.cpp diomap.cpp mcu.cpp netdbg.cpp gforce.cpp
+HEADERS=diomap.h netdbg.h mcu.h gforce.h
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 

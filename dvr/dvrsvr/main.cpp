@@ -148,9 +148,7 @@ int dvr_log(char *fmt, ...)
     l++ ;
     va_start( ap, fmt );
     vsprintf( &(lbuf[l]), fmt, ap );
-#ifdef NETDBG
-    NET_DPRINT( "%s\n", lbuf );
-#endif    
+    net_dprint("%s\n", lbuf );
     if (flog) {
         fprintf(flog, lbuf);
         if( rectemp ) {
@@ -682,7 +680,6 @@ void app_init()
         // setup hostname
         strncpy( g_hostname, t.getstring(), 127 );
         sethostname( g_hostname, strlen(g_hostname)+1);
-        gethostname( g_hostname, 128 );
         dvr_log("Setup hostname: %s", g_hostname);
     }
 #endif
@@ -712,7 +709,6 @@ void app_init()
         // setup hostname, make hostname same as medallion number
         strncpy( g_hostname, t.getstring(), 127 );
         sethostname( g_hostname, strlen(g_hostname)+1);
-        gethostname( g_hostname, 128 );
         dvr_log("Setup hostname: %s", g_hostname);
     }
     
@@ -750,7 +746,6 @@ void app_init()
         // setup hostname, make hostname same as id1 (medallion # for tvs)
         strncpy( g_hostname, t.getstring(), 127 );
         sethostname( g_hostname, strlen(g_hostname)+1);
-        gethostname( g_hostname, 128 );
         dvr_log("Setup hostname: %s", g_hostname);
     }
 

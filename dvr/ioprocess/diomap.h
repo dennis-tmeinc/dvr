@@ -4,6 +4,8 @@
 #define __DIOMAP_H__
 
 #include <semaphore.h>
+#include <sched.h>
+#include <unistd.h>
 
 struct dio_mmap {
     int     usage ;         // how many processes use this structure
@@ -149,5 +151,9 @@ struct dio_mmap {
 #define PWII_LED_POWER          (1<<4)
 #define PWII_LED_BO             (1<<5)
 #define PWII_LED_BACKLIGHT      (1<<6)
+
+extern struct dio_mmap * p_dio_mmap;
+void dio_lock();
+void dio_unlock();
 
 #endif

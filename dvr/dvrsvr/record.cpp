@@ -1281,7 +1281,6 @@ void rec_pwii_recoff()
 void rec_pwii_toggle_rec( int ch )
 {
     if( ch>=0 && ch<rec_channels ) {
-        screen_setliveview(ch);                              // start live view this camera
         if( recchannel[ch]->recstate() == 0 ) {
             // turn on recording
             recchannel[ch]->setforcerecording(REC_FORCEON) ;       // force start recording

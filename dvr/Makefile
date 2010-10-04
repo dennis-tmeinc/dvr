@@ -4,8 +4,7 @@
 
 include config
 
-SUBDIRS = fb\
-       dvrsvr\
+SUBDIRS = dvrsvr\
        dvrtime\
        eaglehost\
        glog\

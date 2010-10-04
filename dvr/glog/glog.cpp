@@ -30,12 +30,15 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+#include "../cfg.h"
+
 #include "../dvrsvr/eagle32/davinci_sdk.h"
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
 #include "../ioprocess/diomap.h"
 
-#include "../cfg.h"
+#include "netdbg.h"
+
 
 struct baud_table_t {
 	speed_t baudv ;
@@ -79,7 +82,6 @@ int gps_port_disable=0 ;
 int gps_port_handle = -1;
 char gps_port_dev[256] = "/dev/ttyS0" ;
 int gps_port_baudrate = 4800 ;      // gps default baud
-int gps_fifofile ;               // gps data debugging fifo (pipe file)
 int gps_resetsirf ;                 // reset sirf GPS sentense rate
 
 int gforce_log_enable = 0 ;
@@ -90,10 +92,6 @@ int tab102b_port_baudrate = 19200 ;     // tab102b default baud
 int tab102b_data_enable=0 ;
 
 int inputdebounce=3 ;
-
-#ifdef MCU_DEBUG
-int mcu_debug_out ;
-#endif
 
 #define MAXSENSORNUM    (32)
 
@@ -267,52 +265,6 @@ void log_unlock()
     pthread_mutex_unlock(&log_mutex);
 }
 
-/*
-   share memory lock implemented use atomic swap
-
-    operations between lock() and unlock() should be quick enough and only memory access only.
- 
-*/ 
-
-// atomically swap value
-int atomic_swap( int *m, int v)
-{
-    register int result ;
-/*
-    result=*m ;
-    *m = v ;
-*/
-    asm volatile (
-        "swp  %0, %2, [%1]\n\t"
-        : "=r" (result)
-        : "r" (m), "r" (v)
-    ) ;
-    return result ;
-}
-
-void dio_lock()
-{
-    if( p_dio_mmap ) {
-        int c=0;
-        while( atomic_swap( &(p_dio_mmap->lock), 1 ) ) {
-            if( c++<20 ) {
-                sched_yield();
-            }
-            else {
-                // yield too many times ?
-                usleep(1);
-            }
-        }
-    }
-}
-
-void dio_unlock()
-{
-    if( p_dio_mmap ) {
-        p_dio_mmap->lock=0;
-    }
-}
-
 struct buzzer_t_type {
     int times ;
     int ontime ;
@@ -366,8 +318,8 @@ int serial_open(int * handle, char * serial_dev, int serial_baudrate )
     r1 = fstat( 0, &stdinstat ) ; // get stdin stat
     r2 = stat( serial_dev, &devstat ) ;
     
-    if( r1==0 && r2==0 && stdinstat.st_dev == devstat.st_dev && stdinstat.st_ino == devstat.st_ino ) { // matched
-        printf("Stdin match serail port!\n");
+    if( r1==0 && r2==0 && stdinstat.st_dev == devstat.st_dev && stdinstat.st_ino == devstat.st_ino ) { // matched stdin
+        netdbg_print("Stdin match serail port!\n");
         serial_handle=0 ;
  		fcntl(serial_handle, F_SETFL, O_RDWR | O_NOCTTY );
     }
@@ -442,44 +394,28 @@ int serial_dataready(int serial_handle, int microsecondsdelay)
 
 int serial_read(int serial_handle, void * buf, size_t bufsize)
 {
+    int n=0;
 	if( serial_handle>=0 ) {
-#ifdef MCU_DEBUG
-        if( mcu_debug_out ) {
-            int i, n ;
-            char * cbuf ;
-            cbuf = (char *)buf ;
-            n=read( serial_handle, buf, bufsize);
-            for( i=0; i<n ; i++ ) {
-                printf("%02x ", (int)cbuf[i] );
-            }
-            return n ;
-        }
-        else {
-            return read( serial_handle, buf, bufsize);
-        }
-#else        
-        return read( serial_handle, buf, bufsize);
+        n = read( serial_handle, buf, bufsize);
+#ifdef NETDBG
+        netdbg_print("serial read %d bytes:", n);
+        netdbg_dump(buf, n);
 #endif
     }
-    return 0;
+    return n ;
 }
 
 int serial_write(int serial_handle, void * buf, size_t bufsize)
 {
+    int n=0 ;
 	if( serial_handle>=0 ) {
-#ifdef MCU_DEBUG
-        if( mcu_debug_out ) {
-            int i ;
-            char * cbuf ;
-            cbuf = (char *)buf ;
-            for( i=0; i<(int)bufsize ; i++ ) {
-                printf("%02x ", (int)cbuf[i] );
-            }
-        }
+        n = write( serial_handle, buf, bufsize);
+#ifdef NETDBG
+        netdbg_print("serial write %d bytes:", n);
+        netdbg_dump( buf, bufsize );
 #endif
-        return write( serial_handle, buf, bufsize);
 	}
-	return 0;
+	return n;
 }
 
 int serial_clear(int serial_handle)
@@ -660,16 +596,9 @@ int gps_readdata(struct gps_data * gpsdata)
 	char line[300] ;		
 	int l;
 	if( (l=gps_readline( line, sizeof(line) ))>10 ) {
-        // fifo ouput for debuging               
-        if( gps_fifofile>0 ) {
-            write( gps_fifofile, line, l );
-            write( gps_fifofile, "\n", 1 );
-        }
 
-#ifdef MCU_DEBUG
-        printf( "gps:%s\n", line );
-#endif        
-        // end of debug
+        netdbg_print("%s\n",line);
+
 		if( memcmp(line, "$GPRMC,", 7)==0 && gps_checksum(line) )
         {
             char fix = 0 ;
@@ -864,7 +793,6 @@ void gps_logclose()
         gps_close_fine=1 ;
 	}
 }
-
 
 FILE * gps_logopen(struct tm *t)
 {
@@ -1264,65 +1192,48 @@ int tab102b_senddata( unsigned char * data )
         return 0 ;
     }
     tab102b_calchecksun(data);
-
-#ifdef MCU_DEBUG
+#ifdef NETDEB
     // for debugging 
     struct timeval tv ;
     gettimeofday(&tv, NULL);
     struct tm * ptm ;
     ptm = localtime(&tv.tv_sec);
-    double sec ;
+    float sec ;
     sec = ptm->tm_sec + tv.tv_usec/1000000.0 ;
-    
-    printf("%02d:%02d:%02.3f tab102b senddata: ", ptm->tm_hour, ptm->tm_min, sec);
-    mcu_debug_out = 1 ;
-    int n = tab102b_write(data, (int)*data);
-    mcu_debug_out = 0 ;
-    printf("\n");
-    return n ;
-#else    
-    return tab102b_write(data, (int)*data);
+    netdbg_print("%02d:%02d:%02.3f", ptm->tm_hour, ptm->tm_min, sec);
 #endif    
+    netdbg_print("tab102b send %d bytes\n", (int)*data );
+    return tab102b_write(data, (int)*data);
 } 
 
 int tab102b_recvmsg( unsigned char * data, int size )
 {
     int n;
 
-#ifdef MCU_DEBUG
-    // for debugging 
-    struct timeval tv ;
-    gettimeofday(&tv, NULL);
-    struct tm * ptm ;
-    ptm = localtime(&tv.tv_sec);
-    double sec ;
-    sec = ptm->tm_sec + tv.tv_usec/1000000.0 ;
-    
-    printf("%02d:%02d:%02.3f tab102b recvmsg: ", ptm->tm_hour, ptm->tm_min, sec);
-    mcu_debug_out = 1 ;
-#endif    
-    
     if( tab102b_read(data, 1) ) {
         n=(int) *data ;
         if( n>=5 && n<=size ) {
             n=tab102b_read(data+1, n-1, 1000000)+1 ;
+#ifdef NETDEB
+            // for debugging 
+            struct timeval tv ;
+            gettimeofday(&tv, NULL);
+            struct tm * ptm ;
+            ptm = localtime(&tv.tv_sec);
+            double sec ;
+            sec = ptm->tm_sec + tv.tv_usec/1000000.0 ;
+            netdbg_print("%02d:%02d:%02.3f", ptm->tm_hour, ptm->tm_min, sec);
+#endif    
+            netdbg_print("tab102b recv %d bytes", n);
             if( n==*data && 
                 data[1]==0 && 
                 data[2]==4 &&
                 tab102b_checksun( data ) == 0 ) 
             {
-#ifdef MCU_DEBUG
-    mcu_debug_out = 0 ;
-    printf("\n");
-#endif                    
                 return n ;
             }
         }
     }
-#ifdef MCU_DEBUG
-    mcu_debug_out = 0 ;
-#endif                    
-
     tab102b_clear();
     return 0 ;
 }
@@ -1337,12 +1248,10 @@ void tab102b_log( int x, int y, int z)
     y_v = (y-tab102b_y_0g) * (3.3/1024.0/0.12) ;
     z_v = (z-tab102b_z_0g) * (3.3/1024.0/0.12) ;
 
-#ifdef MCU_DEBUG    
-    printf( "tab102b: x %05x :%05x : %.2f  y %05x :%05x : %.2f  z %05x :%05x : %.2f\n", 
+    netdbg_print( "tab102b: x %05x :%05x : %.2f  y %05x :%05x : %.2f  z %05x :%05x : %.2f\n", 
            x, tab102b_x_0g, x_v, 
            y, tab102b_y_0g, y_v, 
            z, tab102b_z_0g, z_v );
-#endif
 
 //    if( validgpsdata.year < 1900 ) return ;       // removed, don't wait for gps signal.
 
@@ -1537,10 +1446,9 @@ int tab102b_cmd_req_data()
         if( response[3]=='\x19' ) {             // data response?
             datalength = 0x1000000 * response[5] + 0x10000* response[6] + 0x100 * response[7] + response[8] ;
             if( datalength>0 && datalength<0x100000) {
-    
-#ifdef MCU_DEBUG    
-    printf( "tab102b: uploading data , length: %d\n", datalength );
-#endif                
+
+                netdbg_print("tab102b: uploading data %d bytes\n", datalength );
+
                 udatabuf=(unsigned char *)malloc( datalength+0x12 );
                 if( udatabuf ) {
                     int readlen = 0;
@@ -1740,12 +1648,20 @@ int appinit()
 	string iomapfile ;
     string tstr ;
 	config dvrconfig(dvrconfigfile);
-	iomapfile = dvrconfig.getvalue( "system", "iomapfile");
-	
+    string v ;
+
+    iomapfile = dvrconfig.getvalue( "system", "iomapfile");
 	p_dio_mmap=NULL ;
 	if( iomapfile.length()==0 ) {
 		return 0;						// no DIO.
 	}
+
+    // setup dbg host
+    if( dvrconfig.getvalueint("debug", "glog") ) {
+        v = dvrconfig.getvalue("debug","host");
+        i = dvrconfig.getvalueint("debug", "port");
+        netdbg_init( v.getstring(), i );
+    }
 
 	for( i=0; i<10; i++ ) {				// retry 10 times
 		fd = open(iomapfile.getstring(), O_RDWR );
@@ -1755,14 +1671,14 @@ int appinit()
 		sleep(1);
 	}
 	if( fd<=0 ) {
-		printf("GLOG: IO module not started!");
+		netdbg_print("GLOG: IO module not started!");
 		return 0;
 	}
 
 	p=(char *)mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
 	close( fd );								// fd no more needed
 	if( p==(char *)-1 || p==NULL ) {
-		printf( "GLOG:IO memory map failed!");
+		netdbg_print( "GLOG:IO memory map failed!");
 		return 0;
 	}
 	p_dio_mmap = (struct dio_mmap *)p ;   
@@ -1795,13 +1711,6 @@ int appinit()
 		gps_port_baudrate=i ;
 	}
     gps_resetsirf = 0 ;              // reset
-    tstr = dvrconfig.getvalue( "glog", "gpsfifo" ); 
-    if( tstr.length()>0 ) {
-        gps_fifofile = open( tstr.getstring(), O_WRONLY | O_NONBLOCK );
-    }
-    else {
-        gps_fifofile=0 ;
-    }
     
     // get tab102b serial port setting
 	serialport = dvrconfig.getvalue( "glog", "tab102b_port");
@@ -1915,7 +1824,7 @@ int appinit()
         pthread_create(&tab102b_threadid, NULL, tab102b_thread, NULL); 
     }
     
-    printf( "GLOG: started!\n");
+    netdbg_print( "GPS logging process started!\n");
 
 	return 1;
 }
@@ -1952,11 +1861,13 @@ void appfinish()
     p_dio_mmap->usage--;
 
     munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
+
+    netdbg_finish();
     
     // delete pid file
 	unlink( pidfile );
     
-	printf( "GPS logging process ended!\n");
+	netdbg_print( "GPS logging process ended!\n");
 }
 
 int main()

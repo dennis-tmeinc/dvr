@@ -19,9 +19,8 @@ struct file_head {
     uint compsize ;
 } ;
 
-char * sfxfile ="sfx" ;
-char * sfxlistfile = "sfxlist";
-char * outfile ;
+const char * sfxfile ="sfx" ;
+const char * sfxlistfile = "sfxlist";
 
 int main(int argc, char * argv[])
 {
@@ -30,8 +29,9 @@ int main(int argc, char * argv[])
     FILE * listfile ;
     struct file_head fhd ;
     struct stat filestat ;
-    char * buf ;
+    unsigned char * buf ;
     int bufsize ;
+    char outfile[256] ;
     char line[256] ;
     char ifilename[256] ;
     char ofilename[256] ;
@@ -53,9 +53,11 @@ int main(int argc, char * argv[])
     if( argc>=3 ) {
         sfxlistfile=argv[2] ;
     }
-    outfile = sfxfile ;
     if( argc>=4 ) {
-        outfile = argv[3] ;
+        strncpy( outfile, argv[3], sizeof(outfile));
+    }
+    else {
+        strncpy( outfile, sfxfile, sizeof(outfile));
     }
     
     buf = NULL ;
@@ -68,7 +70,7 @@ int main(int argc, char * argv[])
         fseek( selfext, 0, SEEK_SET );
         
         if( executesize>0 ) {
-            buf = malloc( executesize );
+            buf = (unsigned char *)malloc( executesize );
             bufsize = fread( buf, 1, executesize, selfext ) ;
             if( bufsize!=executesize ) {
                 printf("Error: sfx file read.");
@@ -138,7 +140,7 @@ int main(int argc, char * argv[])
         else if( S_ISREG(filestat.st_mode) ) {
             int lzmaenc( unsigned char * lzmabuf, int lzmasize, unsigned char * src, int srcsize );
             FILE * srcfile ;
-            char * lzmabuf ;
+            unsigned char * lzmabuf ;
             int    lzmabufsize ;
             srcfile = fopen( ifilename, "r" );
             if( srcfile ) {

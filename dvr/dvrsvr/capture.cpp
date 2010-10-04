@@ -294,8 +294,7 @@ void capture::onframe(cap_frame * pcapframe)
     net_onframe(pcapframe);
     screen_onframe(pcapframe); 
 
-#ifdef EAGLE34    
-#ifdef NETDBG        
+#ifdef EAGLE34      
 
 #if 0
 //     NET_DPRINT( "frame on channel %d\n", pcapframe->channel ) ;
@@ -413,14 +412,13 @@ void capture::onframe(cap_frame * pcapframe)
                 break;
             }
         }
-//        net_sendmsg( "192.168.247.100", 15119, pcapframe->framedata, pcapframe->framesize );
+//       net_sendmsg( "192.168.247.100", 15119, pcapframe->framedata, pcapframe->framesize );
     }
 
 
 #endif  // 0    
     
-#endif      // NETDBG
-#endif      // EAGLE34ndif
+#endif      // EAGLE34
 
 }
 

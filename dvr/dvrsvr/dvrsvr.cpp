@@ -1067,7 +1067,7 @@ void dvrsvr::ReqStreamSeek()
         Send( &ans, sizeof(ans));
         
 #ifdef NETDBG
-        NET_DPRINT("Stream seek, %04d-%02d-%02d %02d:%02d:%02d\n", 
+        net_dprint("Stream seek, %04d-%02d-%02d %02d:%02d:%02d\n", 
                ((struct dvrtime *) m_recvbuf)->year,
                ((struct dvrtime *) m_recvbuf)->month,
                ((struct dvrtime *) m_recvbuf)->day,
@@ -1166,7 +1166,7 @@ void dvrsvr::ReqStreamTime()
             Send( &ans, sizeof(ans));
             Send( &streamtime, ans.anssize);
 #ifdef NETDBG
-        NET_DPRINT("Stream time, %04d-%02d-%02d %02d:%02d:%02d.%03d\n", 
+        net_dprint("Stream time, %04d-%02d-%02d %02d:%02d:%02d.%03d\n", 
                streamtime.year,
                streamtime.month,
                streamtime.day,

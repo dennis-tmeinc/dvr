@@ -629,7 +629,7 @@ void mcu_firmwareupload_page()
     fclose( mcu_firmwaremsgfile );    
 }
 
-extern void md5_checksum( char * checksum, unsigned char * data, unsigned int datalen );
+extern void md5_checksum( char * checksum, unsigned char * data, int datalen );
 
 int checktvskey( char * usbkeyserialid, struct key_data * tvskey, int keysize )
 {

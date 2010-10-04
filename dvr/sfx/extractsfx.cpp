@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-int extract( char * filename );
+int extract( const char * filename );
 
 int main(int argc, char * argv[])
 {

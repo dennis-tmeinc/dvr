@@ -15,6 +15,9 @@ static struct sockad loopback;
 static pthread_t net_threadid;
 static int net_run;
 static int net_port;
+// for debugging (net_dprint)
+static int netdbg_on ;
+static struct sockad netdbg_destaddr ;
 
 int    net_livefifosize=100000 ;
 static int noreclive=1 ;
@@ -176,18 +179,18 @@ int net_sendmsg( char * dest, int port, const void * msg, int msgsize )
     return (int)sendto( msgfd, msg, (size_t)msgsize, 0, &(destaddr.addr), destaddr.addrlen );
 }
 
-#ifdef NETDBG
-int net_dprint( char * fmt, ... ) 
+void net_dprint( char * fmt, ... ) 
 {
-    char msg[1024] ;
-    va_list ap ;
-    va_start( ap, fmt );
-    vsprintf(msg, fmt, ap );
-    net_sendmsg( "192.168.247.100", 15118, msg, strlen(msg) );
-    va_end( ap );
-    return 0 ;
+    if( netdbg_on && msgfd>0 ) {
+        char msg[1024] ;
+        strcpy(msg,"dvrsvr:");
+        va_list ap ;
+        va_start( ap, fmt );
+        vsprintf(&msg[7], fmt, ap );
+        va_end( ap );
+        sendto( msgfd, msg, strlen(msg), 0, &(netdbg_destaddr.addr), netdbg_destaddr.addrlen );
+    }
 }
-#endif
 
 int net_broadcast(char * interface, int port, void * msg, int msgsize )
 {
@@ -531,6 +534,9 @@ void *net_thread(void *param)
 void net_init()
 {
     config dvrconfig(dvrconfigfile);
+    string v ;
+    int   iv ;
+
     // initial mutex
     pthread_mutex_init(&net_mutex, NULL);
     net_run = 0;				// assume not running
@@ -585,20 +591,28 @@ void net_init()
     net_run = 1;
     pthread_create(&net_threadid, NULL, net_thread, NULL);
 
+    // setup netdbg host
+    netdbg_on = dvrconfig.getvalueint("debug", "dvrsvr");
+    if( netdbg_on ) {
+        v=dvrconfig.getvalue("debug","host");
+        iv=dvrconfig.getvalueint("debug", "port");
+        net_addr( v.getstring(), iv, &netdbg_destaddr );
+    }
+    
     dvr_log("Network initialized.");
 }
 
 void net_uninit()
 {
-    if( net_run!=0) {
-        net_run = 0;				// stop net_thread.
-        net_trigger();
-        pthread_join(net_threadid, NULL);
-        net_threadid = (pthread_t)0 ;
-        closesocket(serverfd);
-        closesocket(msgfd);
-        dvr_log("Network uninitialized.");
-    }
+    net_run = 0;				// stop net_thread.
+    net_trigger();
+    pthread_join(net_threadid, NULL);
+    net_threadid = (pthread_t)0 ;
+    closesocket(serverfd);
+    serverfd=0;
+    closesocket(msgfd);
+    msgfd=0;
+    dvr_log("Network uninitialized.");
     msg_uninit();
     pthread_mutex_destroy(&net_mutex);
 }

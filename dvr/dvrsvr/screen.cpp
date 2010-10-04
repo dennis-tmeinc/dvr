@@ -1531,6 +1531,7 @@ int screen_key( int keycode, int keydown )
     
     if( keycode == (int) VK_TM ) {
         if( keydown ) {
+            screen_setliveview(-1);         // switch to live view
             dvr_log("TraceMark pressed!");
             event_tm = 1 ;
             rec_update();
@@ -1543,6 +1544,7 @@ int screen_key( int keycode, int keydown )
 #ifdef PWII_APP    
     else if( keycode==(int)VK_RECON ) {     // record on, (turn on all record)
         if( keydown ) {
+            screen_setliveview(-1);
             rec_pwii_recon();
             dvr_log("RECON pressed!");
         }
@@ -1555,12 +1557,14 @@ int screen_key( int keycode, int keydown )
     }
     else if( keycode>=(int)VK_C1 && keycode<=(int)VK_C8 ) {     // record C1-C8
         if( keydown ) {
+            screen_setliveview(keycode-(int)VK_C1);             // start live view this camera
             rec_pwii_toggle_rec( keycode-(int)VK_C1 ) ;
             dvr_log("C%d pressed!", keycode-(int)VK_C1+1);
         }
     }
-    else if( keycode==(int)VK_LP ) {                            // LP key
+    else if( keycode==(int)VK_LP ) {                             // LP key
         if( keydown ) {
+            screen_setliveview(pwii_front_ch);                   // start front camera
             dvr_log("LP pressed!");
         }
         else {

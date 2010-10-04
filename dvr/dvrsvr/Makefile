@@ -28,7 +28,9 @@ SOURCES=main.cpp \
 		dio.cpp \
 		screen.cpp \
 		md5.cpp \
-		draw.cpp
+		draw.cpp \
+        ../ioprocess/diomap.cpp \
+        ../lzmasdk/dec.cpp 
 
 EAGLESRS=eaglesvr.cpp \
 		dvrtime.cpp \
@@ -78,8 +80,8 @@ all : dvrsvr
 #	$(CC)  $(CCFLAGS) -o $@  $(OBJS) ../fb/libfbdraw.so $(LDFLAGS)
 #	cp dvrsvr  $(debug_folder)
 
-dvrsvr : $(OBJS) ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c
-	$(CC)  $(CCFLAGS) -o $@  $(OBJS) ../lzmasdk/dec.c ../lzmasdk/LzmaDec.c $(LDFLAGS)
+dvrsvr : $(OBJS) ../lzmasdk/LzmaDec.c
+	$(CC)  $(CCFLAGS) -o $@  $^ $(LDFLAGS)
 	cp dvrsvr  $(debug_folder)
 
 ../fb/libfbdraw.so : 
@@ -90,11 +92,11 @@ eaglesvr : $(EAGLESRS)
 	cp eaglesvr  $(debug_folder)
 
 eagleinit : eagleinit.cpp
-	$(CC) $(CCFLAGS) -o $@ eagleinit.cpp $(LDFLAGS)
+	$(CC) $(CCFLAGS) -o $@ $< $(LDFLAGS)
 	cp eagleinit  $(debug_folder)
 
 md5 : md5.cpp
-	$(CC) -g -o md5 md5.cpp $(LDFLAGS)
+	$(CC) $(CCFLAGS) -o $@ $< $(LDFLAGS)
 	cp md5  $(debug_folder)
 
 %.o : %.cpp $(HEADERS)

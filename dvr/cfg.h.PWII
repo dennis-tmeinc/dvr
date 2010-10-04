@@ -11,7 +11,7 @@
 //#define TVS_APP
 
 // option to enable ioprocess display mcu debugging message
-//#define MCU_DEBUG  (1)
+#define MCU_DEBUG  (1)
 
 // to enable dvrsvr network message
 #define NETDBG

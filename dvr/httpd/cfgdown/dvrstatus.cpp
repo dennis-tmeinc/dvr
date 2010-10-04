@@ -44,7 +44,7 @@ int net_sendmsg( char * dest, int port, const void * msg, int msgsize )
     return (int)sendto( msgfd, msg, (size_t)msgsize, 0, &(destaddr.addr), destaddr.addrlen );
 }
 
-int net_dprint( char * fmt, ... ) 
+void net_dprint( char * fmt, ... ) 
 {
     char msg[1024] ;
     va_list ap ;
@@ -52,7 +52,6 @@ int net_dprint( char * fmt, ... )
     vsprintf(msg, fmt, ap );
     net_sendmsg( "192.168.152.61", 15333, msg, strlen(msg) );
     va_end( ap );
-    return 0 ;
 }
 #endif
 

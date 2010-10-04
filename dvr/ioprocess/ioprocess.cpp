@@ -18,7 +18,11 @@
 #include "../dvrsvr/eagle32/davinci_sdk.h"
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
+#include "netdbg.h"
+#include "mcu.h"
+#include "gforce.h"
 #include "diomap.h"
+
 
 // options
 int standbyhdoff = 0 ;
@@ -96,18 +100,6 @@ unsigned int input_map_table [MAXINPUT] = {
 
 #endif  // PWII_APP
 
-// translate output bits
-#define MAXOUTPUT    (8)
-unsigned int output_map_table [MAXOUTPUT] = {
-    1,              // bit 0
-    (1<<1),         // bit 1
-    (1<<8),         // bit 2   (buzzer)
-    (1<<3),         // bit 3
-    (1<<4),         // bit 4
-    (1<<2),         // bit 5
-    (1<<6),         // bit 6
-    (1<<7)          // bit 7
-} ;
 
 int hdlock=0 ;								// HD lock status
 int hdinserted=0 ;
@@ -115,62 +107,10 @@ int hdinserted=0 ;
 #define PANELLEDNUM (3)
 #define DEVICEPOWERNUM (5)
 
-struct baud_table_t {
-    speed_t baudv ;
-    int baudrate ;
-} baud_table[7] = {
-    { B2400, 	2400},
-    { B4800,	4800},
-    { B9600,	9600},
-    { B19200,	19200},
-    { B38400,	38400},
-    { B57600,	57600},
-    { B115200,	115200} 
-} ;
-
 struct dio_mmap * p_dio_mmap=NULL ;
 
-#define MIN_SERIAL_DELAY	(10000)
-#define DEFSERIALBAUD	    (115200)
-#define MCU_CMD_DELAY       (500000)
-
-#define MCU_CMD_RESET	        (0)
-#define MCU_CMD_READRTC         (0x6)
-#define MCU_CMD_WRITERTC        (0x7)
-#define MCU_CMD_POWEROFFDELAY	(0x8)
-#define MCU_CMD_IOTEMPERATURE   (0x0b)
-#define MCU_CMD_HDTEMPERATURE   (0x0c)
-#define MCU_CMD_BOOTUPREADY     (0x11)
-#define MCU_CMD_KICKWATCHDOG    (0x18)
-#define MCU_CMD_SETWATCHDOGTIMEOUT (0x19)
-#define MCU_CMD_ENABLEWATCHDOG  (0x1a)
-#define MCU_CMD_DISABLEWATCHDOG (0x1b)
-#define MCU_CMD_DIGITALINPUT	(0x1d)
-#define MCU_CMD_CAMERA_ZOOMIN   (0x1f)
-#define MCU_CMD_CAMERA_ZOOMOUT  (0x20)
-#define MCU_CMD_MICON	        (0x21)
-#define MCU_CMD_MICOFF	        (0x22)
-#define MCU_CMD_HDPOWERON       (0x28)
-#define MCU_CMD_HDPOWEROFF      (0x29)
-#define MCU_CMD_GETVERSION	    (0x2d)
-#define MCU_CMD_DEVICEPOWER     (0x2e)
-#define MCU_CMD_PANELLED        (0x2f)
-#define MCU_CMD_DIGITALOUTPUT	(0x31)
-#define MCU_CMD_GSENSORINIT	    (0x34)
-#define MCU_CMD_READCODE	    (0x41)
-
-// mcu input
-#define MCU_INPUT_DIO           ('\x1c')
-#define MCU_INPUT_IGNITIONOFF   ('\x08') 
-#define MCU_INPUT_IGNITIONON    ('\x09')
-#define MCU_INPUT_ACCEL         ('\x40')
-
 char dvriomap[100] = "/var/dvr/dvriomap" ;
-char mcu_dev[100] = "/dev/ttyS1" ;
 char * pidfile = "/var/dvr/ioprocess.pid" ;
-int mcu_handle = 0 ;
-int mcu_baud = 115200 ;
-int mcupowerdelaytime = 0 ;
 
 int shutdowndelaytime ;
 int wifidetecttime ;
@@ -180,41 +120,13 @@ int standbytime ;
 
 // unsigned int outputmap ;	// output pin map cache
 char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
-char logfile[128] = "dvrlog.txt" ;
+char logfile[]="/var/dvr/dvrlogfile";
 char temp_logfile[128] ;
 int watchdogenabled=0 ;
 int watchdogtimeout=30 ;
 int gpsvalid = 0 ;
-int gforce_log_enable=0 ;
-int output_inverted=0 ;
 
 #ifdef PWII_APP
-
-#define PWII_CMD_BOOTUPREADY    (4)
-#define PWII_CMD_VERSION        (0x11)
-#define PWII_CMD_C1             (0x12)
-#define PWII_CMD_C2             (0x13)
-#define PWII_CMD_LEDMIC         (0xf)
-#define PWII_CMD_LCD	        (0x16)
-#define PWII_CMD_STANDBY        (0x15)
-#define PWII_CMD_LEDPOWER       (0x14)
-#define PWII_CMD_LEDERROR       (0x10)
-#define PWII_CMD_POWER_GPSANT   (0x0e)
-#define PWII_CMD_POWER_GPS      (0x0d)
-#define PWII_CMD_POWER_RF900    (0x0c)
-#define PWII_CMD_POWER_WIFI     (0x19)
-#define PWII_CMD_OUTPUTSTATUS   (0x17)
-
-// CDC inputs 
-#define PWII_INPUT_REC ('\x05')
-#define PWII_INPUT_C1 (PWII_INPUT_REC)
-#define PWII_INPUT_C2 ('\x06')
-#define PWII_INPUT_TM ('\x07')
-#define PWII_INPUT_LP ('\x08')
-#define PWII_INPUT_BO ('\x0b')
-#define PWII_INPUT_MEDIA ('\x09')
-#define PWII_INPUT_BOOTUP ('\x18')
-
 int pwii_tracemark_inverted=0 ;
 int pwii_rear_ch ;
 int pwii_front_ch ;
@@ -237,12 +149,6 @@ void sig_handler(int signum)
     }
 }
 
-// return bcd value
-int getbcd(unsigned char c)
-{
-    return (int)(c/16)*10 + c%16 ;
-}
-
 // write log to file.
 // return 
 //       1: log to recording hd
@@ -250,36 +156,31 @@ int getbcd(unsigned char c)
 int dvr_log(char *fmt, ...)
 {
     int res = 0 ;
-    static char logfilename[512]="" ;
     char lbuf[512];
-    char hostname[128] ;
     FILE *flog;
     time_t ti;
     int l;
     va_list ap ;
 
-    flog = fopen("/var/dvr/dvrcurdisk", "r");
-    if( flog ) {
-        if( fscanf(flog, "%s", lbuf )==1 ) {
-            gethostname(hostname, 128);
-            sprintf(logfilename, "%s/_%s_/%s", lbuf, hostname, logfile);
-        }
-        fclose(flog);
-    }
-
     ti = time(NULL);
     ctime_r(&ti, lbuf);
     l = strlen(lbuf);
     if (lbuf[l - 1] == '\n')
-        lbuf[l - 1] = '\0';
+        l-- ;
+    lbuf[l++]=':' ;
+    lbuf[l++]='I' ;
+    lbuf[l++]='O' ;
+    lbuf[l++]=':' ;
+    va_start( ap, fmt );
+    vsprintf(&lbuf[l], fmt, ap );
+    va_end( ap );
 
-    flog = fopen(logfilename, "a");
+    // send log to netdbg server
+    netdbg_print("%s\n", lbuf);
+    
+    flog = fopen(logfile, "a");
     if (flog) {
-        fprintf(flog, "%s:IO:", lbuf);
-        va_start( ap, fmt );
-        vfprintf(flog, fmt, ap );
-        va_end( ap );
-        fprintf(flog, "\n");		
+        fprintf(flog, "%s\n", lbuf);
         if( fclose(flog)==0 ) {
             res=1 ;
         }
@@ -288,26 +189,13 @@ int dvr_log(char *fmt, ...)
     if( res==0 ) {
         flog = fopen(temp_logfile, "a");
         if (flog) {
-            fprintf(flog, "%s:IO:", lbuf);
-            va_start( ap, fmt );
-            vfprintf(flog, fmt, ap );
-            va_end( ap );
-            fprintf(flog, " *\n");		
+            fprintf(flog, "%s *\n", lbuf);
             if( fclose(flog)==0 ) {
                 res=1 ;
             }
         }
     }
-    
-#ifdef MCU_DEBUG
-    // also output to stdout (if in debugging)
-    printf("%s:IO:", lbuf);
-    va_start( ap, fmt );
-    vprintf(fmt, ap );
-    va_end( ap );
-    printf("\n");		
-#endif
-        
+
     return res ;
 }
 
@@ -327,52 +215,6 @@ unsigned int getruntime()
     return (unsigned int)(tv.tv_sec-starttime)*1000 + tv.tv_usec/1000 ;
 }
 
-/*
-   share memory lock implemented use atomic swap
-
-    operations between lock() and unlock() should be quick enough and only memory access only.
- 
-*/ 
-
-// atomically swap value
-int atomic_swap( int *m, int v)
-{
-    register int result ;
-/*
-    result=*m ;
-    *m = v ;
-*/
-    asm volatile (
-        "swp  %0, %2, [%1]\n\t"
-        : "=r" (result)
-        : "r" (m), "r" (v)
-    ) ;
-    return result ;
-}
-
-void dio_lock()
-{
-    if( p_dio_mmap ) {
-        int c=0;
-        while( atomic_swap( &(p_dio_mmap->lock), 1 ) ) {
-            if( c++<20 ) {
-                sched_yield();
-            }
-            else {
-                // yield too many times ?
-                usleep(1);
-            }
-        }
-    }
-}
-
-void dio_unlock()
-{
-    if( p_dio_mmap ) {
-        p_dio_mmap->lock=0;
-    }
-}
-
 // set onboard rtc 
 void rtc_set(time_t utctime)
 {
@@ -384,444 +226,6 @@ void rtc_set(time_t utctime)
         close( hrtc );
     }
 }
-
-
-// open serial port
-int serial_open(char * device, int buadrate) 
-{
-    int hserial ;
-    int i;
-   
-    hserial = open( device, O_RDWR | O_NOCTTY );
-    if( hserial > 0 ) {
-#ifdef EAGLE32        
-        if( strcmp( device, "/dev/ttyS1")==0 ) {    // this is hikvision specific serial port
-            // Use Hikvision API to setup serial port (RS485)
-            InitRS485(hserial, buadrate, DATAB8, STOPB1, NOPARITY, NOCTRL);
-        }
-        else 
-#endif            
-        {
-            struct termios tios ;
-            speed_t baud_t ;
-            tcgetattr(hserial, &tios);
-            // set serial port attributes
-            tios.c_cflag = CS8|CLOCAL|CREAD;
-            tios.c_iflag = IGNPAR;
-            tios.c_oflag = 0;
-            tios.c_lflag = 0;       // ICANON;
-            tios.c_cc[VMIN]=10;		// minimum char 
-            tios.c_cc[VTIME]=1;		// 0.1 sec time out
-            baud_t = B115200 ;
-            for( i=0; i<7; i++ ) {
-                if( buadrate == baud_table[i].baudrate ) {
-                    baud_t = baud_table[i].baudv ;
-                    break;
-                }
-            }
-            
-            cfsetispeed(&tios, baud_t);
-            cfsetospeed(&tios, baud_t);
-            
-            tcflush(hserial, TCIFLUSH);
-            tcsetattr(hserial, TCSANOW, &tios);
-        }
-        return hserial ;
-    }
-    return 0 ;
-}
-
-//  
-int serial_dataready(int handle, int usdelay=MIN_SERIAL_DELAY, int * usremain=NULL)
-{
-    struct timeval timeout ;
-    fd_set fds;
-
-    FD_ZERO(&fds);
-    FD_SET(handle, &fds);
-    timeout.tv_sec = usdelay/1000000 ;
-    timeout.tv_usec = usdelay%1000000 ;
-
-    if (select(handle + 1, &fds, NULL, NULL, &timeout) > 0) {
-        if( FD_ISSET(handle, &fds) ) {
-            if( usremain ) {
-                *usremain = (int)(timeout.tv_sec*1000000 + timeout.tv_usec) ;
-            }
-            return 1 ;
-        }
-    }
-
-    if( usremain ) {
-        *usremain = 0 ;
-    }
-    return 0;
-}
-
-#define MCU_BUFFER_SIZE (100)
-static char mcu_buffer[MCU_BUFFER_SIZE] ;
-static int  mcu_buffer_len ;
-static int  mcu_buffer_pointer ;
-
-// Check if data ready to read on serial port
-//     return 0: no data
-//            1: yes
-int mcu_dataready(int usdelay=MIN_SERIAL_DELAY, int * usremain=NULL)
-{
-    if( mcu_handle<=0 ) {
-        return 0;
-    }
-    if( mcu_buffer_len > mcu_buffer_pointer ) {       // buffer available?
-        if( usremain ) {
-            *usremain = usdelay ;
-        }
-        return 1 ;
-    }
-    if( serial_dataready( mcu_handle, usdelay, usremain ) ) {
-        mcu_buffer_pointer=0 ;
-        mcu_buffer_len = read(mcu_handle, mcu_buffer, MCU_BUFFER_SIZE);
-        if( mcu_buffer_len > 0 ) {       // buffer available?
-            return 1 ;
-        }
-    }
-    if( usremain ) {
-        *usremain = 0 ;
-    }
-    mcu_buffer_len = 0 ;
-    return 0;
-}
-
-// read one byte from mcu
-int mcu_readbyte(char * b, int timeout=MIN_SERIAL_DELAY)
-{
-    if( mcu_dataready(timeout) ) {
-        *b = mcu_buffer[mcu_buffer_pointer++];
-#ifdef MCU_DEBUG
-        printf( "%02x ", (int)*b );
-#endif
-        return 1 ;
-    }
-    return 0 ;
-}
-
-int mcu_read(char * sbuf, size_t bufsize, int wait=MIN_SERIAL_DELAY, int interval=MIN_SERIAL_DELAY)
-{
-    size_t nread=0 ;
-    if( mcu_dataready(wait) ) {
-        while( nread<bufsize ) {
-            if( mcu_readbyte(sbuf+nread, interval) ) {
-                nread++;
-            }
-            else {
-                break;
-            }
-        }
-    }
-    return nread ;
-}
-
-int mcu_write(void * buf, int bufsize)
-{
-    if( mcu_handle>0 ) {
-#ifdef MCU_DEBUG
-        int i;
-        for(i=0;i<bufsize;i++) {
-            printf( "%02x ", (int)(((char *)buf)[i]) );
-        }
-#endif
-        return write( mcu_handle, buf, bufsize);
-    }
-    return 0;
-}
-
-// clear receiving buffer
-void mcu_clear(int delay=MIN_SERIAL_DELAY)
-{
-    int i;
-#ifdef MCU_DEBUG
-    printf("clear: ");
-#endif     
-    for(i=0;i<10000;i++) {
-        char c ;
-        if( mcu_readbyte(&c, delay)==0 ) {
-            break;
-        }
-    }
-#ifdef MCU_DEBUG
-    printf("\n");
-#endif                
-}
-
-// initialize serial port
-void mcu_init() 
-{
-    if( mcu_handle > 0 ) {
-        close( mcu_handle );
-        mcu_handle = 0 ;
-    }
-    mcu_handle = serial_open( mcu_dev, mcu_baud );
-    mcu_buffer_len = 0 ;
-    if( mcu_handle<=0 ) {
-        // even no serail port, we still let process run
-        printf("Serial port failed!\n");
-    }
-}
-
-#define MCU_INPUTNUM (6)
-#define MCU_OUTPUTNUM (4)
-
-unsigned int mcu_doutputmap ;
-
-// check data check sum
-// return 0: checksum correct
-signed char mcu_checksum( char * data ) 
-{
-    signed char ck;
-    signed char i = *data;
-    if( i<6 || i>60 ) {
-        return -1 ;
-    }
-    ck=0;
-    while(i-->0) {
-        ck+=*data++;
-    }
-    return ck ;
-}
-
-// calculate check sum of data
-void mcu_calchecksum( char * data )
-{
-    char ck = 0 ;
-    char i = *data ;
-    while( --i>0 ) {
-        ck-=*data++ ;
-    }
-    *data = ck ;
-}
-
-// send command to mcu
-// return 0 : failed
-//        >0 : success
-int mcu_send( char * cmd ) 
-{
-    if( *cmd<5 || *cmd>40 ) { 	// wrong data
-        return 0 ;
-    }
-    mcu_calchecksum( cmd );
-
-#ifdef  MCU_DEBUG
-// for debugging    
-    struct timeval tv ;
-    gettimeofday(&tv, NULL);
-    int r ;
-    struct tm * ptm ;
-    ptm = localtime(&tv.tv_sec);
-    double sec ;
-    sec = ptm->tm_sec + tv.tv_usec/1000000.0 ;
-    
-    printf("%02d:%02d:%05.3f Send: ", ptm->tm_hour, ptm->tm_min, sec);
-    r=mcu_write(cmd, (int)(*cmd));
-    printf("\n");
-    return r ;
-#else    
-    return mcu_write(cmd, (int)(*cmd));
-#endif
-}
-
-int mcu_checkinputbuf(char * ibuf);
-
-static int mcu_inputmissed ;
-
-// receive one data package from mcu
-// return : received msg
-//          NULL : failed
-char * mcu_recvmsg()
-{
-    int n;
-    static char msgbuf[100] ;
-
-#ifdef MCU_DEBUG
-    // for debugging 
-    struct timeval tv ;
-    gettimeofday(&tv, NULL);
-    struct tm * ptm ;
-    ptm = localtime(&tv.tv_sec);
-    double sec ;
-    sec = ptm->tm_sec + tv.tv_usec/1000000.0 ;
-    
-    printf("%02d:%02d:%05.3f Recv: ", ptm->tm_hour, ptm->tm_min, sec);
-#endif    
-    
-    if( mcu_read(msgbuf, 1) ) {
-        n=(int) msgbuf[0] ;
-        if( n>=5 && n<(int)sizeof(msgbuf) ) {
-            n=mcu_read(&msgbuf[1], n-1)+1 ; 
-            if( n==(int)msgbuf[0] &&                   // correct size
-                msgbuf[1]==0 &&                 // correct target
-                mcu_checksum( msgbuf ) == 0 )   // correct checksum
-            {
-#ifdef MCU_DEBUG
-                printf("\n");
-#endif
-                return msgbuf ;
-            }
-            if( strncmp(msgbuf, "Enter", 5 )==0 ) {
-                // MCU reboots, why?
-                dvr_log("MCU is powering down!");
-                sync();sync();sync();
-            }
-        }
-    }
-
-#ifdef MCU_DEBUG
-    // for debugging 
-    printf("** error! \n");
-#endif
-    mcu_inputmissed = 1 ;
-    mcu_clear(100000);
-    return NULL ;
-}
-
-// to receive a respondes message from mcu
-char * mcu_recv( int usdelay = MIN_SERIAL_DELAY, int * usremain=NULL )
-{
-    char * mcu_msg ;
-    while( mcu_dataready(usdelay, &usdelay) ) {
-        mcu_msg = mcu_recvmsg();
-        if( mcu_msg ) {
-            if( mcu_msg[4]=='\x02' ) {             // is it an input message ?
-                mcu_checkinputbuf(mcu_msg) ;
-            }
-            else {
-#ifdef MCU_DEBUG
-                if( mcu_msg[3]=='\x1f' ) {         // error report, not action for this now
-                    printf("A possible error report detected!\n" );
-                }
-#endif
-                if( usremain ) {
-                    * usremain=usdelay ;
-                }
-                return mcu_msg ;                  // it could be a responding message
-            }
-        }
-        else {
-            break;
-        }
-    }
-    if( usremain ) {
-        * usremain=usdelay ;
-    }
-    return NULL ;
-}
-
-// send command to mcu without waiting for responds
-int mcu_sendcmd(int cmd, int datalen=0, ...)
-{
-    int i ;
-    va_list v ;
-    char mcu_buf[datalen+10] ;
-
-    mcu_buf[0] = (char)(datalen+6) ;
-    mcu_buf[1] = (char)1 ;
-    mcu_buf[2] = (char)0 ;
-    mcu_buf[3] = (char)cmd ;
-    mcu_buf[4] = (char)2 ;
-
-    va_start( v, datalen ) ;
-    for( i=0 ; i<datalen ; i++ ) {
-        mcu_buf[5+i] = (char) va_arg( v, int );
-    }
-    va_end(v);
-    return mcu_send(mcu_buf) ;
-}
-
-// wait for response from mcu
-// return valid rsp buffer
-//        NULL if failed or timeout
-char * mcu_waitrsp(int target, int cmd, int delay=MCU_CMD_DELAY)
-{
-    char * mcu_rsp ;
-    while( delay>0 ) {                          // wait until delay time out
-        mcu_rsp = mcu_recv( delay, &delay ) ;   
-        if( mcu_rsp ) {     // received a responds
-            if( mcu_rsp[2]==(char)target &&         // resp from correct target (MCU)
-                mcu_rsp[3]==(char)cmd &&            // correct resp for CMD
-                mcu_rsp[4]==3 )                     // right responds
-            {
-                return mcu_rsp ;           
-            }                                       // ignor wrong resps and continue waiting
-        }
-        else {
-            break;
-        }
-    }
-    return NULL ;
-}
-    
-// Send command to mcu and check responds
-// return 
-//       valid response string
-//       NULL if failed
-char * mcu_cmd(int cmd, int datalen=0, ...)
-{
-    int i ;
-    va_list v ;
-    char * mcu_rsp ;
-    char mcu_buf[datalen+10] ;
-    static int mcu_error ;
-
-    mcu_buf[0] = (char)(datalen+6) ;
-    mcu_buf[1] = (char)1 ;                      // target MCU
-    mcu_buf[2] = (char)0 ;
-    mcu_buf[3] = (char)cmd ;
-    mcu_buf[4] = (char)2 ;
-
-    va_start( v, datalen ) ;
-    for( i=0 ; i<datalen ; i++ ) {
-        mcu_buf[5+i] = (char) va_arg( v, int );
-    }
-    va_end(v);
-    i=3 ;
-    while( i-->0 ) {
-        if(mcu_send(mcu_buf)) {
-            mcu_rsp = mcu_waitrsp(1, cmd) ;         // wait rsp from MCU
-            if( mcu_rsp ) {
-                mcu_error = 0 ;
-                return mcu_rsp ;
-            }
-        }
-
-#ifdef MCU_DEBUG
-        printf("Retry!!!\n" );
-#endif
-        if( ++mcu_error>10 ) {
-            sleep(1);
-            mcu_init();
-            mcu_error=0 ;
-        }
-    }
-
-    return NULL ;
-}
-
-// response to mcu 
-static void mcu_response(char * msg, int datalen=0, ... )
-{
-    int i ;
-    va_list v ;
-    char mcu_buf[datalen+10] ;
-    mcu_buf[0] = datalen+6 ;
-    mcu_buf[1] = msg[2] ;
-    mcu_buf[2] = 0 ;                // cpu
-    mcu_buf[3] = msg[3] ;           // response to same command
-    mcu_buf[4] = 3 ;                // response
-    va_start( v, datalen ) ;
-    for( i=0 ; i<datalen ; i++ ) {
-        mcu_buf[5+i] = (char) va_arg( v, int );
-    }
-    va_end(v);
-    mcu_send( mcu_buf );
-}
-
 
 #ifdef PWII_APP
 int  zoomcam_enable = 0 ;
@@ -898,264 +302,7 @@ void zoomcam_led(int on)
 
 #endif
 
-// g value converting vectors , (Forward, Right, Down) = [vecttabe] * (Back, Right, Buttom)
-static signed char g_convert[24][3][3] = 
-{
-//  Front -> Forward    
-    {   // Front -> Forward, Right -> Upward
-        {-1, 0, 0},
-        { 0, 0,-1},
-        { 0,-1, 0}
-    },
-    {   // Front -> Forward, Left  -> Upward
-        {-1, 0, 0},
-        { 0, 0, 1},
-        { 0, 1, 0}
-    },
-    {   // Front -> Forward, Bottom  -> Upward
-        {-1, 0, 0},
-        { 0, 1, 0},
-        { 0, 0,-1}
-    },
-    {   // Front -> Forward, Top -> Upward
-        {-1, 0, 0},
-        { 0,-1, 0},
-        { 0, 0, 1}
-    },
-//---- Back->Forward
-    {   // Back -> Forward, Right -> Upward
-        { 1, 0, 0},
-        { 0, 0, 1},
-        { 0,-1, 0}
-    },
-    {   // Back -> Forward, Left -> Upward
-        { 1, 0, 0},
-        { 0, 0,-1},
-        { 0, 1, 0}
-    },
-    {   // Back -> Forward, Button -> Upward
-        { 1, 0, 0},
-        { 0,-1, 0},
-        { 0, 0,-1}
-    },
-    {   // Back -> Forward, Top -> Upward
-        { 1, 0, 0},
-        { 0, 1, 0},
-        { 0, 0, 1}
-    },
-//---- Right -> Forward
-    {   // Right -> Forward, Front -> Upward
-        { 0, 1, 0},
-        { 0, 0, 1},
-        { 1, 0, 0}
-    },
-    {   // Right -> Forward, Back -> Upward
-        { 0, 1, 0},
-        { 0, 0,-1},
-        {-1, 0, 0}
-    },
-    {   // Right -> Forward, Bottom -> Upward
-        { 0, 1, 0},
-        { 1, 0, 0},
-        { 0, 0,-1}
-    },
-    {   // Right -> Forward, Top -> Upward
-        { 0, 1, 0},
-        {-1, 0, 0},
-        { 0, 0, 1}
-    },
-//---- Left -> Forward
-    {   // Left -> Forward, Front -> Upward
-        { 0,-1, 0},
-        { 0, 0,-1},
-        { 1, 0, 0}
-    },
-    {   // Left -> Forward, Back -> Upward
-        { 0,-1, 0},
-        { 0, 0, 1},
-        {-1, 0, 0}
-    },
-    {   // Left -> Forward, Bottom -> Upward
-        { 0,-1, 0},
-        {-1, 0, 0},
-        { 0, 0,-1}
-    },
-    {   // Left -> Forward, Top -> Upward
-        { 0,-1, 0},
-        { 1, 0, 0},
-        { 0, 0, 1}
-    },
-//---- Bottom -> Forward
-    {   // Bottom -> Forward, Front -> Upward
-        { 0, 0, 1},
-        { 0,-1, 0},
-        { 1, 0, 0}
-    },
-    {   // Bottom -> Forward, Back -> Upward
-        { 0, 0, 1},
-        { 0, 1, 0},
-        {-1, 0, 0}
-    },
-    {   // Bottom -> Forward, Right -> Upward
-        { 0, 0, 1},
-        {-1, 0, 0},
-        { 0,-1, 0}
-    },
-    {   // Bottom -> Forward, Left -> Upward
-        { 0, 0, 1},
-        { 1, 0, 0},
-        { 0, 1, 0}
-    },
-//---- Top -> Forward
-    {   // Top -> Forward, Front -> Upward
-        { 0, 0,-1},
-        { 0, 1, 0},
-        { 1, 0, 0}
-    },
-    {   // Top -> Forward, Back -> Upward
-        { 0, 0,-1},
-        { 0,-1, 0},
-        {-1, 0, 0}
-    },
-    {   // Top -> Forward, Right -> Upward
-        { 0, 0,-1},
-        { 1, 0, 0},
-        { 0,-1, 0}
-    },
-    {   // Top -> Forward, Left -> Upward
-        { 0, 0,-1},
-        {-1, 0, 0},
-        { 0, 1, 0}
-    }
-
-} ;
-
-/* original direction table 
-static char direction_table[24][2] = 
-{
-    {0, 2}, {0, 3}, {0, 4}, {0,5},      // Front -> Forward
-    {1, 2}, {1, 3}, {1, 4}, {1,5},      // Back  -> Forward
-    {2, 0}, {2, 1}, {2, 4}, {2,5},      // Right -> Forward
-    {3, 0}, {3, 1}, {3, 4}, {3,5},      // Left  -> Forward
-    {4, 0}, {4, 1}, {4, 2}, {4,3},      // Buttom -> Forward
-    {5, 0}, {5, 1}, {5, 2}, {5,3},      // Top   -> Forward
-};
-*/
-
-// direction table from harrison.  ??? what is the third number ???
-// 0:Front,1:Back, 2:Right, 3:Left, 4:Bottom, 5:Top 
-static char direction_table[24][3] = 
-{
-  {0, 2, 0x62}, // Forward:front, Upward:right    Leftward:top
-  {0, 3, 0x52}, // Forward:Front, Upward:left,    Leftward:bottom
-  {0, 4, 0x22}, // Forward:Front, Upward:bottom,  Leftward:right 
-  {0, 5, 0x12}, // Forward:Front, Upward:top,    Leftward:left 
-  {1, 2, 0x61}, // Forward:back,  Upward:right,    Leftward:bottom 
-  {1, 3, 0x51}, // Forward:back,  Upward:left,    Leftward:top
-  {1, 4, 0x21}, // Forward:back,  Upward:bottom,    Leftward:left
-  {1, 5, 0x11}, // Forward:back, Upward:top,    Leftward:right 
-  {2, 0, 0x42}, // Forward:right, Upward:front,    Leftward:bottom
-  {2, 1, 0x32}, // Forward:right, Upward:back,    Leftward:top
-  {2, 4, 0x28}, // Forward:right, Upward:bottom,    Leftward:back
-  {2, 5, 0x18}, // Forward:right, Upward:top,    Leftward:front
-  {3, 0, 0x41}, // Forward:left, Upward:front,    Leftward:top
-  {3, 1, 0x31}, // Forward:left, Upward:back,    Leftward:bottom
-  {3, 4, 0x24}, // Forward:left, Upward:bottom,    Leftward:front
-  {3, 5, 0x14}, // Forward:left, Upward:top,    Leftward:back
-  {4, 0, 0x48}, // Forward:bottom, Upward:front,    Leftward:left
-  {4, 1, 0x38}, // Forward:bottom, Upward:back,    Leftward:right
-  {4, 2, 0x68}, // Forward:bottom, Upward:right,    Leftward:front
-  {4, 3, 0x58}, // Forward:bottom, Upward:left,    Leftward:back
-  {5, 0, 0x44}, // Forward:top, Upward:front,    Leftward:right
-  {5, 1, 0x34}, // Forward:top, Upward:back,    Leftward:left
-  {5, 2, 0x64}, // Forward:top, Upward:right,    Leftward:back
-  {5, 3, 0x54}  // Forward:top, Upward:left,    Leftward:front
-};
-
-#define DEFAULT_DIRECTION   (7)
-static int gsensor_direction = DEFAULT_DIRECTION ;
-float g_sensor_trigger_forward ;
-float g_sensor_trigger_backward ;
-float g_sensor_trigger_right ;
-float g_sensor_trigger_left ;
-float g_sensor_trigger_down ;
-float g_sensor_trigger_up ;
-// new parameters for g sensor. (2010-04-08)
-float g_sensor_base_forward ;
-float g_sensor_base_backward ;
-float g_sensor_base_right ;
-float g_sensor_base_left ;
-float g_sensor_base_down ;
-float g_sensor_base_up ;
-float g_sensor_crash_forward ;
-float g_sensor_crash_backward ;
-float g_sensor_crash_right ;
-float g_sensor_crash_left ;
-float g_sensor_crash_down ;
-float g_sensor_crash_up ;
-
 #ifdef PWII_APP
-
-// Send cmd to pwii and check responds
-char * mcu_pwii_cmd(int cmd, int datalen=0, ...)
-{
-    int i ;
-    va_list v ;
-    char * mcu_rsp ;
-    char mcu_buf[datalen+10] ;
-
-    mcu_buf[0] = (char)(datalen+6) ;
-    mcu_buf[1] = (char)5 ;                      // target PWII
-    mcu_buf[2] = (char)0 ;
-    mcu_buf[3] = (char)cmd ;
-    mcu_buf[4] = (char)2 ;
-
-    va_start( v, datalen ) ;
-    for( i=0 ; i<datalen ; i++ ) {
-        mcu_buf[5+i] = (char) va_arg( v, int );
-    }
-    va_end(v);
-    i=3 ;
-    while( i-->0 ) {
-        if(mcu_send(mcu_buf)) {
-            mcu_rsp = mcu_waitrsp(5, cmd) ;         // wait rsp from PWII
-            if( mcu_rsp ) {
-                return mcu_rsp ;
-            }
-        }
-
-#ifdef MCU_DEBUG
-        printf("Retry!!!\n" );
-#endif
-
-    }
-
-    return NULL ;
-}
-
-int mcu_pwii_bootupready()
-{
-    mcu_clear() ;
-    if( mcu_pwii_cmd(PWII_CMD_BOOTUPREADY)!=NULL ) {
-        return 1 ;
-    }
-    return 0 ;
-}
-
-// get pwii MCU firmware version.
-// return 0: failed
-//       >0: size of version string (not include null char)
-int mcu_pwii_version(char * version)
-{
-    char * v ;
-    v = mcu_pwii_cmd(PWII_CMD_VERSION) ;
-    if( v ) {
-        memcpy( version, &v[5], *v-6 );
-        version[*v-6]=0 ;
-        return *v-6 ;
-    }
-    return 0 ;
-}
 
 // Set C1/C2 LED and set external mic
 void mcu_pwii_setc1c2() 
@@ -1278,25 +425,6 @@ void mcu_pwii_output()
     }
 }
 
-unsigned int mcu_pwii_ouputstatus()
-{
-    unsigned int outputmap = 0 ;
-    char * ibuf = mcu_pwii_cmd( PWII_CMD_OUTPUTSTATUS, 2, 0, 0 ) ;
-    if( ibuf ) {
-        if( ibuf[6] & 1 ) outputmap|=1 ;        // C1 LED
-        if( ibuf[6] & 2 ) outputmap|=2 ;        // C2 LED
-        if( ibuf[6] & 4 ) outputmap|=4 ;        // MIC
-        if( ibuf[6] & 0x18 ) outputmap|=8 ;     // Error
-        if( ibuf[6] & 0x20 ) outputmap|=0x10 ;  // POWER LED
-        if( ibuf[6] & 0x40 ) outputmap|=0x20 ;  // BO_LED
-        if( ibuf[6] & 0x80 ) outputmap|=0x40 ;  // Backlight LED
-        
-        if( ibuf[5] & 1 ) outputmap|=0x800 ;    // LCD POWER
-        if( ibuf[5] & 2 ) outputmap|=0x200 ;    // GPS POWER
-        if( ibuf[5] & 4 ) outputmap|=0x400 ;    // RF900 POWER
-    }
-    return outputmap ;
-}
 
 static unsigned int pwii_keyreltime ;
 // auto release keys REC, C2, TM
@@ -1329,7 +457,7 @@ void mcu_camera_zoom( int zoomin )
 
 #endif  // PWII_APP
 
-static void mcu_dinput_help(char * ibuf)
+void mcu_dinput_help(char * ibuf)
 {
     unsigned int imap1, imap2 ;
     int i;
@@ -1360,48 +488,6 @@ static void mcu_dinput_help(char * ibuf)
     dio_unlock();
 }
 
-static void mcu_gforce_log( float gright, float gback, float gbuttom ) 
-{
-    //        float gback, gright, gbuttom ;
-    float gbusforward, gbusright, gbusdown ;
-
-#ifdef MCU_DEBUG
-    printf("Accelerometer, --------- right=%.2f , back   =%.2f , buttom=%.2f .\n",     
-           gright,
-           gback,
-           gbuttom );
-#endif            
-
-    // converting
-    gbusforward = 
-        ((float)(signed char)(g_convert[gsensor_direction][0][0])) * gback + 
-        ((float)(signed char)(g_convert[gsensor_direction][0][1])) * gright + 
-        ((float)(signed char)(g_convert[gsensor_direction][0][2])) * gbuttom ;
-    gbusright = 
-        ((float)(signed char)(g_convert[gsensor_direction][1][0])) * gback + 
-        ((float)(signed char)(g_convert[gsensor_direction][1][1])) * gright + 
-        ((float)(signed char)(g_convert[gsensor_direction][1][2])) * gbuttom ;
-    gbusdown = 
-        ((float)(signed char)(g_convert[gsensor_direction][2][0])) * gback + 
-        ((float)(signed char)(g_convert[gsensor_direction][2][1])) * gright + 
-        ((float)(signed char)(g_convert[gsensor_direction][2][2])) * gbuttom ;
-
-#ifdef MCU_DEBUG
-    printf("Accelerometer, converted right=%.2f , forward=%.2f , down  =%.2f .\n",     
-           gbusright,
-           gbusforward,
-           gbusdown );
-#endif            
-    // save to log
-    dio_lock();
-    p_dio_mmap->gforce_serialno++ ;
-    p_dio_mmap->gforce_right = gbusright ;
-    p_dio_mmap->gforce_forward = gbusforward ;
-    p_dio_mmap->gforce_down = gbusdown ;
-    dio_unlock();
-    
-}
-
 int mcu_checkinputbuf(char * ibuf)
 {
     if( ibuf[4]=='\x02' && ibuf[2]=='\x01' ) {  // mcu initiated message ?
@@ -1415,31 +501,25 @@ int mcu_checkinputbuf(char * ibuf)
             mcu_response( ibuf, 2, 0, 0 );      // response with two 0 data
             mcupowerdelaytime = 0 ;
             p_dio_mmap->poweroff = 1 ;          // send power off message to DVR
-#ifdef MCU_DEBUG
-            printf("Ignition off, mcu delay %d s\n", mcupowerdelaytime );
-#endif            
+            netdbg_print("Ignition off, mcu delay %d s\n", mcupowerdelaytime );
             break;
             
         case MCU_INPUT_IGNITIONON :	// ignition on event
             mcu_response( ibuf, 1, watchdogenabled  );      // response with watchdog enable flag
             p_dio_mmap->poweroff = 0 ;						// send power on message to DVR
-#ifdef MCU_DEBUG
-            printf("ignition on\n");
-#endif            
+            netdbg_print("ignition on\n");
             break ;
 
         case MCU_INPUT_ACCEL :                  // Accelerometer data
             mcu_response( ibuf );
 
-            mcu_gforce_log( ((float)(signed char)ibuf[5])/14 ,
+            gforce_log( ((float)(signed char)ibuf[5])/14 ,
                            ((float)(signed char)ibuf[6])/14 ,
                            ((float)(signed char)ibuf[7])/14 ) ;
             break;
             
         default :
-#ifdef MCU_DEBUG
-            printf("Unknown message from MCU.\n");
-#endif
+            netdbg_print("Unknown message from MCU.\n");
             break;
         }
     }
@@ -1448,9 +528,7 @@ int mcu_checkinputbuf(char * ibuf)
 
     else if( ibuf[4]=='\x02' && ibuf[2]=='\x05' )          // input from MCU5 (MR. Henry?)
     {
-#ifdef MCU_DEBUG
-            printf("Messages from Mr. Henry!\n" );
-#endif            
+       netdbg_print("Messages from Mr. Henry!\n" );
        switch( ibuf[3] ) {
        case PWII_INPUT_REC :                        // Front Camera (REC) button
            dio_lock();
@@ -1533,9 +611,7 @@ int mcu_checkinputbuf(char * ibuf)
            break;
 
        default :
-#ifdef MCU_DEBUG
-            printf("Unknown message from PWII MCU.\n");
-#endif
+            netdbg_print("Unknown message from PWII MCU.\n");
             break;
 
        }
@@ -1546,765 +622,8 @@ int mcu_checkinputbuf(char * ibuf)
     return 0 ;
 }
 
-// check mcu input
-// parameter
-//      wait - micro-seconds waiting
-// return 
-//		number of input message received.
-//      0: timeout (no message)
-//     -1: error
-int mcu_input(int usdelay)
-{
-    int res = 0 ;
-    char * mcu_msg ;
-    while( mcu_dataready(usdelay, &usdelay) ) {
-        mcu_msg = mcu_recvmsg();
-        if( mcu_msg ) {
-            if( mcu_msg[4]=='\x02' ) {             // is it an input message ?
-                mcu_checkinputbuf(mcu_msg) ;
-                res++;
-            }
-        }
-        else {
-            return -1 ;
-        }
-    }
-    return res ;
-}
 
-int mcu_readcode()
-{
-    char * v = mcu_cmd(MCU_CMD_READCODE);
-    if( v ) {
-        if( v[5]!=(unsigned char)0xff ) {
-            struct tm ttm ;
-            time_t tt ;
-            memset( &ttm, 0, sizeof(ttm) );
-            ttm.tm_year = getbcd(v[12]) + 100 ;
-            ttm.tm_mon  = getbcd(v[11]) - 1;
-            ttm.tm_mday = getbcd(v[10]) ;
-            ttm.tm_hour = getbcd(v[8]) ;
-            ttm.tm_min  = getbcd(v[7]) ;
-            ttm.tm_sec  = getbcd(v[6]) ;
-            ttm.tm_isdst= -1 ;
-            tt=timegm(&ttm);
-            if( (int)tt>0 ) {
-                localtime_r(&tt, &ttm);
-                dvr_log( "MCU shutdown code: %02x at %04d-%02d-%02d %02d:%02d:%02d",
-                        (int)(v[5]),
-                        ttm.tm_year+1900,
-                        ttm.tm_mon+1,
-                        ttm.tm_mday,
-                        ttm.tm_hour,
-                        ttm.tm_min,
-                        ttm.tm_sec );
-            }
-        }
-        return 1 ;
-    }
-    dvr_log( "Read MCU shutdown code failed.");
-    return 0 ;
-}
-
-int mcu_bootupready()
-{
-    static int mcuready = 0 ;
-    int i ;
-    char * rsp ;
-    if( mcuready ) {
-        return 1 ;
-    }
-    mcu_clear() ;
-    if( (rsp=mcu_cmd(MCU_CMD_BOOTUPREADY, 1, 0 ))!=NULL ) {
-        int rlen = *rsp - 6 ;
-        char status[200] ;
-        char tst[10] ;
-        status[0]=0 ;
-        for( i=0; i<rlen; i++ ) {
-            sprintf(tst, " %02x", (unsigned int)(unsigned char)rsp[5+i] );
-            strcat( status, tst );
-        }
-        dvr_log( "MCU ready with status :%s", status );
-        mcuready = 1 ;
-        mcu_readcode();
-        return 1 ;
-    }
-    dvr_log("Ooops, MCU is mad on me!!! System power could be cut off! Sync, sync, sync!");
-    sync();
-    sync();
-    sync();
-    return 0 ;
-}
-
-// return gsensor available
-int mcu_gsensorinit_old()
-{
-    char * responds ;
-    float trigger_back, trigger_front ;
-    float trigger_right, trigger_left ;
-    float trigger_bottom, trigger_top ;
-    char tr_rt, tr_lf, tr_bk, tr_fr, tr_bt, tr_tp ;
-    
-    if( !gforce_log_enable ) {
-        return 0 ;
-    }
-
-    trigger_back =
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_trigger_forward +
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_trigger_right +
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_trigger_down ;
-    trigger_right = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_trigger_forward + 
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_trigger_right + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_trigger_down ;
-    trigger_bottom = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_trigger_forward + 
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_trigger_right + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_trigger_down ;
-    trigger_front = 
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_trigger_backward + 
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_trigger_left + 
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_trigger_up ;
-    trigger_left = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_trigger_backward + 
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_trigger_left + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_trigger_up ;
-    trigger_top = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_trigger_backward + 
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_trigger_left + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_trigger_up ;
-
-    if( trigger_right >= trigger_left ) {
-        tr_rt  = (signed char)(trigger_right*0xe) ;    // Right Trigger
-        tr_lf  = (signed char)(trigger_left*0xe) ;     // Left Trigger
-    }
-    else {
-        tr_rt  = (signed char)(trigger_left*0xe) ;     // Right Trigger
-        tr_lf  = (signed char)(trigger_right*0xe) ;    // Left Trigger
-    }
-
-    if( trigger_back >= trigger_front ) {
-        tr_bk  = (signed char)(trigger_back*0xe) ;    // Back Trigger
-        tr_fr  = (signed char)(trigger_front*0xe) ;    // Front Trigger
-    }
-    else {
-        tr_bk  = (signed char)(trigger_front*0xe) ;    // Back Trigger
-        tr_fr  = (signed char)(trigger_back*0xe) ;    // Front Trigger
-    }
-
-    if( trigger_bottom >= trigger_top ) {
-        tr_bt = (signed char)(trigger_bottom*0xe) ;    // Bottom Trigger
-        tr_tp = (signed char)(trigger_top*0xe) ;    // Top Trigger
-    }
-    else {
-        tr_bt = (signed char)(trigger_top*0xe) ;    // Bottom Trigger
-        tr_tp = (signed char)(trigger_bottom*0xe) ;    // Top Trigger
-    }
-    
-    responds = mcu_cmd( MCU_CMD_GSENSORINIT, 6, tr_rt, tr_lf, tr_bk, tr_fr, tr_bt, tr_tp );
-    if( responds ) {
-        return responds[5] ;        // g_sensor_available
-    }
-    return 0 ;
-}
-
-// init gsensor
-// return 1 if gsensor available
-int mcu_gsensorinit()
-{
-    char * responds ;
-
-    float trigger_back, trigger_front ;
-    float trigger_right, trigger_left ;
-    float trigger_bottom, trigger_top ;
-    int XP, XN, YP, YN, ZP, ZN;
-
-    float base_back, base_front ;
-    float base_right, base_left ;
-    float base_bottom, base_top ;
-    int BXP, BXN, BYP, BYN, BZP, BZN;
-
-    float crash_back, crash_front ;
-    float crash_right, crash_left ;
-    float crash_bottom, crash_top ;
-    int CXP, CXN, CYP, CYN, CZP, CZN;
-
-    if( !gforce_log_enable ) {
-        return 0 ;
-    }
-
-    trigger_back = 
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_trigger_forward + 
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_trigger_right + 
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_trigger_down ;
-    trigger_right = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_trigger_forward + 
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_trigger_right + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_trigger_down ;
-    trigger_bottom = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_trigger_forward + 
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_trigger_right + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_trigger_down ;
-
-    trigger_front = 
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_trigger_backward +
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_trigger_left + 
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_trigger_up ;
-    trigger_left = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_trigger_backward +
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_trigger_left + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_trigger_up ;
-    trigger_top = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_trigger_backward +
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_trigger_left + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_trigger_up ;
-
-    if( trigger_right >= trigger_left ) {
-        XP  = (int)(trigger_right*14) ;    // Right Trigger
-        XN  = (int)(trigger_left*14) ;     // Left Trigger
-    }
-    else {
-        XP  = (int)(trigger_left*14) ;     // Right Trigger
-        XN  = (int)(trigger_right*14) ;    // Left Trigger
-    }
-
-    if( trigger_back >= trigger_front ) {
-        YP  = (int)(trigger_back*14) ;    // Back Trigger
-        YN  = (int)(trigger_front*14) ;    // Front Trigger
-    }
-    else {
-        YP  = (int)(trigger_front*14) ;    // Back Trigger
-        YN  = (int)(trigger_back*14) ;    // Front Trigger
-    }
-
-    if( trigger_bottom >= trigger_top ) {
-        ZP  = (int)(trigger_bottom*14) ;    // Bottom Trigger
-        ZN = (int)(trigger_top*14) ;    // Top Trigger
-    }
-    else {
-        ZP  = (int)(trigger_top*14) ;    // Bottom Trigger
-        ZN = (int)(trigger_bottom*14) ;    // Top Trigger
-    }
-
-    base_back = 
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_base_forward + 
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_base_right + 
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_base_down ;
-    base_right = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_base_forward + 
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_base_right + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_base_down ;
-    base_bottom = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_base_forward + 
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_base_right + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_base_down ;
-
-    base_front = 
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_base_backward +
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_base_left + 
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_base_up ;
-    base_left = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_base_backward +
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_base_left + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_base_up ;
-    base_top = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_base_backward +
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_base_left + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_base_up ;
-
-    if( base_right >= base_left ) {
-        BXP  = (int)(base_right*14) ;    // Right Trigger
-        BXN  = (int)(base_left*14) ;     // Left Trigger
-    }
-    else {
-        BXP  = (int)(base_left*14) ;     // Right Trigger
-        BXN  = (int)(base_right*14) ;    // Left Trigger
-    }
-
-    if( base_back >= base_front ) {
-        BYP  = (int)(base_back*14) ;    // Back Trigger
-        BYN  = (int)(base_front*14) ;    // Front Trigger
-    }
-    else {
-        BYP  = (int)(base_front*14) ;    // Back Trigger
-        BYN  = (int)(base_back*14) ;    // Front Trigger
-    }
-
-    if( base_bottom >= base_top ) {
-        BZP  = (int)(base_bottom*14) ;    // Bottom Trigger
-        BZN = (int)(base_top*14) ;    // Top Trigger
-    }
-    else {
-        BZP  = (int)(base_top*14) ;    // Bottom Trigger
-        BZN = (int)(base_bottom*14) ;    // Top Trigger
-    }
-
-    crash_back = 
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_crash_forward + 
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_crash_right + 
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_crash_down ;
-    crash_right = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_crash_forward + 
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_crash_right + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_crash_down ;
-    crash_bottom = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_crash_forward + 
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_crash_right + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_crash_down ;
-
-    crash_front = 
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_crash_backward +
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_crash_left + 
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_crash_up ;
-    crash_left = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_crash_backward +
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_crash_left + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_crash_up ;
-    crash_top = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_crash_backward +
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_crash_left + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_crash_up ;
-
-    if( crash_right >= crash_left ) {
-        CXP  = (int)(crash_right*14) ;    // Right Trigger
-        CXN  = (int)(crash_left*14) ;     // Left Trigger
-    }
-    else {
-        CXP  = (int)(crash_left*14) ;     // Right Trigger
-        CXN  = (int)(crash_right*14) ;    // Left Trigger
-    }
-
-    if( crash_back >= crash_front ) {
-        CYP  = (int)(crash_back*14) ;    // Back Trigger
-        CYN  = (int)(crash_front*14) ;    // Front Trigger
-    }
-    else {
-        CYP  = (int)(crash_front*14) ;    // Back Trigger
-        CYN  = (int)(crash_back*14) ;    // Front Trigger
-    }
-
-    if( crash_bottom >= crash_top ) {
-        CZP  = (int)(crash_bottom*14) ;    // Bottom Trigger
-        CZN = (int)(crash_top*14) ;    // Top Trigger
-    }
-    else {
-        CZP  = (int)(crash_top*14) ;    // Bottom Trigger
-        CZN = (int)(crash_bottom*14) ;    // Top Trigger
-    }
-
-    responds = mcu_cmd( MCU_CMD_GSENSORINIT, 20, 
-        1,                                          // enable GForce
-        (int)(direction_table[gsensor_direction][2]),      // direction
-        BXP, BXN, BYP, BYN, BZP, BZN,               // base parameter
-        XP, XN, YP, YN, ZP, ZN,                     // trigger parameter
-        CXP, CXN, CYP, CYN, CZP, CZN );             // crash parameter
-    if( responds ) {
-        return responds[5] ;        // g_sensor_available
-    }
-    return 0 ;
-}
-
-// get MCU firmware version.
-// return 0: failed
-//       >0: size of version string (not include null char)
-int mcu_version(char * version)
-{
-    char * v ;
-    v = mcu_cmd( MCU_CMD_GETVERSION ) ;
-    if( v ) {
-        memcpy( version, &v[5], *v-6 );
-        version[*v-6]=0 ;
-        return *v-6 ;
-    }
-    return 0 ;
-}
-
-int mcu_doutput()
-{
-    unsigned int outputmap = p_dio_mmap->outputmap ;
-    unsigned int outputmapx ;
-    int i ;
-    unsigned int dout ;
-    
-    if( outputmap == mcu_doutputmap ) return 1 ;
-
-    outputmapx = (outputmap^output_inverted) ;
-
-    // bit 2 is beep. (from July 6, 2009)
-    // translate output bits ;
-    dout = 0 ;
-    for(i=0; i<MAXOUTPUT; i++) {
-        if( outputmapx & output_map_table[i] ) {
-            dout|=(1<<i) ;
-        }
-    }
-    if( mcu_cmd(MCU_CMD_DIGITALOUTPUT, 1, dout) ) {
-        mcu_doutputmap=outputmap ;
-    }
-    return 1;
-}
-
-// get mcu digital input
-int mcu_dinput()
-{
-    char * v ;
-    v = mcu_cmd( MCU_CMD_DIGITALINPUT ) ;
-    if( v ) {
-        mcu_dinput_help(v);
-        return 1 ;
-    }
-    return 0 ;
-}
-
-static int delay_inc = 10 ;
-
-// set more mcu power off delay (keep power alive), (called every few seconds)
-void mcu_poweroffdelay()
-{
-    char * responds ;
-    if( mcupowerdelaytime < 50 ) {
-        responds = mcu_cmd( MCU_CMD_POWEROFFDELAY, 2, delay_inc/256, delay_inc%256 );
-    }
-    else {
-        responds = mcu_cmd( MCU_CMD_POWEROFFDELAY, 2, 0, 0 );
-    }
-    if( responds ) {
-        mcupowerdelaytime = ((unsigned)(responds[5]))*256+((unsigned)responds[6]) ;
-#ifdef MCU_DEBUG        
-        printf("mcu delay %d s\n", mcupowerdelaytime );
-#endif                    
-    }
-}
-
-void mcu_watchdogenable()
-{
-#ifdef MCU_DEBUG        
-    printf("mcu watchdog enable, timeout %d s.\n", watchdogtimeout );
-#endif                    
-    // set watchdog timeout
-    mcu_cmd( MCU_CMD_SETWATCHDOGTIMEOUT, 2, watchdogtimeout/256, watchdogtimeout%256 ) ;
-    // enable watchdog
-    mcu_cmd( MCU_CMD_ENABLEWATCHDOG  );
-    watchdogenabled = 1 ;
-}
-
-void mcu_watchdogdisable()
-{
-#ifdef MCU_DEBUG        
-    printf("mcu watchdog disable.\n" );
-#endif                    
-    mcu_cmd( MCU_CMD_DISABLEWATCHDOG  );
-    watchdogenabled = 0 ;
-}
-
-// return 0: error, >0 success
-int mcu_watchdogkick()
-{
-#ifdef MCU_DEBUG        
-    printf("mcu watchdog kick.\n" );
-#endif                    
-    mcu_cmd(MCU_CMD_KICKWATCHDOG);
-    return 0;
-}
-
-// get io board temperature
-int mcu_iotemperature()
-{
-    char * v = mcu_cmd(MCU_CMD_IOTEMPERATURE) ;
-    if( v ) {
-        return (int)(signed char)v[5] ;
-    }
-    return -128;
-}
-
-// get hd temperature
-int mcu_hdtemperature()
-{
-#ifdef  MDVR_APP
-    char * v = mcu_cmd(MCU_CMD_HDTEMPERATURE) ;
-    if( v ) {
-        return (int)(signed char)v[5] ;
-    }
-#endif    
-    return -128 ;
-}
-
-void mcu_hdpoweron()
-{
-    mcu_cmd(MCU_CMD_HDPOWERON);
-}
-
-void mcu_hdpoweroff()
-{
-    mcu_cmd(MCU_CMD_HDPOWEROFF);
-}
-
-void mcu_initsensor2(int invert)
-{
-    char * rsp ;
-    rsp = mcu_cmd(0x14);
-    if( rsp ) {
-        if( invert != ((int)rsp[5]) ) {         // settings are from whats in MCU
-            mcu_cmd(0x13,1,invert);
-        }
-    }
-}
-
-// return time_t: success
-//             -1: failed
-time_t mcu_r_rtc( struct tm * ptm = NULL )
-{
-    struct tm ttm ;
-    time_t tt ;
-    char * responds ;
-
-    responds = mcu_cmd( MCU_CMD_READRTC ) ;
-    if( responds ) {
-        memset( &ttm, 0, sizeof(ttm) );
-        ttm.tm_year = getbcd(responds[11]) + 100 ;
-        ttm.tm_mon  = getbcd(responds[10]) - 1;
-        ttm.tm_mday = getbcd(responds[9]) ;
-        ttm.tm_hour = getbcd(responds[7]) ;
-        ttm.tm_min  = getbcd(responds[6]) ;
-        ttm.tm_sec  = getbcd(responds[5]) ;
-        ttm.tm_isdst= -1 ;
-
-        if( ttm.tm_year>105 && ttm.tm_year<135 &&
-            ttm.tm_mon>=0 && ttm.tm_mon<=11 &&
-            ttm.tm_mday>=1 && ttm.tm_mday<=31 &&
-            ttm.tm_hour>=0 && ttm.tm_hour<=24 &&
-            ttm.tm_min>=0 && ttm.tm_min<=60 &&
-            ttm.tm_sec>=0 && ttm.tm_sec<=60 ) 
-        {
-            tt = timegm( &ttm );
-            if( (int)tt > 0 ) {
-                if(ptm) {
-                    *ptm = ttm ;
-                }
-                return tt ;
-            }
-        }
-    }
-    dvr_log("Read clock from MCU failed!");
-    return (time_t)-1;
-}
-
-void mcu_readrtc()
-{
-    time_t t ;
-    struct tm ttm ;
-    t = mcu_r_rtc(&ttm) ;
-    if( (int)t > 0 ) {
-        dio_lock();
-        p_dio_mmap->rtc_year  = ttm.tm_year+1900 ;
-        p_dio_mmap->rtc_month = ttm.tm_mon+1 ;
-        p_dio_mmap->rtc_day   = ttm.tm_mday ;
-        p_dio_mmap->rtc_hour  = ttm.tm_hour ;
-        p_dio_mmap->rtc_minute= ttm.tm_min ;
-        p_dio_mmap->rtc_second= ttm.tm_sec ;
-        p_dio_mmap->rtc_millisecond = 0 ;
-        p_dio_mmap->rtc_cmd   = 0 ;	// cmd finish
-        dio_unlock();
-        return ;
-    }
-    p_dio_mmap->rtc_cmd   = -1 ;	// cmd error.
-}
-
-// 3 LEDs On Panel
-//   parameters:
-//      led:  0= USB flash LED, 1= Error LED, 2 = Video Lost LED
-//      flash: 0=off, 1=flash
-void mcu_led(int led, int flash)
-{
-    mcu_cmd( MCU_CMD_PANELLED, 2, led, (flash!=0) );
-}
-
-// Device Power
-//   parameters:
-//      device:  0= GPS, 1= Slave Eagle boards, 2=Network switch
-//      poweron: 0=poweroff, 1=poweron
-void mcu_devicepower(int device, int poweron )
-{
-    mcu_cmd( MCU_CMD_DEVICEPOWER, 2, device, poweron );
-}
-
-// reboot mcu, (with force-power-on)
-int mcu_reset()
-{
-    int r ;
-    char enteracommand[200] ;
-    mcu_sendcmd( MCU_CMD_RESET ) ;
-    r = mcu_read(enteracommand, sizeof(enteracommand)-1, 30000000, 1000000);
-    if( r>10 ) {
-        enteracommand[r]=0 ;
-        if( strcasestr( enteracommand, "command" ) ) {
-#ifdef MCU_DEBUG
-            printf("MCU reset detected!\n");
-#endif            
-            return 1 ;
-        }
-    }
-    return 0 ;
-}
-
-// update mcu firmware
-// return 1: success, 0: failed
-int mcu_update_firmware( char * firmwarefile) 
-{
-    int res = 0 ;
-    FILE * fwfile ;
-    int c ;
-    int rd ;
-    char responds[200] ;
-    static char cmd_updatefirmware[8] = "\x05\x01\x00\x01\x02\xcc" ;
-    
-    fwfile=fopen(firmwarefile, "rb");
-    
-    if( fwfile==NULL ) {
-        return 0 ;                  // failed, can't open firmware file
-    }
-    
-    // 
-    printf("Start update MCU firmware: %s\n", firmwarefile);
-    
-    // reset mcu
-    printf("Reset MCU.\n");
-    if( mcu_reset()==0 ) {              // reset failed.
-        printf("Failed\n");
-        return 0;
-    }
-    printf("Done.\n");
-    
-    // clean out serial buffer
-    memset( responds, 0, sizeof(responds)) ;
-    mcu_write( responds, sizeof(responds));
-    mcu_clear(1000000);
-    
-    printf("Erasing.\n");
-    rd=0 ;
-    if( mcu_write( cmd_updatefirmware, 5 ) ) {
-        rd=mcu_read( responds, sizeof(responds), 20000000, 500000 ) ;
-    }
-    
-    if( rd>=5 && 
-       responds[rd-5]==0x05 && 
-       responds[rd-4]==0x0 && 
-       responds[rd-3]==0x01 && 
-       responds[rd-2]==0x01 && 
-       responds[rd-1]==0x03 ) {
-       // ok ;
-       printf("Done.\n");
-       res=0 ;
-   }
-   else {
-       printf("Failed.\n");
-       return 0;                    // can't start fw update
-   }
-    
-    printf("Programming.\n");
-    // send firmware 
-    res = 0 ;
-    while( (c=fgetc( fwfile ))!=EOF ) {
-        if( mcu_write( &c, 1)!=1 ) 
-            break;
-        if( c=='\n' && mcu_dataready (0) ) {
-            rd = mcu_read(responds, sizeof(responds), 200000, 200000 );
-            if( rd>=5 &&
-               responds[0]==0x05 && 
-               responds[1]==0x0 && 
-               responds[2]==0x01 && 
-               responds[3]==0x03 && 
-               responds[4]==0x02 ) {
-                   res=1 ;
-                    break;                  // program done.
-            }
-            else if( rd>=5 &&
-               responds[rd-5]==0x05 && 
-               responds[rd-4]==0x0 && 
-               responds[rd-3]==0x01 && 
-               responds[rd-2]==0x03 && 
-               responds[rd-1]==0x02 ) {
-                   res=1 ;
-                    break;                  // program done.
-            }
-            else if( rd>=6 &&
-               responds[0]==0x06 && 
-               responds[1]==0x0 && 
-               responds[2]==0x01 && 
-               responds[3]==0x01 && 
-               responds[4]==0x03 ) {
-                    break;                  // receive error report
-            }
-            else if( rd>=6 &&
-               responds[rd-6]==0x06 && 
-               responds[rd-5]==0x0 && 
-               responds[rd-4]==0x01 && 
-               responds[rd-3]==0x01 && 
-               responds[rd-2]==0x03 ) {
-                    break;                  // receive error report
-            }
-        }
-    }
-
-    fclose( fwfile );
-
-    // wait a bit (10 seconds), for firmware update done signal
-    if( res==0 ) {
-        rd = mcu_read(responds, sizeof(responds), 10000000, 200000 );
-        if( rd>=5 &&
-            responds[0]==0x05 && 
-            responds[1]==0x0 && 
-            responds[2]==0x01 && 
-            responds[3]==0x03 && 
-            responds[4]==0x02 ) 
-        {
-            res=1 ;
-        }
-        else if( rd>=5 &&
-            responds[rd-5]==0x05 && 
-            responds[rd-4]==0x0 && 
-            responds[rd-3]==0x01 && 
-            responds[rd-2]==0x03 && 
-            responds[rd-1]==0x02 ) 
-        {
-            res=1 ;
-        }
-    }
-    if( res ) {
-        printf("Done.\n");
-    }
-    else {
-        printf("Failed.\n");
-    }
-    return res ;
-}
-
-static int bcd(int v)
-{
-    return (((v/10)%10)*0x10 + v%10) ;
-}
-
-// return 1: success
-//        0: failed
-int mcu_w_rtc(time_t tt)
-{
-    struct tm t ;
-    gmtime_r( &tt, &t);
-    if( mcu_cmd( MCU_CMD_WRITERTC, 7, 
-                bcd( t.tm_sec ),
-                bcd( t.tm_min ),
-                bcd( t.tm_hour ),
-                bcd( t.tm_wday ),
-                bcd( t.tm_mday ),
-                bcd( t.tm_mon + 1 ),
-                bcd( t.tm_year ) ) ) 
-    {
-        return 1 ;
-    }
-    return 0 ;
-}
-
-void mcu_setrtc()
+void time_setmcu()
 {
     int bsecond, bminute, bhour, bzero, bday, bmonth, byear ;
     dio_lock();
@@ -2333,7 +652,7 @@ void mcu_setrtc()
 }
 
 // sync system time to rtc
-void mcu_syncrtc()
+void time_syncrtc()
 {
     time_t t ;
     struct timeval current_time;
@@ -2347,7 +666,7 @@ void mcu_syncrtc()
     }
 }
 
-void mcu_rtctosys()
+void time_rtctosys()
 {
     struct timeval tv ;
     time_t rtc ;
@@ -2499,7 +818,7 @@ void wifi_up()
     p_dio_mmap->pwii_output |= 0x2000 ;
     dio_unlock();
     wifi_run=1 ;
-    printf("\nWifi up\n");
+    netdbg_print("Wifi up\n");
 }
 
 // bring down wifi adaptor
@@ -2515,7 +834,7 @@ void wifi_down()
         dio_lock();
         p_dio_mmap->pwii_output &= ~0x2000 ;
         dio_unlock();
-        printf("\nWifi down\n");
+        netdbg_print("Wifi down\n");
         wifi_run=0 ;
     }
 }
@@ -2763,6 +1082,13 @@ int appinit()
     config dvrconfig(dvrconfigfile);
     string v ;
     int i;
+
+    // setup netdbg
+    if( dvrconfig.getvalueint( "debug", "ioprocess" ) ) {
+        i = dvrconfig.getvalueint( "debug", "port" ) ;
+        v = dvrconfig.getvalue( "debug", "host" ) ;
+        netdbg_init( v.getstring(), i );
+    }
     
     // setup time zone
     string tz ;
@@ -2786,10 +1112,6 @@ int appinit()
         }
     }
 
-    v = dvrconfig.getvalue( "system", "logfile");
-    if (v.length() > 0){
-        strncpy( logfile, v.getstring(), sizeof(logfile));
-    }
     v = dvrconfig.getvalue( "system", "temp_logfile");
     if (v.length() > 0){
         strncpy( temp_logfile, v.getstring(), sizeof(temp_logfile));
@@ -2809,7 +1131,7 @@ int appinit()
     p=(char *)mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
     close( fd );								// fd no more needed
     if( p==(char *)-1 || p==NULL ) {
-        printf( "IO memory map failed!");
+        dvr_log( "IO memory map failed!");
         return 0;
     }
     p_dio_mmap = (struct dio_mmap *)p ;
@@ -2845,31 +1167,10 @@ int appinit()
     p_dio_mmap->devicepower = 0xffff;				// assume all device is power on
     
     p_dio_mmap->iopid = getpid () ;					// io process pid
-    
-    output_inverted = 0 ;
-    
-    for( i=0; i<32 ; i++ ) {
-        char outinvkey[50] ;
-        sprintf(outinvkey, "output%d_inverted", i+1);
-        if( dvrconfig.getvalueint( "io", outinvkey ) ) {
-            output_inverted |= (1<<i) ;
-        }
-    }
-    
+
     // check if sync rtc wanted
     
     g_syncrtc = dvrconfig.getvalueint("io", "syncrtc");
-    
-    // initilize serial port
-    v = dvrconfig.getvalue( "io", "serialport");
-    if( v.length()>0 ) {
-        strcpy( mcu_dev, v.getstring() );
-    }
-    mcu_baud = dvrconfig.getvalueint("io", "serialbaudrate");
-    if( mcu_baud<2400 || mcu_baud>115200 ) {
-            mcu_baud=DEFSERIALBAUD ;
-    }
-    mcu_init ();
 
     // smartftp variable
     smartftp_disable = dvrconfig.getvalueint("system", "smartftp_disable");
@@ -2879,31 +1180,17 @@ int appinit()
     if( !wifi_on ) {
         wifi_down();
     }
-        
-    // initialize mcu (power processor)
-    if( mcu_bootupready () ) {
-        // get MCU version
-        char mcu_firmware_version[80] ;
-        if( mcu_version( mcu_firmware_version ) ) {
-            printf("MCU: %s\n", mcu_firmware_version );
-            FILE * mcuversionfile=fopen("/var/dvr/mcuversion", "w");
-            if( mcuversionfile ) {
-                fprintf( mcuversionfile, "%s", mcu_firmware_version );
-                fclose( mcuversionfile );
-            }
-        }        
-    }
-    else {
-        dvr_log("MCU failed.");
-    }
+
+    // initial mcu
+    mcu_init (dvrconfig);
 
 #ifdef PWII_APP
     if( mcu_pwii_bootupready() ) {
-        printf( "PWII boot up ready!\n");
+        dvr_log( "PWII boot up ready!");
         // get MCU version
         char pwii_version[100] ;
         if( mcu_pwii_version( pwii_version ) ) {
-            printf("PWII version: %s\n", pwii_version );
+            dvr_log("PWII version: %s", pwii_version );
             FILE * pwiiversionfile=fopen("/var/dvr/pwiiversion", "w");
             if( pwiiversionfile ) {
                 fprintf( pwiiversionfile, "%s", pwii_version );
@@ -2933,137 +1220,12 @@ int appinit()
         
 #endif // PWII_APP   
 
-#ifdef TVS_APP
-    // setup GP5 polarity for TVS 
-    mcu_initsensor2(dvrconfig.getvalueint( "sensor2", "inverted" ));
-#endif
-        
     if( g_syncrtc ) {
-        mcu_rtctosys();
-    }
-    
-    // gforce sensor setup
-
-    gforce_log_enable = dvrconfig.getvalueint( "glog", "gforce_log_enable");
-
-    // get gsensor direction setup
-    
-    int dforward, dupward ;
-    dforward = dvrconfig.getvalueint( "io", "gsensor_forward");	
-    dupward  = dvrconfig.getvalueint( "io", "gsensor_upward");	
-    gsensor_direction = DEFAULT_DIRECTION ;
-    for(i=0; i<24; i++) {
-        if( dforward == direction_table[i][0] && dupward == direction_table[i][1] ) {
-            gsensor_direction = i ;
-            break;
-        }
-    }
-    p_dio_mmap->gforce_serialno=0;
-    
-    g_sensor_trigger_forward = 0.5 ;
-    v = dvrconfig.getvalue( "io", "gsensor_forward_trigger");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_trigger_forward);
-    }
-    g_sensor_trigger_backward = -0.5 ;
-    v = dvrconfig.getvalue( "io", "gsensor_backward_trigger");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_trigger_backward);
-    }
-    g_sensor_trigger_right = 0.5 ;
-    v = dvrconfig.getvalue( "io", "gsensor_right_trigger");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_trigger_right);
-    }
-    g_sensor_trigger_left = -0.5 ;
-    v = dvrconfig.getvalue( "io", "gsensor_left_trigger");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_trigger_left);
-    }
-    g_sensor_trigger_down = 1.0+2.5 ;
-    v = dvrconfig.getvalue( "io", "gsensor_down_trigger");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_trigger_down);
-    }
-    g_sensor_trigger_up = 1.0-2.5 ;
-    v = dvrconfig.getvalue( "io", "gsensor_up_trigger");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_trigger_up);
+        time_rtctosys();
     }
 
-    // new parameters for gsensor 
-    g_sensor_base_forward = 0.2 ;
-    v = dvrconfig.getvalue( "io", "gsensor_forward_base");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_base_forward);
-    }
-    g_sensor_base_backward = -0.2 ;
-    v = dvrconfig.getvalue( "io", "gsensor_backward_base");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_base_backward);
-    }
-    g_sensor_base_right = 0.2 ;
-    v = dvrconfig.getvalue( "io", "gsensor_right_base");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_base_right);
-    }
-    g_sensor_base_left = -0.2 ;
-    v = dvrconfig.getvalue( "io", "gsensor_left_base");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_base_left);
-    }
-    g_sensor_base_down = 1.0+2.0 ;
-    v = dvrconfig.getvalue( "io", "gsensor_down_base");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_base_down);
-    }
-    g_sensor_base_up = 1.0-2.0 ;
-    v = dvrconfig.getvalue( "io", "gsensor_up_base");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_base_up);
-    }
-    
-    g_sensor_crash_forward = 3.0 ;
-    v = dvrconfig.getvalue( "io", "gsensor_forward_crash");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_crash_forward);
-    }
-    g_sensor_crash_backward = -3.0 ;
-    v = dvrconfig.getvalue( "io", "gsensor_backward_crash");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_crash_backward);
-    }
-    g_sensor_crash_right = 3.0 ;
-    v = dvrconfig.getvalue( "io", "gsensor_right_crash");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_crash_right);
-    }
-    g_sensor_crash_left = -3.0 ;
-    v = dvrconfig.getvalue( "io", "gsensor_left_crash");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_crash_left);
-    }
-    g_sensor_crash_down = 1.0+5.0 ;
-    v = dvrconfig.getvalue( "io", "gsensor_down_crash");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_crash_down);
-    }
-    g_sensor_crash_up = 1.0-5.0 ;
-    v = dvrconfig.getvalue( "io", "gsensor_up_crash");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_crash_up);
-    }
-    
-     // gsensor trigger setup
-    if( mcu_gsensorinit() ) {       // g sensor available
-        dvr_log("G sensor detected!");
-        pidf = fopen( "/var/dvr/gsensor", "w" );
-        if( pidf ) {
-            fprintf(pidf, "1");
-            fclose(pidf);
-        }
-    }
-    
+    gforce_init( dvrconfig );
+     
     usewatchdog = dvrconfig.getvalueint("io", "usewatchdog");
     watchdogtimeout=dvrconfig.getvalueint("io", "watchdogtimeout");
     if( watchdogtimeout<10 )
@@ -3132,12 +1294,9 @@ void appfinish()
     if( watchdogenabled ) {
         mcu_watchdogdisable();
     }
-    
-    // close serial port
-    if( mcu_handle>0 ) {
-        close( mcu_handle );
-        mcu_handle=0;
-    }
+
+    gforce_finish();
+    mcu_finish();
     
     p_dio_mmap->iopid = 0 ;
     p_dio_mmap->usage-- ;
@@ -3280,7 +1439,7 @@ int main(int argc, char * argv[])
     signal(SIGTERM, sig_handler);
     signal(SIGUSR2, sig_handler);
     
-    printf( "DVR IO process started!\n");
+    dvr_log( "DVR IO process started!");
    
     // get default digital input
     mcu_dinput();
@@ -3329,10 +1488,10 @@ int main(int argc, char * argv[])
                 mcu_readrtc(); 
             }
             else if( p_dio_mmap->rtc_cmd == 2 ) {
-                mcu_setrtc();
+                time_setmcu();
             }
             else if( p_dio_mmap->rtc_cmd == 3 ) {
-                mcu_syncrtc();
+                time_syncrtc();
             }
             else {
                 p_dio_mmap->rtc_cmd=-1;		// command error, (unknown cmd)
@@ -3361,9 +1520,7 @@ int main(int argc, char * argv[])
             temperature_timer=runtime ;
             
             i=mcu_iotemperature();
-#ifdef MCU_DEBUG        
-            printf("Temperature: io(%d)",i );
-#endif
+            netdbg_print("Temperature: io(%d)",i );
             if( i > -127 && i < 127 ) {
                 static int saveiotemp = 0 ;
                 if( i>=75 && 
@@ -3380,9 +1537,7 @@ int main(int argc, char * argv[])
             }
             
             i=mcu_hdtemperature();
-#ifdef MCU_DEBUG        
-            printf(" hd(%d)\n", i );
-#endif
+            netdbg_print(" hd(%d)\n", i );
             if( i > -127 && i < 127 ) {
                 static int savehdtemp = 0 ;
 
@@ -3454,7 +1609,6 @@ int main(int argc, char * argv[])
                 mcu_reset();
             }
             
-            // printf("mode %d\n", p_dio_mmap->iomode);
             // do power management mode switching
             if( p_dio_mmap->iomode==IOMODE_RUN ) {                         // running mode
                 static int app_run_bell = 0 ;
@@ -3894,7 +2048,7 @@ int main(int argc, char * argv[])
     
     appfinish();
     
-    printf( "DVR IO process ended!\n");
+    dvr_log( "DVR IO process ended!");
     return 0;
 }
 

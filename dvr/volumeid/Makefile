@@ -21,12 +21,12 @@ CFLAGS=-I../dvrsvr -g -Wall
 
 all: volumeid md5check
 
-volumeid : volumeid.c $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
-	$(CC) $(CFLAGS) -o $@ volumeid.c $(EXTSOURCES) $(LDFLAGS)
+volumeid : volumeid.cpp $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
+	$(CC) $(CFLAGS) -o $@ volumeid.cpp $(EXTSOURCES) $(LDFLAGS)
 	cp volumeid ~/nfsroot/eagletest
 
-md5check :  md5check.c md5.c $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
-	$(CC) $(CFLAGS) -o $@ md5check.c md5.c $(EXTSOURCES) $(LDFLAGS)
+md5check :  md5check.cpp ../dvrsvr/md5.cpp $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
+	$(CC) $(CFLAGS) -o $@ md5check.cpp ../dvrsvr/md5.cpp $(EXTSOURCES) $(LDFLAGS)
 	cp md5check ~/nfsroot/eagletest
 
 %.o : %.c $(HEADERS) $(EXTHEADERS)

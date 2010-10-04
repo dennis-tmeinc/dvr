@@ -6,12 +6,12 @@ include ../arm_tool
 
 CC=$(CROSS_COMPILE_PREFIX)gcc
 
-SOURCES=glog.cpp
+SOURCES=glog.cpp netdbg.cpp ../ioprocess/diomap.cpp
 
 EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h ../ioprocess/diomap.h
 EXTSOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp
 
-HEADERS=
+HEADERS=netdbg.h ../ioprocess/diomap.h
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
@@ -19,8 +19,8 @@ LDFLAGS= -lpthread -lstdc++ -L../dvrsvr/$(EAGLE) -lsdk -ldadsp ../dvrsvr/$(EAGLE
 
 CFLAGS=-I../dvrsvr -g -Wall
 
-glog : $(OBJS) $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(EXTSOURCES) $(LDFLAGS)
+glog : $(OBJS) $(EXTSOURCES)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 	cp glog  $(debug_folder)
 
 

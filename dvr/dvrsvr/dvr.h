@@ -827,8 +827,8 @@ int net_sendok(int fd, int tout);
 int net_recvok(int fd, int tout);
 void net_message();
 int net_sendmsg( char * dest, int port, const void * msg, int msgsize );
+void net_dprint( char * fmt, ... ) ;
 #ifdef NETDBG
-int net_dprint( char * fmt, ... ) ;
 #define NET_DPRINT net_dprint
 #else
 #define NET_DPRINT
