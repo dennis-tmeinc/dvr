@@ -75,7 +75,22 @@ int serial_open(char * device, int buadrate)
     int hserial ;
     int i;
    
-    hserial = open( device, O_RDWR | O_NOCTTY );
+    // check if serial device match stdin ?
+    struct stat stdinstat ;
+    struct stat devstat ;
+    int r1, r2 ;
+    r1 = fstat( 0, &stdinstat ) ;           // get stdin stat
+    r2 = stat( device, &devstat ) ;
+    
+    if( r1==0 && r2==0 && stdinstat.st_dev == devstat.st_dev && stdinstat.st_ino == devstat.st_ino ) { // matched stdin
+        netdbg_print("Stdin match serail port!\n");
+        hserial = dup(0);                   // duplicate stdin
+ 		fcntl(hserial, F_SETFL, O_RDWR | O_NOCTTY );
+    }
+    else {
+       hserial = open( device, O_RDWR | O_NOCTTY );
+    }
+   
     if( hserial > 0 ) {
 #ifdef EAGLE32        
         if( strcmp( device, "/dev/ttyS1")==0 ) {    // this is hikvision specific serial port
@@ -612,6 +627,7 @@ void mcu_readrtc()
     struct tm ttm ;
     t = mcu_r_rtc(&ttm) ;
     if( (int)t > 0 ) {
+        dio_lock();
         p_dio_mmap->rtc_year  = ttm.tm_year+1900 ;
         p_dio_mmap->rtc_month = ttm.tm_mon+1 ;
         p_dio_mmap->rtc_day   = ttm.tm_mday ;
@@ -620,6 +636,7 @@ void mcu_readrtc()
         p_dio_mmap->rtc_second= ttm.tm_sec ;
         p_dio_mmap->rtc_millisecond = 0 ;
         p_dio_mmap->rtc_cmd   = 0 ;	// cmd finish
+        dio_unlock();
         return ;
     }
     p_dio_mmap->rtc_cmd   = -1 ;	// cmd error.
@@ -1053,7 +1070,6 @@ unsigned int mcu_pwii_ouputstatus()
     }
     return outputmap ;
 }
-
 
 #endif          // PWII_APP
 

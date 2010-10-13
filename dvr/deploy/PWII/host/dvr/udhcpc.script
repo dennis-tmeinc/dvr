@@ -1,0 +1,6 @@
+#!/bin/sh
+
+if [ $1 = "bound" ] then
+    ifconfig ${interface} ${ip}/${mask} 
+fi
+

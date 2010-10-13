@@ -367,6 +367,14 @@ int main()
         }
         
         // g-force data
+        v = getsetvalue( "gforce_enable" );
+        if( v ) {
+            dvrconfig.setvalueint( "glog", "gforce_log_enable", 1 );
+        }
+        else {
+            dvrconfig.setvalueint( "glog", "gforce_log_enable", 0 );
+        }
+        
         v = getsetvalue( "gforce_forward" );
         if( v ) {
             dvrconfig.setvalue(  "io", "gsensor_forward", v );
@@ -375,7 +383,8 @@ int main()
         if( v ) {
             dvrconfig.setvalue(  "io", "gsensor_upward", v );
         }
-        
+
+        // triggering value. (peak)
         v = getsetvalue( "gforce_forward_trigger" );
         if( v ) {
             dvrconfig.setvalue(  "io", "gsensor_forward_trigger", v );
@@ -401,6 +410,58 @@ int main()
             dvrconfig.setvalue(  "io", "gsensor_up_trigger", v );
         }
 
+        // base value. (don't know what it is, just do it)
+        v = getsetvalue( "gforce_forward_base" );
+        if( v ) {
+            dvrconfig.setvalue(  "io", "gsensor_forward_base", v );
+        }
+        v = getsetvalue( "gforce_backward_base" );
+        if( v ) {
+            dvrconfig.setvalue(  "io", "gsensor_backward_base", v );
+        }
+        v = getsetvalue( "gforce_right_base" );
+        if( v ) {
+            dvrconfig.setvalue(  "io", "gsensor_right_base", v );
+        }
+        v = getsetvalue( "gforce_left_base" );
+        if( v ) {
+            dvrconfig.setvalue(  "io", "gsensor_left_base", v );
+        }
+        v = getsetvalue( "gforce_downward_base" );
+        if( v ) {
+            dvrconfig.setvalue(  "io", "gsensor_down_base", v );
+        }
+        v = getsetvalue( "gforce_upward_base" );
+        if( v ) {
+            dvrconfig.setvalue(  "io", "gsensor_up_base", v );
+        }
+
+        // base value. (don't know what it is, just do it)
+        v = getsetvalue( "gforce_forward_crash" );
+        if( v ) {
+            dvrconfig.setvalue(  "io", "gsensor_forward_crash", v );
+        }
+        v = getsetvalue( "gforce_backward_crash" );
+        if( v ) {
+            dvrconfig.setvalue(  "io", "gsensor_backward_crash", v );
+        }
+        v = getsetvalue( "gforce_right_crash" );
+        if( v ) {
+            dvrconfig.setvalue(  "io", "gsensor_right_crash", v );
+        }
+        v = getsetvalue( "gforce_left_crash" );
+        if( v ) {
+            dvrconfig.setvalue(  "io", "gsensor_left_crash", v );
+        }
+        v = getsetvalue( "gforce_downward_crash" );
+        if( v ) {
+            dvrconfig.setvalue(  "io", "gsensor_down_crash", v );
+        }
+        v = getsetvalue( "gforce_upward_crash" );
+        if( v ) {
+            dvrconfig.setvalue(  "io", "gsensor_up_crash", v );
+        }        
+        
         // Video output selection
         v = getsetvalue( "videoout" );
         if( v ) {

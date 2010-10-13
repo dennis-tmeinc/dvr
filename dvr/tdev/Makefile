@@ -2,9 +2,8 @@
 # Makefile for Eagle32 DVR server app 
 #
 
-include ../arm_tool
-
-CC=$(CROSS_COMPILE_PREFIX)gcc
+include ../config
+include $(PROJDIR)/arm_tool
 
 SOURCES=tdevd.c
 
@@ -17,11 +16,11 @@ all: tdevd tdevmount
 
 tdevd : tdevd.c
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
-	cp tdevd ~/nfsroot/eagletest
+	cp tdevd $(debug_folder)
 
 tdevmount : tdevmount.cpp
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) -lstdc++
-	cp tdevmount ~/nfsroot/eagletest
+	cp tdevmount $(debug_folder)
 
 clean :
 	rm -f tdevd

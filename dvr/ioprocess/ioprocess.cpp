@@ -12,6 +12,7 @@
 #include <sys/wait.h>
 #include <sys/ioctl.h>
 #include <linux/rtc.h>
+#include <sys/stat.h>
 
 #include "../cfg.h"
 
@@ -107,8 +108,6 @@ int hdinserted=0 ;
 #define PANELLEDNUM (3)
 #define DEVICEPOWERNUM (5)
 
-struct dio_mmap * p_dio_mmap=NULL ;
-
 char dvriomap[100] = "/var/dvr/dvriomap" ;
 char * pidfile = "/var/dvr/ioprocess.pid" ;
 
@@ -161,6 +160,7 @@ int dvr_log(char *fmt, ...)
     time_t ti;
     int l;
     va_list ap ;
+    struct stat st ;
 
     ti = time(NULL);
     ctime_r(&ti, lbuf);
@@ -177,15 +177,20 @@ int dvr_log(char *fmt, ...)
 
     // send log to netdbg server
     netdbg_print("%s\n", lbuf);
-    
-    flog = fopen(logfile, "a");
-    if (flog) {
-        fprintf(flog, "%s\n", lbuf);
-        if( fclose(flog)==0 ) {
-            res=1 ;
+
+    // check logfile, it must be a symlink to hard disk
+    if( stat(logfile, &st)==0 ) {
+        if( S_ISLNK(st.st_mode) ) {
+            flog = fopen(logfile, "a");
+            if (flog) {
+                fprintf(flog, "%s\n", lbuf);
+                if( fclose(flog)==0 ) {
+                    res=1 ;
+                }
+            }
         }
     }
-
+    
     if( res==0 ) {
         flog = fopen(temp_logfile, "a");
         if (flog) {
@@ -228,6 +233,7 @@ void rtc_set(time_t utctime)
 }
 
 #ifdef PWII_APP
+
 int  zoomcam_enable = 0 ;
 char zoomcam_dev[20] = "/dev/ttyUSB0" ;
 int  zoomcam_baud = 115200 ;
@@ -425,8 +431,8 @@ void mcu_pwii_output()
     }
 }
 
+unsigned int pwii_keyreltime ;
 
-static unsigned int pwii_keyreltime ;
 // auto release keys REC, C2, TM
 void pwii_keyautorelease()
 {
@@ -434,6 +440,7 @@ void pwii_keyautorelease()
         p_dio_mmap->pwii_buttons &= ~PWII_BT_AUTORELEASE ;
     }
 }
+
 
 void mcu_pwii_init()
 {
@@ -510,12 +517,9 @@ int mcu_checkinputbuf(char * ibuf)
             netdbg_print("ignition on\n");
             break ;
 
-        case MCU_INPUT_ACCEL :                  // Accelerometer data
+        case MCU_INPUT_GSENSOR :                  // g sensor Accelerometer data
             mcu_response( ibuf );
-
-            gforce_log( ((float)(signed char)ibuf[5])/14 ,
-                           ((float)(signed char)ibuf[6])/14 ,
-                           ((float)(signed char)ibuf[7])/14 ) ;
+            gforce_log( (int)(signed char)ibuf[5], (int)(signed char)ibuf[6], (int)(signed char)ibuf[7]) ;
             break;
             
         default :
@@ -1128,13 +1132,11 @@ int appinit()
         return 0 ;
     }
     ftruncate(fd, sizeof(struct dio_mmap));
-    p=(char *)mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
-    close( fd );								// fd no more needed
-    if( p==(char *)-1 || p==NULL ) {
+    close(fd);
+    if( dio_mmap( dvriomap )==NULL ) {
         dvr_log( "IO memory map failed!");
-        return 0;
+        return 0 ;
     }
-    p_dio_mmap = (struct dio_mmap *)p ;
     
     if( p_dio_mmap->usage <=0 ) {
         memset( p_dio_mmap, 0, sizeof( struct dio_mmap ) );
@@ -1302,8 +1304,10 @@ void appfinish()
     p_dio_mmap->usage-- ;
     
     // clean up shared memory
-    munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
-    
+    dio_munmap();
+
+    netdbg_finish();
+
     // delete pid file
     unlink( pidfile );
 }
@@ -2026,6 +2030,13 @@ int main(int argc, char * argv[])
                 time_syncgps () ;
                 adjtime_timer=runtime ;
                 gpsavailable = 1 ;
+            }
+            // sound the bell on gps data
+            if( gpsvalid ) {
+                buzzer( 2, 300, 300 );
+            }
+            else {
+                buzzer( 3, 300, 300 );
             }
         }
         if( (runtime - adjtime_timer)> 600000 ||

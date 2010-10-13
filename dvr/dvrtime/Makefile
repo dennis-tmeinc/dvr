@@ -2,16 +2,15 @@
 # Makefile for Eagle32 DVR server app 
 #
 
-include ../arm_tool
-
-CC=$(CROSS_COMPILE_PREFIX)gcc
+include ../config
+include $(PROJDIR)/arm_tool
 
 SOURCES=dvrtime.cpp
 
 HEADERS=
 
 EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h ../ioprocess/diomap.h
-EXTSOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp 
+EXTSOURCES=../ioprocess/diomap.cpp ../dvrsvr/config.cpp ../dvrsvr/string.cpp 
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 CFLAGS=-I../dvrsvr -g -Wall
@@ -24,7 +23,6 @@ dvrtime : $(OBJS) $(EXTSOURCES) $(EXTHEADERS)
 
 dtime : $(SOURCES) $(EXTSOURCES) $(EXTHEADERS)
 	gcc $(CFLAGS) -o $@ $(SOURCES) $(EXTSOURCES) $(LDFLAGS)
-
 
 %.o : %.cpp $(HEADERS)  $(EXTHEADERS)
 	$(CC) $(DBGFLAGS) -Wall -c $< -o $@

@@ -2,14 +2,10 @@
 # Makefile for Eagle32 DVR ioprocess app 
 #
 
-CROSS_COMPILE_PREFIX=~/proj/eagle32/hik_toolchain/bin/arm-linux-
-
-include ../arm_tool
-
-CC=$(CROSS_COMPILE_PREFIX)gcc
+include ../config
+include $(PROJDIR)/arm_tool
 
 CFLAGS=-g
-
 LDFLAGS= 
 
 all: slaveip eaglehost

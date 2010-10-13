@@ -2,9 +2,8 @@
 # Makefile for Eagle32 DVR ioprocess app 
 #
 
-include ../arm_tool
-
-CC=$(CROSS_COMPILE_PREFIX)gcc
+include ../config
+include $(PROJDIR)/arm_tool
 
 EXTHEADERS=../cfg.h ../dvrsvr/cfg.h ../dvrsvr/genclass.h
 EXTSOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp
@@ -25,16 +24,16 @@ ioprocess : $(OBJS) $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 	cp ioprocess  $(debug_folder)
 
 
-panelled : panelled.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
-	$(CC) $(CFLAGS) -o $@ panelled.o $(EXTSOURCES) $(LDFLAGS)
+panelled : panelled.o diomap.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
+	$(CC) $(CFLAGS) -o $@ panelled.o diomap.o $(EXTSOURCES) $(LDFLAGS)
 	cp panelled  $(debug_folder)
 
-devicepower : devicepower.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
-	$(CC) $(CFLAGS) -o $@ devicepower.o $(EXTSOURCES) $(LDFLAGS)
+devicepower : devicepower.o diomap.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
+	$(CC) $(CFLAGS) -o $@ devicepower.o diomap.o $(EXTSOURCES) $(LDFLAGS)
 	cp devicepower  $(debug_folder)
 
-buzzer : buzzer.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
-	$(CC) $(CFLAGS) -o $@ buzzer.o $(EXTSOURCES) $(LDFLAGS)
+buzzer : buzzer.o diomap.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
+	$(CC) $(CFLAGS) -o $@ buzzer.o diomap.o $(EXTSOURCES) $(LDFLAGS)
 	cp buzzer  $(debug_folder)
 
 %.o : %.cpp $(HEADERS) $(EXTHEADERS)

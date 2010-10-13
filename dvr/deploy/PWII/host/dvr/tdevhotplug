@@ -361,6 +361,12 @@ case $1 in
 
             ifconfig ${devname} up ${wifi_ip}
             ifconfig ${devname} netmask ${wifi_mask}
+            
+            wifi_dhcp=`/davinci/dvr/cfg get network wifi_dhcp`
+            if [ ${wifi_dhcp} = "1" ]; then
+                # to use dhcp on wifi
+                /davinci/dvr/udhcpc -n -q -i ${devname} -s /davinci/dvr/udhcpc.script
+            fi
 
         fi
 

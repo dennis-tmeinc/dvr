@@ -265,7 +265,11 @@ int main()
         
         // g-force data
         // 
-
+        ivalue = dvrconfig.getvalueint( "glog", "gforce_log_enable");	
+        if( ivalue ) {
+            fprintf(fvalue, "\"gforce_enable\":\"on\"," );
+        }
+        
         value = dvrconfig.getvalue( "io", "gsensor_forward");	
         if( value.length()>0 ) {
             fprintf(fvalue, "\"gforce_forward\":\"%s\",", value.getstring() );
@@ -276,6 +280,7 @@ int main()
             fprintf(fvalue, "\"gforce_upward\":\"%s\",", value.getstring() );
         }
 
+        // gforce trigger value (peak value?)
         value = dvrconfig.getvalue( "io", "gsensor_forward_trigger");	
         if( value.length()>0 ) {
             fprintf(fvalue, "\"gforce_forward_trigger\":\"%s\",", value.getstring() );
@@ -299,6 +304,58 @@ int main()
         value = dvrconfig.getvalue( "io", "gsensor_up_trigger");	
         if( value.length()>0 ) {
             fprintf(fvalue, "\"gforce_upward_trigger\":\"%s\",", value.getstring() );
+        }
+
+        // base value (what?)
+        value = dvrconfig.getvalue( "io", "gsensor_forward_base");	
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"gforce_forward_base\":\"%s\",", value.getstring() );
+        }
+        value = dvrconfig.getvalue( "io", "gsensor_backward_base");	
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"gforce_backward_base\":\"%s\",", value.getstring() );
+        }
+        value = dvrconfig.getvalue( "io", "gsensor_right_base");	
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"gforce_right_base\":\"%s\",", value.getstring() );
+        }
+        value = dvrconfig.getvalue( "io", "gsensor_left_base");	
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"gforce_left_base\":\"%s\",", value.getstring() );
+        }
+        value = dvrconfig.getvalue( "io", "gsensor_down_base");	
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"gforce_downward_base\":\"%s\",", value.getstring() );
+        }
+        value = dvrconfig.getvalue( "io", "gsensor_up_base");	
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"gforce_upward_base\":\"%s\",", value.getstring() );
+        }
+
+        // crash value
+        value = dvrconfig.getvalue( "io", "gsensor_forward_crash");	
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"gforce_forward_crash\":\"%s\",", value.getstring() );
+        }
+        value = dvrconfig.getvalue( "io", "gsensor_backward_crash");	
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"gforce_backward_crash\":\"%s\",", value.getstring() );
+        }
+        value = dvrconfig.getvalue( "io", "gsensor_right_crash");	
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"gforce_right_crash\":\"%s\",", value.getstring() );
+        }
+        value = dvrconfig.getvalue( "io", "gsensor_left_crash");	
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"gforce_left_crash\":\"%s\",", value.getstring() );
+        }
+        value = dvrconfig.getvalue( "io", "gsensor_down_crash");	
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"gforce_downward_crash\":\"%s\",", value.getstring() );
+        }
+        value = dvrconfig.getvalue( "io", "gsensor_up_crash");	
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"gforce_upward_crash\":\"%s\",", value.getstring() );
         }
         
         ivalue=0 ;

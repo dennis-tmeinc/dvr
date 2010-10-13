@@ -1,7 +1,48 @@
 /*
  file gforce.cpp,
     read g force sensor data from mcu 
- */
+*/
+
+/*
+ 
+For vehicle, we define six directions, they are natural direction of a vehicle.
+ 
+    Forward   -       The direction where vehicle run forward
+    Backward  -       Opposite of Forward
+ 
+    Right     -       The right hand side where a person inside the vehicle and face forward
+    Left      -       Opposite of Right
+ 
+    Down      -       The direction toward the earth
+    Up        -       Opposite of Down
+ 
+For dvr device, directions are base on six faces of the device. A device can be a DVR box or a G-sensor device.
+ 
+    Front     -       Manufacturer defined. Usually it is the face of front panel where has model number, company logo and some indicators
+    Back      -       Opposite of front face. Usually it is the side where most cable connected to.
+ 
+    Right     -       The right hand side of the device when a person faces the device's front side.
+    Left      -       Opposite of Right face.
+ 
+    Bottom    -       Manufacturer defined. Usually it is the direction of the mounting surface
+    Top       -       Opposite of Bottom face.
+ 
+G sensing report to device of acceleration value (G value) base on device direction. 
+    Right +  / Left -       ------     Right is positive, left is negative 
+    Back +   / Front -      ------     Back is positive, front is negative
+    Bottom + / Top -        ------     Bottom is positive, top is negative 
+ 
+User (Installer) specify device mounting directions on DVR's setup screen, two mounting direction need to be setup.
+    Forward direction    -    6 options:  Front, Back, Right, Left, Bottom, Top       (default is Back)
+    Upward direction     -    6 options:  Front, Back, Right, Left, Bottom, Top       (default is Top)
+    ( default mounting directions is : back of unit face forward, top of unit face upward, right side face to run )
+
+Base on mounting direction setting, DVR application convert G value from device direction to vehicle direction, and record to log file.
+Vihecle direction :
+    Right + / Left -         ------    Right is positive, Left is negative  
+    Forward + / Backward -   ------    Forward is positive, Backward is negative
+    Down + / Up -            ------    Down is positive, Up is negative 
+*/
 
 #include <stdio.h>
 #include <signal.h>
@@ -32,7 +73,11 @@ int dvr_log(char *fmt, ...);
 
 int gforce_log_enable=0 ;
 
-// g value converting vectors , (Forward, Right, Down) = [vecttabe] * (Back, Right, Buttom)
+// g value converting vectors ,
+// for sensor to unit convertion :
+//      (Back, Right, Buttom)  = [vecttabe] * (X, Y, -Z)        // X,Y,Z are based on value from sensor
+// for unit to vehicle convertion:
+//      (Forward, Right, Down) = [vecttabe] * (Back, Right, Buttom)
 static signed char g_convert[24][3][3] = 
 {
 //  Front -> Forward    
@@ -164,7 +209,9 @@ static signed char g_convert[24][3][3] =
 
 } ;
 
-/* original direction table 
+/* 
+ direction table: 0=front, 1=back, 2=right, 3=left, 4=buttom, 5=top
+*/
 static char direction_table[24][2] = 
 {
     {0, 2}, {0, 3}, {0, 4}, {0,5},      // Front -> Forward
@@ -174,10 +221,10 @@ static char direction_table[24][2] =
     {4, 0}, {4, 1}, {4, 2}, {4,3},      // Buttom -> Forward
     {5, 0}, {5, 1}, {5, 2}, {5,3},      // Top   -> Forward
 };
-*/
 
-// direction table from harrison.  ??? what is the third number ???
+// direction table from harrison.  ??? what is this third number for ???
 // 0:Front,1:Back, 2:Right, 3:Left, 4:Bottom, 5:Top 
+/*
 static char direction_table[24][3] = 
 {
   {0, 2, 0x62}, // Forward:front, Upward:right    Leftward:top
@@ -205,457 +252,485 @@ static char direction_table[24][3] =
   {5, 2, 0x64}, // Forward:top, Upward:right,    Leftward:back
   {5, 3, 0x54}  // Forward:top, Upward:left,    Leftward:front
 };
+*/
 
-#define DEFAULT_DIRECTION   (7)
-static int gsensor_direction = DEFAULT_DIRECTION ;
-float g_sensor_trigger_forward ;
-float g_sensor_trigger_backward ;
-float g_sensor_trigger_right ;
-float g_sensor_trigger_left ;
-float g_sensor_trigger_down ;
-float g_sensor_trigger_up ;
-// new parameters for g sensor. (2010-04-08)
-float g_sensor_base_forward ;
-float g_sensor_base_backward ;
-float g_sensor_base_right ;
-float g_sensor_base_left ;
-float g_sensor_base_down ;
-float g_sensor_base_up ;
-float g_sensor_crash_forward ;
-float g_sensor_crash_backward ;
-float g_sensor_crash_right ;
-float g_sensor_crash_left ;
-float g_sensor_crash_down ;
-float g_sensor_crash_up ;
+#define DEFAULT_DIRECTION  (7)   
+static int gsensor_direction=DEFAULT_DIRECTION ;    // sensor direction relate to dvr unit. (HARD CODED to 7) 
+static int unit_direction ;                         // unit direction relate to vehicle.
 
-
-// return gsensor available
-int mcu_gsensorinit_old()
+static void direction_convertor( int &x, int &y, int &z, int direction, int revert=0 )
 {
-    char * responds ;
-    float trigger_back, trigger_front ;
-    float trigger_right, trigger_left ;
-    float trigger_bottom, trigger_top ;
-    char tr_rt, tr_lf, tr_bk, tr_fr, tr_bt, tr_tp ;
-    
-    if( !gforce_log_enable ) {
-        return 0 ;
-    }
-
-    trigger_back =
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_trigger_forward +
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_trigger_right +
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_trigger_down ;
-    trigger_right = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_trigger_forward + 
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_trigger_right + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_trigger_down ;
-    trigger_bottom = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_trigger_forward + 
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_trigger_right + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_trigger_down ;
-    trigger_front = 
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_trigger_backward + 
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_trigger_left + 
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_trigger_up ;
-    trigger_left = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_trigger_backward + 
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_trigger_left + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_trigger_up ;
-    trigger_top = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_trigger_backward + 
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_trigger_left + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_trigger_up ;
-
-    if( trigger_right >= trigger_left ) {
-        tr_rt  = (signed char)(trigger_right*0xe) ;    // Right Trigger
-        tr_lf  = (signed char)(trigger_left*0xe) ;     // Left Trigger
+    int cx, cy, cz ;
+    if( revert==0 ) {
+        cx = 
+            g_convert[direction][0][0] * x + 
+            g_convert[direction][0][1] * y + 
+            g_convert[direction][0][2] * z ;
+        cy = 
+            g_convert[direction][1][0] * x + 
+            g_convert[direction][1][1] * y + 
+            g_convert[direction][1][2] * z ;
+        cz = 
+            g_convert[direction][2][0] * x + 
+            g_convert[direction][2][1] * y + 
+            g_convert[direction][2][2] * z ;
     }
     else {
-        tr_rt  = (signed char)(trigger_left*0xe) ;     // Right Trigger
-        tr_lf  = (signed char)(trigger_right*0xe) ;    // Left Trigger
+        cx = 
+            g_convert[direction][0][0] * x + 
+            g_convert[direction][1][0] * y + 
+            g_convert[direction][2][0] * z ;
+        cy = 
+            g_convert[direction][0][1] * x + 
+            g_convert[direction][1][1] * y + 
+            g_convert[direction][2][1] * z ;
+        cz = 
+            g_convert[direction][0][2] * x + 
+            g_convert[direction][1][2] * y + 
+            g_convert[direction][2][2] * z ;
     }
-
-    if( trigger_back >= trigger_front ) {
-        tr_bk  = (signed char)(trigger_back*0xe) ;    // Back Trigger
-        tr_fr  = (signed char)(trigger_front*0xe) ;    // Front Trigger
-    }
-    else {
-        tr_bk  = (signed char)(trigger_front*0xe) ;    // Back Trigger
-        tr_fr  = (signed char)(trigger_back*0xe) ;    // Front Trigger
-    }
-
-    if( trigger_bottom >= trigger_top ) {
-        tr_bt = (signed char)(trigger_bottom*0xe) ;    // Bottom Trigger
-        tr_tp = (signed char)(trigger_top*0xe) ;    // Top Trigger
-    }
-    else {
-        tr_bt = (signed char)(trigger_top*0xe) ;    // Bottom Trigger
-        tr_tp = (signed char)(trigger_bottom*0xe) ;    // Top Trigger
-    }
-    
-    responds = mcu_cmd( MCU_CMD_GSENSORINIT, 6, tr_rt, tr_lf, tr_bk, tr_fr, tr_bt, tr_tp );
-    if( responds ) {
-        return responds[5] ;        // g_sensor_available
-    }
-    return 0 ;
+    x=cx ;
+    y=cy ;
+    z=cz ;
 }
 
-// init gsensor
-// return 1 if gsensor available
-int mcu_gsensorinit()
+void gforce_writeTab102Data(unsigned char *buf, int len)
 {
-    char * responds ;
+    char filename[256];
+    struct tm tm;
+    char hostname[128] ;
 
-    float trigger_back, trigger_front ;
-    float trigger_right, trigger_left ;
-    float trigger_bottom, trigger_top ;
-    int XP, XN, YP, YN, ZP, ZN;
+    gethostname(hostname, 128) ;
 
-    float base_back, base_front ;
-    float base_right, base_left ;
-    float base_bottom, base_top ;
-    int BXP, BXN, BYP, BYN, BZP, BZN;
+    time_t t = time(NULL);
+    localtime_r(&t, &tm);
+    snprintf(filename, sizeof(filename),
+             "/var/dvr/%s_%04d%02d%02d%02d%02d%02d_TAB102log_L.log",
+             hostname,
+             tm.tm_year + 1900,
+             tm.tm_mon + 1,
+             tm.tm_mday,
+             tm.tm_hour,
+             tm.tm_min,
+             tm.tm_sec );
+    FILE *fp;   
+    fp = fopen(filename, "w");
+    if (fp) {
 
-    float crash_back, crash_front ;
-    float crash_right, crash_left ;
-    float crash_bottom, crash_top ;
-    int CXP, CXN, CYP, CYN, CZP, CZN;
+        /*
+         todo:
+         convert origin X/Y/Z -> Unit Direction -> Vehicle Direction
+         before save to disk.
+         */
 
-    if( !gforce_log_enable ) {
-        return 0 ;
+        fwrite(buf, 1, len, fp);
+        fclose(fp);
     }
-
-    trigger_back = 
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_trigger_forward + 
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_trigger_right + 
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_trigger_down ;
-    trigger_right = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_trigger_forward + 
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_trigger_right + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_trigger_down ;
-    trigger_bottom = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_trigger_forward + 
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_trigger_right + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_trigger_down ;
-
-    trigger_front = 
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_trigger_backward +
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_trigger_left + 
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_trigger_up ;
-    trigger_left = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_trigger_backward +
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_trigger_left + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_trigger_up ;
-    trigger_top = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_trigger_backward +
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_trigger_left + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_trigger_up ;
-
-    if( trigger_right >= trigger_left ) {
-        XP  = (int)(trigger_right*14) ;    // Right Trigger
-        XN  = (int)(trigger_left*14) ;     // Left Trigger
-    }
-    else {
-        XP  = (int)(trigger_left*14) ;     // Right Trigger
-        XN  = (int)(trigger_right*14) ;    // Left Trigger
-    }
-
-    if( trigger_back >= trigger_front ) {
-        YP  = (int)(trigger_back*14) ;    // Back Trigger
-        YN  = (int)(trigger_front*14) ;    // Front Trigger
-    }
-    else {
-        YP  = (int)(trigger_front*14) ;    // Back Trigger
-        YN  = (int)(trigger_back*14) ;    // Front Trigger
-    }
-
-    if( trigger_bottom >= trigger_top ) {
-        ZP  = (int)(trigger_bottom*14) ;    // Bottom Trigger
-        ZN = (int)(trigger_top*14) ;    // Top Trigger
-    }
-    else {
-        ZP  = (int)(trigger_top*14) ;    // Bottom Trigger
-        ZN = (int)(trigger_bottom*14) ;    // Top Trigger
-    }
-
-    base_back = 
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_base_forward + 
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_base_right + 
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_base_down ;
-    base_right = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_base_forward + 
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_base_right + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_base_down ;
-    base_bottom = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_base_forward + 
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_base_right + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_base_down ;
-
-    base_front = 
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_base_backward +
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_base_left + 
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_base_up ;
-    base_left = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_base_backward +
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_base_left + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_base_up ;
-    base_top = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_base_backward +
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_base_left + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_base_up ;
-
-    if( base_right >= base_left ) {
-        BXP  = (int)(base_right*14) ;    // Right Trigger
-        BXN  = (int)(base_left*14) ;     // Left Trigger
-    }
-    else {
-        BXP  = (int)(base_left*14) ;     // Right Trigger
-        BXN  = (int)(base_right*14) ;    // Left Trigger
-    }
-
-    if( base_back >= base_front ) {
-        BYP  = (int)(base_back*14) ;    // Back Trigger
-        BYN  = (int)(base_front*14) ;    // Front Trigger
-    }
-    else {
-        BYP  = (int)(base_front*14) ;    // Back Trigger
-        BYN  = (int)(base_back*14) ;    // Front Trigger
-    }
-
-    if( base_bottom >= base_top ) {
-        BZP  = (int)(base_bottom*14) ;    // Bottom Trigger
-        BZN = (int)(base_top*14) ;    // Top Trigger
-    }
-    else {
-        BZP  = (int)(base_top*14) ;    // Bottom Trigger
-        BZN = (int)(base_bottom*14) ;    // Top Trigger
-    }
-
-    crash_back = 
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_crash_forward + 
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_crash_right + 
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_crash_down ;
-    crash_right = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_crash_forward + 
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_crash_right + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_crash_down ;
-    crash_bottom = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_crash_forward + 
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_crash_right + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_crash_down ;
-
-    crash_front = 
-        ((float)(g_convert[gsensor_direction][0][0])) * g_sensor_crash_backward +
-        ((float)(g_convert[gsensor_direction][1][0])) * g_sensor_crash_left + 
-        ((float)(g_convert[gsensor_direction][2][0])) * g_sensor_crash_up ;
-    crash_left = 
-        ((float)(g_convert[gsensor_direction][0][1])) * g_sensor_crash_backward +
-        ((float)(g_convert[gsensor_direction][1][1])) * g_sensor_crash_left + 
-        ((float)(g_convert[gsensor_direction][2][1])) * g_sensor_crash_up ;
-    crash_top = 
-        ((float)(g_convert[gsensor_direction][0][2])) * g_sensor_crash_backward +
-        ((float)(g_convert[gsensor_direction][1][2])) * g_sensor_crash_left + 
-        ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_crash_up ;
-
-    if( crash_right >= crash_left ) {
-        CXP  = (int)(crash_right*14) ;    // Right Trigger
-        CXN  = (int)(crash_left*14) ;     // Left Trigger
-    }
-    else {
-        CXP  = (int)(crash_left*14) ;     // Right Trigger
-        CXN  = (int)(crash_right*14) ;    // Left Trigger
-    }
-
-    if( crash_back >= crash_front ) {
-        CYP  = (int)(crash_back*14) ;    // Back Trigger
-        CYN  = (int)(crash_front*14) ;    // Front Trigger
-    }
-    else {
-        CYP  = (int)(crash_front*14) ;    // Back Trigger
-        CYN  = (int)(crash_back*14) ;    // Front Trigger
-    }
-
-    if( crash_bottom >= crash_top ) {
-        CZP  = (int)(crash_bottom*14) ;    // Bottom Trigger
-        CZN = (int)(crash_top*14) ;    // Top Trigger
-    }
-    else {
-        CZP  = (int)(crash_top*14) ;    // Bottom Trigger
-        CZN = (int)(crash_bottom*14) ;    // Top Trigger
-    }
-
-    responds = mcu_cmd( MCU_CMD_GSENSORINIT, 20, 
-        1,                                          // enable GForce
-        (int)(direction_table[gsensor_direction][2]),      // direction
-        BXP, BXN, BYP, BYN, BZP, BZN,               // base parameter
-        XP, XN, YP, YN, ZP, ZN,                     // trigger parameter
-        CXP, CXN, CYP, CYN, CZP, CZN );             // crash parameter
-    if( responds ) {
-        return responds[5] ;        // g_sensor_available
-    }
-    return 0 ;
 }
 
-
-void gforce_log( float gright, float gback, float gbuttom ) 
+int gforce_checksum(unsigned char * buf, int bsize)
 {
-    //        float gback, gright, gbuttom ;
-    float gbusforward, gbusright, gbusdown ;
+    unsigned char cs = 0;
+    int i;
 
-    netdbg_print("Accelerometer, --------- right=%.2f , back   =%.2f , buttom=%.2f .\n",     
-           gright,
+    for (i = 0; i < bsize; i++) {
+        cs += buf[i];
+    }
+
+    return cs==0 ;
+}
+
+#define UPLOAD_ACK_SIZE (10)
+
+int gforce_upload()
+{
+    unsigned char * responds ;
+    unsigned int uploadSize ;
+    unsigned int nbytes ;
+    responds = (unsigned char *)mcu_cmd( MCU_CMD_GSENSORUPLOAD, 1, 
+        (int)(direction_table[gsensor_direction][2]) );      // direction
+    if( responds!=NULL && *responds>=10 ) {
+        uploadSize = 
+            (responds[5] << 24) | 
+            (responds[6] << 16) | 
+            (responds[7] << 8) |
+            responds[8];
+        netdbg_print("gforce: upload size:%d\n", uploadSize);
+        if (uploadSize) {
+            //1024 for room, actually UPLOAD_ACK_SIZE(upload ack)
+            // + 8(0g + checksum)
+            int bufsize = uploadSize + 1024;
+            unsigned char *tbuf = (unsigned char *)malloc(bufsize);
+            if (!tbuf) {
+                netdbg_print("gforce: no enough memory!");
+                return 0 ;
+            }
+            nbytes = mcu_read((char *)tbuf, bufsize, 1000000, 1000000 );
+            netdbg_print("gforce: uploaded %d bytes", nbytes );
+
+            int success=0 ;
+            if (nbytes >= uploadSize + UPLOAD_ACK_SIZE + 8) {
+                if (gforce_checksum(tbuf + UPLOAD_ACK_SIZE, uploadSize + 8)) {
+                    success = 1;
+                    gforce_writeTab102Data(tbuf, uploadSize + UPLOAD_ACK_SIZE + 8);
+                } else {
+                    netdbg_print("gforce: upload checksum error.");
+                }
+            }
+            free(tbuf);
+            responds = (unsigned char *)mcu_cmd( MCU_CMD_GSENSORUPLOADACK, success );
+            if( responds ) {
+                return 1 ;
+            }
+        }
+    }
+    return 0;
+}
+
+// recevied gforce sensor data
+void gforce_log( int x, int y, int z )
+{
+    int gback, gright, gbuttom ;            // in unit direction
+    int gbusforward, gbusright, gbusdown ;  // in vehicle direction
+
+    netdbg_print("Gsensor value X=%d, Y=%d, Z=%d\n",     
+           x,
+           y,
+           z );
+
+    // convert sensor value (X/Y/X) to unit direction (back/right/buttom). 
+    //  gsensor_direction has been Hard coded to 7 (DEFAULT) for PWII, back=x bottom=-z
+    gback = x ;
+    gright = y ;
+    gbuttom = -z ;
+    direction_convertor( gback, gright, gbuttom, gsensor_direction ) ;
+    
+    netdbg_print("G unit value  B=%d, R=%d, T=%d\n",     
            gback,
+           gright,
            gbuttom );
+    
+    // convert from unit direction(back/right/buttom) to vehicle direction(forward/right/down). (base on user defined unit direction)
+    gbusforward=gback ;
+    gbusright=gright ;
+    gbusdown=gbuttom ;
+    direction_convertor( gbusforward, gbusright, gbusdown, unit_direction ) ;
 
-    // converting
-    gbusforward = 
-        ((float)(signed char)(g_convert[gsensor_direction][0][0])) * gback + 
-        ((float)(signed char)(g_convert[gsensor_direction][0][1])) * gright + 
-        ((float)(signed char)(g_convert[gsensor_direction][0][2])) * gbuttom ;
-    gbusright = 
-        ((float)(signed char)(g_convert[gsensor_direction][1][0])) * gback + 
-        ((float)(signed char)(g_convert[gsensor_direction][1][1])) * gright + 
-        ((float)(signed char)(g_convert[gsensor_direction][1][2])) * gbuttom ;
-    gbusdown = 
-        ((float)(signed char)(g_convert[gsensor_direction][2][0])) * gback + 
-        ((float)(signed char)(g_convert[gsensor_direction][2][1])) * gright + 
-        ((float)(signed char)(g_convert[gsensor_direction][2][2])) * gbuttom ;
-
-    netdbg_print("Accelerometer, converted right=%.2f , forward=%.2f , down  =%.2f .\n",     
-           gbusright,
+    netdbg_print("G vehicle v   F=%d, R=%d, D=%d\n",
            gbusforward,
+           gbusright,
            gbusdown );
        
     // save to log
     dio_lock();
     p_dio_mmap->gforce_serialno++ ;
-    p_dio_mmap->gforce_right = gbusright ;
-    p_dio_mmap->gforce_forward = gbusforward ;
-    p_dio_mmap->gforce_down = gbusdown ;
+    p_dio_mmap->gforce_forward = gbusforward/14.0 ;
+    p_dio_mmap->gforce_right = gbusright/14.0 ;
+    p_dio_mmap->gforce_down = gbusdown/14.0 ;
     dio_unlock();
     
 }
 
-
 // initialize serial port
 void gforce_init( config & dvrconfig ) 
 {
-    string v ;
     int i ;
+    string v ;
+    float fv ;
+    int x, y, z ;
+    // value in sensor's direction (X/Y/Z)
+    int trigger_x_pos, trigger_x_neg, trigger_y_pos, trigger_y_neg, trigger_z_pos, trigger_z_neg ;
+    int base_x_pos, base_x_neg, base_y_pos, base_y_neg, base_z_pos, base_z_neg ;
+    int crash_x_pos, crash_x_neg, crash_y_pos, crash_y_neg, crash_z_pos, crash_z_neg ;
 
+    p_dio_mmap->gforce_serialno=0 ;
+    // gforce log enabled ?
     gforce_log_enable = dvrconfig.getvalueint( "glog", "gforce_log_enable");
 
-    // get gsensor direction setup
-    
+    // unit direction
     int dforward, dupward ;
     dforward = dvrconfig.getvalueint( "io", "gsensor_forward");	
     dupward  = dvrconfig.getvalueint( "io", "gsensor_upward");	
-    gsensor_direction = DEFAULT_DIRECTION ;
+    unit_direction = DEFAULT_DIRECTION ;
     for(i=0; i<24; i++) {
         if( dforward == direction_table[i][0] && dupward == direction_table[i][1] ) {
-            gsensor_direction = i ;
+            unit_direction = i ;
+            netdbg_print("unit direction number: %d\n", i );
             break;
         }
     }
-    p_dio_mmap->gforce_serialno=0;
-    
-    g_sensor_trigger_forward = 0.5 ;
+
+    // trigger value in vehicle direction
+
+    // forword trigger value
+    fv = 0.5 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_forward_trigger");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_trigger_forward);
+        sscanf(v.getstring(),"%f", &fv);
     }
-    g_sensor_trigger_backward = -0.5 ;
-    v = dvrconfig.getvalue( "io", "gsensor_backward_trigger");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_trigger_backward);
-    }
-    g_sensor_trigger_right = 0.5 ;
+    x = (int)(fv*14) ;
+    if( x<0 ) x=-x ;
+
+    // right trigger value
+    fv = 0.5 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_right_trigger");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_trigger_right);
+        sscanf(v.getstring(),"%f", &fv);
     }
-    g_sensor_trigger_left = -0.5 ;
-    v = dvrconfig.getvalue( "io", "gsensor_left_trigger");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_trigger_left);
-    }
-    g_sensor_trigger_down = 1.0+2.5 ;
+    y = (int)(fv*14) ;
+    if( y<0 ) y=-y ;
+   
+    // down trigger value
+    fv = 1.0+2.5 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_down_trigger");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_trigger_down);
+        sscanf(v.getstring(),"%f", &fv);
     }
-    g_sensor_trigger_up = 1.0-2.5 ;
+    z = (int)(fv*14) ;
+    if( z<0 ) z=-z ;
+       
+    // convert trigger value from vehicle direction to unit direction
+    direction_convertor( x, y, z, unit_direction, 1 );
+    // convert trigger value from unit direction to sensor direction (X/Y/Z)
+    direction_convertor( x, y, z, gsensor_direction, 1 );
+    trigger_x_pos=x ;
+    trigger_y_pos=y ;
+    trigger_z_pos=z ;
+
+    // backward trigger value
+    fv = -0.5 ;               // default value
+    v = dvrconfig.getvalue( "io", "gsensor_backward_trigger");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &fv);
+    }
+    x = (int)(fv*14) ;
+    if( x>0 ) x=-x ;
+
+    // left trigger value
+    fv = -0.5 ;               // default value
+    v = dvrconfig.getvalue( "io", "gsensor_left_trigger");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &fv);
+    }
+    y = (int)(fv*14) ;
+    if( y>0 ) y=-y ;
+   
+    // up trigger value
+    fv = 1.0-2.5 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_up_trigger");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_trigger_up);
+        sscanf(v.getstring(),"%f", &fv);
     }
+    z = (int)(fv*14) ;
+    if( z>0 ) z=-z ;
+       
+    // convert trigger value from vehicle direction to unit direction
+    direction_convertor( x, y, z, unit_direction, 1 );
+    // convert trigger value from unit direction to sensor direction (X/Y/Z)
+    direction_convertor( x, y, z, gsensor_direction, 1 );
+    trigger_x_neg=x ;
+    trigger_y_neg=y ;
+    trigger_z_neg=z ;
 
-    // new parameters for gsensor 
-    g_sensor_base_forward = 0.2 ;
+    // base value in vehicle direction
+
+    // forword base value
+    fv = 0.2 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_forward_base");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_base_forward);
+        sscanf(v.getstring(),"%f", &fv);
     }
-    g_sensor_base_backward = -0.2 ;
-    v = dvrconfig.getvalue( "io", "gsensor_backward_base");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_base_backward);
-    }
-    g_sensor_base_right = 0.2 ;
+    x = (int)(fv*14) ;
+    if( x<0 ) x=-x ;
+
+    // right base value
+    fv = 0.2 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_right_base");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_base_right);
+        sscanf(v.getstring(),"%f", &fv);
     }
-    g_sensor_base_left = -0.2 ;
-    v = dvrconfig.getvalue( "io", "gsensor_left_base");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_base_left);
-    }
-    g_sensor_base_down = 1.0+2.0 ;
+    y = (int)(fv*14) ;
+    if( y<0 ) y=-y ;
+   
+    // down base value
+    fv = 1.0+2 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_down_base");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_base_down);
+        sscanf(v.getstring(),"%f", &fv);
     }
-    g_sensor_base_up = 1.0-2.0 ;
+    z = (int)(fv*14) ;
+    if( z<0 ) z=-z ;
+       
+    // convert base value from vehicle direction to unit direction
+    direction_convertor( x, y, z, unit_direction, 1 );
+    // convert base value from unit direction to sensor direction (X/Y/Z)
+    direction_convertor( x, y, z, gsensor_direction, 1 );
+    base_x_pos=x ;
+    base_y_pos=y ;
+    base_z_pos=z ;
+
+    // backward base value
+    fv = -0.2 ;               // default value
+    v = dvrconfig.getvalue( "io", "gsensor_backward_base");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &fv);
+    }
+    x = (int)(fv*14) ;
+    if( x>0 ) x=-x ;
+
+    // left base value
+    fv = -0.2 ;               // default value
+    v = dvrconfig.getvalue( "io", "gsensor_left_base");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &fv);
+    }
+    y = (int)(fv*14) ;
+    if( y>0 ) y=-y ;
+   
+    // up base value
+    fv = 1.0-2 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_up_base");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_base_up);
+        sscanf(v.getstring(),"%f", &fv);
     }
-    
-    g_sensor_crash_forward = 3.0 ;
+    z = (int)(fv*14) ;
+    if( z>0 ) z=-z ;
+       
+    // convert base value from vehicle direction to unit direction
+    direction_convertor( x, y, z, unit_direction, 1 );
+    // convert base value from unit direction to sensor direction (X/Y/Z)
+    direction_convertor( x, y, z, gsensor_direction, 1 );
+    base_x_neg=x ;
+    base_y_neg=y ;
+    base_z_neg=z ;
+
+    // crash value in vehicle direction
+
+    // forword crash value
+    fv = 3.0 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_forward_crash");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_crash_forward);
+        sscanf(v.getstring(),"%f", &fv);
     }
-    g_sensor_crash_backward = -3.0 ;
-    v = dvrconfig.getvalue( "io", "gsensor_backward_crash");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_crash_backward);
-    }
-    g_sensor_crash_right = 3.0 ;
+    x = (int)(fv*14) ;
+    if( x<0 ) x=-x ;
+
+    // right crash value
+    fv = 3.0 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_right_crash");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_crash_right);
+        sscanf(v.getstring(),"%f", &fv);
     }
-    g_sensor_crash_left = -3.0 ;
-    v = dvrconfig.getvalue( "io", "gsensor_left_crash");
-    if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_crash_left);
-    }
-    g_sensor_crash_down = 1.0+5.0 ;
+    y = (int)(fv*14) ;
+    if( y<0 ) y=-y ;
+   
+    // down crash value
+    fv = 1.0+5.0 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_down_crash");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_crash_down);
+        sscanf(v.getstring(),"%f", &fv);
     }
-    g_sensor_crash_up = 1.0-5.0 ;
+    z = (int)(fv*14) ;
+    if( z<0 ) z=-z ;
+       
+    // convert crash value from vehicle direction to unit direction
+    direction_convertor( x, y, z, unit_direction, 1 );
+    // convert crash value from unit direction to sensor direction (X/Y/Z)
+    direction_convertor( x, y, z, gsensor_direction, 1 );
+    crash_x_pos=x ;
+    crash_y_pos=y ;
+    crash_z_pos=z ;
+
+    // backward crash value
+    fv = -3.0 ;               // default value
+    v = dvrconfig.getvalue( "io", "gsensor_backward_crash");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &fv);
+    }
+    x = (int)(fv*14) ;
+    if( x>0 ) x=-x ;
+
+    // left crash value
+    fv = -3.0 ;               // default value
+    v = dvrconfig.getvalue( "io", "gsensor_left_crash");
+    if( v.length()>0 ) {
+        sscanf(v.getstring(),"%f", &fv);
+    }
+    y = (int)(fv*14) ;
+    if( y>0 ) y=-y ;
+   
+    // up crash value
+    fv = 1.0-3.0 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_up_crash");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &g_sensor_crash_up);
+        sscanf(v.getstring(),"%f", &fv);
     }
-    
-     // gsensor trigger setup
-    if( mcu_gsensorinit() ) {       // g sensor available
+    z = (int)(fv*14) ;
+    if( z>0 ) z=-z ;
+       
+    // convert crash value from vehicle direction to unit direction
+    direction_convertor( x, y, z, unit_direction, 1 );
+    // convert crash value from unit direction to sensor direction (X/Y/Z)
+    direction_convertor( x, y, z, gsensor_direction, 1 );
+    crash_x_neg=x ;
+    crash_y_neg=y ;
+    crash_z_neg=z ;
+
+    // adjust negtive value
+    if( base_x_pos<base_x_neg ) {
+        x=base_x_pos ;
+        base_x_pos=base_x_neg ;
+        base_x_neg=x ;
+    }
+    if( base_y_pos<base_y_neg ) {
+        y=base_y_pos ;
+        base_y_pos=base_y_neg ;
+        base_y_neg=y ;
+    }
+    if( base_z_pos<base_z_neg ) {
+        z=base_z_pos ;
+        base_z_pos=base_z_neg ;
+        base_z_neg=z ;
+    }
+    if( trigger_x_pos<trigger_x_neg ) {
+        x=trigger_x_pos ;
+        trigger_x_pos=trigger_x_neg ;
+        trigger_x_neg=x ;
+    }
+    if( trigger_y_pos<trigger_y_neg ) {
+        y=trigger_y_pos ;
+        trigger_y_pos=trigger_y_neg ;
+        trigger_y_neg=y ;
+    }
+    if( trigger_z_pos<trigger_z_neg ) {
+        z=trigger_z_pos ;
+        trigger_z_pos=trigger_z_neg ;
+        trigger_z_neg=z ;
+    }
+    if( crash_x_pos<crash_x_neg ) {
+        x=crash_x_pos ;
+        crash_x_pos=crash_x_neg ;
+        crash_x_neg=x ;
+    }
+    if( crash_y_pos<crash_y_neg ) {
+        y=crash_y_pos ;
+        crash_y_pos=crash_y_neg ;
+        crash_y_neg=y ;
+    }
+    if( crash_z_pos<crash_z_neg ) {
+        z=crash_z_pos ;
+        crash_z_pos=crash_z_neg ;
+        crash_z_neg=z ;
+    }
+     // send init value to mcu
+    char * responds = mcu_cmd( MCU_CMD_GSENSORINIT, 
+                       20,      // 20 parameters 
+                       1,       // enable GForce
+                       0x12,    // 0x12=keep all value in it original direction (@&$^-$)
+                       base_x_pos, base_x_neg, base_y_pos, base_y_neg, base_z_pos, base_z_neg,
+                       trigger_x_pos, trigger_x_neg, trigger_y_pos, trigger_y_neg, trigger_z_pos, trigger_z_neg,
+                       crash_x_pos, crash_x_neg, crash_y_pos, crash_y_neg, crash_z_pos, crash_z_neg ) ;
+    if( responds && responds[5] ) { // g_sensor available
         FILE * fgsensor ;
         dvr_log("G force sensor detected!");
         fgsensor = fopen( "/var/dvr/gsensor", "w" );
@@ -666,6 +741,7 @@ void gforce_init( config & dvrconfig )
     }
     else {
         dvr_log("No G force sensor.");
+        gforce_log_enable=0;                // dont' log and show gforce
     }
 }
 

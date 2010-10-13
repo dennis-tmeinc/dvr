@@ -16,6 +16,7 @@ SUBDIRS = dvrsvr\
        usbgenkey\
        volumeid\
        cfg\
+       dhcp\
        tmeft\
        usbid\
        usbnotify
@@ -55,21 +56,27 @@ firmware_cycle:
 	cd deploy/MDVR5100 ; ./mkdeploy MDVR5104 2 cycle
 	cd deploy/MDVR5100 ; ./mkdeploy MDVR5108 4 cycle
 
+ssh:
+	$(MAKE) -C dropbear
+
 rel:
 	date +%y.%m%d.%H > release
 
 app_tvs:
-	echo "proj=TVS21" > config
+	echo PROJDIR=`pwd` > config
+	echo "proj=TVS21" >> config
 	echo "EAGLE=eagle32" >> config
 	ln -sf cfg.h.TVS21 cfg.h
 
 app_pwii:
-	echo "proj=PWII" > config
+	echo PROJDIR=`pwd` > config
+	echo "proj=PWII" >> config
 	echo "EAGLE=eagle32" >> config
 	ln -sf cfg.h.PWII cfg.h
 	
 app_pw34:
-	echo "proj=PW34" > config
+	echo PROJDIR=`pwd` > config
+	echo "proj=PW34" >> config
 	echo "EAGLE=eagle34" >> config
 	ln -sf cfg.h.PW34 cfg.h
 
@@ -85,6 +92,7 @@ pw34: app_pw34 firmware
 	
 clean:
 	for dir in $(SUBDIRS); do $(MAKE) -C $$dir clean ; done
+	$(MAKE) -C dropbear clean
 	$(MAKE) -C test clean
 	$(MAKE) -C deploy/$(proj) clean
 	find -name \*~ -delete

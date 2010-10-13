@@ -156,11 +156,7 @@
 <td class="col1">GPS port:</td>
 <td>
 <select name="gpsport">
-    <option value="/dev/ttyS0">COM1</option>
-    <option value="/dev/ttyUSB0">USB0</option>
-    <option value="/dev/ttyUSB1">USB1</option>
-    <option value="/dev/ttyUSB2">USB2</option>
-    <option value="/dev/ttyUSB3">USB3</option>
+<!--#exec cmd="./gpsport.cgi"-->
 </select>
 </td>
 </tr>
@@ -196,6 +192,70 @@
 
 <tr>
 <td>&nbsp;</td>
+<td><input name="gforce_available" value="0" type="hidden" /></td>
+</tr>
+
+<tr id="id_gforce_enable" >
+<td class="col1">Enable G Force Sensor:</td>
+<td><input name="gforce_enable" value="on" type="checkbox" /></td>
+</tr>
+
+<tr id="id_gforce_forward" >
+<td class="col1">G-Force Forward Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_forward_base" size="5" />&nbsp;
+Peak&nbsp;<input name="gforce_forward_trigger" size="5" />&nbsp;
+Crash&nbsp;<input name="gforce_forward_crash" size="5" />
+</td>
+</tr>
+
+<tr id="id_gforce_backward" >
+<td class="col1">G-Force Backward Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_backward_base" size=5 />&nbsp;
+Peak&nbsp;<input name="gforce_backward_trigger" size=5 />&nbsp;
+Crash&nbsp;<input name="gforce_backward_crash" size=5 />
+</td>
+</tr>
+
+<tr id="id_gforce_right" >
+<td class="col1">G-Force Right Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_right_base" size=5 />&nbsp;
+Peak&nbsp;<input name="gforce_right_trigger" size=5 />&nbsp;
+Crash&nbsp;<input name="gforce_right_crash" size=5 />
+</td>
+</tr>
+
+<tr id="id_gforce_left" >
+<td class="col1">G-Force Left Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_left_base" size=5 />&nbsp;
+Peak&nbsp;<input name="gforce_left_trigger" size=5 />&nbsp;
+Crash&nbsp;<input name="gforce_left_crash" size=5 />
+</td>
+</tr>
+
+<tr id="id_gforce_downward" >
+<td class="col1">G-Force Downward Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_downward_base" size=5 />&nbsp;
+Peak&nbsp;<input name="gforce_downward_trigger" size=5 />&nbsp;
+Crash&nbsp;<input name="gforce_downward_crash" size=5 />
+</td>
+</tr>
+
+<tr id="id_gforce_upward" >
+<td class="col1">G-Force Upward Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_upward_base" size=5 />&nbsp;
+Peak&nbsp;<input name="gforce_upward_trigger" size=5 />&nbsp;
+Crash&nbsp;<input name="gforce_upward_crash" size=5 />
+</td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
 <td></td>
 </tr>
 
@@ -212,6 +272,16 @@ var formdata =
 <!--#include file="system_value" --> 
 ;
 JSONinitfield( formdata );
+
+if( formdata.gforce_available != "1" ) {
+    document.getElementById('id_gforce_enable').style.display="none" ;
+    document.getElementById('id_gforce_forward').style.display="none" ;
+    document.getElementById('id_gforce_backward').style.display="none" ;
+    document.getElementById('id_gforce_right').style.display="none" ;
+    document.getElementById('id_gforce_left').style.display="none" ;
+    document.getElementById('id_gforce_upward').style.display="none" ;
+    document.getElementById('id_gforce_downward').style.display="none" ;
+}
 
 </script>
 </body>

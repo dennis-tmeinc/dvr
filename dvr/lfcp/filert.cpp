@@ -137,7 +137,9 @@ void dio_finish()
 
 
 #define MAX_CHANNEL 16
+#ifndef DVRPORT
 #define DVRPORT 15111
+#endif
 
 //#define MYDEBUG
 //#define NET_DEBUG

@@ -2,7 +2,8 @@
 # Makefile for Eagle32 DVR projects
 #
 
-proj=TVS21
+include ../../config
+include $(PROJDIR)/arm_tool
 
 all:
 	./mkdeploy $(proj) 1

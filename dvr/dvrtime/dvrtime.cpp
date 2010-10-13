@@ -30,8 +30,6 @@ char dvrconfigfile[]="/etc/dvr/dvr.conf" ;
 
 #ifdef MCU_SUPPORT
 
-struct dio_mmap * p_dio_mmap ;
-
 char dvriomap[256] = "/var/dvr/dvriomap" ;
 
 #endif		// MCU_SUPPORT
@@ -238,28 +236,18 @@ int rtctolocal()
 int readmcu(struct tm * t)
 {
     int res=0;
-    int fd ;
     int i;
-    char * p ;
     config dvrconfig(dvrconfigfile);
     string iomapfile ;
     iomapfile = dvrconfig.getvalue( "system", "iomapfile");
     if( iomapfile.length()>0 ) {
         strncpy( dvriomap, iomapfile.getstring(), sizeof(dvriomap));
     }
-    fd = open(dvriomap, O_RDWR, S_IRWXU);
-    if( fd<=0 ) {
+    if( dio_mmap( dvriomap )==NULL ) {
         return 0 ;
     }
-    p=(char *)mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
-    close( fd );								// fd no more needed
-    if( p==(char *)-1 || p==NULL ) {
-        return 0;
-    }
-    p_dio_mmap = (struct dio_mmap *)p ;
-    
     if( p_dio_mmap->iopid<=0 ) {	// IO not started !
-        munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
+        dio_munmap();
         return 0 ;
     }
     
@@ -281,16 +269,18 @@ int readmcu(struct tm * t)
     }
     
     if( p_dio_mmap->rtc_cmd==0 ) {
+        dio_lock();
         t->tm_year=p_dio_mmap->rtc_year-1900 ;
         t->tm_mon =p_dio_mmap->rtc_month-1 ;
         t->tm_mday=p_dio_mmap->rtc_day ;
         t->tm_hour=p_dio_mmap->rtc_hour ;
         t->tm_min =p_dio_mmap->rtc_minute ;
         t->tm_sec =p_dio_mmap->rtc_second ;
+        dio_unlock();
         mktime(t);
         res=1 ;
     }
-    munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
+    dio_munmap();
     return res ;
 }
 
@@ -299,27 +289,17 @@ int readmcu(struct tm * t)
 int writemcu(struct tm * t)
 {
     int res=0;
-    int fd ;
     int i;
-    char * p ;
     config dvrconfig(dvrconfigfile);
     string iomapfile( dvrconfig.getvalue( "system", "iomapfile") ) ;
     if( iomapfile.length()>0 ) {
         strncpy( dvriomap, iomapfile.getstring(), sizeof(dvriomap));
     }
-    fd = open(dvriomap, O_RDWR, S_IRWXU);
-    if( fd<=0 ) {
+    if( dio_mmap( dvriomap )==NULL ) {
         return 0 ;
     }
-    p=(char *)mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
-    close( fd );								// fd no more needed
-    if( p==(char *)-1 || p==NULL ) {
-        return 0;
-    }
-    p_dio_mmap = (struct dio_mmap *)p ;
-    
     if( p_dio_mmap->iopid<=0 ) {	// IO not started !
-        munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
+        dio_munmap();
         return res ;
     }
     
@@ -332,6 +312,7 @@ int writemcu(struct tm * t)
         }
         usleep(1000);
     }
+    dio_lock();
     p_dio_mmap->rtc_year=t->tm_year+1900 ;
     p_dio_mmap->rtc_month=t->tm_mon+1;
     p_dio_mmap->rtc_day=t->tm_mday;
@@ -339,6 +320,7 @@ int writemcu(struct tm * t)
     p_dio_mmap->rtc_minute=t->tm_min;
     p_dio_mmap->rtc_second=t->tm_sec;
     p_dio_mmap->rtc_cmd = 2 ;		// set rtc command
+    dio_unlock();
     // wait 
     for( i=0;i<1000; i++ ) {
         if( p_dio_mmap->rtc_cmd!=2 ) 
@@ -349,7 +331,7 @@ int writemcu(struct tm * t)
     if( p_dio_mmap->rtc_cmd==0 ) {
         res=1 ;
     }
-    munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
+    dio_munmap();
     return res ;
 }
 
@@ -425,26 +407,16 @@ int mcutolocal()
 int readgps(struct tm * t)
 {
     int res=0;
-    int fd ;
-    char * p ;
     config dvrconfig(dvrconfigfile);
     string iomapfile( dvrconfig.getvalue( "system", "iomapfile")) ;
     if( iomapfile.length()>0 ) {
         strncpy( dvriomap, iomapfile.getstring(), sizeof(dvriomap));
     }
-    fd = open(dvriomap, O_RDWR, S_IRWXU);
-    if( fd<=0 ) {
+    if( dio_mmap( dvriomap )==NULL ) {
         return 0 ;
     }
-    p=(char *)mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
-    close( fd );								// fd no more needed
-    if( p==(char *)-1 || p==NULL ) {
-        return 0;
-    }
-    p_dio_mmap = (struct dio_mmap *)p ;
-    
     if( p_dio_mmap->iopid<=0 ) {	// IO not started !
-        munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
+        dio_munmap() ;
         return res ;
     }
     
@@ -453,8 +425,7 @@ int readgps(struct tm * t)
         gmtime_r( &tt, t );
         res=1 ;
     }
-    
-    munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
+    dio_munmap();
     return res ;
 }
 

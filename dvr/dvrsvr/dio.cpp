@@ -5,7 +5,6 @@
 
 #include "../ioprocess/diomap.h"
 
-struct dio_mmap * p_dio_mmap ;
 static unsigned int dio_inputmap ;
 int dio_record;
 int dio_capture;
@@ -429,15 +428,26 @@ void dio_devicepower(int onoffmaps)
     dio_unlock();
 }
 
-int dio_getgforce( float * gfb, float * glr, float *gud )
+int dio_getgforce( float * gf, float * gr, float *gd )
 {
+    static int gforceupdtime ;  
+    static int gforceserialno ;
     int v=0 ;
     dio_lock();
     if( p_dio_mmap && p_dio_mmap->glogpid>0 && p_dio_mmap->gforce_serialno ) {
-        *gfb = p_dio_mmap->gforce_forward ;
-        *glr = p_dio_mmap->gforce_right ;
-        *gud = p_dio_mmap->gforce_down ;
-        v = 1 ;
+        if( gforceserialno !=  p_dio_mmap->gforce_serialno ) {
+            v=1 ;
+            gforceupdtime=g_timetick ;
+            gforceserialno = p_dio_mmap->gforce_serialno ;
+        }
+        else if( (g_timetick-gforceupdtime)<5000 ) {
+            v=1 ;
+        }
+        if( v ) {
+            *gf = p_dio_mmap->gforce_forward ;
+            *gr = p_dio_mmap->gforce_right ;
+            *gd = p_dio_mmap->gforce_down ;
+        }
     }
     dio_unlock();
     return v;
@@ -520,31 +530,13 @@ int dio_syncrtc()
 
 void dio_init()
 {
-    int i;
-    int fd ;
-    void * p ;
     string iomapfile ;
     config dvrconfig(dvrconfigfile);
-    iomapfile = dvrconfig.getvalue( "system", "iomapfile");
     
     dio_inputmap = 0 ;
     dio_record = 1 ;
     p_dio_mmap=NULL ;
-    if( iomapfile.length()==0 ) {
-        return ;						// no DIO.
-    }
-    for( i=0; i<10; i++ ) {				// retry 10 times
-        fd = open(iomapfile.getstring(), O_RDWR );
-        if( fd>0 ) {
-            break ;
-        }
-        sleep(1);
-    }
-    if( fd<=0 ) {
-        dvr_log( "IO module not started!");
-        return ;
-    }
-
+    
 #ifdef    PWII_APP
     pwii_front_ch = dvrconfig.getvalueint( "pwii", "front");
     pwii_rear_ch = dvrconfig.getvalueint( "pwii", "rear");
@@ -552,14 +544,14 @@ void dio_init()
         pwii_rear_ch = pwii_front_ch+1 ;
     }
 #endif
-    
-    p=mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
-    close( fd );                                // don't need fd to use memory map.
-    if( p==(void *)-1 || p==NULL ) {
-        dvr_log( "IO memory map failed!");
+    iomapfile = dvrconfig.getvalue( "system", "iomapfile");
+    if( iomapfile.length()==0 ) {
+        return ;						// no DIO.
+    }
+    if( dio_mmap( iomapfile.getstring() )==NULL ) {
+        dvr_log( "IO module not started!");
         return ;
     }
-    p_dio_mmap = (struct dio_mmap *)p ;
     dio_lock();
     p_dio_mmap->lockpower = 0 ;
     p_dio_mmap->dvrpid = getpid () ;
@@ -569,6 +561,7 @@ void dio_init()
     p_dio_mmap->dvrcmd = 0 ;
     p_dio_mmap->dvrstatus = DVR_RUN ;
     dio_unlock();
+
     return ;
 }
 
@@ -583,7 +576,6 @@ void dio_uninit()
         p_dio_mmap->dvrstatus &= ~DVR_RUN ;
         p_dio_mmap->dvrwatchdog = -1 ;
         dio_unlock();
-        munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
-        p_dio_mmap=NULL ;
+        dio_munmap();
     }
 }

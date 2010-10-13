@@ -60,3 +60,14 @@ void netdbg_print( char * fmt, ... )
         va_end( ap );
     }
 }
+
+void netdbg_dump( void * data, int size )
+{
+    if( netdbg_on ) {
+        int i ;
+        unsigned char * cbuf = (unsigned char *)data ;
+        for( i=0; i<size ; i++ ) {
+            netdbg_print("%02x ", (int)cbuf[i] );
+        }
+    }
+}

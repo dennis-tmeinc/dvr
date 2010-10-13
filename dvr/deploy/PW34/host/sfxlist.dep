@@ -27,6 +27,10 @@ sfxrun.dep sfxrun
 ./dvr/start.sh
 ./dvr/firmwareid
 ./dvr/httpd.sfx
+./dvr/udhcpc
+./dvr/udhcpc.script
+./dvr/dropbear dvr/sshd
+./dvr/rsa_host_key
 ./dvr/librt-0.9.28.so
 ./dvr/mountdisks
 ./dvr/ioprocess

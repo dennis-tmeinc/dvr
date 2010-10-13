@@ -2,9 +2,8 @@
 # Makefile for Eagle32 DVR ioprocess app 
 #
 
-include ../arm_tool
-
-CC=$(CROSS_COMPILE_PREFIX)gcc
+include ../config
+include $(PROJDIR)/arm_tool
 
 SOURCES=cfg.cpp
 
@@ -24,6 +23,7 @@ all : cfg cfgpc
 cfg : $(SOURCES) $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ $(SOURCES) $(EXTSOURCES) $(LDFLAGS)
 	cp cfg $(debug_folder)
+	$(STRIP) cfg
 
 cfgpc : $(SOURCES) $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 	gcc $(CFLAGS) -o $@ $(SOURCES) $(EXTSOURCES) $(LDFLAGS)

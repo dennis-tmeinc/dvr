@@ -84,18 +84,22 @@ int openport( char * port, int baud )
 	int eagle485=0;
 
 	// initilize serial port
+#ifdef EAGLE32    
 	if( strcmp( port, "/dev/ttyS1")==0 ) {
 		eagle485=1 ;
 	}
+#endif    
 	fd = open( port, O_RDWR | O_NOCTTY | O_NDELAY );
 	if( fd > 0 ) {
  		fcntl(fd, F_SETFL, 0);
+#ifdef EAGLE32        
 		if( eagle485 ) {		// eagle485
 			// Use Hikvision API to setup serial port (RS485)
 			InitRS485(fd, baud, DATAB8, STOPB1, NOPARITY, NOCTRL);
 		}
 		else {
-			struct termios tios ;
+#endif        
+            struct termios tios ;
 			speed_t baud_t ;
 			memset( &tios, 0, sizeof(tios) );
 			tcgetattr(fd, &tios);
@@ -119,7 +123,9 @@ int openport( char * port, int baud )
 			
 			tcflush(fd, TCIOFLUSH);
 			tcsetattr(fd, TCSANOW, &tios);
+#ifdef EAGLE32            
 		}
+#endif        
 	}
 	else {
 		// even no serail port, we still let process run

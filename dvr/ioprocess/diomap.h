@@ -6,6 +6,8 @@
 #include <semaphore.h>
 #include <sched.h>
 #include <unistd.h>
+#include <sys/mman.h>
+#include <fcntl.h>
 
 struct dio_mmap {
     int     usage ;         // how many processes use this structure
@@ -155,5 +157,6 @@ struct dio_mmap {
 extern struct dio_mmap * p_dio_mmap;
 void dio_lock();
 void dio_unlock();
-
+struct dio_mmap * dio_mmap(char * mmapfile=NULL);
+void dio_munmap();
 #endif

@@ -777,13 +777,20 @@ void capture::updateOSD()
         osd.osdline[line][i++]=y_max - bottom_margin + linepos[line]*line_dist; // y position
     }
 
-    float gfb, glr, gud ;
-    if( m_show_gforce && dio_getgforce( &gfb, &glr, &gud ) ) {
-        sprintf( osdbuf, "F%5.2lf,L%5.2lf,U%5.2lf", gfb, glr, gud);
+    float gf, gr, gd ;
+    if( m_show_gforce && dio_getgforce( &gf, &gr, &gd ) ) {
+        sprintf( osdbuf, "%c%2.1lf %c%2.1lf %c%2.1lf", 
+                gf>=0.0?'F':'B',
+                gf>=0.0?gf:-gf, 
+                gr>=0.0?'R':'L',
+                gr>=0.0?gr:-gr,
+                gd>=0.0?'D':'U',
+                gd>=0.0?gd:-gd );
         k=osdbuf ;
         while( *k && i<50 ) {
             osd.osdline[line][i++] = * k++ ;
         }
+        osd.osdline[line][i] = 0 ;
     }
     osd.osdline[line][i]=0 ;            // null terminal
     line++ ;
@@ -1079,9 +1086,15 @@ void capture::updateOSD()
         osd.osdline[line][i++]=y_max - bottom_margin + linepos[line]*line_dist; // y position
     }
 
-    float gfb, glr, gud ;
-    if( m_show_gforce && dio_getgforce( &gfb, &glr, &gud ) ) {
-        sprintf( osdbuf, "F%5.2lf,L%5.2lf,U%5.2lf", gfb, glr, gud);
+    float gf, gr, gd ;
+    if( m_show_gforce && dio_getgforce( &gf, &gr, &gd ) ) {
+        sprintf( osdbuf, "%c%2.1lf %c%2.1lf %c%2.1lf", 
+                gf>=0.0?'F':'B',
+                gf>=0.0?gf:-gf, 
+                gr>=0.0?'R':'L',
+                gr>=0.0?gr:-gr,
+                gd>=0.0?'D':'U',
+                gd>=0.0?gd:-gd );
         k=osdbuf ;
         while( *k && i<50 ) {
             osd.osdline[line][i++] = * k++ ;

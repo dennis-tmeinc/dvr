@@ -1,16 +1,16 @@
 
-PROJDIR=~/proj/eagle32/dvr/dvr
-
-include $(PROJDIR)/config
-
 # cross compile toolchain
 ifeq ($(EAGLE),eagle34)
-CROSS_COMPILE_PREFIX=~/proj/eagle34/hiktoolchain/bin/arm_v5t_le-
+CROSS_COMPILE_PREFIX=/home/dennis/proj/eagle34/hiktoolchain/bin/arm_v5t_le-
 else ifeq ($(EAGLE),eagle32)
-CROSS_COMPILE_PREFIX=~/proj/eagle32/hik_toolchain/bin/arm-linux-
+CROSS_COMPILE_PREFIX=/home/dennis/proj/eagle32/hik_toolchain/bin/arm-linux-
 else
 CROSS_COMPILE_PREFIX=
 endif
 
+export CROSS_COMPILE=$(CROSS_COMPILE_PREFIX)
+export CC=$(CROSS_COMPILE_PREFIX)gcc
+export STRIP=$(CROSS_COMPILE_PREFIX)strip
+
 # debugging folder
-debug_folder=~/nfsroot/eagletest
+debug_folder=/home/dennis/nfsroot/eagletest

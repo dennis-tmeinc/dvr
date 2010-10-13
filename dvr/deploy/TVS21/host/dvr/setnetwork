@@ -4,7 +4,7 @@
 ifconfig eth0:1 up `/davinci/dvr/cfg get network eth_ip`
 ifconfig eth0:1 netmask `/davinci/dvr/cfg get network eth_mask`
 
-// reconfig wifi, (if interface availabe)
+# reconfig wifi, (if interface availabe)
 if [ -f /var/dvr/wifidev ] ; then
   interface=`cat /var/dvr/wifidev`
   if [ -d /sys/class/net/${interface} ] ; then 

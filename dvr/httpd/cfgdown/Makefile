@@ -2,9 +2,8 @@
 # Makefile for Eagle32 DVR dvrsetup app 
 #
 
-include ../../arm_tool
-
-CC=$(CROSS_COMPILE_PREFIX)gcc
+include ../../config
+include $(PROJDIR)/arm_tool
 
 SOURCES=
 
@@ -24,12 +23,12 @@ cfgdown.cgi: cfgdown.c $(EXTSOURCES) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ cfgdown.c $(LDFLAGS)
 	cp cfgdown.cgi  $(debug_folder)/www
 
-dvrstatus.cgi : dvrstatus.cpp $(EXTHEADERS) $(EXTSOURCES)
-	$(CC) $(CFLAGS) -o $@ dvrstatus.cpp $(LDFLAGS)
+dvrstatus.cgi : dvrstatus.cpp $(EXTHEADERS) $(EXTSOURCES) ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h
+	$(CC) $(CFLAGS) -o $@ dvrstatus.cpp ../../ioprocess/diomap.cpp $(LDFLAGS)
 	cp $@  $(debug_folder)/www
 
-cfgreport.cgi : cfgreport.cpp $(EXTHEADERS) $(EXTSOURCES)
-	$(CC) $(CFLAGS) -o $@ cfgreport.cpp $(EXTSOURCES) $(LDFLAGS)  -lstdc++
+cfgreport.cgi : cfgreport.cpp $(EXTHEADERS) $(EXTSOURCES) ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h
+	$(CC) $(CFLAGS) -o $@ cfgreport.cpp ../../ioprocess/diomap.cpp $(EXTSOURCES) $(LDFLAGS)  -lstdc++
 	cp $@  $(debug_folder)/www
 
 %.o : %.c $(HEADERS)

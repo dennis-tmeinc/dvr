@@ -8,13 +8,13 @@
 */ 
 
 // atomically swap value
-int atomic_swap( int *m, int v)
-{
-    register int result ;
 /*
     result=*m ;
     *m = v ;
 */
+int atomic_swap( int *m, int v)
+{
+    register int result ;
     asm volatile (
         "swp  %0, %2, [%1]\n\t"
         : "=r" (result)
@@ -32,7 +32,7 @@ void dio_lock()
                 sched_yield();
             }
             else {
-                // yield too many times ?
+                // yield too many times, let's sleep to save CPU. 
                 usleep(1);
             }
         }
@@ -42,6 +42,36 @@ void dio_lock()
 void dio_unlock()
 {
     if( p_dio_mmap ) {
-        p_dio_mmap->lock=0;
+        p_dio_mmap->lock=0;         // 32bit int assignment is atomic already
     }
+}
+
+struct dio_mmap * p_dio_mmap ;
+
+struct dio_mmap * dio_mmap(char * mmapfile)
+{
+    int fd ;
+    void * p ;
+    if( mmapfile==NULL ) {
+        fd = open("/var/dvr/dvriomap", O_RDWR );
+    }
+    else {
+        fd = open( mmapfile, O_RDWR, S_IRWXU);
+    }
+    if( fd<=0 ) {
+        return NULL ;
+    }
+    p=mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
+    close( fd );								// fd no more needed
+    if( p==(void *)-1 ) {
+        p=NULL ;
+    }
+    p_dio_mmap=(struct dio_mmap *)p ;
+    return  p_dio_mmap ;
+}
+
+void dio_munmap()
+{
+    munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
+    p_dio_mmap=NULL ;
 }

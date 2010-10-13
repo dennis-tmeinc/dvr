@@ -2,9 +2,8 @@
 # Makefile for Eagle32 DVR web base setup app 
 #
 
-include ../../arm_tool
-
-CC=$(CROSS_COMPILE_PREFIX)gcc
+include ../../config
+include $(PROJDIR)/arm_tool
 
 #SOURCES=eagle_setup.cpp md5.cpp
 SOURCES=eagle_setup.cpp ../../dvrsvr/md5.cpp

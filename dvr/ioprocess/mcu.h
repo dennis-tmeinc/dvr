@@ -25,14 +25,18 @@
 #define MCU_CMD_DEVICEPOWER     (0x2e)
 #define MCU_CMD_PANELLED        (0x2f)
 #define MCU_CMD_DIGITALOUTPUT	(0x31)
-#define MCU_CMD_GSENSORINIT	    (0x34)
 #define MCU_CMD_READCODE	    (0x41)
+// gforce sensor cmd
+#define MCU_CMD_GSENSORINIT	    (0x34)
+#define MCU_CMD_GSENSORUPLOAD   (0x35)
+#define MCU_CMD_GSENSORUPLOADACK (0x36)
+#define MCU_CMD_GSENSORPEAK     (0x40)
 
 // mcu input
-#define MCU_INPUT_DIO           ('\x1c')
-#define MCU_INPUT_IGNITIONOFF   ('\x08') 
-#define MCU_INPUT_IGNITIONON    ('\x09')
-#define MCU_INPUT_ACCEL         ('\x40')
+#define MCU_INPUT_DIO           (0x1C)
+#define MCU_INPUT_IGNITIONOFF   (0x08) 
+#define MCU_INPUT_IGNITIONON    (0x09)
+#define MCU_INPUT_GSENSOR       (0x40)
 
 #define MCU_CMD_DELAY       (500000)
 #define MIN_SERIAL_DELAY	(10000)
@@ -125,13 +129,18 @@ int mcu_checkinputbuf(char * ibuf);
 void mcu_dinput_help(char * ibuf);
 int mcu_dinput();
 int mcu_update_firmware( char * firmwarefile) ;
+void mcu_camera_zoom( int zoomin );
 
 #ifdef PWII_APP
+
+extern unsigned int pwii_keyreltime ;
 
 char * mcu_pwii_cmd(int cmd, int datalen=0, ...);
 int mcu_pwii_bootupready();
 int mcu_pwii_version(char * version);
 unsigned int mcu_pwii_ouputstatus();
+void pwii_keyautorelease();
+void mcu_pwii_init();
 
 #endif          // PWII_APP
 

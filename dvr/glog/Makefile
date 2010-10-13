@@ -2,16 +2,15 @@
 # Makefile for Eagle32 DVR ioprocess app 
 #
 
-include ../arm_tool
+include ../config
+include $(PROJDIR)/arm_tool
 
-CC=$(CROSS_COMPILE_PREFIX)gcc
-
-SOURCES=glog.cpp netdbg.cpp ../ioprocess/diomap.cpp
+SOURCES=glog.cpp netdbg.cpp
 
 EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h ../ioprocess/diomap.h
-EXTSOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp
+EXTSOURCES=../ioprocess/diomap.cpp ../dvrsvr/config.cpp ../dvrsvr/string.cpp
 
-HEADERS=netdbg.h ../ioprocess/diomap.h
+HEADERS=netdbg.h
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
@@ -31,6 +30,3 @@ clean :
 	rm -f *.o
 	rm -f glog
 
-ttest : ttest.c $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
-	$(CC) $(CFLAGS) -o $@ ttest.c $(EXTSOURCES) $(LDFLAGS)
-	cp ttest  $(debug_folder)

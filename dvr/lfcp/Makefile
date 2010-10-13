@@ -2,10 +2,8 @@
 # Makefile for Eagle32 DVR server app 
 #
 
-include ../arm_tool
-
-CC=$(CROSS_COMPILE_PREFIX)gcc
-STRIP=$(CROSS_COMPILE_PREFIX)strip
+include ../config
+include $(PROJDIR)/arm_tool
 
 INCS=../dvrsvr/cfg.h ../dvrsvr/genclass.h
 EXTRASOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp

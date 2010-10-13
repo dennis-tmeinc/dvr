@@ -2,10 +2,8 @@
 # Makefile for Eagle32 DVR ioprocess app 
 #
 
-include ../arm_tool
-
-CC=$(CROSS_COMPILE_PREFIX)gcc
-CPP=$(CROSS_COMPILE_PREFIX)g++
+include ../config
+include $(PROJDIR)/arm_tool
 
 SOURCES=serialtest.c
 
@@ -22,11 +20,7 @@ LDFLAGS= -lpthread -lstdc++
 #CFLAGS=-I../dvrsvr -g -Wall
 CFLAGS=-g -Wall
 
-all : v4ltest
-
-v4ltest : v4ltest.cpp
-	$(CC) $(CFLAGS) -o v4ltest v4ltest.cpp $(LDFLAGS)
-	cp v4ltest  $(debug_folder)
+all : serialtest
 
 serialtest : $(OBJS) $(HEADERS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)

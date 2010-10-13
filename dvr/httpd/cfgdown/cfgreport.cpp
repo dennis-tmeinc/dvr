@@ -224,21 +224,10 @@ int disk_usage( int * disk_total, int * disk_free)
 
 int get_temperature( int * sys_temp, int * disk_temp)
 {
-    int fd ;
-    void * p ;
-    struct dio_mmap * p_dio_mmap ;
-    
-    fd = open("/var/dvr/dvriomap",O_RDWR );
-    if( fd>0 ) {
-        p=mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
-        close( fd );                                // don't need fd to use memory map.
-        if( p==(void *)-1 || p==NULL ) {
-            return 0;
-        }
-        p_dio_mmap = (struct dio_mmap *)p ;
+    if( dio_mmap() ) {
         *sys_temp = p_dio_mmap->iotemperature ;
         *disk_temp = p_dio_mmap->hdtemperature ;
-        munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
+        dio_munmap();
         return 1 ;
     }
     return 0 ;

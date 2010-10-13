@@ -5,11 +5,9 @@ if [ $# -lt 1 ]; then
   exit 1
 fi
 
-PATH=~/proj/eagle32/hik_toolchain/bin:/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin
-
 DEPROOT=$PWD
-
 APPROOT=${DEPROOT}/../..
+PATH=${APPROOT}/deploy/util:${PATH}
 
 if [ -f ${APPROOT}/release ] ; then
 RELEASE=`cat ${APPROOT}/release`
@@ -35,7 +33,7 @@ if [ ${appid} = "clean" ]; then
 # clean host firmware filesa
     cd ${DEPROOT}/host/dvr
     rm -f httpd.sfx firmwareid
-    rm -f dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
+    rm -f dvrsvr dvrtime eaglehost udhcpc glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
     rm -f ../sfxrun  
     
     cd ${DEPROOT}/host/ID
@@ -79,7 +77,7 @@ cp -v ${APPROOT}/sfx/sfx .
 
 ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/defconf set glog tab102b_enable 0
 
-arm-linux-strip sfx
+$(STRIP} sfx
 
 # makeing host board deploy firmware
 
@@ -92,7 +90,7 @@ cp -v ${APPROOT}/httpd/eagle_setup/eagle_setup .
 cp -v ${APPROOT}/httpd//cfgdown/cfgdown.cgi .
 cp -v ${APPROOT}/httpd//cfgdown/dvrstatus.cgi .
 cp -v ${APPROOT}/httpd//cfgdown/cfgreport.cgi .
-arm-linux-strip applysetup eagle_setup eaglehttpd getsetup cfgdown.cgi dvrstatus.cgi
+$(STRIP} applysetup eagle_setup eaglehttpd getsetup cfgdown.cgi dvrstatus.cgi
 
 ${DEPROOT}/mksfx ${DEPROOT}/sfx wwwlist ../httpd.sfx
 
@@ -125,8 +123,12 @@ cp -v ${APPROOT}/tmeft/tmefile .
 cp -v ${APPROOT}/volumeid/md5check .
 cp -v ${APPROOT}/volumeid/volumeid .
 cp -v ${APPROOT}/cfg/cfg .
+cp -v ${APPROOT}/dhcp/udhcpc .
 
-arm-linux-strip dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg
+echo "Generate RSA key for ssh"
+dropbearkey -t rsa -f rsa_host_key
+
+$(STRIP} dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg
 cd ${DEPROOT}/host
 echo ${firmwareid} > dvr/firmwareid
 cp  sfxrun.dep  sfxrun

@@ -2,9 +2,9 @@
 # Makefile for Eagle32 DVR ioprocess app 
 #
 
-include ../arm_tool
+include ../config
+include $(PROJDIR)/arm_tool
 
-CC=$(CROSS_COMPILE_PREFIX)gcc
 CFLAGS=-g -Wall
 
 HEADERS=

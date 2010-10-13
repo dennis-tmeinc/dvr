@@ -1,9 +1,8 @@
 #
 # Makefile for Eagle32 DVR server app 
 #
-include ../arm_tool
-
-CC=$(CROSS_COMPILE_PREFIX)gcc
+include ../config
+include $(PROJDIR)/arm_tool
 
 SOURCES=main.cpp \
 		dvrtime.cpp \
@@ -28,9 +27,9 @@ SOURCES=main.cpp \
 		dio.cpp \
 		screen.cpp \
 		md5.cpp \
-		draw.cpp \
-        ../ioprocess/diomap.cpp \
-        ../lzmasdk/dec.cpp 
+		draw.cpp
+
+EXTRASOURCES=../ioprocess/diomap.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
 
 EAGLESRS=eaglesvr.cpp \
 		dvrtime.cpp \
@@ -70,8 +69,8 @@ OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 # LIBRARY=libdio.so
 
 CCFLAGS= -Wall -g
-LDFLAGS= -lpthread -lstdc++ -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib -Wl,-rpath,.
-
+#LDFLAGS= -lpthread -lstdc++ -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib -Wl,-rpath,.
+LDFLAGS= -lpthread -lstdc++ -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib
 
 all : dvrsvr
 
@@ -80,7 +79,7 @@ all : dvrsvr
 #	$(CC)  $(CCFLAGS) -o $@  $(OBJS) ../fb/libfbdraw.so $(LDFLAGS)
 #	cp dvrsvr  $(debug_folder)
 
-dvrsvr : $(OBJS) ../lzmasdk/LzmaDec.c
+dvrsvr : $(OBJS) $(EXTRASOURCES)
 	$(CC)  $(CCFLAGS) -o $@  $^ $(LDFLAGS)
 	cp dvrsvr  $(debug_folder)
 

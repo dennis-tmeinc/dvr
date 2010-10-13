@@ -24,6 +24,11 @@
 ./dvr/httpd.sfx
 ./dvr/tmefile
 ./dvr/smartftp
+./dvr/udhcpc
+./dvr/udhcpc.script
+./dvr/dropbear dvr/sshd
+./dvr/rsa_host_key
+./dvr/libutil-0.9.28.so
 ./dvr/librt-0.9.28.so
 ./dvr/resource
 ./dvr/resource/arrow.cursor

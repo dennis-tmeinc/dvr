@@ -70,23 +70,26 @@ float max_distance=500 ;
 // converting parameter
 float degree1km = 0.012 ;
 
-struct dio_mmap * p_dio_mmap ;
-
 char dvriomap[256] = "/var/dvr/dvriomap" ;
 char gpslogfilename[512] ;
 int glog_poweroff=1 ;           // start from power off
 string dvrcurdisk;
 int glog_ok=0 ;                 // logging success.
+int glog_timer=0;
+
+#define PORTNUM (2) 
+
+int mhandles[PORTNUM]={-1,-1} ;
+#define gps_port_handle ( mhandles[0] )
+#define tab102b_port_handle ( mhandles[1] )
 
 int gps_port_disable=0 ;
-int gps_port_handle = -1;
 char gps_port_dev[256] = "/dev/ttyS0" ;
 int gps_port_baudrate = 4800 ;      // gps default baud
 int gps_resetsirf ;                 // reset sirf GPS sentense rate
 
 int gforce_log_enable = 0 ;
 int tab102b_enable = 0 ;
-int tab102b_port_handle = -1;
 char tab102b_port_dev[256] = "/dev/ttyUSB1" ;
 int tab102b_port_baudrate = 19200 ;     // tab102b default baud
 int tab102b_data_enable=0 ;
@@ -244,7 +247,7 @@ void sig_handler(int signum)
         sigcap |= 2 ;
     }
     else if( signum == SIGPIPE ) {
-        sigcap |= 3 ;
+//        sigcap |= 3 ;
     }
     else {
         sigcap |= 0x8000 ;
@@ -265,6 +268,9 @@ void log_unlock()
     pthread_mutex_unlock(&log_mutex);
 }
 
+/* buzzer functions moved to ioprocess */
+
+/*
 struct buzzer_t_type {
     int times ;
     int ontime ;
@@ -302,6 +308,7 @@ void buzzer(int times, int ontime, int offtime)
         delete pbuzzer ;
     }
 }
+*/
 
 int serial_open(int * handle, char * serial_dev, int serial_baudrate )
 {
@@ -320,16 +327,18 @@ int serial_open(int * handle, char * serial_dev, int serial_baudrate )
     
     if( r1==0 && r2==0 && stdinstat.st_dev == devstat.st_dev && stdinstat.st_ino == devstat.st_ino ) { // matched stdin
         netdbg_print("Stdin match serail port!\n");
-        serial_handle=0 ;
+        serial_handle = dup(0);     // duplicate stdin
  		fcntl(serial_handle, F_SETFL, O_RDWR | O_NOCTTY );
     }
     else {
         serial_handle = open( serial_dev, O_RDWR | O_NOCTTY );
+/*
         if(serial_handle>0) {
             close(serial_handle);       // do reopen to fix ttyUSB port bugs
             usleep(20000);
         }
         serial_handle = open( serial_dev, O_RDWR | O_NOCTTY );
+*/
     }
     
 	if( serial_handle >= 0 ) {
@@ -429,12 +438,33 @@ int serial_clear(int serial_handle)
 	return 0;
 }
 
-#define GPS_BUFFER_SIZE (100)
+// Check if data ready to read on multiple serial ports
+//     return 0: no data
+//            1: yes
+int serial_mready(int microsecondsdelay)
+{
+    int i ;
+    int maxhandle=0 ;
+	struct timeval timeout ;
+	fd_set fds;
+	timeout.tv_sec = microsecondsdelay/1000000 ;
+	timeout.tv_usec = microsecondsdelay%1000000 ;
+	FD_ZERO(&fds);
+    for( i=0;i<PORTNUM;i++) {
+        if( mhandles[i]>=0 ) {
+            FD_SET( mhandles[i], &fds);
+            maxhandle=mhandles[i] ;
+        }
+    }
+    return ( select(maxhandle + 1, &fds, NULL, NULL, &timeout) > 0) ;
+}
+
+#define GPS_BUFFER_SIZE (200)
 static char gps_buffer[GPS_BUFFER_SIZE] ;
 static int  gps_buffer_len = 0 ;
 static int  gps_buffer_pointer ;
 
-#define gps_open() ( gps_buffer_len=0, serial_open(&gps_port_handle, gps_port_dev, gps_port_baudrate ))
+#define gps_open() ( gps_buffer_len=0, serial_open(&gps_port_handle, gps_port_dev, gps_port_baudrate ) )
 #define gps_close() serial_close(&gps_port_handle)
 // #define gps_dataready(microsecondsdelay) serial_dataready(gps_port_handle, microsecondsdelay)
 // #define gps_read(buf,bufsize) serial_read(gps_port_handle, buf, bufsize)
@@ -500,57 +530,49 @@ void gps_setsirfbaudrate(int baudrate)
     gps_open();
 }
 
-
-int gps_readline( char * line, int linesize )
+//	GPS line example: "$GPRMC,225446,A,4916.45,N,12311.12,W,000.5,054.7,191194,020.3,E*68"
+char * gps_readline()
 {
-//	strcpy( line, "$GPRMC,225446,A,4916.45,N,12311.12,W,000.5,054.7,191194,020.3,E*68" );
-	int i; 
+    static char gpsline[300] ;
+    static int  gpslineidx ;
 	char c ;
-    static int errcount=0 ;
     
     if( gps_port_disable ) {                // gps disabled ?
-        return 0;
+        return NULL;
     }
 
     if( gps_port_handle<0 ) {
         if( gps_open() < 0 ) {					// open serial port
-            sleep(1);
-            return 0 ;					
+            return NULL ;					
         }
     }
 
-    for( i=0 ;i<linesize; ) {
-		if( gps_dataready(2200000) ) {
-			if( gps_read(&c, 1)==1 ) {
-				if( c=='\n' ) {
-					line[i]=0;
-				    return i;
-				}
-				else if( c<=1 || c>=127 ) {		// GPS dont give these chars
+    while( gps_dataready(0) ) {
+        if( gps_read(&c, 1)==1 ) {
+            if( c=='$' ) {
+                gpslineidx=0 ;
+                gpsline[gpslineidx++]=c ;
+            }
+            else if( gpslineidx>0 && gpslineidx<(int)sizeof(gpsline) ) {
+                if( c=='\n' ) {
+                    gpsline[gpslineidx]=0;
+                    gpslineidx=0 ;
+                    return gpsline ;        // got a gps line
+                }
+                else if( c<=1 || c>=127 ) {		// GPS dont give these chars
 					// for unknown reason, serial port mess up all the time??????
-					break;
+                    gpslineidx=0 ;
 				}
 				else {
-					line[i++]=c ;
+                    gpsline[gpslineidx++]=c ;
 				}
 			}
-			else {
-				break;
-			}
-		}
-		else {
-    	    break;
         }
-	}
-
-    // error !
-    if( ++errcount > 10 ) {
-    	gps_close();
-        usleep(100000);
-        errcount=0 ;
     }
-	return 0;
+
+    return NULL ;                           // gps not ready!
 }
+
 
 // 0: failed, 1: success
 int gps_checksum( char * line )
@@ -589,196 +611,71 @@ struct gps_data {
 //   gps sentence example: $GPRMC,225446,A,4916.45,N,12311.12,W,000.5,054.7,191194,020.3,E*68
 // return
 //   1: receive GPRMC sentence
-//   2: receive other GPS sentence
-//   0: no GPS sentence or sentence error
+//   2: receive other valid GPS sentence
+//   0: no serial data or data checksum error
 int gps_readdata(struct gps_data * gpsdata)
 {
-	char line[300] ;		
-	int l;
-	if( (l=gps_readline( line, sizeof(line) ))>10 ) {
+    char * line ;
+	if( ( line=gps_readline() ) != NULL ) {
 
         netdbg_print("%s\n",line);
+        if( gps_checksum(line) ) {
+            if( memcmp(line, "$GPRMC,", 7)==0 ) {
+                char fix = 0 ;
+                int lat_deg, long_deg ;
+                char lat_dir, long_dir ;
+                memset( gpsdata, 0, sizeof(*gpsdata));
+                sscanf( &line[7], "%2d%2d%f,%c,%2d%f,%c,%3d%f,%c,%f,%f,%2d%2d%d",
+                       &gpsdata->hour,
+                       &gpsdata->minute,
+                       &gpsdata->second,
+                       &fix,
+                       &lat_deg, &gpsdata->latitude, &lat_dir,
+                       &long_deg, &gpsdata->longitude, &long_dir,
+                       &gpsdata->speed,
+                       &gpsdata->direction,
+                       &gpsdata->day,
+                       &gpsdata->month,
+                       &gpsdata->year 
+                       );   
 
-		if( memcmp(line, "$GPRMC,", 7)==0 && gps_checksum(line) )
-        {
-            char fix = 0 ;
-            int lat_deg, long_deg ;
-            char lat_dir, long_dir ;
-            sscanf( &line[7], "%2d%2d%f,%c,%2d%f,%c,%3d%f,%c,%f,%f,%2d%2d%d",
-                   &gpsdata->hour,
-                   &gpsdata->minute,
-                   &gpsdata->second,
-                   &fix,
-                   &lat_deg, &gpsdata->latitude, &lat_dir,
-                   &long_deg, &gpsdata->longitude, &long_dir,
-                   &gpsdata->speed,
-                   &gpsdata->direction,
-                   &gpsdata->day,
-                   &gpsdata->month,
-                   &gpsdata->year 
-                   );   
-            
-            gpsdata->valid = ( fix == 'A' ) ;
-            
-            gpsdata->latitude = lat_deg + gpsdata->latitude/60.0 ;	
-            if( lat_dir != 'N' ) {
-                gpsdata->latitude = - gpsdata->latitude ;
-            }
-            
-            gpsdata->longitude = long_deg + gpsdata->longitude/60.0 ;	
-            if( long_dir != 'E' ) {
-                gpsdata->longitude = - gpsdata->longitude ;
-            }
+                gpsdata->valid = ( fix == 'A' ) ;
 
-            if( gpsdata->year>=80 ) {
-                gpsdata->year+=1900 ;
-            }
-            else {
-                gpsdata->year+=2000 ;
-            }
-
-            static int ttyusbBug =10 ;
-            if( ttyusbBug > 0 ) {
-                if( --ttyusbBug==0 ) {
-                    gps_resetsirf=0 ;
-                    gps_close();            // close and re-open it try to fix mos7840 bugs (which make all usb interface dead!!)
+                gpsdata->latitude = lat_deg + gpsdata->latitude/60.0 ;	
+                if( lat_dir != 'N' ) {
+                    gpsdata->latitude = - gpsdata->latitude ;
                 }
-            }
 
-            return 1 ;
-        }
-        else {
-            if( gps_resetsirf<=0 ) {
-                // set SiRF sentences rates
-                gps_setsirfrate(0,0);       // turn off GGA
-                gps_setsirfrate(1,0);       // turn off GLL
-                gps_setsirfrate(2,0);       // turn off GSA
-                gps_setsirfrate(3,0);       // turn off GSV
-                gps_setsirfrate(5,0);       // turn off VTG
-                gps_setsirfrate(8,0);       // turn off ZDA
-                gps_setsirfrate(4,2);       // turn on RMC
-                gps_resetsirf = 3000 ;
+                gpsdata->longitude = long_deg + gpsdata->longitude/60.0 ;	
+                if( long_dir != 'E' ) {
+                    gpsdata->longitude = - gpsdata->longitude ;
+                }
+
+                if( gpsdata->year>=80 ) {
+                    gpsdata->year+=1900 ;
+                }
+                else {
+                    gpsdata->year+=2000 ;
+                }
+
+                static int ttyusbBug =10 ;
+                if( ttyusbBug > 0 ) {
+                    if( --ttyusbBug==0 ) {
+                        gps_resetsirf=0 ;
+                        gps_close();            // close and re-open it try to fix mos7840 bugs (which make all usb interface dead!!)
+                    }
+                }
+
+                return 1 ;
             }
             else {
-                gps_resetsirf--;
+                return 2 ;
             }
-            return 2 ;
         }
-    }
-    else {
-    	gpsdata->valid=0;               // serial line broken or no data
     }
     return 0 ;
 }
     
-/*
-
-// read and parse GPS sentence
-//   gps sentence example: $GPRMC,225446,A,4916.45,N,12311.12,W,000.5,054.7,191194,020.3,E*68
-// return
-//   1: receive GPRMC sentence
-//   0: no GPRMC sentence or sentence error
-int gps_readdata(struct gps_data * gpsdata)
-{
-	char line[300] ;		
-	int i, f, l;
-	int field[40] ;
-	f=0 ;		
-	if( (l=gps_readline( line, sizeof(line) ))>10 ) {
-		if( memcmp(line, "$GPRMC,", 7)==0 ) {
-			field[0] = 7 ;
-			for( i=7; i<300 && f<39; i++ ) {
-				if( line[i]==',' ) {		// field breaker
-					field[++f]=i+1;
-				}
-				else if( line[i]=='*' ) {		// check sum field
-					field[++f] = i ;
-					break;
-				}
-				else if( line[i]=='\0' ) {		// should not reach here
-					return 0;
-				}
-			}
-		}
-	}
-    else {
-    	gpsdata->valid=0;               // serial line broken
-        return 0;
-    }
-    
-	if( f>9 ) {
-		// last field checksum
-		if( line[field[f]]!='*' ) {
-			return 0;
-		}
-
-		unsigned int checksum ;
-		sscanf(&(line[field[f]+1]), "%2x", &checksum );
-		if( checksum != gps_checksum(line) ) {
-			// check sum error!
-			return 0;
-		}
-
-// debuging                
-        static int gpsfifo=0 ;
-        if( gpsfifo<=0 ) {
-            gpsfifo=open( "/davinci/gpsfifo", O_WRONLY | O_NONBLOCK );
-        }
-        if( gpsfifo>0 ) {
-            if( write( gpsfifo, line, l )!=l ) {
-                close(gpsfifo);
-                gpsfifo=0;
-            }
-        }
-// end of debug
-
-		// field 0 : UTC time
-		sscanf( &line[field[0]], " %2d%2d%f", 
-				&gpsdata->hour,
-				&gpsdata->minute,
-				&gpsdata->second );
-
-		// field 1 : A = gps fix valid
-		gpsdata->valid = ( line[field[1]] == 'A' ) ;
- 
-		// field 2 , 3 Latitude
-		sscanf( &line[field[2]], " %2d%f", &i, &gpsdata->latitude );
-		gpsdata->latitude = i + gpsdata->latitude/60.0 ;	
-        if( line[field[3]] != 'N' ) {
-            gpsdata->latitude = - gpsdata->latitude ;
-        }
-
-		// field 4,  5 Longitude
-		sscanf( &line[field[4]], " %3d%f", &i, &gpsdata->longitude );
-		gpsdata->longitude = i + gpsdata->longitude/60.0 ;	
-        if( line[field[5]] != 'E' ) {
-            gpsdata->longitude = - gpsdata->longitude ;
-        }
-
-		// field 6 speed
-		sscanf( &line[field[6]], "%f", &gpsdata->speed );
-
-		// field 7 direction, degree
-		sscanf( &line[field[7]], "%f", &gpsdata->direction );
-
-		// field 8 Date (DDMMYY)
-		sscanf( &line[field[8]], " %2d%2d%d", 
-				&gpsdata->day,
-				&gpsdata->month,
-				&gpsdata->year );
-		if( gpsdata->year>=80 ) {
-			gpsdata->year+=1900 ;
-		}
-		else {
-			gpsdata->year+=2000 ;
-		}
-
-		return 1 ;
-	}
-	return 0 ;		
-}
-*/
-
 FILE * gps_logfile ;
 static int gps_logday ;
 struct gps_data validgpsdata ;
@@ -1002,6 +899,76 @@ int	gps_log()
 	return 1;
 }
 
+
+// checking gps inputs
+void gps_check()
+{
+    static int gpstimeout ;
+    struct gps_data gpsdata ;
+    int gpsstatus = gps_readdata(&gpsdata) ;
+    if( gpsstatus==1 ) {      // read a GPRMC sentence?
+        gpstimeout=0;
+        // update dvrsvr OSD speed display
+        dio_lock();
+        p_dio_mmap->gps_speed=gpsdata.speed ;
+        p_dio_mmap->gps_direction=gpsdata.direction ;
+        p_dio_mmap->gps_latitude=gpsdata.latitude ;
+        p_dio_mmap->gps_longitud=gpsdata.longitude ;
+        p_dio_mmap->gps_valid = gpsdata.valid ;
+        if( gpsdata.valid ) {
+            struct tm ttm ;
+            ttm.tm_sec = 0;
+            ttm.tm_min = gpsdata.minute ;
+            ttm.tm_hour = gpsdata.hour ;
+            ttm.tm_mday = gpsdata.day ;
+            ttm.tm_mon = gpsdata.month-1 ;
+            ttm.tm_year = gpsdata.year-1900 ;
+            ttm.tm_wday=0 ;
+            ttm.tm_yday=0 ;
+            ttm.tm_isdst=-1 ;
+            p_dio_mmap->gps_gpstime = (double) timegm(&ttm) + gpsdata.second ;
+        }
+        dio_unlock();
+        // log gps position
+        if( gpsdata.valid ) {
+            validgpsdata = gpsdata ;
+            gps_log();
+        }
+    }
+    else if(gpsstatus==2) {             // other sentence
+        gpstimeout=0;
+        if( gps_resetsirf<=0 ) {
+            // set SiRF sentences rates
+            gps_setsirfrate(0,0);       // turn off GGA
+            gps_setsirfrate(1,0);       // turn off GLL
+            gps_setsirfrate(2,0);       // turn off GSA
+            gps_setsirfrate(3,0);       // turn off GSV
+            gps_setsirfrate(5,0);       // turn off VTG
+            gps_setsirfrate(8,0);       // turn off ZDA
+            gps_setsirfrate(4,2);       // turn on RMC
+            gps_resetsirf = 3000 ;
+        }
+        else {
+            gps_resetsirf--;
+        }
+    }
+    else {                              // no serial data
+        static int ot ;
+        struct timeval tv ;
+        gettimeofday( &tv, NULL);
+        if( tv.tv_sec != ot ) {
+            ot=tv.tv_sec ;
+            if( ++gpstimeout>20 ) {
+                // timeout, make gpsdata invalid
+                p_dio_mmap->gps_valid=0 ;
+                gps_close();
+                gps_logclose();
+                gpstimeout=0 ;
+            }
+        }
+    }
+}
+
 // log sensor event
 int	sensor_log()
 {
@@ -1053,7 +1020,7 @@ int	sensor_log()
         }
     }
 
-    // log g sensor value
+    // log g force sensor value
     if( gforce_log_enable ) {
         static int gforce_ser ;
         double gforward, gright, gdown ;
@@ -1112,6 +1079,7 @@ int	sensor_log()
 	return 1;
 }
 
+/*
 static void * sensorlog_thread(void *param)
 {
     while( app_state ) {
@@ -1122,6 +1090,7 @@ static void * sensorlog_thread(void *param)
     }
     return NULL ;
 }
+*/
 
 // TAB102B sensor log
 
@@ -1253,17 +1222,16 @@ void tab102b_log( int x, int y, int z)
            y, tab102b_y_0g, y_v, 
            z, tab102b_z_0g, z_v );
 
-//    if( validgpsdata.year < 1900 ) return ;       // removed, don't wait for gps signal.
+    // copy gforce data to shared memory
+    dio_lock();
+    p_dio_mmap->gforce_forward = x_v ;
+    p_dio_mmap->gforce_right   = y_v ;
+    p_dio_mmap->gforce_down    = z_v ;
+    p_dio_mmap->gforce_serialno++ ;
+    dio_unlock();
 
-    // log tab102b g sensor value
-    // we record forward/backward, right/left acceleration value, up/down as g-force value
-    if( gforce_log_enable ) {
-        gps_logprintf(16, ",%.1f,%.1f,%.1f", 
-                      (double) - x_v ,
-                      (double) - y_v ,
-                      (double) z_v );
-    }
-    
+    // let sensor_log() do log file writing
+    sensor_log();
 }
 
 void tab102b_checkinput(unsigned char * ibuf)
@@ -1562,36 +1530,26 @@ int tab102b_cmd_disablepeak()
     return 0;
 }
 
-int tab102b_init()
+int tab102b_start ;
+
+void tab102b_init(config &dvrconfig)
 {
-    if( tab102b_open()<0 ) {
-        return 0;
-    }
-    tab102b_cmd_sync_rtc();
-    
-    tab102b_cmd_req_data();
-        
-    tab102b_cmd_get_0g();
-    
-    tab102b_cmd_ready();
-    
-    if( gforce_log_enable ) {
-        tab102b_cmd_enablepeak();
-    }
-    
-    return 1;
+    tab102b_enable = dvrconfig.getvalueint( "glog", "tab102b_enable");
+    tab102b_data_enable = dvrconfig.getvalueint( "glog", "tab102b_data_enable");
+    tab102b_start=0 ;
 }
 
 int tab102b_finish()
 {
-    if( tab102b_open()<0 ) {
-        return 0;
+    if( tab102b_start ) {
+        tab102b_cmd_disablepeak();
+        tab102b_start=0 ;
     }
-    tab102b_cmd_disablepeak();
     tab102b_close();
     return 1;
 }
 
+/*
 static void * tab102b_thread(void *param)
 {
     int tab102b_start=0;
@@ -1631,6 +1589,29 @@ static void * tab102b_thread(void *param)
     }
     return NULL ;
 }
+*/
+
+void tab102b_check()
+{
+    if( tab102b_start==0 ) {
+        if( glog_ok ) {
+            if( tab102b_open()>0 ) {
+                tab102b_cmd_sync_rtc();
+                tab102b_cmd_req_data();
+                tab102b_cmd_get_0g();
+                tab102b_cmd_ready();
+                if( gforce_log_enable ) {
+                    tab102b_cmd_enablepeak();
+                }
+                tab102b_start=1;
+            }
+        }
+    }
+    else if( tab102b_dataready(0) ) {
+        unsigned char recvbuf[200] ;
+        tab102b_response(recvbuf, sizeof(recvbuf), 500000);
+    }
+}
 
 pthread_t sensorthreadid=0 ;
 pthread_t tab102b_threadid=0 ;
@@ -1640,7 +1621,6 @@ pthread_t tab102b_threadid=0 ;
 //        1 : success
 int appinit()
 {
-	int fd ;
 	int i;
 	char * p ;
     FILE * pidf ;
@@ -1650,12 +1630,6 @@ int appinit()
 	config dvrconfig(dvrconfigfile);
     string v ;
 
-    iomapfile = dvrconfig.getvalue( "system", "iomapfile");
-	p_dio_mmap=NULL ;
-	if( iomapfile.length()==0 ) {
-		return 0;						// no DIO.
-	}
-
     // setup dbg host
     if( dvrconfig.getvalueint("debug", "glog") ) {
         v = dvrconfig.getvalue("debug","host");
@@ -1663,34 +1637,23 @@ int appinit()
         netdbg_init( v.getstring(), i );
     }
 
-	for( i=0; i<10; i++ ) {				// retry 10 times
-		fd = open(iomapfile.getstring(), O_RDWR );
-		if( fd>0 ) {
-			break ;
-		}
-		sleep(1);
-	}
-	if( fd<=0 ) {
+
+    iomapfile = dvrconfig.getvalue( "system", "iomapfile");
+    if( dio_mmap( iomapfile.getstring() )==NULL ) {
 		netdbg_print("GLOG: IO module not started!");
-		return 0;
+		return 0;						// no DIO.
 	}
 
-	p=(char *)mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
-	close( fd );								// fd no more needed
-	if( p==(char *)-1 || p==NULL ) {
-		netdbg_print( "GLOG:IO memory map failed!");
-		return 0;
-	}
-	p_dio_mmap = (struct dio_mmap *)p ;   
-    
     if( p_dio_mmap->glogpid > 0 ) {
         kill( p_dio_mmap->glogpid, SIGTERM );
         for(i=0; i<10; i++) {
             if(p_dio_mmap->glogpid<=0 ) break;
+            usleep(10000);
         }
     }
 
     // init gps log 
+    dio_lock();
     p_dio_mmap->usage++;
     p_dio_mmap->glogpid = getpid();
     p_dio_mmap->gps_valid = 0 ;
@@ -1699,7 +1662,9 @@ int appinit()
     p_dio_mmap->gps_latitude=0 ;		
     p_dio_mmap->gps_longitud=0 ;
     p_dio_mmap->gps_gpstime=0 ;
-    
+    dio_unlock();
+    memset( &validgpsdata, 0, sizeof(validgpsdata) );
+
 	// get GPS port setting
     gps_port_disable = dvrconfig.getvalueint( "glog", "gpsdisable");
 	serialport = dvrconfig.getvalue( "glog", "serialport");
@@ -1792,11 +1757,6 @@ int appinit()
     // gforce logging enabled ?
     gforce_log_enable = dvrconfig.getvalueint( "glog", "gforce_log_enable");
 
-    tab102b_enable = dvrconfig.getvalueint( "glog", "tab102b_enable");
-
-    tab102b_data_enable = dvrconfig.getvalueint( "glog", "tab102b_data_enable");
-
-        
     // get dvr disk directory
 	dvrcurdisk = dvrconfig.getvalue("system", "currentdisk" );
 
@@ -1817,14 +1777,16 @@ int appinit()
 	}
 
     // create sensor log thread
-    pthread_create(&sensorthreadid, NULL, sensorlog_thread, NULL); 
-    
-    // create tab102 log thread
-    if( tab102b_enable ) {
-        pthread_create(&tab102b_threadid, NULL, tab102b_thread, NULL); 
-    }
+//    pthread_create(&sensorthreadid, NULL, sensorlog_thread, NULL); 
     
     netdbg_print( "GPS logging process started!\n");
+
+    // init tab102b
+    tab102b_init(dvrconfig) ;
+    // create tab102 log thread
+//    if( tab102b_enable ) {
+//        pthread_create(&tab102b_threadid, NULL, tab102b_thread, NULL); 
+//    }
 
 	return 1;
 }
@@ -1834,15 +1796,16 @@ int appinit()
 void appfinish()
 {
     // end of sensor log thread,
-    if( sensorthreadid != 0 ) {
-        pthread_join( sensorthreadid, NULL );
-    }
-    sensorthreadid = 0 ;
+//    if( sensorthreadid != 0 ) {
+//        pthread_join( sensorthreadid, NULL );
+//    }
+//    sensorthreadid = 0 ;
     
-    if( tab102b_threadid!=0 ) {
-        pthread_join( tab102b_threadid, NULL );
-    }
-    tab102b_threadid = 0 ;
+//    if( tab102b_threadid!=0 ) {
+//        pthread_join( tab102b_threadid, NULL );
+//    }
+//    tab102b_threadid = 0 ;
+    tab102b_finish();
     
 	// close serial port
 	gps_close();
@@ -1851,6 +1814,7 @@ void appfinish()
     gps_logclose();
 
     // clean up shared memory
+    dio_lock();
     p_dio_mmap->gps_valid = 0 ;
     p_dio_mmap->gps_speed = 0 ;			// knots
     p_dio_mmap->gps_direction = 0 ;     // degree
@@ -1859,24 +1823,19 @@ void appfinish()
     p_dio_mmap->gps_gpstime=0 ;
     p_dio_mmap->glogpid=0;
     p_dio_mmap->usage--;
-
-    munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
-
-    netdbg_finish();
+    dio_unlock();
     
+    dio_munmap();
+
     // delete pid file
 	unlink( pidfile );
     
 	netdbg_print( "GPS logging process ended!\n");
+    netdbg_finish();
 }
 
 int main()
 {
-    int r ;
-    int validgpsbell=0 ;
-    int validgpstimeout=0 ;
-    struct gps_data gpsdata ;
-
     app_state=1 ;
     // setup signal handler	
 	signal(SIGQUIT, sig_handler);
@@ -1892,93 +1851,42 @@ int main()
     
 	glog_poweroff = 1 ;         // start from power off
     
-    memset( &gpsdata, 0, sizeof(gpsdata) );
-    validgpsdata = gpsdata ;
-
 	while( app_state ) {
         if( sigcap ) {
-            p_dio_mmap->gps_valid = 0 ;
-            if( sigcap&0x8000 ) {       // Quit signal ?
+            int cap = sigcap ;
+            sigcap=0;
+            if( cap&0x8000 ) {       // Quit signal ?
                 app_state=0 ;
             }
-            else {
-                if( sigcap&1 ) {       // SigUsr1? 
-                    app_state=2 ;           // suspend running
-                }
-                if( sigcap&2 ) {
-                    if( app_state==1 ) {
-                        app_state=0 ;       // to let sensor thread exit
-                        appfinish();    
-                        appinit();
-                    }
-                    app_state=1 ;
-                }
+            if( cap&1 ) {       // SigUsr1? 
+                appfinish();
+                app_state=2 ;           // suspend running
             }
-            sigcap=0 ;
+            if( cap&2 ) {        // SigUsr2
+                if( app_state!=2 ) {
+                    appfinish();
+                }
+                appinit();
+                app_state=1 ;
+            }
         }
 
         if( app_state==1 && 
-            gps_port_disable==0 &&
             (p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) )
         {
-            r=gps_readdata(&gpsdata) ;
-            if( r==1 ) {      // read a GPRMC sentence?
-                // update dvrsvr OSD speed display
-                dio_lock();
-                p_dio_mmap->gps_speed=gpsdata.speed ;
-                p_dio_mmap->gps_direction=gpsdata.direction ;
-                p_dio_mmap->gps_latitude=gpsdata.latitude ;
-                p_dio_mmap->gps_longitud=gpsdata.longitude ;
-                struct tm ttm ;
-                ttm.tm_sec = 0;
-                ttm.tm_min = gpsdata.minute ;
-                ttm.tm_hour = gpsdata.hour ;
-                ttm.tm_mday = gpsdata.day ;
-                ttm.tm_mon = gpsdata.month-1 ;
-                ttm.tm_year = gpsdata.year-1900 ;
-                ttm.tm_wday=0 ;
-                ttm.tm_yday=0 ;
-                ttm.tm_isdst=-1 ;
-                p_dio_mmap->gps_gpstime = (double) timegm(&ttm) + gpsdata.second ;
-                p_dio_mmap->gps_valid = gpsdata.valid ;
-                dio_unlock();
-                // log gps position
-                if( gpsdata.valid ) {
-                    validgpsdata = gpsdata ;
-                    gps_log();
-                    validgpstimeout = 30 ;
-                }
-                else {
-                    if( validgpstimeout>=0 ) {
-                        if( --validgpstimeout<0 ) {
-                            memset( &validgpsdata, 0, sizeof(validgpsdata) );
-                        }
-                    }
-                }
+            serial_mready(50000) ;
+            // check table102b
+            if( tab102b_enable ) {
+                tab102b_check();
             }
-            else if( r==0 ) {
-                p_dio_mmap->gps_valid=0 ;
+            // check gps
+            if( gps_port_disable==0 ) {
+                gps_check();
             }
-
-            // sound the bell
-            if( gpsdata.valid ) {
-                if( validgpsbell==0 ) {
-                    buzzer( 2, 300, 300 );
-                    validgpsbell=1;
-                }
-            }
-            else {
-                if( validgpsbell==1 ) {
-                    buzzer( 3, 300, 300 );
-                    validgpsbell=0;
-                }
-            }
+            sensor_log();
         }
         else {
-            p_dio_mmap->gps_valid = 0 ;
-            gps_close();
-            gps_logclose();
-            usleep(10000);
+            usleep(50000);          // idleing CPU
         }
     }
     

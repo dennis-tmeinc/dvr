@@ -1324,7 +1324,7 @@ void dio_checkwifi();
 int dio_setstate( int status ) ;
 int dio_clearstate( int status ) ;
 void dio_setchstat( int channel, int ch_state );
-int dio_getgforce( float * gfb, float * glr, float *gud );
+int dio_getgforce( float * gf, float * gr, float *gd );
 int dio_mode_archive();
 int dio_getiomsg( char * oldmsg );
 void dio_smartserveron();

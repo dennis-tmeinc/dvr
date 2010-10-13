@@ -1,9 +1,8 @@
 #
 # Makefile for Eagle32 DVR  application for slave eagle boards 
 #
-include ../arm_tool
-
-CC=$(CROSS_COMPILE_PREFIX)gcc
+include ../config
+include $(PROJDIR)/arm_tool
 
 SOURCES=main.cpp \
 		dvrtime.cpp \
