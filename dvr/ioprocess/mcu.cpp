@@ -155,6 +155,36 @@ int serial_dataready(int handle, int usdelay, int * usremain)
     return 0;
 }
 
+#define MAXDEVICES  (8)
+int shandles[MAXDEVICES] ;
+
+// check serial port ready on multi ports  
+int serial_mready(int usdelay)
+{
+    int i;
+    int maxh=0 ;
+    struct timeval timeout ;
+    fd_set fds;
+
+    timeout.tv_sec = usdelay/1000000 ;
+    timeout.tv_usec = usdelay%1000000 ;
+
+    FD_ZERO(&fds);
+    for( i=0; i<MAXDEVICES; i++ ) {
+        if( shandles[i]>0 ) {
+            FD_SET(shandles[i], &fds);
+            if( shandles[i]>maxh ) {
+                maxh=shandles[i] ;
+            }
+        }
+    }
+    
+    if (select(maxh + 1, &fds, NULL, NULL, &timeout) > 0) {
+        return 1 ;
+    }
+    return 0;
+}
+
 // Check if data ready to read on serial port
 //     return 0: no data
 //            1: yes
@@ -183,30 +213,16 @@ int mcu_dataready(int usdelay, int * usremain)
     return 0;
 }
 
-// read one byte from mcu
-int mcu_readbyte(char * b, int timeout)
-{
-    if( mcu_dataready(timeout) ) {
-        *b = mcu_buffer[mcu_buffer_pointer++];
-#ifdef MCU_DEBUG
-        printf( "%02x ", (int)*b );
-#endif
-        return 1 ;
-    }
-    return 0 ;
-}
-
 int mcu_read(char * sbuf, size_t bufsize, int wait, int interval)
 {
     size_t nread=0 ;
     if( mcu_dataready(wait) ) {
-        while( nread<bufsize ) {
-            if( mcu_readbyte(sbuf+nread, interval) ) {
-                nread++;
-            }
-            else {
-                break;
-            }
+        while( nread<bufsize && mcu_dataready(interval) ) {
+#ifdef  MCU_DEBUG
+            printf( "%02x ", (int) mcu_buffer[mcu_buffer_pointer] );
+#endif
+            *sbuf++ = mcu_buffer[mcu_buffer_pointer++] ;
+            nread++;
         }
     }
     return nread ;
@@ -232,11 +248,11 @@ void mcu_clear(int delay)
     int i;
 #ifdef MCU_DEBUG
     printf("clear: ");
-#endif     
-    for(i=0;i<10000;i++) {
-        char c ;
-        if( mcu_readbyte(&c, delay)==0 ) {
-            break;
+#endif  
+    char buf[100] ;
+    for(i=0;i<100;i++) {
+        if( mcu_read( buf, sizeof(buf), 0, 0 )==0 ) {
+            break ;
         }
     }
 #ifdef MCU_DEBUG

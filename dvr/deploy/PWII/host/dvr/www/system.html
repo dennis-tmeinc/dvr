@@ -200,6 +200,34 @@
 <td><input name="gforce_enable" value="on" type="checkbox" /></td>
 </tr>
 
+<tr id="id_gforce_dirforward" >
+<td class="col1">G-Force Direction - Forward:</td>
+<td>
+<select name="gforce_forward">
+    <option value="0">Front</option>
+    <option value="1">Back</option>
+    <option value="2">Right</option>
+    <option value="3">Left</option>
+    <option value="4">Buttom</option>
+    <option value="5">Top</option>
+</select>
+</td>
+</tr>
+
+<tr id="id_gforce_dirupward" >
+<td class="col1">G-Force Direction - Up:</td>
+<td>
+<select name="gforce_upward">
+    <option value="0">Front</option>
+    <option value="1">Back</option>
+    <option value="2">Right</option>
+    <option value="3">Left</option>
+    <option value="4">Buttom</option>
+    <option value="5">Top</option>
+</select>
+</td>
+</tr>
+
 <tr id="id_gforce_forward" >
 <td class="col1">G-Force Forward Trigger Point:</td>
 <td>
@@ -275,6 +303,8 @@ JSONinitfield( formdata );
 
 if( formdata.gforce_available != "1" ) {
     document.getElementById('id_gforce_enable').style.display="none" ;
+    document.getElementById('id_gforce_dirupward').style.display="none" ;
+    document.getElementById('id_gforce_dirforward').style.display="none" ;
     document.getElementById('id_gforce_forward').style.display="none" ;
     document.getElementById('id_gforce_backward').style.display="none" ;
     document.getElementById('id_gforce_right').style.display="none" ;

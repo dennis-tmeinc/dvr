@@ -1093,6 +1093,7 @@ class dvrsvr {
         virtual void ReqNextKeyFrame();
         virtual void ReqPrevKeyFrame();
         virtual void ReqStreamGetData();
+        virtual void Req2StreamGetDataEx();
         virtual void ReqStreamTime();
         virtual void ReqStreamDayInfo();
         virtual void ReqStreamMonthInfo();

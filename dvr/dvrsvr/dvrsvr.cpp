@@ -487,6 +487,9 @@ void dvrsvr::onrequest()
         case REQSTREAMGETDATA:
             ReqStreamGetData();
             break;
+        case REQ2STREAMGETDATAEX:
+            Req2StreamGetDataEx();
+            break;
         case REQSTREAMTIME:
             ReqStreamTime();
             break;
@@ -1150,6 +1153,55 @@ void dvrsvr::ReqStreamGetData()
     }
     DefaultReq();
 }
+
+// Requested by Harrison. (2010-09-30)
+void dvrsvr::Req2StreamGetDataEx()
+{
+    void * pbuf=NULL ;
+    int  getsize=0 ;
+    int  frametype ;
+    struct dvrtime streamtime ;
+
+    if( m_req.data == DVRSTREAMHANDLE(m_playback) && 
+       m_playback )
+    {
+        m_playback->getstreamdata( &pbuf, &getsize, &frametype);
+        if( getsize>0  && pbuf ) {
+            struct dvr_ans ans ;
+            ans.anscode = ANS2STREAMDATAEX;
+            ans.anssize = getsize+sizeof(streamtime);
+            ans.data = frametype;
+            Send( &ans, sizeof( struct dvr_ans ) );
+            m_playback->getstreamtime(&streamtime);
+            Send( &streamtime, sizeof(streamtime) );
+            Send( pbuf, ans.anssize );
+            if( m_playback ) {
+                m_playback->preread();
+            }
+            return ;
+        }
+    }
+    else if( m_req.data == DVRSTREAMHANDLE(m_live) && 
+       m_live )
+    {
+        m_live->getstreamdata( &pbuf, &getsize, &frametype);
+        if( getsize>=0 && pbuf ) {
+            struct dvr_ans ans ;
+            ans.anscode = ANS2STREAMDATAEX ;
+            ans.anssize = getsize+sizeof(streamtime);
+            ans.data = frametype ;
+            Send( &ans, sizeof(ans));
+            time_now(&streamtime);
+            Send( &streamtime, sizeof(streamtime) );
+            if( getsize>0 ) {
+                Send( pbuf, getsize );
+            }
+            return ;
+        }
+    }
+    DefaultReq();
+}
+
 
 void dvrsvr::ReqStreamTime()
 {

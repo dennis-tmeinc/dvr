@@ -180,7 +180,7 @@ static FILE * dvr_logkey_file()
     flog = file_open(logfilename, "a");
     if ( flog==NULL ) {
         if (rec_basedir.length() > 0) {
-            sprintf(logfilename, "%s/%s", rec_basedir.getstring(), keylogfile.getstring());
+            sprintf(logfilename, "%s/_%s_/%s", rec_basedir.getstring(), g_hostname, keylogfile.getstring());
             symlink(logfilename, "/var/dvr/tvslogfile" );
         }
     }
