@@ -1,7 +1,6 @@
 
 // GPS LOGING 
 
-
 #include <sys/mman.h>
 #include <sys/vfs.h>
 #include <sys/time.h>
@@ -256,6 +255,7 @@ void sig_handler(int signum)
 
 // pthread_mutex_t mutex_init=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP ;
 
+/*
 static pthread_mutex_t log_mutex = PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP ;
 
 void log_lock()
@@ -267,6 +267,7 @@ void log_unlock()
 {
     pthread_mutex_unlock(&log_mutex);
 }
+*/
 
 /* buzzer functions moved to ioprocess */
 
@@ -805,20 +806,22 @@ int gps_logprintf(int logid, char * fmt, ...)
         return 0 ;
     }
     
-    log_lock();
+//    log_lock();
 
     int iomode = p_dio_mmap->iomode ;
 
-    if( iomode<IOMODE_QUIT || iomode>IOMODE_SHUTDOWNDELAY ) {
+    if( !( iomode==IOMODE_RUN || 
+        iomode==IOMODE_SHUTDOWNDELAY ||
+        iomode==IOMODE_STANDBY) ) {
         gps_logclose();
-        log_unlock();
+//        log_unlock();
         return 0 ;
     }
     
 	logfile = gps_logopen(&t);
     
 	if( logfile==NULL ) {
-        log_unlock();
+//        log_unlock();
         glog_ok=0 ;
 		return 0;
 	}
@@ -847,7 +850,7 @@ int gps_logprintf(int logid, char * fmt, ...)
         gps_logclose ();
     }
 
-    log_unlock();
+//    log_unlock();
     glog_ok=1 ;
     return 1;
 }
@@ -958,7 +961,7 @@ void gps_check()
         gettimeofday( &tv, NULL);
         if( tv.tv_sec != ot ) {
             ot=tv.tv_sec ;
-            if( ++gpstimeout>20 ) {
+            if( ++gpstimeout>10 ) {
                 // timeout, make gpsdata invalid
                 p_dio_mmap->gps_valid=0 ;
                 gps_close();
@@ -1852,6 +1855,19 @@ int main()
 	glog_poweroff = 1 ;         // start from power off
     
 	while( app_state ) {
+        
+        serial_mready(50000) ;
+        
+        // check table102b
+        if( tab102b_enable ) {
+            tab102b_check();
+        }
+        // check gps
+        if( gps_port_disable==0 ) {
+            gps_check();
+        }
+        sensor_log();
+        
         if( sigcap ) {
             int cap = sigcap ;
             sigcap=0;
@@ -1869,24 +1885,6 @@ int main()
                 appinit();
                 app_state=1 ;
             }
-        }
-
-        if( app_state==1 && 
-            (p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) )
-        {
-            serial_mready(50000) ;
-            // check table102b
-            if( tab102b_enable ) {
-                tab102b_check();
-            }
-            // check gps
-            if( gps_port_disable==0 ) {
-                gps_check();
-            }
-            sensor_log();
-        }
-        else {
-            usleep(50000);          // idleing CPU
         }
     }
     

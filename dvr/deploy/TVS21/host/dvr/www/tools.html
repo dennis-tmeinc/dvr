@@ -5,6 +5,21 @@
 <link href="eagle.css" rel="stylesheet" type="text/css" /><title>Tools</title>
 
 <script type="text/javascript" src="eagle.js"></script>
+<script type="text/javascript">
+
+  function on_uploadsubmit( fileid )
+  {
+        var ifile = document.getElementById(fileid);
+        if( ifile.value == "" ) {
+           alert( "Please select uploading file!" );
+        }
+        else {
+           ifile.form.submit();
+        }
+  }
+
+</script>
+
 </head>
 <body>
 <!--#include file="header.i"-->
@@ -37,11 +52,11 @@
 <tr>
 <td class="col1" rowspan="2">Upload Configuration:</td>
 <td>
-<input name="cfgupload_file" type="file" />
+<input name="cfgupload_file" id="id_cfgupload_file" type="file" />
 </td>
 </tr>
 <tr>
-<td><input value="Upload" title="Upload configuration." type="submit" /></td>
+<td><input value="Upload" title="Upload configuration." type="button" onclick="on_uploadsubmit('id_cfgupload_file')" /></td>
 </tr>
 
 </form>
@@ -49,20 +64,20 @@
 <form enctype="multipart/form-data" method="post" action="firmware.html">
 <tr>
 <td class="col1" rowspan="2">Firmware:</td>
-<td><input name="firmware_file" type="file" /></td>
+<td><input name="firmware_file" id="id_firmware_file" type="file" /></td>
 </tr>
 <tr>
-<td><input value="Update Firmware" type="submit" /></td>
+<td><input value="Update Firmware" type="button" onclick="on_uploadsubmit('id_firmware_file')"/></td>
 </tr>
 </form>
 
 <form enctype="multipart/form-data" method="post" action="mcufirmware.html">
 <tr>
 <td class="col1" rowspan="2">MCU Firmware:<br />(with FORCE-ON loopback cable plugged in)</td>
-<td><input name="mcu_firmware_file" type="file" /></td>
+<td><input name="mcu_firmware_file" id="id_mcu_firmware_file" type="file" /></td>
 </tr>
 <tr>
-<td><input value="Update MCU Firmware" type="submit" /></td>
+<td><input value="Update MCU Firmware" type="button" onclick="on_uploadsubmit('id_mcu_firmware_file')" /></td>
 </tr>
 </form>
 <!--#exec cmd="./master_form.cgi"-->

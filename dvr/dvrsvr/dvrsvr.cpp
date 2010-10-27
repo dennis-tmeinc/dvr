@@ -677,6 +677,7 @@ void dvrsvr::GetSystemSetup()
 {
     struct dvr_ans ans ;
     struct system_stru sys ;
+    memset( &sys, 0, sizeof(sys));
     if( dvr_getsystemsetup(&sys) ) {
         ans.anscode = ANSSYSTEMSETUP;
         ans.anssize = sizeof( struct system_stru );
@@ -966,6 +967,7 @@ void dvrsvr::ReqSharePasswd()
 //  m_req.data is stream channel
 void dvrsvr::ReqStreamOpen()
 {
+    net_dprint( "ReqStreamOpen, channel %d\n", m_req.data );
     struct dvr_ans ans ;
     if( g_keycheck && m_keycheck==0 ) {
         DefaultReq();

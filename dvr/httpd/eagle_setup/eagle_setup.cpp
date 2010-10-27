@@ -528,7 +528,6 @@ void firmwareupload_page()
     if( firmwareok ) {
         // install the firmware
         link( firmwarefilename, "firmware_x" );
-        fflush(stdout);
         if( fork()==0 ) {
             // disable stdin , stdout
             int fd = open("/dev/null", O_RDWR );
@@ -573,9 +572,8 @@ void mcu_firmwareupload_page()
         fclose( mcu_firmwaremsgfile );
         return;
     }
-
+    
     // install MCU firmware
-    fflush(stdout);
     mcu_upd_pid = fork() ;
     if( mcu_upd_pid == 0 ) {
         // disable stdin , stdout
@@ -583,7 +581,7 @@ void mcu_firmwareupload_page()
         dup2(fd, 0);                 // set dummy stdin stdout, also close old stdin (socket)
         dup2(fd, 1);
         dup2(fd, 2);
-        
+        close(fd);
         // if dvrsvr running, kill it
         FILE * dvrpidfile ;
         pid_t dvrpid ;
@@ -593,13 +591,12 @@ void mcu_firmwareupload_page()
             fscanf(dvrpidfile, "%d", &dvrpid);
             fclose( dvrpidfile );
             if( dvrpid>0 ) {
-                kill( dvrpid, SIGTERM );
+                kill( dvrpid, SIGUSR1 );
             }
         }
-        
         // updating MCU firmware
         execlp("/davinci/dvr/ioprocess", "ioprocess", "-fw", mcu_firmwarefilename, NULL );
-        exit(0);
+        exit(2);    // error exec
     }
     else if( mcu_upd_pid>0 ) {
         int status=-1 ;
@@ -608,25 +605,25 @@ void mcu_firmwareupload_page()
             res=1 ;
         }
     }
+
     if( res ) {
         fprintf( mcu_firmwaremsgfile, "MCU firmware update succeed. <br /> Please un-plug FORCEON cable. <br />System reboot... " );
-        fflush(stdout);
-        if( fork() == 0 ) {
-            sleep(5);
-            // disable stdin , stdout
-            int fd = open("/dev/null", O_RDWR );
-            dup2(fd, 0);                 // set dummy stdin stdout, also close old stdin (socket)
-            dup2(fd, 1);
-            dup2(fd, 2);
-            // reboot system
-            execlp("/bin/reboot", "/bin/reboot", NULL );
-            exit(0);
-        }
     }
     else {
-        fprintf( mcu_firmwaremsgfile, "MCU firmware update failed!" );
+        fprintf( mcu_firmwaremsgfile, "MCU firmware update failed. Reset system!" );
     }
     fclose( mcu_firmwaremsgfile );    
+    if( fork() == 0 ) {
+        // disable stdin , stdout
+        int fd = open("/dev/null", O_RDWR );
+        dup2(fd, 0);                 // set dummy stdin stdout, also close old stdin (socket)
+        dup2(fd, 1);
+        dup2(fd, 2);
+        close(fd);
+        // reboot system
+        execlp("/davinci/dvr/ioprocess", "ioprocess", "-reboot", "5", NULL );
+        exit(2);
+    }
 }
 
 extern void md5_checksum( char * checksum, unsigned char * data, int datalen );

@@ -749,7 +749,7 @@ class video_screen : public window {
                             time_now( &ref_time );
                             if( play==0 ) {
                                 ply->readfileheader( (char *)&hdfile, sizeof(hdfile));
-                                restartdecoder(&hdfile);
+                                restartdecoder(&hdfile);            // restart decoder to flush decoder buffer
                                 play=1 ;
                                 streamstart = streamtime ;
                                 ref_start = ref_time ;
@@ -768,9 +768,10 @@ class video_screen : public window {
                                 }
                             }
                             else if( (diff_ref-diff_stream)>1000 ) {
-                                streamstart = streamtime ;
-                                ref_start = ref_time ;
-                                break ;
+//                                streamstart = streamtime ;
+//                                ref_start = ref_time ;
+                                play=0;
+                                continue ;
                             }
                             else {
                                 break ;

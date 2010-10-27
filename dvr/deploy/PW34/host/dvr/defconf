@@ -190,7 +190,7 @@ bitrateen=1
 # Bitrate mode, 0: VBR, 1:CBR
 bitratemode=0
 # bitrate, bps
-bitrate=3000000
+bitrate=1750000
 
 # frame rate
 framerate=30
@@ -261,11 +261,11 @@ brightness=5
 contrast=5
 saturation=5
 hue=5
-bitrate=3000000
+bitrate=768000
 bitratemode=0
 bitrateen=1
-framerate=30
-resolution=3
+framerate=15
+resolution=2
 recordmode=1
 
 ptzaddr=2
@@ -316,11 +316,11 @@ brightness=5
 contrast=5
 saturation=5
 hue=5
-bitrate=3000000
+bitrate=768000
 bitratemode=0
 bitrateen=1
-framerate=30
-resolution=3
+framerate=15
+resolution=2
 recordmode=1
 ptzaddr=2
 
@@ -370,11 +370,11 @@ brightness=5
 contrast=5
 saturation=5
 hue=5
-bitrate=3000000
+bitrate=768000
 bitratemode=0
 bitrateen=1
-framerate=30
-resolution=3
+framerate=15
+resolution=2
 recordmode=1
 ptzaddr=2
 

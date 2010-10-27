@@ -32,7 +32,7 @@ if [ ${appid} = "clean" ]; then
 
 # clean host firmware filesa
     cd ${DEPROOT}/host/dvr
-    rm -f httpd.sfx firmwareid
+    rm -f httpd.sfx firmwareid rsa_host_key
     rm -f dvrsvr dvrtime eaglehost udhcpc glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
     rm -f ../sfxrun  
     
@@ -77,7 +77,7 @@ cp -v ${APPROOT}/sfx/sfx .
 
 ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/defconf set glog tab102b_enable 0
 
-$(STRIP} sfx
+${STRIP} sfx
 
 # makeing host board deploy firmware
 
@@ -90,7 +90,7 @@ cp -v ${APPROOT}/httpd/eagle_setup/eagle_setup .
 cp -v ${APPROOT}/httpd//cfgdown/cfgdown.cgi .
 cp -v ${APPROOT}/httpd//cfgdown/dvrstatus.cgi .
 cp -v ${APPROOT}/httpd//cfgdown/cfgreport.cgi .
-$(STRIP} applysetup eagle_setup eaglehttpd getsetup cfgdown.cgi dvrstatus.cgi
+${STRIP} applysetup eagle_setup eaglehttpd getsetup cfgdown.cgi dvrstatus.cgi
 
 ${DEPROOT}/mksfx ${DEPROOT}/sfx wwwlist ../httpd.sfx
 
@@ -126,9 +126,10 @@ cp -v ${APPROOT}/cfg/cfg .
 cp -v ${APPROOT}/dhcp/udhcpc .
 
 echo "Generate RSA key for ssh"
+rm -f rsa_host_key
 dropbearkey -t rsa -f rsa_host_key
 
-$(STRIP} dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg
+${STRIP} dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg
 cd ${DEPROOT}/host
 echo ${firmwareid} > dvr/firmwareid
 cp  sfxrun.dep  sfxrun

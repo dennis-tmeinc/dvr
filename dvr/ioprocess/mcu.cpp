@@ -881,13 +881,60 @@ int mcu_update_firmware( char * firmwarefile)
     int rd ;
     char responds[200] ;
     static char cmd_updatefirmware[8] = "\x05\x01\x00\x01\x02\xcc" ;
-    
+
+    netdbg_print("Start update mcu firmware.\n");
+
     fwfile=fopen(firmwarefile, "rb");
+
+	// check firmware file is valid
+	if( fwfile ) {
+		// check valid file contents. 
+		if( fgets( responds, 200, fwfile ))
+		{
+            // example of HEX file line ":02EEFE00382AB0"
+			if( responds[0]==':' ) {
+                unsigned int l=0 ;
+                unsigned int sum=0;
+                unsigned int s ;
+                sscanf( &responds[1], "%2x", &l );
+                res=1 ;
+                l+=5 ;
+                for( c=0; c<(int)l ; c++ ) {
+                    if( sscanf( &responds[1+c*2], "%2x", &s )==1 ) {
+                        sum+=s ;
+                    }
+                    else {
+                        res=0;
+                        break;
+                    }
+                }
+                if( (sum&0xff)!=0 ) {
+                    res=0 ;
+                }
+			}
+		}
+	}
+
+	if( res==0 ) {
+		// invalid file
+		if( fwfile) fclose( fwfile );
+		netdbg_print("Invalid mcu firmware file.\n");
+		return 0 ;
+	}
+	res=0;
+
+	if( res==0 ) {
+		// invalid file
+		if( fwfile) fclose( fwfile );
+		netdbg_print("Valid mcu firmware file. Test done!\n");
+		return 0 ;
+	}
+	res=0;
+
     
-    if( fwfile==NULL ) {
-        return 0 ;                  // failed, can't open firmware file
-    }
-    
+	// rewind
+	fseek( fwfile, 0, SEEK_SET );
+	
     // 
     netdbg_print("Start update MCU firmware: %s\n", firmwarefile);
     
