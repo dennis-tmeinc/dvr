@@ -1610,7 +1610,7 @@ static void run_getsetup()
     childpid=fork();
     if( childpid==0 ) {
         chdir("/home/www");
-        execl("./getsetup", "./getsetup", NULL );
+        execl("cgi/getsetup", "cgi/getsetup", NULL );
         exit(0);
     }
     else if( childpid>0 ) {

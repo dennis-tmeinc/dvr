@@ -14,7 +14,7 @@ LDFLAGS=
 all: eaglehttpd eagle_setup- getsetup- cfgdown-
 
 eaglehttpd: eaglehttpd.c
-	$(CC) $(CFLAGS) -o $@ eaglehttpd.c $(LDFLAGS) -lcrypt
+	$(CC) $(CFLAGS) -o $@ eaglehttpd.c $(LDFLAGS)
 	cp eaglehttpd  $(debug_folder)/www
     
 eagle_setup- :

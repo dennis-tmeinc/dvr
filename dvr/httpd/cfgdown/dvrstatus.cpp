@@ -470,7 +470,41 @@ void print_status()
     }
     
 }
- 
+
+//  function from getquery
+int decode(const char * in, char * out, int osize );
+char * getquery( const char * qname );
+
+void check_synctime()
+{ 
+    char * synctime = getquery("synctime");
+    if( synctime ) {
+            long long int stime = 0 ;
+            sscanf(synctime, "%Ld", &stime );
+            if( stime>0 ) {                     // milliseconds since 1970/01/01
+                struct timeval tv ;
+                tv.tv_sec = stime/1000 ;
+                tv.tv_usec = (stime%1000)*1000 ;
+                settimeofday( &tv, NULL );
+
+                // kill -USR2 dvrsvr.pid
+                FILE * fvalue = fopen( "/var/dvr/dvrsvr.pid", "r" );
+                if( fvalue ) {
+                    int i=0 ;
+                    fscanf(fvalue, "%d", &i) ;
+                    fclose( fvalue );
+                    if( i> 0 ) {
+                        kill( (pid_t)i, SIGUSR2 );      // re-initial dvrsvr
+                    }
+                }
+                
+                system( "/davinci/dvr/dvrtime utctomcu > /dev/null" );
+                system( "/davinci/dvr/dvrtime utctortc > /dev/null" );
+            }
+    }
+    return ;
+}
+
 // return 0: for keep alive
 int main()
 {
@@ -478,11 +512,10 @@ int main()
 	net_dprint( "dvrstatus started.\n"); 
 #endif
 		
+    check_synctime();
+	
     // printf headers
-    printf( "HTTP/1.1 200 OK\r\n" );
-    printf( "Content-Type: text/plain\r\n" );
-    printf( "Cache-Control: no-cache\r\n" );        // no cache on cgi contents
-    printf( "\r\n" );
+    printf( "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nCache-Control: no-cache\r\n\r\n" );
     print_status();
 
 #ifdef NETDBG

@@ -76,7 +76,9 @@ insmod /davinci/mbcache.ko
 insmod /davinci/ext3.ko
 
 #smartftp support
-ln -sf /davinci/dvr/librt-0.9.28.so /lib/librt.so.0
+#ln -sf /davinci/dvr/librt-0.9.28.so /lib/librt.so.0
+ln -sf /davinci/dvr/libcurl.so.4 /lib/libcurl.so.4
+ln -sf /lib/librt.so /lib/librt.so.0
 
 # start io module
 ioprocess < /dev/null > /dev/null 2> /dev/null &

@@ -1,3 +1,6 @@
+./dvr
+./dvr/firmwareid
+./ID
 sfxrun.dep sfxrun
 ./HZK16.bin
 ./rt73.ko
@@ -17,21 +20,18 @@ sfxrun.dep sfxrun
 ./dsplinkk.ko
 ./mos7840.ko
 ./usbserial.ko
-./ID
 ./ID/APPID
 ./ID/BOARDNUM
 ./ID/BOARDID
-./dvr
 ./dvr/tdevd
 ./dvr/setnetwork
 ./dvr/start.sh
-./dvr/firmwareid
 ./dvr/httpd.sfx
 ./dvr/udhcpc
 ./dvr/udhcpc.script
 ./dvr/dropbear dvr/sshd
 ./dvr/rsa_host_key
-./dvr/librt-0.9.28.so
+./dvr/libcurl.so.4
 ./dvr/mountdisks
 ./dvr/ioprocess
 ./dvr/tdevmount
@@ -75,4 +75,3 @@ sfxrun.dep sfxrun
 ./dvr/resource/rwd.pic
 ./dvr/resource/stop.pic
 ./dvr/resource/freemono18.font
-

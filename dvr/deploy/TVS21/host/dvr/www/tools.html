@@ -2,11 +2,18 @@
 <html xmlns="http://www.w3.org/1999/xhtml"><head>
 <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
 <meta content="Dennis Chen" name="author" />
-<link href="eagle.css" rel="stylesheet" type="text/css" /><title>Tools</title>
-
-<script type="text/javascript" src="eagle.js"></script>
+<link href="eagle3.css" rel="stylesheet" type="text/css" /><title>Tools</title>
+<!--#exec cmd="cgi/pagevalue"-->
+<script type="text/javascript" src="eagle3.js"></script>
 <script type="text/javascript">
-
+  var submitform ;
+  function iframeload()
+  {
+      if( submitform ) {
+         submitform.submit();
+      }
+  }
+  
   function on_uploadsubmit( fileid )
   {
         var ifile = document.getElementById(fileid);
@@ -14,10 +21,12 @@
            alert( "Please select uploading file!" );
         }
         else {
-           ifile.form.submit();
+           frame=document.getElementById("id_uploadprog") ;
+           submitform=ifile.form ;
+           frame.src="uploading.html";
+           frame.style.display="";
         }
   }
-
 </script>
 
 </head>
@@ -29,19 +38,25 @@
 <li><a onclick="on_camera_click()"><span>Camera</span></a></li>
 <li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
 <li><a onclick="on_status_click()"><span>Status</span></a></li>
-<li class="current"><a onclick="on_tools_click()"><span>Tools</span></a></li>
+<li class="current"><a onclick="on_tools_click()"><span>Tools </span></a></li>
 </ul>
 </div>
 <p>&nbsp;</p>
+
 <form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="tools.html">
 <input name="page" value="tools" type="hidden" />
 </form>
+
+<iframe id="id_uploadprog" style="width:60%;height:180px;display:none;position:absolute;left:20%;top:32%;z-index:10;background-color:#b0c4de;" onload="iframeload()">
+  <p>Your browser does not support iframes.</p>
+</iframe>
+
 <table>
 <tbody>
 <tr>
 <td class="col1">Download Configuration:</td>
 <td>
-<form id="id_down_cfg" enctype="application/x-www-form-urlencoded" method="get" action="cfgdown.cgi">
+<form id="id_down_cfg" enctype="application/x-www-form-urlencoded" method="get" action="cgi/cfgdown.cgi">
 <input value="Download" title="Download current configuration." type="submit" />
 </form>
 </td>
@@ -58,7 +73,6 @@
 <tr>
 <td><input value="Upload" title="Upload configuration." type="button" onclick="on_uploadsubmit('id_cfgupload_file')" /></td>
 </tr>
-
 </form>
 
 <form enctype="multipart/form-data" method="post" action="firmware.html">

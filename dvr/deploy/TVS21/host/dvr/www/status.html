@@ -2,8 +2,9 @@
 <html xmlns="http://www.w3.org/1999/xhtml"><head>
 <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
 <meta content="Dennis Chen" name="author" />
-<link href="eagle.css" rel="stylesheet" type="text/css" /><title>Status</title>
-<script type="text/javascript" src="eagle.js"></script>
+<!--#exec cmd="cgi/pagevalue"-->
+<link href="eagle3.css" rel="stylesheet" type="text/css" /><title>Status</title>
+<script type="text/javascript" src="eagle3.js"></script>
 </head>
 <body>
 <!--#include file="header.i"-->
@@ -13,7 +14,7 @@
 <li><a onclick="on_camera_click()"><span>Camera</span></a></li>
 <li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
 <li class="current"><a onclick="on_status_click()"><span>Status</span></a></li>
-<li><a onclick="on_tools_click()"><span>Tools</span></a></li>
+<li><a onclick="on_tools_click()"><span>Tools </span></a></li>
 </ul>
 </div>
 <p>&nbsp;</p>
@@ -55,11 +56,7 @@
 <tr>
 <td></td>
 <td>
-<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="status.html">
- <input name="page" value="status" type="hidden" />
- <input name="synctime", id="id_synctime" value="0" type="hidden" />
- <input onclick="on_sync_time()" value="Synchronize Controller Time" type="button" />
-</form>
+<button type="button" onclick="synctime=1">Synchronize Controller Time</button>
 </td>
 </tr>
 <tr>
@@ -138,10 +135,15 @@ for( i=1; i<=camera_num; i++ ) {
 </tr>
 </tbody>
 </table>
-<script type="text/javascript">
 
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="status.html">
+<input name="page" value="status" type="hidden" />
+</form>
+
+<script type="text/javascript">
 var count=0 ;
 var timer ;
+var synctime=0 ;
 var systime=new Date();
 var dvrtime=new Date();
 
@@ -168,45 +170,6 @@ function statusvalue( statusvalue )
  timefunc();
 }
 
-var xmlhttp;
-function loadXMLDoc(url)
-{
- xmlhttp=null;
- if (window.XMLHttpRequest)
- { // code for Firefox, Opera, IE7, etc.
-  xmlhttp=new XMLHttpRequest();
- }
- else if (window.ActiveXObject)
- { // code for IE6, IE5
-  xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
- }
- if (xmlhttp!=null)
- {
-  xmlhttp.onreadystatechange=state_Change;
-  xmlhttp.open("GET",url,true);
-  xmlhttp.send(null);
- }
- else
- {
-  alert("Your browser does not support XMLHTTP.");
- }
-}
-
-function state_Change()
-{
- if (xmlhttp.readyState==4)
- { // 4 = "loaded"
-  if (xmlhttp.status==200)
-  { // 200 = "OK"
-   statusvalue( xmlhttp.responseText ) ;
-  }
-  else
-  {
-   alert("Problem retrieving data:" + xmlhttp.statusText);
-  }
- }
-}
-
 function timefunc()
 {
     var stime = new Date();
@@ -219,16 +182,20 @@ function timefunc()
                                                      +"(<!--#include file="timezone"-->)" ;
     document.getElementById("id_local_time").innerHTML=stime.toDateString()+" "
                                                      +stime.toLocaleTimeString() ;
-
-    if( ++count%25 == 0 ) {
-        loadXMLDoc( "dvrstatus.cgi" ) ;
+	if( synctime == 1 ) {
+		synctime = 0 ;
+        ajaxload( "POST", "cgi/dvrstatus.cgi?synctime="+stime.getTime(), statusvalue );
+	}	
+	else if( ++count%25 == 0 ) {
+        ajaxload( "POST", "cgi/dvrstatus.cgi", statusvalue );
     }
     else {
         timer=setTimeout("timefunc()", 200);
     }
 }
 
-loadXMLDoc( "dvrstatus.cgi" ) ;
+ajaxload( "POST", "cgi/dvrstatus.cgi", statusvalue );
 
+</script>
 </script>
 </body></html>

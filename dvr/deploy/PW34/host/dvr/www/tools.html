@@ -7,6 +7,14 @@
 <script type="text/javascript" src="eagle.js"></script>
 <script type="text/javascript">
 
+  var submitform ;
+  function iframeload()
+  {
+      if( submitform ) {
+         submitform.submit();
+      }
+  }
+  
   function on_uploadsubmit( fileid )
   {
         var ifile = document.getElementById(fileid);
@@ -14,7 +22,10 @@
            alert( "Please select uploading file!" );
         }
         else {
-           ifile.form.submit();
+           frame=document.getElementById("id_uploadprog") ;
+           submitform=ifile.form ;
+           frame.src="uploading.html";
+           frame.style.display="";
         }
   }
 
@@ -37,8 +48,14 @@
 <form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="tools.html">
 <input name="page" value="tools" type="hidden" />
 </form>
+
+<iframe id="id_uploadprog" style="width:60%;height:180px;display:none;position:absolute;left:20%;top:32%;z-index:10;background-color:#b0c4de;" onload="iframeload()">
+  <p>Your browser does not support iframes.</p>
+</iframe>
+
 <table>
 <tbody>
+
 <tr>
 <td class="col1">Download Configuration:</td>
 <td>
@@ -84,4 +101,6 @@
 <!--#exec cmd="./master_form.cgi"-->
 </tbody>
 </table>
-</body></html>
+</body>
+</html>
+

@@ -1,6 +1,11 @@
 #!/bin/sh
-echo Start update MDVR5104 firmware...
+echo Start update TVS21 firmware...
 echo Kill processes...
+
+if [ -n '${FWUPDMSG}' ] ; then 
+    echo "New firmware prepared success." >> ${FWUPDMSG}
+fi
+
 if [ -f /var/dvr/dvrsvr.pid ] ; then
   kill `cat /var/dvr/dvrsvr.pid` 
 fi
@@ -48,11 +53,20 @@ for i in 1 2 3 4 5 6 7 8 9 10 ; do
   fi
 done
 
+if [ -n '${FWUPDMSG}' ] ; then 
+    echo "Erasing old firmware..." >> ${FWUPDMSG}
+fi
+
 # remove old files
 rm -f -r /davinci/*
 
 # start copying files
 echo Copying file to /davinci, please wait.
+
+if [ -n '${FWUPDMSG}' ] ; then 
+    echo "Writing new firmware..." >> ${FWUPDMSG}
+fi
+
 cp -f -a * /davinci
 rm /davinci/sfxrun
 sync
@@ -61,15 +75,21 @@ sync
 ./dvr/panelled 0
 
 cd /davinci/dvr
+sync
+
+if [ -n '${FWUPDMSG}' ] ; then 
+    echo "Fireware update success." >> ${FWUPDMSG}
+    echo "New firmware version:" >> ${FWUPDMSG}
+    cat /davinci/dvr/firmwareid >> ${FWUPDMSG} 
+    echo "Resetting system......" >> ${FWUPDMSG}
+fi
 
 echo Firmware update complete. 
 echo New Version:
-cat firmwareid
+cat /davinci/dvr/firmwareid
 echo
 echo Turn off system power and turn on power again.
 
 if [ -f /var/dvr/mcuversion ] ; then
  ./ioprocess -reboot 8
 fi
-
-

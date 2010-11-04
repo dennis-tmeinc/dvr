@@ -1,4 +1,3 @@
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -15,6 +14,8 @@
 #define PROTOCOL "HTTP/1.1"
 #define RFC1123FMT "%a, %d %b %Y %H:%M:%S GMT"
 
+#define DENIED_PAGE ("/denied.html")
+
 // we need to excess environment
 extern char **environ ;
 
@@ -22,6 +23,8 @@ static char * mime_type[][2] =
 {
     {"html", "text/html; charset=UTF-8"},
     {"htm", "text/html; charset=UTF-8"},
+    {"shtml", "text/html; charset=UTF-8"},
+    {"shtm", "text/html; charset=UTF-8"},
     {"jpg", "image/jpeg"},
     {"jpeg", "image/jpeg"},
     {"gif", "image/gif"},
@@ -46,13 +49,11 @@ static char * mime_type[][2] =
 
 char * document_root="/home/www" ;
 
-#define MAX_KEEPALIVE       (100)
-#define KEEP_ALIVE_TIMEOUT  (60)
-#define CACHE_MAXAGE        (900)
+#define CACHE_MAXAGE        (600)
 
-int keep_alive ;
-long etag ;             // Etag of request document
-time_t modtime ;        // last modified time
+int    http_keep_alive ;
+long   http_etag ;           // Etag of request document
+time_t http_modtime ;        // last modified time
 
 // check if data ready to read
 int recvok(int fd, int usdelay)
@@ -226,6 +227,46 @@ char * getcookie(char * key)
     return NULL;
 }
 
+struct http_msg_t {
+    int status ;
+    char * msg ;
+} http_msg_table [] =
+{
+    { 100, "Continue" },
+    { 200, "OK" },
+    { 300, "Multiple Choices" },
+    { 304, "Not Modified" },
+    { 400, "Bad Request" },
+    { 403, "Forbidden" },
+    { 404, "Not Found" },
+    { 0, "" },
+} ;
+
+char * http_msg( int status )
+{
+    int i;
+    for( i=0; i<100; i++ ) {
+        if( http_msg_table[i].status == status || http_msg_table[i].status<=0 ) {
+            return http_msg_table[i].msg ;
+        }
+    }
+    return "" ;
+}
+
+void http_setheader(char * header, char *header_txt)
+{
+    char hdenv[160] ;
+    sprintf( hdenv, "HEADER_%s", header );
+    setenv( hdenv, header_txt, 1 );
+}
+
+void setcookie(char * key, char * value)
+{
+    char cookie[200] ;
+    sprintf( cookie, "%s=%s", key, value );
+    http_setheader("Set-Cookie", cookie );
+}
+
 // output http header
 void http_header( int status, char * title, char * mime_type, int length)
 {
@@ -233,7 +274,13 @@ void http_header( int status, char * title, char * mime_type, int length)
     char hbuf[120];
     int i ;
     char * resp ;
+    char * fn ;
 
+    if( title==NULL ) {
+        // use default title
+        title=http_msg(status);
+    }
+    
     printf( "%s %d %s\r\n", PROTOCOL, status, title );
     unsetenv("HEADER_Server");                  //  Not allowed for CGI to change server
     unsetenv("HEADER_Date");                    //  Not allowed for CGI to change date 
@@ -242,12 +289,39 @@ void http_header( int status, char * title, char * mime_type, int length)
     strftime( hbuf, sizeof(hbuf), RFC1123FMT, gmtime( &now ) );
     printf( "Date: %s\r\n", hbuf );
 
-    keep_alive=KEEP_ALIVE_TIMEOUT ;
     if( mime_type!=NULL ) {
         setenv("HEADER_Content-Type", mime_type, 1 );
     }
-    sprintf(hbuf, "%d", length);
-    setenv("HEADER_Content-Length",hbuf,0);         // don't overwrite if env exist
+    if( length>=0 ) {
+        sprintf(hbuf, "%d", length);
+        setenv("HEADER_Content-Length",hbuf,0);         // don't overwrite if env exist
+    }
+    if( getenv("HEADER_Content-Length") == NULL ) {
+        http_keep_alive=0;
+    }
+    else {
+        resp = getenv("HTTP_KEEP_ALIVE");
+        if( resp ) {
+            sscanf(resp, "%d", &http_keep_alive );
+        }
+    }
+
+    // check extra header (may be set by online cgi)
+    fn = getenv("POST_FILE_EXHEADER");
+    if( fn ) {
+        FILE * fexhdr = fopen( fn, "r" );
+        if( fexhdr ) {
+            while( fgets( hbuf, sizeof(hbuf), fexhdr ) ) 
+            {
+                if( (fn=strchr(hbuf, ':' )) ) {
+                    *fn=0 ;
+                    http_setheader(cleanstring(hbuf), cleanstring(fn+1)) ;
+                }
+            }
+            fclose( fexhdr );
+        }
+    }
+
     setenv("HEADER_Cache-Control", "no-cache", 0);  // don't overwrite it
     
     for(i=0; i<200; ) {
@@ -273,77 +347,72 @@ void http_header( int status, char * title, char * mime_type, int length)
     printf("\r\n");             
 }
 
-void http_setheader(char * header, char *header_txt)
-{
-    char hdenv[160] ;
-    sprintf( hdenv, "HEADER_%s", header );
-    setenv( hdenv, header_txt, 1 );
-}
-
-void setcookie(char * key, char * value)
-{
-    char cookie[200] ;
-    sprintf( cookie, "%s=%s", key, value );
-    http_setheader("Set-Cookie", cookie );
-}
-
 void http_error( int status, char * title )
 {
-    char errtxt[800] ;
-    sprintf(errtxt, "<html><head><title>%d %s</title></head>\n<body bgcolor=\"#66ffff\"><h4>%d %s</h4></body></html>\r\n",
+    if( title==NULL ) {
+        title = http_msg( status );
+    }
+    http_header( status, title, "text/html", -1 );
+    printf("<html><head><title>%d %s</title></head>\n<body bgcolor=\"#66ffff\"><h4>%d %s</h4></body></html>\r\n",
            status, title, status, title );
-    http_header( status, title, "text/html", strlen(errtxt));
-    fputs(errtxt, stdout);
 }
 
 // update page modified time and etag
 void cache_upd(char * pagefile)
 {
     struct stat filest ;
-    int i ;
-    unsigned char * et ;
-    if( pagefile==NULL || stat( pagefile, &filest ) < 0 ) {
-        modtime=time(NULL);
+    if( pagefile != NULL && stat( pagefile, &filest ) ==0 ) {
+        if( http_modtime<filest.st_mtime ) {
+            http_modtime=filest.st_mtime ;
+        }
+        http_etag+=(long)filest.st_ino ;
+        http_etag+=(long)filest.st_mode ;
+        http_etag+=(long)filest.st_size ;
+        http_etag+=(long)filest.st_ctime ;
     }
     else {
-        if( modtime<filest.st_mtime ) {
-            modtime=filest.st_mtime ;
-        }
-        et = (unsigned char *) &filest ;
-        for( i=0; i<(int)sizeof(filest); i++) {
-            etag+=((unsigned int)*et++)<<(i%24); 
-        }
+        http_modtime=time(NULL);
     }
 }
 
-// return true if cache is fresh
-int http_cache()
+int http_nocache()
+{
+    http_setheader( "Cache-Control", "no-cache" );
+    return 0 ;
+}    
+
+// return true if document is fresh
+int http_checkcache()
 {
     char tbuf[120];
     char etagstr[16] ;
     char * s ;
 
-    if( modtime==(time_t)0 || etag==0 ) {
-        http_setheader( "Cache-Control", "no-cache" );
-        return 0 ;
+    if( (s=getenv( "HTTP_CACHE_CONTROL")) ) {
+        if( strcmp(s, "no-cache")==0 ) {
+            return http_nocache();
+        }
     }
 
     if( (s=getenv( "REQUEST_METHOD" )) ) {
         if( strcmp(s, "POST")==0 ) {
-            http_setheader( "Cache-Control", "no-cache" );
-            return 0 ;
+            return http_nocache();
         }
+    }
+
+    if( http_modtime==(time_t)0 || http_etag==0 ) {
+            return http_nocache();
     }
     
     sprintf( tbuf, "max-age=%d",  CACHE_MAXAGE );
     http_setheader( "Cache-Control", tbuf );
 
     // Modified time
-    strftime( tbuf, sizeof(tbuf), RFC1123FMT, gmtime( &modtime ) );
+    strftime( tbuf, sizeof(tbuf), RFC1123FMT, gmtime( &http_modtime ) );
     http_setheader( "Last-Modified", tbuf );
 
     //  etag
-    sprintf(etagstr, "\"%x\"", (unsigned int)etag);
+    sprintf(etagstr, "\"%x\"", (unsigned int)http_etag);
     http_setheader( "Etag", etagstr);
 
     // check etag
@@ -386,127 +455,76 @@ int copycleanstring( char * instr, char * outstr )
     return len ;
 }
 
-void runapp( char * execfile, char * arg )
+int cgi_run()
 {
     pid_t childpid ;
+    char  cgioutfile[20] ;
+
+    // make output file name for cgi
+    sprintf( cgioutfile, "cgiout%d", getpid() );
+    setenv("POST_FILE_TMPCGIOUT", cgioutfile, 1 );
+    
     fflush(stdout);
     childpid=fork();
     if( childpid==0 ) {
-        execlp(execfile, execfile, arg, NULL);
-        exit(0);
+        char  cgifile[200] ;
+        // open cgi output file and set it as stdout for cgi
+        int hcgifile = open(cgioutfile, O_RDWR|O_CREAT, S_IRWXU );
+        if( hcgifile ) {
+            dup2( hcgifile, 1 ) ;
+            close( hcgifile );
+        }
+        // cgi file name
+        sprintf( cgifile, "%s%s", document_root, getenv("REQUEST_URI") );
+        execl( cgifile, cgifile, NULL );
+        exit(0) ;
     }
-    else if( childpid>0 ) {
-        waitpid( childpid, NULL, 0 );
-    }
-}
+    else if( childpid>0) {
+        int   chstatus ;
+        int   len ;
 
-/*
-#include <dlfcn.h>
-int fcgi_run( char * fcgifile ) 
-{   
-    // debug
-    int i=0; 
-    while( ++i<500 ) sleep(1);
-    void * fcgi = dlopen( fcgifile, RTLD_LAZY );
-    if( fcgi ) {
-        void (* fcgifunc)() ;
-        fcgifunc = (void (*)()) dlsym( fcgi, "fcgi_run" ) ;
-        if( fcgifunc ) {
-            fcgifunc();
-            return 1 ;
-        }
-        else {
-            dlclose( fcgi );
-        }
-    }
-    return 0 ;
-}
-*/
-
-int cgi_run(char * execfile )
-{
-    pid_t childpid ;
-    int   status ;
-    char  env_originalhandle[]="POST_CGI_ORIGINHANDLE" ;
-    char  env_cgifile[]="POST_FILE_TMPCGI" ;
-    
-    fflush(stdout);
-    
-    // save old stdout
-    char cgiout[20] ;
-    int dupstdout = dup(1);
-    sprintf( cgiout, "%d", dupstdout );
-    setenv(env_originalhandle, cgiout, 1 );  // pass original socket handle to cgi
-    sprintf( cgiout, "/tmp/cgi%d", getpid() );
-    setenv(env_cgifile, cgiout, 1 );         // set a POST_FILE_* env, so the file can be clean out
-    int hcgifile = open(cgiout, O_RDWR|O_CREAT, S_IRWXU );
-    dup2( hcgifile, 1 ) ;
-
-//    if( fcgi_run( "YAYA" ) == 0 ) {
-        childpid=fork();
-        if( childpid==0 ) {
-            char execdir[512] ;
-            char * d ;
-            strncpy( execdir, execfile, 511);
-            execdir[511]=0;
-            d=strrchr( execdir, '/' );
-            if( d ) {
-                *d='\0' ;
-                chdir( execdir );
-            }
-            execl( execfile, execfile, NULL );
-            http_error( 403, "Forbidden" );
-            exit(0) ;
-        }
-        else if( childpid>0) {
-            waitpid(childpid, &status, 0);
-        }
-//    }
+        waitpid(childpid, &chstatus, 0);      // wait cgi to finish
         
-    unsetenv(env_originalhandle);
-    
-    // restore stdout
-    fflush( stdout );
-    dup2( dupstdout, 1 );
-    close( dupstdout );
-
-    int len = lseek( hcgifile, 0, SEEK_END ) ;
-    if( len<=0 ) {
-        http_error( 403, "Forbidden" );
-        return 0;
-    }
-
-    lseek( hcgifile, 0, SEEK_SET );
-    FILE * fp = fdopen( hcgifile, "r" );
-
-    // parse cgi output header
-    char cgiheader[160];
-    char * p ;
-    while ( fgets( cgiheader, sizeof(cgiheader), fp )  )
-    {
-        if( cgiheader[0] == '\r' || cgiheader[0] == '\n' ) {
-            break;
+        FILE * fp = fopen( cgioutfile, "r" );
+        if( fp==NULL ) {
+            http_error( 403, NULL );
+            return 0;
         }
-        else if( strncmp(cgiheader, "HTTP/", 5)==0 ) {
-            continue ;          // ignor HTTP responds
+        fseek( fp, 0, SEEK_END ) ;
+        len = ftell(fp);
+        if( len<=0 ) {
+            http_error( 403, NULL );
+            return 0;
         }
-        else if( (p=strchr(cgiheader, ':' )) ) {
-            *p=0 ;
-            http_setheader(cleanstring(cgiheader), cleanstring(p+1)) ;
+        fseek( fp, 0, SEEK_SET );
+
+        // parse cgi output header
+        char cgiheader[160];
+        char * p ;
+        while ( fgets( cgiheader, sizeof(cgiheader), fp )  )
+        {
+            if( cgiheader[0] == '\r' || cgiheader[0] == '\n' ) {
+                break;
+            }
+            else if( strncmp(cgiheader, "HTTP/", 5)==0 ) {
+                continue ;          // ignor HTTP responds
+            }
+            else if( (p=strchr(cgiheader, ':' )) ) {
+                *p=0 ;
+                http_setheader(cleanstring(cgiheader), cleanstring(p+1)) ;
+            }
         }
-    }
-    
-    http_cache();
-    http_header( 200, "OK", NULL, len-ftell(fp) );
 
-    int ch ;
-    while( (ch = fgetc( fp ))!=EOF ) {
-        fputc( ch, stdout ) ;
-    }
-    fclose( fp ) ;
-    unlink( cgiout );
-    unsetenv( env_cgifile );
+        http_checkcache();
+        http_header( 200, NULL, NULL, len-ftell(fp) );
 
+        // output cgi 
+        int ch ;
+        while( (ch = fgetc( fp ))!=EOF ) {
+            fputc( ch, stdout ) ;
+        }
+        fclose( fp ) ;
+    }
     return 0 ;
 }
 
@@ -515,6 +533,7 @@ int smallssi_gettoken(FILE * fp, char * token, int bufsize)
     int r=0;
     int c = fgetc(fp);
     if( c==EOF ) return 0;
+    http_etag+=(long)c ;
     token[r] = c ;
     if( token[r] == '<' ) {
         r++;
@@ -572,6 +591,7 @@ void smallssi_echo( char * ssicmd )
 {
     char * eq ;
     char * ifile ;
+    cache_upd(NULL);
     eq = strchr( ssicmd, '=' );
     if( eq ) {
         ifile=strchr(eq, '\"');
@@ -594,6 +614,7 @@ void smallssi_exec( char * ssicmd )
 {
     char * eq ;
     char * ifile ;
+    cache_upd(NULL);
     eq = strchr( ssicmd, '=' );
     if( eq ) {
         ifile=strchr(eq, '\"');
@@ -613,29 +634,27 @@ void smallssi_include_file( char * ifilename )
 {
     FILE * fp ;
     int r ;
-    char linebuf[1024] ;
+    char token[1024] ;
     fp = fopen( ifilename, "r" ) ;
     if( fp==NULL ) {
         return ;
     }
     cache_upd(ifilename);
-    while( (r=smallssi_gettoken(fp, linebuf, sizeof(linebuf) ) )>0 ) {
+    while( (r=smallssi_gettoken(fp, token, sizeof(token) ) )>0 ) {
         if( r<8 ) {
-            fputs(linebuf, stdout);
+            fputs(token, stdout);
         }
-        else if( strncasecmp(linebuf, "<!--#include ", 13) == 0 ) {		// found ssi include command
-            smallssi_include(linebuf);
+        else if( strncasecmp(token, "<!--#include ", 13) == 0 ) {		// found ssi include command
+            smallssi_include(token);
         }
-        else if( strncasecmp(linebuf, "<!--#echo ", 10) == 0 ) {		// found ssi echo command
-            smallssi_echo(linebuf);
-            cache_upd(NULL);
+        else if( strncasecmp(token, "<!--#echo ", 10) == 0 ) {		// found ssi echo command
+            smallssi_echo(token);
         }
-        else if( strncasecmp(linebuf, "<!--#exec ", 10) == 0 ) {		// found ssi exec command
-            smallssi_exec(linebuf);
-            cache_upd(NULL);
+        else if( strncasecmp(token, "<!--#exec ", 10) == 0 ) {		// found ssi exec command
+            smallssi_exec(token);
         }
         else {
-            fputs(linebuf, stdout);		// pass to client
+            fputs(token, stdout);		// pass to client
         }
     }
     
@@ -643,36 +662,6 @@ void smallssi_include_file( char * ifilename )
 }
 
 char serfile[]="/tmp/wwwserialnofile" ;
-char * makeserialno( char * buf, int bufsize ) 
-{
-    time_t t ;
-    FILE * sfile ;
-    int i ;
-    unsigned int c ;
-    // generate random serialno
-    sfile=fopen("/dev/urandom", "r");
-    for(i=0;i<(bufsize-1);i++) {
-        c=(((unsigned int)fgetc(sfile))*256+(unsigned int)fgetc(sfile))%62 ;
-        if( c<10 )
-            buf[i]= '0'+ c;
-        else if( c<36 ) 
-            buf[i]= 'a' + (c-10) ;
-        else if( c<62 )
-            buf[i]= 'A' + (c-36) ;
-        else 
-            buf[i]='A' ;
-    }
-    buf[i]=0;
-    fclose(sfile);
-    
-    sfile=fopen(serfile, "w");
-    time(&t);
-    if(sfile) {
-        fprintf(sfile, "%u %s", (unsigned int)t, buf);
-        fclose(sfile);
-    }
-    return buf ;
-}
 
 int checkserialno( char * serialno )
 {
@@ -692,6 +681,7 @@ int checkserialno( char * serialno )
     return 0;
 }
 
+// update valid serialno time 
 int updateserialno(char * serialno)
 {
     time_t t ;
@@ -711,48 +701,6 @@ int cleanserialno()
     return 0 ;
 }
 
-extern char *crypt (__const char *__key, __const char *__salt) __THROW;
-
-int checkloginpassword()
-{
-    int res=0;
-    char * p ;
-    char username[100], password[100] ;
-    char passwdline[200] ;    
-    char salt[20] ;
-    char * key ;
-    int l;
-    FILE * fpasswd;
-    username[0]=0;
-    password[0]=0;
-    p = getquery( "login_username" );
-    if( p )strcpy( username, p );
-    p = getquery( "login_password" );
-    if( p )strcpy( password, p );
-    
-    fpasswd=fopen("/etc/passwd", "r");
-    if( fpasswd ) {
-        while( fgets(passwdline, sizeof(passwdline), fpasswd) ) {
-            l=strlen(username);
-            if( strncmp(username, passwdline, l)==0 && 
-               passwdline[l]==':' ) {                    // username matched
-                   strncpy(salt, passwdline+l+1, 13);
-                   salt[12]=0;
-                   key = crypt(password, salt);
-                   if( key ) {
-                       if( strncmp( key, passwdline+l+1, strlen(key) )==0 ) {
-                           setenv("loginname", username, 1);
-                           res=1 ;
-                       }
-                   }
-                   break;
-            }
-        }
-        fclose(fpasswd);
-    }
-    return res ;
-}
-
 // return 1: success, 0: failed to received all content
 int savepostfile()
 {
@@ -763,11 +711,20 @@ int savepostfile()
     char * p2 ;
     char linebuf[4096] ;
     int  i ;
-    int  content_length ;
+    int  content_length=0 ;
     int  d ;
-    int lbdy ;          // boundary length ;
+    int lbdy=0 ;            // boundary length ;
     int datatype = 1 ;      // 0: dataend, 1: data, 2: databoundary
+    int res=0;
 
+    p = getenv("CONTENT_LENGTH" );
+    if( p ) {
+        sscanf(p,"%d", &content_length);
+    }
+    else {
+        return res ;
+    }
+    
     p = getenv("CONTENT_TYPE");
     if( p ) {
         boundary = strstr(p, "boundary=" ) ;
@@ -776,30 +733,32 @@ int savepostfile()
             lbdy = strlen(boundary);
         }
         else {
-            return 0;
+            return res;
         }
     }
     else {
-        return 0;
+        return res;
     }
 
-    content_length = 0 ;
-    p = getenv("CONTENT_LENGTH" );
-    if( p ) {
-        sscanf(p,"%d", &content_length);
-    }
     if( content_length <= 2*lbdy ) {
-        return 0;
+        return res;
     }
-
+    
     // get first boundary
     if( fgets( linebuf, sizeof(linebuf), stdin)== NULL )
-        return 0;
+        return res;
     if( linebuf[0]!='-' ||
         linebuf[1]!='-' ||
         strncmp( &linebuf[2], boundary, lbdy )!=0 ) 
-        return 0;
+        return res;
 
+    
+    FILE * ulprogfile = fopen("uploading", "w");
+    int  ulbytes = 0 ;
+
+    fprintf(ulprogfile,"0" );
+    fflush(ulprogfile);
+    
     while(1) {
         char part_name[128] ;
         char part_filename[256] ;
@@ -857,6 +816,13 @@ int savepostfile()
             datatype=1 ;
             while( datatype==1 ) {
                 d=fgetc(stdin);
+                ulbytes++ ;
+                if( (ulbytes%(100+content_length/150))==0 ) {
+                    rewind(ulprogfile);
+                    fprintf(ulprogfile,"%d\r\n", ulbytes*100/content_length );
+                    fflush(ulprogfile);
+                }
+                
                 if( d==EOF ) {
                     if( i>0 ) {
                         fwrite( linebuf, 1, i, postfile);
@@ -904,136 +870,98 @@ int savepostfile()
                 continue ;
             }
             else if( linebuf[0]=='-' && linebuf[1]=='-' ) {
-                return 1 ;
+                res=1;
+                break;
             }
             else {
                 break ;
             }
         }
     }
-    return 0 ;
+    rewind(ulprogfile);
+    fprintf(ulprogfile,"100");
+    fclose( ulprogfile );
+    return res ;
 }
 
-#define EXCEPTPAGES 3
-char * exceptionpages[EXCEPTPAGES] =
+int check_access()
 {
-    "/dvrlog.html",
-    "/tvslog.html",
-    "/cfgreport.html"
-};
+	char * p ;
+	char * uri ;
+    int res=1 ;
+	char access[128] ;
+	FILE * accessfile = fopen( "access", "r" );
+	if( accessfile ) {
+		uri = getenv("REQUEST_URI");
+		while( fgets( access, 128, accessfile ) ) {
+			if( strcmp( cleanstring(access), uri )==0 ) {
+				// access check required
+				p = getquery("ser") ;
+				if( p ) {
+					setcookie("ser",p);
+				}
+				else {
+					p = getcookie("ser");
+				}
 
-int check_exceptionpage()
-{
-    int i;
-    char * uri = getenv("REQUEST_URI");
-    for( i=0; i<EXCEPTPAGES ; i++ ) {
-        if( strcmp( uri, exceptionpages[i] )==0 ) {
-            return 1 ;
-        }
-    }
-    return 0 ;
+				if( p && checkserialno (p)) {
+					updateserialno(p);
+				}
+				else {
+					setenv("REQUEST_URI", DENIED_PAGE, 1);	// replace denied page
+					res=0 ;
+				}
+				break;
+			}
+		}
+		fclose( accessfile );
+	}
+    return res ;
 }
 
-void smallssi_run( char * ssipath )
+void smallssi_run()
 {
-    char * p ;          // generic pointer
     FILE * fp ;
-    char ssidir[512] ;
-    char * ssid ;
+    char ssioutfile[20] ;
 
-    strncpy( ssidir, ssipath, 511);
-    ssidir[511]=0 ;
-    ssid=strrchr(ssidir, '/' );
-    if( ssid ) {
-        *ssid=0;
-        ssid++;
-        chdir(ssidir);
-    }
-   
-    fp = fopen( ssipath, "r" );
+    char * ssiname = getenv("REQUEST_URI");
+    ssiname++ ;
+    
+    fp = fopen( ssiname, "r" );
     if ( fp == NULL ) {
-        http_error( 403, "Forbidden" );
+        http_error( 403, NULL );
         return ;
     }
     fclose( fp );
 
-//  dvr specific extension
-    p = getquery( "page" );
-    if( ssid && strcmp( ssid, "login.html" )==0 ) {
-        strncpy( ssidir, ssipath, sizeof(ssidir) );
-    }
-    else if( p && strcmp(p, "login")==0 ) {          // login page 
-        if( checkloginpassword() ) {
-               char serno[30] ;
-               // setup configure data
-               runapp("./getsetup", NULL);
-               // make serial number
-               makeserialno( serno, sizeof(serno));
-               setcookie("ser",serno);
-               strncpy( ssidir, ssipath, sizeof(ssidir) );
-           }
-        else {                                  // password error
-            strcat( ssidir, "/login.html");
-        }
-    }
-    else if( check_exceptionpage() ){
-        ;   // go throught serial check
-        strncpy( ssidir, ssipath, sizeof(ssidir) );
-    }
-    else {
-        p = getquery("ser") ;
-        if( p ) {
-            setcookie("ser",p);
-        }
-        else {
-            p = getcookie("ser");
-        }
-            
-        if( p && checkserialno (p)) {
-            // excute pre-page 
-            runapp("./eagle_setup", NULL );
-            updateserialno(p);
-            strncpy( ssidir, ssipath, sizeof(ssidir) );
-        }
-        else {
-            strcat( ssidir, "/denied.html");
-        }
-    }
-
     fflush(stdout);
 
     // save old stdout
-    char ssifile[20] ;
-    int dupstdout = dup(1);
-    sprintf( ssifile, "/tmp/ssi%d", getpid() );
-    setenv("POST_FILE_TMPSSI", ssifile, 1 );
-    int hssifile = open(ssifile, O_RDWR|O_CREAT, S_IRWXU );
+    int orgstdout = dup(1);
+
+    // set ssi output file
+    sprintf( ssioutfile, "ssi%d", getpid() );
+    setenv("POST_FILE_TMPSSI", ssioutfile, 1 );
+    
+    int hssifile = open(ssioutfile, O_RDWR|O_CREAT, S_IRWXU );
     dup2( hssifile, 1 ) ;
     close( hssifile );
 
-    smallssi_include_file( ssidir );
+    smallssi_include_file( ssiname );
     
     // restore stdout
     fflush( stdout );
-    dup2( dupstdout, 1 );
-    close( dupstdout );
+    dup2( orgstdout, 1 );
+    close( orgstdout );
 
-/*
-    if( dynamic_page ) {
-        http_cache(0, (time_t)0);
-    }
-    else {
-        http_cache( CACHE_MAXAGE, 0 );
-    }
-*/
-    if( http_cache() ) {       // check if cache fresh?
+    if( http_checkcache() ) {       // check if cache fresh?
         // use cahce
-        http_header( 304, "Not modified", NULL, 0 );        // let browser to use cache
+        http_header( 304, NULL, NULL, 0 );        // let browser to use cache
     }
     else {
-        fp = fopen( ssifile, "r" );
+        fp = fopen( ssioutfile, "r" );
         fseek( fp, 0, SEEK_END );
-        http_header( 200, "OK", "text/html; charset=UTF-8", ftell(fp) );
+        http_header( 200, NULL, "text/html; charset=UTF-8", ftell(fp) );
         fseek( fp, 0, SEEK_SET );
         int ch ;
         while( (ch=fgetc(fp))!=EOF ) {
@@ -1041,8 +969,6 @@ void smallssi_run( char * ssipath )
         }
         fclose( fp ) ;
     }
-    unlink( ssifile );
-    unsetenv( "POST_FILE_TMPSSI" );
 }
 
 // set http headers as environment variable. 
@@ -1167,6 +1093,85 @@ int savepost()
     return res ;
 }
 
+void http_document()
+{
+    struct stat sb;
+    char * uri ;
+    char * fname ;
+    int len ;
+    FILE * fp ;
+    int ch ;
+
+    // use linebuf to store document name.
+	uri = getenv("REQUEST_URI");
+
+    if( uri==NULL ) {
+        http_error( 404, NULL );
+        return ;
+    }
+    fname=uri+1 ;
+    // if file available ?
+    if ( stat( fname, &sb ) < 0 ) {
+        http_error( 404, NULL );
+        return ;
+    }
+    if ( S_ISDIR( sb.st_mode ) )    // do not support directory list
+    {
+        http_error( 403, NULL );
+        return ;
+    }
+
+	len = strlen( fname );
+
+    // check file type by extension
+    if(strcasecmp(&fname[len-5], ".html")==0 ||   // to run small ssi
+       strcasecmp(&fname[len-6], ".shtml")==0 ) 
+    {  
+        smallssi_run();
+    }
+    else if( strncmp(fname, "cgi/", 4 )==0 ||
+	         strcasecmp(&fname[len-4], ".cgi")==0 ) 
+    {
+        // execute cgi.
+        cgi_run();
+    }
+    else {
+        // if we are here, no cgi is executed, dump out requested file.
+        cache_upd( fname );
+        if( http_checkcache() ) {       // check if cache fresh?
+            http_header( 304, NULL, NULL, 0 );        // to let browser use cache
+            return ;
+        }
+
+        fp = fopen( fname, "r" );
+
+        if ( fp == NULL ) {
+            http_error( 403, NULL );
+            return ;
+        }
+
+        fseek( fp, 0, SEEK_END );
+        len = (size_t) ftell( fp );
+        fseek( fp, 0, SEEK_SET );
+
+        if( len<=0 ) {
+            http_error( 404, NULL );
+            fclose( fp );
+            return ;
+        }
+
+        http_header( 200, NULL, get_mime_type( fname ), len );
+
+        // output whole file 
+        while ( ( ch = getc( fp ) ) != EOF ) {
+            putchar( ch );    
+        }
+
+        fclose( fp );
+    }
+    
+}
+
 void http()
 {
     char * method ;	// request method
@@ -1177,17 +1182,14 @@ void http()
 
     char * ext ;
     char * pc ;
-    size_t len;
-    int ch;
-    FILE* fp;
-    struct stat sb;
 
-    if( recvok(0, keep_alive*1000000)<=0 ) {
+    if( recvok(0, http_keep_alive*1000000)<=0 ) {
+        http_keep_alive=0 ;
         return ;
     }
-    keep_alive=0 ;
-    etag=0 ;
-    modtime=0 ;
+    http_keep_alive=0 ;
+    http_etag=0 ;
+    http_modtime=0 ;
     
     if ( fgets( linebuf, sizeof(linebuf), stdin ) == NULL )
     {
@@ -1202,9 +1204,6 @@ void http()
     *uri=0;
     uri=cleanstring(uri+1);
 
-    setenv( "DOCUMENT_ROOT", document_root, 1);
-    chdir(document_root);
-
     // set request method, support POST and GET only
     if( strcasecmp(method, "POST")==0 ) {
         setenv( "REQUEST_METHOD", "POST", 1 );
@@ -1213,7 +1212,7 @@ void http()
         setenv( "REQUEST_METHOD", "GET", 1 );
     }
     else {
-        http_error(300, "Bad Query");
+        http_error(400, NULL);
         goto http_done ;
     }
     
@@ -1221,13 +1220,13 @@ void http()
     if( uri[0] != '/' ||
        uri[1] == '/' ||
        strstr( uri, "/../" ) ) {
-        http_error(400, "Bad Request" );
+        http_error(400, NULL );
         goto http_done ;
     }
     
     protocol=strchr(uri, ' ');
     if( protocol==NULL ) {
-        http_error(400, "Bad Request" );
+        http_error(400, NULL );
         goto http_done ;
     }
 
@@ -1235,7 +1234,7 @@ void http()
     protocol=cleanstring(protocol+1);
     // check protocol
     if( strncasecmp(protocol, "HTTP/1.", 7)!=0 ) {
-        http_error( 300, "Bad Request");
+        http_error( 400, NULL );
         goto http_done ;
     }
     setenv("SERVER_PROTOCOL", protocol, 1 );
@@ -1248,7 +1247,7 @@ void http()
         setenv( "QUERY_STRING", query, 1);
     }
 
-    if( uri[1]=='\0' ) {        // default page ?
+    if( uri[1]=='\0' ) {        // default page
         setenv( "REQUEST_URI", "/system.html", 1 );
     }
     else {
@@ -1288,75 +1287,25 @@ void http()
             sethttpenv(linebuf);
         }
     }
+    
     // save post data
     if( savepost()==0 ) {
         goto http_done ;
     }
     // all inputs processed!
-    
-    // use linebuf to store document name.
-    sprintf(linebuf, "%s%s", document_root, getenv("REQUEST_URI") );
-    // check if we need to run a cgi
-    ext=strrchr( linebuf, '.' ) ;
-    if( ext ) {
-        if(strcasecmp(ext, ".html")==0 ||   // to run small ssi
-           strcasecmp(ext, ".shtml")==0 ||
-           strcasecmp(ext, ".shtm")==0 ) {  
-            smallssi_run(linebuf);
-            goto http_done ;
-        }
-        else if( strcasecmp(ext, ".cgi")==0 ) {
-            // execute cgi.
-            cgi_run(linebuf);
-            goto http_done ;
-        }
-    }
 
-    // if we are here, no cgi is executed, dump out requested file.
-    if ( stat( linebuf, &sb ) < 0 ) {
-        http_error( 404, "Not Found");
-        goto http_done ;
-    }
-    if ( S_ISDIR( sb.st_mode ) )    // not supporting directory list
-    {
-        http_error( 403, "Forbidden" );
-        goto http_done ;
-    }
+	// access check
+	check_access() ;
 
-    cache_upd( linebuf );
-    if( http_cache() ) {       // check if cache fresh?
-        // use cahce
-        http_header( 304, "Not modified", NULL, 0 );        // let browser to use cache
-        goto http_done ;
-    }
+    // set extra header files. (for inline cgi support)
+    sprintf( linebuf, "exhdr%d", getpid() );
+    setenv("POST_FILE_EXHEADER", linebuf, 1 );
     
-    fp = fopen( linebuf, "r" );	    
-    
-    if ( fp == NULL ) {
-        http_error( 403, "Forbidden" );
-        goto http_done ;
-    }
-    
-    fseek( fp, 0, SEEK_END );
-    len = (size_t) ftell( fp );
-    fseek( fp, 0, SEEK_SET );
-    
-    if( len<=0 ) {
-        http_error( 404, "Not Found" );
-        fclose( fp );
-        goto http_done ;
-    }
+    // out put http document
+    http_document() ;
 
-    http_header( 200, "Ok", get_mime_type( linebuf ), len );
-   
-    // output whole file 
-    while ( ( ch = getc( fp ) ) != EOF ) {
-        putchar( ch );    
-    }
-    
-    fclose( fp );
-    
 http_done:
+    
     fflush(stdout);
 
     // remove all HTTP_* environment
@@ -1373,21 +1322,21 @@ void sigpipe(int sig)
 
 int main(int argc, char * argv[])
 {
-    int keepalive_cycle ;
     if( argc>1 ) {
         document_root=argv[1] ;
     }
 
+	// set document root dir
+    setenv( "DOCUMENT_ROOT", document_root, 1);
+    chdir(document_root);
+
     // do some cleaning on SIGPIPE
     signal(SIGPIPE,  sigpipe );
 
-    keep_alive=1 ;
-    for( keepalive_cycle=0; keepalive_cycle<MAX_KEEPALIVE; keepalive_cycle++) {
+    http_keep_alive=1 ;
+    while( http_keep_alive ) {
         http();
-        if( keep_alive==0 )
-            break;
     }
     return 0 ;
 }
 
- 

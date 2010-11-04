@@ -1,7 +1,7 @@
 /* 
- * eagle.js
- * eagle32 board setup program (java script for setup pages)
- */
+     * eagle.js
+     * eagle32 board setup program (java script for setup pages)
+     */
 
 function formsubmit( fm )
 {
@@ -119,3 +119,37 @@ function JSONinitfield( formdata )
         setfieldvalue( f, formdata[f] );
     }
 }
+
+/* Ajax */
+function ajaxload(mode, url, loaded, fail)
+{
+    if (window.XMLHttpRequest)
+    {   // code for IE7+, Firefox, Chrome, Opera, Safari
+        xmlhttp=new XMLHttpRequest();
+    }
+    else
+    {   // code for IE6, IE5
+        xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+    }
+    xmlhttp.onreadystatechange=function()
+    {
+        if (xmlhttp.readyState==4 ) {       // 4 = "loaded"
+            if ( xmlhttp.status==200 ) {    // 200 = "OK"
+                if( loaded ) {
+                    loaded( xmlhttp.responseText );
+                }
+            }
+            else {
+                if( fail ) {
+                    fail(ajaxhttp.statusText);
+                }
+                else {
+                    alert("Problem retrieving data:" + xmlhttp.statusText);
+                }
+            }
+        }
+    }
+    xmlhttp.open(mode,url,true);
+    xmlhttp.send();
+}
+

@@ -877,6 +877,9 @@ int mcu_update_firmware( char * firmwarefile)
 {
     int res = 0 ;
     FILE * fwfile ;
+    FILE * fwmsgfile=NULL ;
+    FILE * fwprogfile=NULL ;
+    char * fwmsg ;
     int c ;
     int rd ;
     char responds[200] ;
@@ -884,8 +887,26 @@ int mcu_update_firmware( char * firmwarefile)
 
     netdbg_print("Start update mcu firmware.\n");
 
+    fwmsg=getenv("MCUMSG");
+    if( fwmsg ) {
+        fwmsgfile = fopen( fwmsg, "w" );
+    }
+
+    fwmsg=getenv("MCUPROG");
+    if( fwmsg ) {
+        fwprogfile = fopen( fwmsg, "w" );
+        fprintf(fwprogfile, "0");
+        rewind(fwprogfile);
+        fflush(fwprogfile);
+    }
+    
     fwfile=fopen(firmwarefile, "rb");
 
+    if( fwmsgfile ) {
+        fprintf(fwmsgfile, "Verify mcu firmware file ......" );
+        fflush( fwmsgfile );
+    }
+    
 	// check firmware file is valid
 	if( fwfile ) {
 		// check valid file contents. 
@@ -919,18 +940,19 @@ int mcu_update_firmware( char * firmwarefile)
 		// invalid file
 		if( fwfile) fclose( fwfile );
 		netdbg_print("Invalid mcu firmware file.\n");
-		return 0 ;
+        if( fwmsgfile ) {
+            fprintf(fwmsgfile, "Failed!\r\n");
+            fflush( fwmsgfile );
+            fclose( fwmsgfile );
+        }
+        return 0 ;
 	}
 	res=0;
 
-	if( res==0 ) {
-		// invalid file
-		if( fwfile) fclose( fwfile );
-		netdbg_print("Valid mcu firmware file. Test done!\n");
-		return 0 ;
-	}
-	res=0;
-
+    if( fwmsgfile ) {
+        fprintf(fwmsgfile, "OK.\r\n");
+        fflush( fwmsgfile );
+    }
     
 	// rewind
 	fseek( fwfile, 0, SEEK_SET );
@@ -940,11 +962,25 @@ int mcu_update_firmware( char * firmwarefile)
     
     // reset mcu
     netdbg_print("Reset MCU.\n");
+    if( fwmsgfile ) {
+        fprintf(fwmsgfile, "Resetting MCU......");
+        fflush( fwmsgfile );
+    }
+    
     if( mcu_reset()==0 ) {              // reset failed.
         netdbg_print("Failed\n");
+        if( fwmsgfile ) {
+            fprintf(fwmsgfile, "Failed!\r\n");
+            fflush( fwmsgfile );
+            fclose( fwmsgfile );
+        }        
         return 0;
     }
     netdbg_print("Done.\n");
+    if( fwmsgfile ) {
+        fprintf(fwmsgfile, "OK.\r\n");
+        fflush( fwmsgfile );
+    }
     
     // clean out serial buffer
     memset( responds, 0, sizeof(responds)) ;
@@ -952,6 +988,11 @@ int mcu_update_firmware( char * firmwarefile)
     mcu_clear(1000000);
     
     netdbg_print("Erasing.\n");
+    if( fwmsgfile ) {
+        fprintf(fwmsgfile, "Erasing MCU......");
+        fflush( fwmsgfile );
+    }
+    
     rd=0 ;
     if( mcu_write( cmd_updatefirmware, 5 ) ) {
         rd=mcu_read( responds, sizeof(responds), 20000000, 500000 ) ;
@@ -962,22 +1003,59 @@ int mcu_update_firmware( char * firmwarefile)
        responds[rd-4]==0x0 && 
        responds[rd-3]==0x01 && 
        responds[rd-2]==0x01 && 
-       responds[rd-1]==0x03 ) {
-       // ok ;
-       netdbg_print("Done.\n");
-       res=0 ;
-   }
-   else {
-       netdbg_print("Failed.\n");
-       return 0;                    // can't start fw update
-   }
-    
+       responds[rd-1]==0x03 ) 
+    {
+        // ok ;
+        netdbg_print("Done.\n");
+        res=0 ;
+    }
+    else {
+        netdbg_print("Failed.\n");
+        if( fwmsgfile ) {
+            fprintf(fwmsgfile, "Failed!\r\n");
+            fflush( fwmsgfile );
+            fclose( fwmsgfile );
+        }        
+        return 0;                    // can't start fw update
+    }
+
+    if( fwmsgfile ) {
+        fprintf(fwmsgfile, "OK.\r\n");
+        fflush( fwmsgfile );
+    }
+
     netdbg_print("Programming.\n");
+    if( fwmsgfile ) {
+        fprintf(fwmsgfile, "Programming MCU......");
+        fflush( fwmsgfile );
+    }
+
     // send firmware 
+    fseek( fwfile, 0, SEEK_END );
+    int mcufilelen = ftell( fwfile );
+    if( mcufilelen < 1000 ) {
+        if( fwmsgfile ) {
+            fprintf(fwmsgfile, "Error in file!\r\n");
+            fflush( fwmsgfile );
+            fclose( fwmsgfile );
+        }        
+        return 0;                    // can't start fw update
+    }
+    int proglen = 0 ;
+    fseek( fwfile, 0, SEEK_SET );
+    
     res = 0 ;
     while( (c=fgetc( fwfile ))!=EOF ) {
         if( mcu_write( &c, 1)!=1 ) 
             break;
+        if( fwprogfile ) {
+            proglen++ ;
+            if( proglen%(mcufilelen/100)==9 ) {
+                fprintf( fwprogfile, "%d", (proglen*100)/mcufilelen  );
+                rewind( fwprogfile );
+                fflush( fwprogfile );
+            }
+        }
         if( c=='\n' && mcu_dataready (0) ) {
             rd = mcu_read(responds, sizeof(responds), 200000, 200000 );
             if( rd>=5 &&
@@ -1043,9 +1121,28 @@ int mcu_update_firmware( char * firmwarefile)
     }
     if( res ) {
         netdbg_print("Done.\n");
+        if( fwprogfile ) {
+            fprintf( fwprogfile, "100"  );
+            fflush( fwprogfile );
+        }        
+        if( fwmsgfile ) {
+            fprintf(fwmsgfile, "Done.\n");
+            fprintf(fwmsgfile, "Please reset the unit.\n");
+            fflush( fwmsgfile );
+        }
     }
     else {
         netdbg_print("Failed.\n");
+        if( fwmsgfile ) {
+            fprintf(fwmsgfile, "Failed.\n");
+            fflush( fwmsgfile );
+        }
+    }
+    if( fwmsgfile ) {
+        fclose( fwmsgfile );
+    }
+    if( fwprogfile ) {
+        fclose( fwprogfile );
     }
     return res ;
 }

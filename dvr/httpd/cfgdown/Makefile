@@ -17,17 +17,17 @@ LDFLAGS=
 
 CFLAGS= -g -Wall -Wno-write-strings
 
-all: cfgdown.cgi dvrstatus.cgi cfgreport.cgi
+all: cfgdown.cgi dvrstatus.cgi cfgreport
 
 cfgdown.cgi: cfgdown.c $(EXTSOURCES) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ cfgdown.c $(LDFLAGS)
 	cp cfgdown.cgi  $(debug_folder)/www
 
-dvrstatus.cgi : dvrstatus.cpp $(EXTHEADERS) $(EXTSOURCES) ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h
-	$(CC) $(CFLAGS) -o $@ dvrstatus.cpp ../../ioprocess/diomap.cpp $(LDFLAGS)
+dvrstatus.cgi : dvrstatus.cpp ../eagle_setup/getquery.cpp $(EXTHEADERS) $(EXTSOURCES) ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h
+	$(CC) $(CFLAGS) -o $@ dvrstatus.cpp ../eagle_setup/getquery.cpp ../../ioprocess/diomap.cpp $(LDFLAGS)
 	cp $@  $(debug_folder)/www
 
-cfgreport.cgi : cfgreport.cpp $(EXTHEADERS) $(EXTSOURCES) ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h
+cfgreport : cfgreport.cpp $(EXTHEADERS) $(EXTSOURCES) ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h
 	$(CC) $(CFLAGS) -o $@ cfgreport.cpp ../../ioprocess/diomap.cpp $(EXTSOURCES) $(LDFLAGS)  -lstdc++
 	cp $@  $(debug_folder)/www
 
@@ -35,7 +35,7 @@ cfgreport.cgi : cfgreport.cpp $(EXTHEADERS) $(EXTSOURCES) ../../ioprocess/diomap
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f *.cgi
+	rm -f *.cgi cfgreport
 	rm -f *.o
 
 

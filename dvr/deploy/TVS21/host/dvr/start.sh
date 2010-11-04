@@ -67,13 +67,19 @@ ifconfig eth0 192.168.247.${boardid}
 #telnet support
 cp /davinci/dvr/passwd /etc
 
+# install web server
+cd /home
+mkdir www
+cd www
+/davinci/dvr/httpd.sfx
+ln -sf /davinci/dvr/www/cgi cgi
+
 # restart inetd
 echo "Restart inetd."
 inetdpid=`ps | awk '$5 ~ /inetd/ {print $1}'`
 kill -TERM ${inetdpid}
 sleep 1
-cp ./inetd.conf /etc/inetd.conf
-/bin/inetd  < /dev/null > /dev/null 2> /dev/null
+/bin/inetd /davinci/dvr/inetd.conf  < /dev/null > /dev/null 2> /dev/null
 
 # ext3 file system modules
 insmod /davinci/jbd.ko
@@ -112,12 +118,6 @@ sleep 3
 
 # wifi driver
 # insmod /davinci/rt73.ko
-
-# install web server
-cd /home
-mkdir www
-cd www
-/davinci/dvr/httpd.sfx
 
 #smartftp support
 ln -sf /davinci/dvr/librt-0.9.28.so /lib/librt.so.0
