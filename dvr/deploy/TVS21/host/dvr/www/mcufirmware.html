@@ -65,7 +65,13 @@ function fmcuprog( prog )
 
 function fmcumsg( msg )
 {
-    document.getElementById("id_mcumsg").innerHTML=msg ;
+    elem = document.getElementById("id_mcumsg") ;
+    if( elem.innerText ) {  // IE would change \n to nothing if use innerHTML
+        elem.innerText = msg ;
+    }
+    else {
+        elem.innerHTML=msg ;
+    }
     postProg();
 }
 

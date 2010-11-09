@@ -303,7 +303,7 @@ void dio_checkwifi()
     if( p_dio_mmap ){
         if( p_dio_mmap->iomode==IOMODE_DETECTWIRELESS ) {
             // probe smartserver
-            net_broadcast("rausb0", 49954, (void *)"lookingforsmartserver", 21 );
+            net_detectsmartserver();
         }
     }
 }

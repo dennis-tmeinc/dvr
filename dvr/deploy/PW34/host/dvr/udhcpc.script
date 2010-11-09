@@ -1,6 +1,10 @@
 #!/bin/sh
 
-if [ $1 = "bound" ] then
+if [ $1 = "bound" ] ; then
     ifconfig ${interface} ${ip}/${mask} 
+    if [ -n ${router} ] ; then
+        route del default
+        route add default gw ${router}
+    fi
 fi
 

@@ -5,7 +5,6 @@ if [ $# -lt 1 ]; then
   exit 1
 fi
 
-
 DEPROOT=$PWD
 APPROOT=${DEPROOT}/../..
 PATH=${APPROOT}/deploy/util:${PATH}
@@ -18,7 +17,6 @@ fi
 
 OUTPUTDIR=${DEPROOT}/${RELEASE}
 
-appid=""
 special=""
 appid=$1
 special=$2
@@ -30,12 +28,13 @@ if [ ${appid} = "clean" ]; then
  
 # clean host www files
     cd ${DEPROOT}/host/dvr/www
-    rm -f applysetup eagle_setup eaglehttpd getsetup cfgdown.cgi dvrstatus.cgi cfgreport.cgi
+    rm -f -r cgi
+    rm -f eaglehttpd
 
 # clean host firmware filesa
     cd ${DEPROOT}/host/dvr
     rm -f httpd.sfx firmwareid rsa_host_key
-    rm -f dvrsvr dvrtime udhcpc eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
+    rm -f udhcpc dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
     
     cd ${DEPROOT}/host/ID
     rm -f BOARDNUM APPID BOARDID
@@ -54,7 +53,7 @@ fi
 
 mkdir ${OUTPUTDIR}
 
-slvfirmwareid=TVS21.1.0.${RELEASE}
+slvfirmwareid=PWII.1.0.${RELEASE}
 
 if [ ${special} = "cycle" ]; then
   firmwareid=${appid}.1.cycle.${RELEASE}
@@ -78,19 +77,34 @@ ${STRIP} sfx
 
 # makeing host board deploy firmware
 
-cd ${DEPROOT}/host/dvr/www
 echo "Build http files"
+cd ${DEPROOT}/host/dvr/www
+if [ ! -d cgi ] ; then
+    mkdir cgi
+fi
 cp -v ${APPROOT}/httpd/eaglehttpd .
-cp -v ${APPROOT}/httpd/getsetup/getsetup .
+${STRIP} eaglehttpd
+
+cd cgi
+echo "Copy cgi files"
+cp -v ${APPROOT}/httpd/cfgdown/cfgdown.cgi .
+cp -v ${APPROOT}/httpd/cfgdown/cfgreport .
+cp -v ${APPROOT}/httpd/cfgdown/dvrstatus.cgi .
+
+cp -v ${APPROOT}/httpd/eagle_setup/cfgupload .
+cp -v ${APPROOT}/httpd/eagle_setup/firmwareupd .
+cp -v ${APPROOT}/httpd/eagle_setup/login .
+cp -v ${APPROOT}/httpd/eagle_setup/mcufwupd .
+cp -v ${APPROOT}/httpd/eagle_setup/mfid .
+cp -v ${APPROOT}/httpd/eagle_setup/pagevalue .
+
 cp -v ${APPROOT}/httpd/getsetup/applysetup .
-cp -v ${APPROOT}/httpd/eagle_setup/eagle_setup .
-cp -v ${APPROOT}/httpd//cfgdown/cfgdown.cgi .
-cp -v ${APPROOT}/httpd//cfgdown/dvrstatus.cgi .
-cp -v ${APPROOT}/httpd//cfgdown/cfgreport.cgi .
-${STRIP} applysetup eagle_setup eaglehttpd getsetup cfgdown.cgi dvrstatus.cgi cfgreport.cgi
+cp -v ${APPROOT}/httpd/getsetup/getsetup .
+
+for f in * ; do ${STRIP} $f ; done
+cd ..
 
 ${DEPROOT}/mksfx ${DEPROOT}/sfx wwwlist ../httpd.sfx
-
 chmod a+x ../httpd.sfx
 
 if [ ! -d ${DEPROOT}/host/ID ] ; then

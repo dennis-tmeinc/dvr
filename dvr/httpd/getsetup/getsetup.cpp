@@ -772,6 +772,12 @@ int main()
         if( value.length()>0 ) {
             fprintf(fvalue, "\"wifi_ip\":\"%s\",", value.getstring() );
         }
+
+        // smartserver
+        ivalue = dvrconfig.getvalueint("network", "wifi_dhcp" );
+        if( ivalue>0 ) {
+            fprintf(fvalue, "\"wifi_dhcp\":\"%s\",", "on" );
+        }
         
         // wifi_mask
         value = dvrconfig.getvalue("network","wifi_mask");
@@ -805,6 +811,12 @@ int main()
             fprintf(fvalue, "\"wifi_enc\":\"%s\",", value.getstring() );
         }
 
+        // smartserver
+        value = dvrconfig.getvalue( "network", "smartserver" );
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"smartserver\":\"%s\",", value.getstring() );
+        }  
+        
         // end of network value
         fprintf(fvalue, "\"objname\":\"network_value\" }" );
         fclose( fvalue );

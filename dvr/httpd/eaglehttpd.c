@@ -50,10 +50,12 @@ static char * mime_type[][2] =
 char * document_root="/home/www" ;
 
 #define CACHE_MAXAGE        (600)
+#define KEEP_ALIVE          (300)
 
 int    http_keep_alive ;
 long   http_etag ;           // Etag of request document
 time_t http_modtime ;        // last modified time
+int    http_cachemaxage ;    // cache max age (in seconds)
 
 // check if data ready to read
 int recvok(int fd, int usdelay)
@@ -296,15 +298,6 @@ void http_header( int status, char * title, char * mime_type, int length)
         sprintf(hbuf, "%d", length);
         setenv("HEADER_Content-Length",hbuf,0);         // don't overwrite if env exist
     }
-    if( getenv("HEADER_Content-Length") == NULL ) {
-        http_keep_alive=0;
-    }
-    else {
-        resp = getenv("HTTP_KEEP_ALIVE");
-        if( resp ) {
-            sscanf(resp, "%d", &http_keep_alive );
-        }
-    }
 
     // check extra header (may be set by online cgi)
     fn = getenv("POST_FILE_EXHEADER");
@@ -349,6 +342,8 @@ void http_header( int status, char * title, char * mime_type, int length)
 
 void http_error( int status, char * title )
 {
+    http_keep_alive=0  ;
+    http_cachemaxage=0 ;
     if( title==NULL ) {
         title = http_msg( status );
     }
@@ -372,6 +367,7 @@ void cache_upd(char * pagefile)
     }
     else {
         http_modtime=time(NULL);
+        http_cachemaxage=0;
     }
 }
 
@@ -404,23 +400,25 @@ int http_checkcache()
             return http_nocache();
     }
     
-    sprintf( tbuf, "max-age=%d",  CACHE_MAXAGE );
+    sprintf( tbuf, "max-age=%d",  http_cachemaxage );
     http_setheader( "Cache-Control", tbuf );
 
-    // Modified time
-    strftime( tbuf, sizeof(tbuf), RFC1123FMT, gmtime( &http_modtime ) );
-    http_setheader( "Last-Modified", tbuf );
+    if( http_cachemaxage>0 ) {
+        // Modified time
+        strftime( tbuf, sizeof(tbuf), RFC1123FMT, gmtime( &http_modtime ) );
+        http_setheader( "Last-Modified", tbuf );
 
-    //  etag
-    sprintf(etagstr, "\"%x\"", (unsigned int)http_etag);
-    http_setheader( "Etag", etagstr);
+        //  etag
+        sprintf(etagstr, "\"%x\"", (unsigned int)http_etag);
+        http_setheader( "Etag", etagstr);
 
-    // check etag
-    if( (s=getenv("HTTP_IF_NONE_MATCH"))) {
-        if( strcmp( s, etagstr )==0 ) {        // Etag match?
-            if( (s=getenv("HTTP_IF_MODIFIED_SINCE"))) {
-                if( strcmp( s, tbuf )==0 ) {   // Modified time match?
-                    return 1 ;                 // cache is fresh
+        // check etag
+        if( (s=getenv("HTTP_IF_NONE_MATCH"))) {
+            if( strcmp( s, etagstr )==0 ) {        // Etag match?
+                if( (s=getenv("HTTP_IF_MODIFIED_SINCE"))) {
+                    if( strcmp( s, tbuf )==0 ) {   // Modified time match?
+                        return 1 ;                 // cache is fresh
+                    }
                 }
             }
         }
@@ -458,25 +456,24 @@ int copycleanstring( char * instr, char * outstr )
 int cgi_run()
 {
     pid_t childpid ;
-    char  cgioutfile[20] ;
+    char  cgibuf[200] ;
 
     // make output file name for cgi
-    sprintf( cgioutfile, "cgiout%d", getpid() );
-    setenv("POST_FILE_TMPCGIOUT", cgioutfile, 1 );
+    sprintf( cgibuf, "%s/cgiout%d", document_root, getpid() );
+    setenv("POST_FILE_TMPCGIOUT", cgibuf, 1 );
     
     fflush(stdout);
     childpid=fork();
     if( childpid==0 ) {
-        char  cgifile[200] ;
         // open cgi output file and set it as stdout for cgi
-        int hcgifile = open(cgioutfile, O_RDWR|O_CREAT, S_IRWXU );
+        int hcgifile = open(cgibuf, O_RDWR|O_CREAT, S_IRWXU );
         if( hcgifile ) {
             dup2( hcgifile, 1 ) ;
             close( hcgifile );
         }
         // cgi file name
-        sprintf( cgifile, "%s%s", document_root, getenv("REQUEST_URI") );
-        execl( cgifile, cgifile, NULL );
+        sprintf( cgibuf, "%s%s", document_root, getenv("REQUEST_URI") );
+        execl( cgibuf, cgibuf, NULL );
         exit(0) ;
     }
     else if( childpid>0) {
@@ -485,7 +482,7 @@ int cgi_run()
 
         waitpid(childpid, &chstatus, 0);      // wait cgi to finish
         
-        FILE * fp = fopen( cgioutfile, "r" );
+        FILE * fp = fopen( cgibuf, "r" );
         if( fp==NULL ) {
             http_error( 403, NULL );
             return 0;
@@ -499,23 +496,22 @@ int cgi_run()
         fseek( fp, 0, SEEK_SET );
 
         // parse cgi output header
-        char cgiheader[160];
         char * p ;
-        while ( fgets( cgiheader, sizeof(cgiheader), fp )  )
+        while ( fgets( cgibuf, sizeof(cgibuf), fp )  )
         {
-            if( cgiheader[0] == '\r' || cgiheader[0] == '\n' ) {
+            if( cgibuf[0] < ' ' ) {
                 break;
             }
-            else if( strncmp(cgiheader, "HTTP/", 5)==0 ) {
+            else if( strncmp(cgibuf, "HTTP/", 5)==0 ) {
                 continue ;          // ignor HTTP responds
             }
-            else if( (p=strchr(cgiheader, ':' )) ) {
+            else if( (p=strchr(cgibuf, ':' )) ) {
                 *p=0 ;
-                http_setheader(cleanstring(cgiheader), cleanstring(p+1)) ;
+                http_setheader(cleanstring(cgibuf), cleanstring(p+1)) ;
             }
         }
 
-        http_checkcache();
+        http_nocache();             // no cache for cgi result
         http_header( 200, NULL, NULL, len-ftell(fp) );
 
         // output cgi 
@@ -721,10 +717,7 @@ int savepostfile()
     if( p ) {
         sscanf(p,"%d", &content_length);
     }
-    else {
-        return res ;
-    }
-    
+
     p = getenv("CONTENT_TYPE");
     if( p ) {
         boundary = strstr(p, "boundary=" ) ;
@@ -922,7 +915,7 @@ int check_access()
 void smallssi_run()
 {
     FILE * fp ;
-    char ssioutfile[20] ;
+    char ssioutfile[200] ;
 
     char * ssiname = getenv("REQUEST_URI");
     ssiname++ ;
@@ -934,13 +927,17 @@ void smallssi_run()
     }
     fclose( fp );
 
+    // setup extra header files. (for inline exec support)
+    sprintf( ssioutfile, "%s/exhdr%d", document_root, getpid() );
+    setenv("POST_FILE_EXHEADER", ssioutfile, 1 );
+
     fflush(stdout);
 
     // save old stdout
     int orgstdout = dup(1);
 
     // set ssi output file
-    sprintf( ssioutfile, "ssi%d", getpid() );
+    sprintf( ssioutfile, "%s/ssiout%d", document_root, getpid() );
     setenv("POST_FILE_TMPSSI", ssioutfile, 1 );
     
     int hssifile = open(ssioutfile, O_RDWR|O_CREAT, S_IRWXU );
@@ -1050,26 +1047,28 @@ int savepost()
 {
     int res = 0 ;
     char * request_method ;
-    int    content_length ;
+    int    content_length=0 ;
     char * content_type ;
     char * post_string;
+    char * p ;
     int  r ;
     
     // check input
-    request_method = getenv("REQUEST_METHOD") ;
-    if( getenv("CONTENT_LENGTH") ) {
-        content_length=atoi( getenv("CONTENT_LENGTH") );
+    p = getenv("CONTENT_LENGTH") ;
+    if( p ) {
+        sscanf( p, "%d", &content_length );
     }
-    else {
-        content_length=0;
+    if( content_length<=0 ) {       // no contents
+        return 1 ;                  // return success. 
     }
+    
     content_type = getenv("CONTENT_TYPE");
-    if( content_length>0 && 
-        content_length< 20000000 &&    // maximum content 20 MB 
-        strcmp( request_method, "POST" )==0 &&
-        content_type ) 
+    request_method = getenv("REQUEST_METHOD") ;
+    if( strcmp( request_method, "POST" )==0 &&      // support "POST" contents only
+       content_type &&                              // content-type must be provided by client
+       content_length<20000000 )                    // can't handle huge contents
     {
-        if( content_length<10000 &&
+        if( content_length<100000 &&
             strncasecmp( content_type, "application/x-www-form-urlencoded", 32)==0 ) 
         {
             post_string = (char *)malloc( content_length + 1 );
@@ -1086,9 +1085,6 @@ int savepost()
         else if( strncasecmp( content_type, "multipart/form-data", 19 )==0 ) {
             res = savepostfile();
         }
-    }
-    else {
-        res=1 ;
     }
     return res ;
 }
@@ -1120,6 +1116,15 @@ void http_document()
         http_error( 403, NULL );
         return ;
     }
+   
+    uri = getenv("HTTP_KEEP_ALIVE");
+    if( uri ) {
+        sscanf(uri, "%d", &http_keep_alive );
+    }
+    else {
+        http_keep_alive=KEEP_ALIVE  ;
+    }
+    http_cachemaxage=CACHE_MAXAGE ;
 
 	len = strlen( fname );
 
@@ -1172,7 +1177,9 @@ void http_document()
     
 }
 
-void http()
+// process_input of http protocol
+// return 1: success, 0: failed
+int http_input()
 {
     char * method ;	// request method
     char * uri ;	// request URI
@@ -1183,23 +1190,15 @@ void http()
     char * ext ;
     char * pc ;
 
-    if( recvok(0, http_keep_alive*1000000)<=0 ) {
-        http_keep_alive=0 ;
-        return ;
-    }
-    http_keep_alive=0 ;
-    http_etag=0 ;
-    http_modtime=0 ;
-    
     if ( fgets( linebuf, sizeof(linebuf), stdin ) == NULL )
     {
-        return ;
+        return 0;
     }
     
     method = cleanstring(linebuf);
     uri = strchr(method, ' ');
     if( uri==NULL ) {
-        return ;
+        return 0;
     }
     *uri=0;
     uri=cleanstring(uri+1);
@@ -1212,30 +1211,27 @@ void http()
         setenv( "REQUEST_METHOD", "GET", 1 );
     }
     else {
-        http_error(400, NULL);
-        goto http_done ;
+        return 0 ;
     }
     
     // check uri
     if( uri[0] != '/' ||
        uri[1] == '/' ||
-       strstr( uri, "/../" ) ) {
-        http_error(400, NULL );
-        goto http_done ;
+       strstr( uri, "/../" ) ) 
+    {
+        return 0 ;
     }
     
     protocol=strchr(uri, ' ');
     if( protocol==NULL ) {
-        http_error(400, NULL );
-        goto http_done ;
+        return 0 ;
     }
 
     *protocol=0;
     protocol=cleanstring(protocol+1);
     // check protocol
     if( strncasecmp(protocol, "HTTP/1.", 7)!=0 ) {
-        http_error( 400, NULL );
-        goto http_done ;
+        return 0 ;
     }
     setenv("SERVER_PROTOCOL", protocol, 1 );
 
@@ -1261,12 +1257,12 @@ void http()
     // analyz request header
     while ( fgets( linebuf, sizeof(linebuf), stdin )  )
     {
-        if( linebuf[0] == 0 ||
-           strcmp( linebuf, "\n" ) == 0 || 
-           strcmp( linebuf, "\r\n" ) == 0 ){
-               break;
-           }
-        else if( strncmp(linebuf, "Host:", 5)==0 ) {
+        if( linebuf[0] < ' ' )
+        {
+            break;
+        }
+        else if( strncmp(linebuf, "Host:", 5)==0 )
+        {
             pc = cleanstring( linebuf+5 );
             setenv("HTTP_HOST", pc, 1);
             ext = strrchr( pc, ':' ) ;
@@ -1287,9 +1283,28 @@ void http()
             sethttpenv(linebuf);
         }
     }
-    
+    return 1 ;
+}
+
+void http()
+{
+    if( recvok(0, http_keep_alive*1000000)<=0 ) {
+        http_keep_alive=0 ;
+        return ;
+    }
+    http_keep_alive=0 ;
+    http_etag=0 ;
+    http_modtime=0 ;
+    http_cachemaxage=0 ;
+
+    if( http_input()==0 ) {
+        http_error(400, NULL);
+        goto http_done ;
+    }
+
     // save post data
     if( savepost()==0 ) {
+        http_error(400, NULL );
         goto http_done ;
     }
     // all inputs processed!
@@ -1297,10 +1312,6 @@ void http()
 	// access check
 	check_access() ;
 
-    // set extra header files. (for inline cgi support)
-    sprintf( linebuf, "exhdr%d", getpid() );
-    setenv("POST_FILE_EXHEADER", linebuf, 1 );
-    
     // out put http document
     http_document() ;
 

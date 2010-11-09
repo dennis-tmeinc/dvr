@@ -66,13 +66,18 @@ setnetwork
 #telnet support
 cp /davinci/dvr/passwd /etc
 
+# install web server
+mkdir /home/www
+cd /home/www
+/davinci/dvr/httpd.sfx
+ln -sf /davinci/dvr/www/cgi cgi
+
 # restart inetd
 echo "Restart inetd."
 inetdpid=`ps | awk '$5 ~ /inetd/ {print $1}'`
 kill -TERM ${inetdpid}
 sleep 1
-cp /davinci/dvr/inetd.conf /etc/inetd.conf
-inetd  < /dev/null > /dev/null 2> /dev/null &
+inetd  /davinci/dvr/inetd.conf < /dev/null > /dev/null 2> /dev/null &
 
 # ext3 file system modules
 insmod /davinci/jbd.ko
@@ -108,18 +113,13 @@ sleep 3
 # wifi driver
 # /davinci/dvr/wifi_up
 
-# install web server
-mkdir /home/www
-cd /home/www
-/davinci/dvr/httpd.sfx
-
 # mount disk already found
 tdevmount /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &
 
 #smartftp support
 ln -sf /davinci/dvr/librt-0.9.28.so /lib/librt.so.0
 
-sleep 100
+sleep 60
 # install usb-serial driver
 insmod /davinci/usbserial.ko
 insmod /davinci/mos7840.ko

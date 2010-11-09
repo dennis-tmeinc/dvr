@@ -1,85 +1,82 @@
 #!/bin/sh
-echo Start update TVS21 firmware...
+echo Start update mDVR firmware...
+echo Kill processes...
 
-if [ -n '${FWUPDMSG}' ] ; then 
+if [ -n "${FWUPDMSG}" ] ; then 
     echo "New firmware prepared success." >> ${FWUPDMSG}
 fi
 
-echo Kill processes...
-if [ -f /var/dvr/dvrsvr.pid ]; then
-  kill `cat /var/dvr/dvrsvr.pid` 
+if [ -f /var/dvr/dvrsvr.pid ] ; then
+  kill -USR1 `cat /var/dvr/dvrsvr.pid` 
 fi
 
-if [ -f /var/dvr/glog.pid ]; then
+if [ -f /var/dvr/glog.pid ] ; then
   kill `cat /var/dvr/glog.pid`
 fi
 
-if [ -f /var/dvr/ioprocess.pid ]; then
+if [ -f /var/dvr/ioprocess.pid ] ; then
    kill `cat /var/dvr/ioprocess.pid`
 fi
 
 for i in 1 2 3 4 5 6 7 8 9 10 ; do
-  if [ -f /var/dvr/ioprocess.pid ]; then
+  if [ -f /var/dvr/ioprocess.pid ] ; then
     sleep 2
   else
     break;
   fi
 done
 
-sleep 1
-./dvr/ioprocess &
-sleep 1
+if [ -f /var/dvr/mcuversion ] ; then
 
-# flashing panel leds
-./dvr/panelled 07
+  sleep 1
+  ./dvr/ioprocess &
 
-for i in 1 2 3 4 5 6 7 8 9 10 ; do
-  if [ -f /var/dvr/dvrsvr.pid ]; then
-    sleep 2
-  else
-    break;
-  fi
-done
+  sleep 1
+  # flashing panel leds
+  ./dvr/panelled 07
 
-for i in 1 2 3 4 5 6 7 8 9 10 ; do
-  if [ -f /var/dvr/glog.pid ]; then
-    sleep 2
-  else
-    break;
-  fi
-done
-
-# remove old files
-
-# start copying files
-
-if [ -n '${FWUPDMSG}' ] ; then 
-    echo "Writing new firmware..." >> ${FWUPDMSG}
 fi
 
-echo Copying file to /davinci, please wait.
-cp -f -a * /davinci
+#for i in 1 2 3 4 5 6 7 8 9 10 ; do
+#  if [ -f /var/dvr/dvrsvr.pid ] ; then
+#    sleep 2
+#  else
+#    break;
+#  fi
+#done
+
+for i in 1 2 3 4 5 6 7 8 9 10 ; do
+  if [ -f /var/dvr/glog.pid ] ; then
+    sleep 2
+  else
+    break;
+  fi
+done
+
+# start copying files
+if [ -n "${FWUPDMSG}" ] ; then 
+    echo "Writing new firmware..." >> ${FWUPDMSG}
+else
+    echo "Writing new firmware..."
+fi
+
+cp -f -a * /davinci/
 rm /davinci/sfxrun
 sync
 
 # stop panel led flashing
-./dvr/panelled 0
+/davinci/dvr/panelled 0
 
-cd /davinci/dvr
-
-if [ -n '${FWUPDMSG}' ] ; then 
+if [ -n "${FWUPDMSG}" ] ; then 
     echo "Fireware update success." >> ${FWUPDMSG}
     echo "New firmware version:" >> ${FWUPDMSG}
     cat /davinci/dvr/firmwareid >> ${FWUPDMSG} 
     echo "Resetting system......" >> ${FWUPDMSG}
+    /davinci/dvr/ioprocess -reboot 5
+else 
+    echo "Fireware update success."
+    echo "New firmware version:"
+    cat /davinci/dvr/firmwareid 
+    echo "Please reset system."
 fi
-
-echo Firmware update complete.
-echo Firmware version:
-cat  /davinci/dvr/firmwareid 
-echo Remove any USB flash.
-echo Turn off system power and turn on power again.
-
-./ioprocess -reboot 8
-
 

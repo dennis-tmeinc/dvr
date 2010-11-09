@@ -834,6 +834,7 @@ void net_dprint( char * fmt, ... ) ;
 #define NET_DPRINT
 #endif
 int net_broadcast( char * interface, int port, void * msg, int msgsize );
+int net_detectsmartserver();
 int net_listen(int port, int socktype);
 int net_connect(char *ip, int port);
 void net_clean(int sockfd);

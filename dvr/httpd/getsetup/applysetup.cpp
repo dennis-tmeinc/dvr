@@ -913,6 +913,17 @@ int main()
             dvrconfig.setvalue( section, "wifi_ip", v);
         }
         
+        // wifi_dhcp
+        if( getsetvalue( "bool_wifi_dhcp" )!=NULL ) {
+            v=getsetvalue( "wifi_dhcp" );
+            if( v ) {
+                dvrconfig.setvalueint(section,"wifi_dhcp",1);
+            }
+            else {
+                dvrconfig.setvalueint(section,"wifi_dhcp",0);
+            }
+        }
+        
         // wifi_mask
         v=getsetvalue("wifi_mask");
         if( v ) {
@@ -925,7 +936,7 @@ int main()
             dvrconfig.setvalue( section, "wifi_essid", v);
         }
 
-        // wifi_key (faked)
+        // wifi_key
         v=getsetvalue("wifi_key");
         if( v ) {
             dvrconfig.setvalue( section, "wifi_key", v);
@@ -943,6 +954,12 @@ int main()
         v=getsetvalue("wifi_enc");
         if( v ) {
             dvrconfig.setvalue( section, "wifi_enc", v);
+        }
+
+        // smartserver
+        v=getsetvalue("smartserver");
+        if( v ) {
+            dvrconfig.setvalue( section, "smartserver", v);
         }
     }
 

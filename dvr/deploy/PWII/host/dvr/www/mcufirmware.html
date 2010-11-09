@@ -2,29 +2,82 @@
 <html xmlns="http://www.w3.org/1999/xhtml"><head>
 <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
 <meta content="Dennis Chen" name="author" />
-<link href="eagle.css" rel="stylesheet" type="text/css" /><title>MCU Firmware Update</title>
+<link href="eagle3.css" rel="stylesheet" type="text/css" /><title>MCU Firmware Update</title>
 
-<script type="text/javascript" src="eagle.js"></script>
+<script type="text/javascript" src="eagle3.js"></script>
 </head>
 <body>
 <!--#include file="header.i"-->
 <p>&nbsp;</p>
-<table>
-<tbody>
+
+<pre style="font-size:1.2em;">
+<!--#exec cmd="cgi/mcufwupd"-->
+</pre>
+
+<br />
+<pre id="id_mcumsg" style="font-size:1.2em;">
+</pre>
+
+<table id="id_progbar" style="width:60%;height:0.8cm;text-align:center;display: none" cellspacing=0 cellpadding=0 border=1 >
 <tr>
-<td>
-<!--#include file="mcu_firmware_msg"-->
-</td>
-<td></td>
-</tr> <tr>
-<td>
-<form name="reboot" enctype="application/x-www-form-urlencoded" method="post" action="apply.html">
-<input value="Back" onclick="window.history.back()" type="button" /> <input value="Close" onclick="self.close()" type="button" /> 
-</form>
-</td>
-<td></td>
-</tr>
-</tbody>
+  <td style="text-align: center; width:1%; background-color: SandyBrown;" id="id_progbarpc">
+  </td>
+  <td>
+  </td>
+</tr>   
 </table>
-<pre></pre>
-</body></html>
+
+<script type="text/javascript">
+
+var tcounter = 0 ;
+
+function postProg()
+{
+    ajaxload( "POST", "mcuprog", fmcuprog );
+}
+
+function postMsg()
+{
+    ajaxload( "POST", "mcumsg", fmcumsg );
+}
+
+function fmcuprog( prog )
+{
+    var progi = parseInt(prog) ;
+    if( progi>0 && progi<100 ) {
+        document.getElementById("id_progbar").style.display="" ;
+        pc=document.getElementById("id_progbarpc") ;
+        pc.style.width=progi.toString()+"%" ;
+        pc.innerHTML=progi.toString()+"%" ;
+        tcounter++ ;
+        if( tcounter%16==1 ) {
+            setTimeout("postMsg()", 100);
+        }
+        else {
+            setTimeout("postProg()", 100);
+        }
+    }
+    else {
+        document.getElementById("id_progbar").style.display="none" ;
+        setTimeout("postMsg()", 1000);
+    }
+}
+
+function fmcumsg( msg )
+{
+    elem = document.getElementById("id_mcumsg") ;
+    if( elem.innerText ) {  // IE would change \n to nothing if use innerHTML
+        elem.innerText = msg ;
+    }
+    else {
+        elem.innerHTML=msg ;
+    }
+    postProg();
+}
+
+postMsg();
+
+</script>
+</body>
+</html>
+

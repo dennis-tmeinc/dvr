@@ -800,7 +800,7 @@ void app_exit()
 
 void do_init()
 {
-   
+    config dvrconfig(dvrconfigfile);
     dvr_log("Start initializing.");
 
     app_init();

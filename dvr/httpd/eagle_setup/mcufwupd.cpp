@@ -28,11 +28,6 @@ int main()
         }
     }
 
-    if( res==0 ) {
-        printf( "Invalid firmware file!" );
-        return 0;
-    }
-
     char mcumsgfile[128] ;
     FILE * fmsg ;
     // msg file
@@ -50,6 +45,11 @@ int main()
     if( fmsg ) {
         fprintf(fmsg,"0");
         fclose( fmsg );
+    }
+
+    if( res==0 ) {
+        printf( "Invalid firmware file!" );
+        return 0;
     }
 
     // make a hard link of firmware file, so it wont be deleted by http process

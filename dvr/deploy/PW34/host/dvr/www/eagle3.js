@@ -1,17 +1,21 @@
 /* 
      * eagle.js
      * eagle32 board setup program (java script for setup pages)
-     */
+*/
+
+var formdatardy = 0 ;
 
 function formsubmit( fm )
 {
-    if( document.readyState ) {
-        if (document.readyState == 'complete' ) {
+    if( formdatardy==1 ) {
+        if( document.readyState ) {
+            if (document.readyState == 'complete' ) {
+                fm.submit();
+            }
+        }
+        else {
             fm.submit();
         }
-    }
-    else {
-        fm.submit();
     }
 }
 
@@ -68,41 +72,29 @@ function on_tools_click() {
     } 
 }
 
-function on_sync_time() {
-    var t = new Date();
-    document.getElementById("id_synctime").value = t.getTime() ;
-    var dvrform = document.getElementById("dvrsetup");
-    if( dvrform != null ) {
-        formsubmit( dvrform );
-    } 
-}
-
 function setfieldvalue( fieldid, fieldvalue )
 {
     try {
         var elems = document.getElementsByName( fieldid ) ;
         if( elems != null && elems.length > 0 ) {
-            for ( i=0; i<elems.length ; i++ ) 
-            {
-                if( elems[i].type == "checkbox" ) {
-                    if( fieldvalue == "0" || fieldvalue == "off" ) {
-                        elems[i].checked = null ;
-                    }
-                    else {
-                        elems[i].checked = "checked" ;
-                    }
-                }
-                else if( elems[i].type == "radio" ) {
-                    if( elems[i].value == fieldvalue ) {
-                        elems[i].checked = "checked" ;
-                    }
-                    else {
-                        elems[i].checked = null ;
-                    }
+            if( elems[0].type == "checkbox" ) {
+                if( fieldvalue == "0" || fieldvalue == "off" ) {
+                    elems[0].checked = null ;
                 }
                 else {
-                    elems[i].value = fieldvalue ;
+                    elems[0].checked = "checked" ;
                 }
+            }
+            else if( elems[0].type == "radio" ) {
+                if( elems[0].value == fieldvalue ) {
+                    elems[0].checked = "checked" ;
+                }
+                else {
+                    elems[0].checked = null ;
+                }
+            }
+            else {
+                elems[0].value = fieldvalue ;
             }
         }
     }
@@ -115,9 +107,12 @@ function setfieldvalue( fieldid, fieldvalue )
 /* initialize input fields (JSON mode) */
 function JSONinitfield( formdata )
 {
-    for( f in formdata ) {
-        setfieldvalue( f, formdata[f] );
+    if( formdata ) {
+        for( f in formdata ) {
+            setfieldvalue( f, formdata[f] );
+        }
     }
+    formdatardy = 1 ;
 }
 
 /* Ajax */
@@ -152,4 +147,3 @@ function ajaxload(mode, url, loaded, fail)
     xmlhttp.open(mode,url,true);
     xmlhttp.send();
 }
-

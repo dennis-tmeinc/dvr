@@ -1,44 +1,51 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
 <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
 <meta content="Dennis Chen" name="author" />
-<link href="eagle.css" rel="stylesheet" type="text/css" /><title>Firmware Update</title>
-
-<script type="text/javascript" src="eagle.js"></script>
+<link href="eagle3.css" rel="stylesheet" type="text/css" /><title>Firmware Update</title>
+<script type="text/javascript" src="eagle3.js"></script>
 </head>
+
 <body>
 <!--#include file="header.i"-->
 <p>&nbsp;</p>
-<table>
-<tbody>
-<tr>
-<td>Updating Firmware...<br />
-<!--#include file="firmware_msg"-->
-</td>
-<td></td>
-</tr>
-<tr>
-<td>
-<div id="countdown"> </div>
-</td>
-</tr>
-</tbody>
-</table>
+
+<pre style="font-size:1.2em;">
+<!--#exec cmd="cgi/firmwareupd"-->
+</pre>
+<br />
+<pre id="id_updatemsg" style="font-size:1.2em;">
+</pre>
 
 <script type="text/javascript">
-var countdown=300 ;
-function countdownfunc()
+
+function fwmsg( msg )
 {
-    document.getElementById("countdown").innerHTML="Please wait "+countdown+" seconds." ;
-    countdown-- ;
-    if( countdown > 0 ) {
-        setTimeout("countdownfunc()", 1000);
+    elem = document.getElementById("id_updatemsg") ;
+    if( elem.innerText ) {  // IE would change \n to nothing if use innerHTML
+        elem.innerText = msg ;
     }
     else {
-        window.location.assign("system.html");
+        elem.innerHTML=msg ;
     }
+    setTimeout("timefunc()", 2000);
 }
-countdownfunc();
+
+function fwmsgfailed()
+{
+    alert("PW unit is down, please close setup window.");
+}
+
+function timefunc()
+{
+    ajaxload( "POST", "fwupdmsg", fwmsg, fwmsgfailed );
+}
+
+timefunc();
+
 </script>
 
-</body></html>
+</body>
+</html>
+

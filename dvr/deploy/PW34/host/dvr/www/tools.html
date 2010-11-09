@@ -1,12 +1,13 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
 <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
 <meta content="Dennis Chen" name="author" />
-<link href="eagle.css" rel="stylesheet" type="text/css" /><title>Tools</title>
-
-<script type="text/javascript" src="eagle.js"></script>
+<link href="eagle3.css" rel="stylesheet" type="text/css" />
+<title>Tools</title>
+<!--#exec cmd="cgi/pagevalue"-->
+<script type="text/javascript" src="eagle3.js"></script>
 <script type="text/javascript">
-
   var submitform ;
   function iframeload()
   {
@@ -28,10 +29,9 @@
            frame.style.display="";
         }
   }
-
 </script>
-
 </head>
+
 <body>
 <!--#include file="header.i"-->
 <div class="tabs">
@@ -55,11 +55,10 @@
 
 <table>
 <tbody>
-
 <tr>
 <td class="col1">Download Configuration:</td>
 <td>
-<form id="id_down_cfg" enctype="application/x-www-form-urlencoded" method="get" action="cfgdown.cgi">
+<form id="id_down_cfg" enctype="application/x-www-form-urlencoded" method="get" action="cgi/cfgdown.cgi">
 <input value="Download" title="Download current configuration." type="submit" />
 </form>
 </td>
@@ -76,7 +75,6 @@
 <tr>
 <td><input value="Upload" title="Upload configuration." type="button" onclick="on_uploadsubmit('id_cfgupload_file')" /></td>
 </tr>
-
 </form>
 
 <form enctype="multipart/form-data" method="post" action="firmware.html">
@@ -101,6 +99,7 @@
 <!--#exec cmd="./master_form.cgi"-->
 </tbody>
 </table>
-</body>
-</html>
-
+<script type="text/javascript">
+JSONinitfield();
+</script>
+</body></html>

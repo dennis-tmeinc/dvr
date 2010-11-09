@@ -2,8 +2,9 @@
 <html xmlns="http://www.w3.org/1999/xhtml"><head>
 <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
 <meta content="Dennis Chen" name="author" />
-<link href="eagle.css" rel="stylesheet" type="text/css" /><title>Apply Setting</title>
-<script type="text/javascript" src="eagle.js"></script>
+<!--#exec cmd="cgi/pagevalue"-->
+<link href="eagle3.css" rel="stylesheet" type="text/css" /><title>Apply Setting</title>
+<script type="text/javascript" src="eagle3.js"></script>
 </head>
 <body>
 <!--#include file="header.i"-->
@@ -15,6 +16,7 @@
 <tr>
 <td>DVR setting changed.<br />
 Close this window or continue setup.
+<!--#exec cmd="cgi/applysetup 2> /dev/null " -->
 </td>
 <td></td>
 </tr>
@@ -26,4 +28,5 @@ Close this window or continue setup.
 </form>
 <script type="text/javascript">
 </script>
-</body></html>
+</body>
+</html>

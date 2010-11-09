@@ -1,5 +1,8 @@
+./ID
+./ID/APPID
+./ID/BOARDID
+./ID/BOARDNUM
 ./dvr
-./dvr/firmwareid
 ./dvr/start.sh
 ./dvr/dvrsvr
 ./dvr/dvrtime
@@ -75,7 +78,18 @@
 ./dosfsck
 ./dsplinkk.ko
 sfxrun.dep sfxrun
-./ID
-./ID/APPID
-./ID/BOARDID
-./ID/BOARDNUM
+./dvr/www
+./dvr/www/eaglehttpd
+./dvr/www/cgi
+./dvr/www/cgi/getsetup
+./dvr/www/cgi/applysetup
+./dvr/www/cgi/cfgreport
+./dvr/www/cgi/firmwareupd
+./dvr/www/cgi/login
+./dvr/www/cgi/mfid
+./dvr/www/cgi/pagevalue
+./dvr/www/cgi/cfgupload
+./dvr/www/cgi/mcufwupd
+./dvr/www/cgi/dvrstatus.cgi
+./dvr/www/cgi/cfgdown.cgi
+./dvr/firmwareid

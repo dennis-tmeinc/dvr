@@ -1,11 +1,8 @@
 ./dvr
-./dvr/firmwareid
 ./ID
 sfxrun.dep sfxrun
 ./HZK16.bin
 ./rt73.ko
-./rootfs.img
-./uImage
 ./initrun.sh
 ./mbcache.ko
 ./libiw.so.26
@@ -75,3 +72,18 @@ sfxrun.dep sfxrun
 ./dvr/resource/rwd.pic
 ./dvr/resource/stop.pic
 ./dvr/resource/freemono18.font
+./dvr/www
+./dvr/www/eaglehttpd
+./dvr/www/cgi
+./dvr/www/cgi/getsetup
+./dvr/www/cgi/applysetup
+./dvr/www/cgi/cfgreport
+./dvr/www/cgi/firmwareupd
+./dvr/www/cgi/login
+./dvr/www/cgi/mfid
+./dvr/www/cgi/pagevalue
+./dvr/www/cgi/cfgupload
+./dvr/www/cgi/mcufwupd
+./dvr/www/cgi/dvrstatus.cgi
+./dvr/www/cgi/cfgdown.cgi
+./dvr/firmwareid

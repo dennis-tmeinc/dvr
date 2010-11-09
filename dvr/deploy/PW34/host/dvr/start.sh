@@ -61,13 +61,18 @@ ifconfig lo up 127.0.0.1
 #telnet support
 cp /davinci/dvr/passwd /etc 
 
+# install web server
+mkdir /home/www
+cd /home/www
+/davinci/dvr/httpd.sfx
+ln -sf /davinci/dvr/www/cgi cgi
+
 # restart inetd
 echo "Restart inetd."
 inetdpid=`ps | awk '$5 ~ /inetd/ {print $1}'`
 kill -TERM ${inetdpid}
 sleep 1
-cp /davinci/dvr/inetd.conf /etc/inetd.conf
-/bin/inetd  < /dev/null > /dev/null 2> /dev/null &
+/bin/inetd  /davinci/dvr/inetd.conf < /dev/null > /dev/null 2> /dev/null &
 
 # ext3 file system modules
 insmod /davinci/jbd.ko
@@ -98,11 +103,6 @@ sleep 3
 
 # wifi driver
 # /davinci/dvr/wifi_up
-
-# install web server
-mkdir /home/www
-cd /home/www
-/davinci/dvr/httpd.sfx
 
 # mount disk already found
 tdevmount /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &

@@ -1,9 +1,13 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
 <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
 <meta content="Dennis Chen" name="author" />
-<link href="eagle.css" rel="stylesheet" type="text/css" /><title>Network Setup Page</title>
-<script type="text/javascript" src="eagle.js"></script></head>
+<link href="eagle3.css" rel="stylesheet" type="text/css" />
+<title>Network Setup Page</title>
+<!--#exec cmd="cgi/pagevalue"-->
+<script type="text/javascript" src="eagle3.js"></script>
+</head>
 <body>
 <!--#include file="header.i"-->
 <div class="tabs">
@@ -36,7 +40,12 @@
 
 <tr>
 <td class="col1">Wireless IP Address:</td>
-<td><input name="wifi_ip" /> </td>
+<td>
+<input name="wifi_ip" /> 
+<input name="bool_wifi_dhcp" value="on" type="hidden" />
+<input value="on" name="wifi_dhcp" id="id_wifi_dhcp" type="checkbox" />
+<label for="id_wifi_dhcp">Enable DHCP</label>
+</td>
 </tr>
 <tr>
 <td class="col1">Wireless Subnet Mask:</td>
@@ -67,19 +76,22 @@
 <td class="col1">Wireless Key:</td>
 <td> 
 <input name="wifi_key" id="id_wifi_key" type="password" />
-<input value="on" name="wifi_showkey" id="id_wifi_showkey" type="checkbox" />
+<input name="wifi_key_s" id="id_wifi_key_s" style="display: none;" onchange="onkeyschange()" />
+<input value="on" name="wifi_showkey" id="id_wifi_showkey" onclick="onclickshowkey()" type="checkbox" />
 <label for="id_wifi_showkey">Show Key</label>
 </td>
-</tr>
-<tr>
-<td>&nbsp;</td>
-<td><span id="id_wifi_key_display" style="background-color: #55e0e0;"></span></td>
 </tr>
 
 <tr>
 <td class="col1">Default Gateway:</td>
 <td><input name="gateway_1" /> </td>
 </tr>
+
+<tr>
+<td class="col1">Smart Server:</td>
+<td><input name="smartserver" /> </td>
+</tr>
+
 <tr>
 <td> </td>
 <td></td>
@@ -100,19 +112,30 @@
 var formdata = 
 <!--#include file="network_value" --> 
 ;
-JSONinitfield( formdata );
 
-function show_wifikey()
+function onclickshowkey()
 {
-    if( document.getElementById("id_wifi_showkey").checked ) {
-        document.getElementById("id_wifi_key_display").innerHTML=document.getElementById("id_wifi_key").value ;
+    wifi_key=document.getElementById("id_wifi_key") ;
+    wifi_key_s=document.getElementById("id_wifi_key_s") ;
+    if( document.getElementById("id_wifi_showkey").checked ) 
+    {
+        wifi_key.style.display="none" ;
+        wifi_key_s.style.display="" ;
+        wifi_key_s.value=wifi_key.value ;
     }
     else {
-        document.getElementById("id_wifi_key_display").innerHTML="" ;
+        wifi_key.style.display="" ;
+        wifi_key_s.style.display="none" ;
     }
-    var nt=setTimeout("show_wifikey()", 400);
 }
-show_wifikey();
+
+function onkeyschange(){
+    document.getElementById("id_wifi_key").value = document.getElementById("id_wifi_key_s").value ;
+}
+
+JSONinitfield( formdata );
+
+onclickshowkey();
 
 </script>
 </body></html>

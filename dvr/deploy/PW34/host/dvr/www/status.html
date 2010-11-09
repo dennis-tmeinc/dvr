@@ -2,8 +2,9 @@
 <html xmlns="http://www.w3.org/1999/xhtml"><head>
 <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
 <meta content="Dennis Chen" name="author" />
-<link href="eagle.css" rel="stylesheet" type="text/css" /><title>Status</title>
-<script type="text/javascript" src="eagle.js"></script>
+<!--#exec cmd="cgi/pagevalue"-->
+<link href="eagle3.css" rel="stylesheet" type="text/css" /><title>Status</title>
+<script type="text/javascript" src="eagle3.js"></script>
 </head>
 <body>
 <!--#include file="header.i"-->
@@ -19,7 +20,7 @@
 </div>
 <p>&nbsp;</p>
 <table>
-<tbody>
+
 <tr>
 <td class="col1">Firmware Version:</td>
 <td> <!--#include file="firmware_version"--> </td>
@@ -53,16 +54,14 @@
 <td class="col1">Computer Time:</td>
 <td><span id="id_local_time"> </span></td>
 </tr>
+
 <tr>
 <td></td>
 <td>
-<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="status.html">
- <input name="page" value="status" type="hidden" />
- <input name="synctime", id="id_synctime" value="0" type="hidden" />
- <input onclick="on_sync_time()" value="Synchronize DVR Time" type="button" />
-</form>
+<button type="button" onclick="synctime=1">Synchronize DVR Time</button>
 </td>
 </tr>
+
 <tr>
 <td>&nbsp;</td>
 <td><br />
@@ -133,16 +132,22 @@ for( i=1; i<=camera_num; i++ ) {
 </tr>
 
 </form>
+
 <tr>
 <td>&nbsp;</td>
 <td></td>
 </tr>
-</tbody>
-</table>
-<script type="text/javascript">
 
+</table>
+
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="status.html">
+<input name="page" value="status" type="hidden" />
+</form>
+
+<script type="text/javascript">
 var count=0 ;
 var timer ;
+var synctime=0 ;
 var systime=new Date();
 var dvrtime=new Date();
 
@@ -181,17 +186,22 @@ function timefunc()
                                                      +"(<!--#include file="timezone"-->)" ;
     document.getElementById("id_local_time").innerHTML=stime.toDateString()+" "
                                                      +stime.toLocaleTimeString() ;
-
-    if( ++count%25 == 0 ) {
-        ajaxload( "POST", "dvrstatus.cgi", statusvalue );
+	if( synctime == 1 ) {
+		synctime = 0 ;
+        ajaxload( "POST", "cgi/dvrstatus.cgi?synctime="+stime.getTime(), statusvalue );
+	}	
+	else if( ++count%25 == 0 ) {
+        ajaxload( "POST", "cgi/dvrstatus.cgi", statusvalue );
     }
     else {
         timer=setTimeout("timefunc()", 200);
     }
 }
 
-ajaxload( "POST", "dvrstatus.cgi", statusvalue );
+ajaxload( "POST", "cgi/dvrstatus.cgi", statusvalue );
+
+JSONinitfield();
 
 </script>
-</body></html>
-
+</body>
+</html>

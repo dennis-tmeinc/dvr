@@ -192,6 +192,9 @@ void net_dprint( char * fmt, ... )
     }
 }
 
+// broadcast on specified interface
+//    to detect smartserver
+//      "rausb0", 49954, "lookingforsmartserver", 21 );
 int net_broadcast(char * interface, int port, void * msg, int msgsize )
 {
     // find the broadcast address of given interface
@@ -201,11 +204,41 @@ int net_broadcast(char * interface, int port, void * msg, int msgsize )
     strcpy( ifr.ifr_name, interface );
     if( ioctl( msgfd, SIOCGIFBRDADDR, &ifr)>=0 ) {
         // address ready
-        char brname[20] ;
+        char brname[40] ;
         getnameinfo( &(ifr.ifr_broadaddr), sizeof(ifr.ifr_broadaddr), brname, sizeof(brname), NULL, 0, NI_NUMERICHOST );
         return net_sendmsg( brname, port, msg, msgsize );
     }
     return 0 ;   
+}
+
+char net_smartserver[128] ;
+int  net_smartserverport ;
+static char smartserver_detection[]="lookingforsmartserver" ;
+
+int net_detectsmartserver()
+{
+    // find the broadcast address of given interface
+    //    "rausb0", 49954, "lookingforsmartserver", 21 );
+    int n ;
+    if( net_smartserver[0]>' ' ) {
+        n=net_sendmsg( net_smartserver,  net_smartserverport, smartserver_detection, strlen(smartserver_detection) ) ;
+    }
+    else {
+        // "rausb0", 49954, "lookingforsmartserver", 21 );
+        FILE * wifi_interface_f ;
+        char   wifi_interface[40] ;
+        wifi_interface_f = fopen( "/var/dvr/wifidev", "r" );
+        if( wifi_interface_f ) {
+            int n=fread( wifi_interface, 1, sizeof( wifi_interface ), wifi_interface_f );
+            if( n>0 ) {
+                wifi_interface[n]=0;
+                //  net_broadcast("rausb0", 49954, "lookingforsmartserver", 21 );
+                n = net_broadcast( wifi_interface, net_smartserverport, smartserver_detection, strlen(smartserver_detection) ) ;
+            }
+            fclose( wifi_interface_f ) ;
+        }
+    }
+    return n;
 }
 
 int net_connect(char *netname, int port)
@@ -585,6 +618,27 @@ void net_init()
 
     net_addr(NULL, net_port, &loopback);	// get loopback addr
 
+    char net_smartserver[128] ;
+    int  net_smartserverport ;
+    
+    v = dvrconfig.getvalue("network", "smartserver");
+    if( v.length()>0 ) {
+        char * p ;
+        strncpy( net_smartserver, v.getstring(), sizeof(net_smartserver) );
+        p = strchr( net_smartserver, ':' );
+        if( p ) {
+            sscanf( p+1, "%d", &net_smartserverport );
+            *p=0 ;
+        }
+        else {
+            net_smartserverport = 49954 ;
+        }
+    }
+    else {
+        net_smartserver[0]=0 ;
+        net_smartserverport=49954 ;
+    }
+    
     msg_init();
     
     net_active = 0 ;
