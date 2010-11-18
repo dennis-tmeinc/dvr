@@ -212,6 +212,7 @@ static signed char g_convert[24][3][3] =
 /* 
  direction table: 0=front, 1=back, 2=right, 3=left, 4=buttom, 5=top
 */
+/*
 static char direction_table[24][2] = 
 {
     {0, 2}, {0, 3}, {0, 4}, {0,5},      // Front -> Forward
@@ -221,10 +222,11 @@ static char direction_table[24][2] =
     {4, 0}, {4, 1}, {4, 2}, {4,3},      // Buttom -> Forward
     {5, 0}, {5, 1}, {5, 2}, {5,3},      // Top   -> Forward
 };
+*/
 
-// direction table from harrison.  ??? what is this third number for ???
+// direction table from harrison.
 // 0:Front,1:Back, 2:Right, 3:Left, 4:Bottom, 5:Top 
-/*
+#ifdef TVS_APP
 static char direction_table[24][3] = 
 {
   {0, 2, 0x62}, // Forward:front, Upward:right    Leftward:top
@@ -252,7 +254,37 @@ static char direction_table[24][3] =
   {5, 2, 0x64}, // Forward:top, Upward:right,    Leftward:back
   {5, 3, 0x54}  // Forward:top, Upward:left,    Leftward:front
 };
-*/
+#endif
+
+#ifdef PWII_APP
+static char direction_table[24][3] = 
+{
+  {0, 2, 0x61}, // Forward:front, Upward:right    Leftward:top
+  {0, 3, 0x51}, // Forward:Front, Upward:left,    Leftward:bottom
+  {0, 4, 0x11}, // Forward:Front, Upward:bottom,  Leftward:right 
+  {0, 5, 0x21}, // Forward:Front, Upward:top,    Leftward:left 
+  {1, 2, 0x62}, // Forward:back,  Upward:right,    Leftward:bottom 
+  {1, 3, 0x52}, // Forward:back,  Upward:left,    Leftward:top
+  {1, 4, 0x12}, // Forward:back,  Upward:bottom,    Leftward:left
+  {1, 5, 0x22}, // Forward:back, Upward:top,    Leftward:right 
+  {2, 0, 0x32}, // Forward:right, Upward:front,    Leftward:bottom
+  {2, 1, 0x42}, // Forward:right, Upward:back,    Leftward:top
+  {2, 4, 0x18}, // Forward:right, Upward:bottom,    Leftward:back
+  {2, 5, 0x28}, // Forward:right, Upward:top,    Leftward:front
+  {3, 0, 0x31}, // Forward:left, Upward:front,    Leftward:top
+  {3, 1, 0x41}, // Forward:left, Upward:back,    Leftward:bottom
+  {3, 4, 0x14}, // Forward:left, Upward:bottom,    Leftward:front
+  {3, 5, 0x24}, // Forward:left, Upward:top,    Leftward:back
+  {4, 0, 0x38}, // Forward:bottom, Upward:front,    Leftward:left
+  {4, 1, 0x48}, // Forward:bottom, Upward:back,    Leftward:right
+  {4, 2, 0x68}, // Forward:bottom, Upward:right,    Leftward:front
+  {4, 3, 0x58}, // Forward:bottom, Upward:left,    Leftward:back
+  {5, 0, 0x34}, // Forward:top, Upward:front,    Leftward:right
+  {5, 1, 0x44}, // Forward:top, Upward:back,    Leftward:left
+  {5, 2, 0x64}, // Forward:top, Upward:right,    Leftward:back
+  {5, 3, 0x54}  // Forward:top, Upward:left,    Leftward:front
+};
+#endif
 
 #define DEFAULT_DIRECTION  (7)   
 static int gsensor_direction=DEFAULT_DIRECTION ;    // sensor direction relate to dvr unit. (HARD CODED to 7) 
@@ -431,6 +463,31 @@ void gforce_log( int x, int y, int z )
     
 }
 
+// calibrate g-sensor.
+//   return 0: no sensor, 1: ok, -1: command failed
+//   comunications:  
+//       input :  p_dio_mmap->rtc_cmd = 10 
+//       output : 
+//            success => p_dio_mmap->rtc_cmd = 0 
+//                       p_dio_mmap->rtc_year = response code
+//            failed  => p_dio_mmap->rtc_cmd = -1
+int gforce_calibration()
+{
+         // send init value to mcu
+    char * responds = mcu_cmd( MCU_CMD_GSENSORCALIBRATION, 0 ) ;
+    if( responds && *responds>=7 ) {    // command success
+        dio_lock();
+        p_dio_mmap->rtc_year = responds[5] ;
+        p_dio_mmap->rtc_cmd = 0 ;
+        dio_unlock();
+        return 0 ;
+    }
+    else {
+        p_dio_mmap->rtc_cmd = -1 ;
+        return -1 ;
+    }
+}
+
 // initialize serial port
 void gforce_init( config & dvrconfig ) 
 {
@@ -460,6 +517,14 @@ void gforce_init( config & dvrconfig )
         }
     }
 
+    v = dvrconfig.getvalue( "io", "gsensor_direction" );
+    if( v.length()>0 ) {
+        gsensor_direction=dvrconfig.getvalueint( "io", "gsensor_direction" );
+    }
+    if( gsensor_direction<0 || gsensor_direction>=24 ) {
+        gsensor_direction = DEFAULT_DIRECTION  ;
+    }
+    
     // trigger value in vehicle direction
 
     // forword trigger value
@@ -726,7 +791,8 @@ void gforce_init( config & dvrconfig )
     char * responds = mcu_cmd( MCU_CMD_GSENSORINIT, 
                        20,      // 20 parameters 
                        1,       // enable GForce
-                       0x12,    // 0x12=keep all value in it original direction (@&$^-$)
+//                       0x12,    // 0x12=keep all value in it original direction (@&$^-$)
+                       direction_table[unit_direction][2],                      // unit direction code
                        base_x_pos, base_x_neg, base_y_pos, base_y_neg, base_z_pos, base_z_neg,
                        trigger_x_pos, trigger_x_neg, trigger_y_pos, trigger_y_neg, trigger_z_pos, trigger_z_neg,
                        crash_x_pos, crash_x_neg, crash_y_pos, crash_y_neg, crash_z_pos, crash_z_neg ) ;

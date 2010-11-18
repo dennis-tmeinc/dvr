@@ -757,6 +757,54 @@ void dvrsvr_down()
     }
 }
 
+void dvrsvr_susp()
+{
+    int pid ;
+    FILE * fpid = fopen("/var/dvr/dvrsvr.pid", "r");
+    if( fpid ) {
+        if( fscanf( fpid, "%d", &pid )==1 ) {
+            kill( pid, SIGUSR1 );
+        }
+        fclose( fpid );
+    }
+}
+
+void dvrsvr_resume()
+{
+    int pid ;
+    FILE * fpid = fopen("/var/dvr/dvrsvr.pid", "r");
+    if( fpid ) {
+        if( fscanf( fpid, "%d", &pid )==1 ) {
+            kill( pid, SIGUSR2 );
+        }
+        fclose( fpid );
+    }
+}
+
+void glog_susp()
+{
+    int pid ;
+    FILE * fpid = fopen("/var/dvr/glog.pid", "r");
+    if( fpid ) {
+        if( fscanf( fpid, "%d", &pid )==1 ) {
+            kill( pid, SIGUSR1 );
+        }
+        fclose( fpid );
+    }
+}
+
+void glog_resume()
+{
+    int pid ;
+    FILE * fpid = fopen("/var/dvr/glog.pid", "r");
+    if( fpid ) {
+        if( fscanf( fpid, "%d", &pid )==1 ) {
+            kill( pid, SIGUSR2 );
+        }
+        fclose( fpid );
+    }
+}
+
 // execute setnetwork script to recover network interface.
 void setnetwork()
 {
@@ -1236,7 +1284,7 @@ int appinit()
         watchdogtimeout=200 ;
 
     hd_timeout = dvrconfig.getvalueint("io", "hdtimeout");
-    if( hd_timeout<=0 || hd_timeout>3000 ) {
+    if( hd_timeout<=0 || hd_timeout>3600 ) {
         hd_timeout=180 ;             // default timeout 180 seconds
     }
 
@@ -1320,11 +1368,16 @@ void mode_run()
     p_dio_mmap->iomsg[0]=0 ;
     p_dio_mmap->iomode=IOMODE_RUN ;    // back to run normal
     dio_unlock();
+    glog_resume();
+    dvrsvr_resume();
     dvr_log("Power on switch, set to running mode. (mode %d)", p_dio_mmap->iomode);
 }
 
 void mode_archive()
 {
+    // resume dvrsvr to start archiving
+    dvrsvr_resume();
+    
     dio_lock();
     strcpy( p_dio_mmap->iomsg, "Archiving, Do not remove CF Card.");
     p_dio_mmap->dvrstatus |= DVR_ARCH ;
@@ -1351,6 +1404,11 @@ void mode_detectwireless()
 
 void mode_upload()
 {
+    // suspend dvrsvr and glog before start uploading.
+
+    glog_susp();
+    dvrsvr_susp();
+    
     // check video lost report to smartftp.
     if( (p_dio_mmap->dvrstatus & (DVR_VIDEOLOST|DVR_ERROR) )==0 )
     {
@@ -1496,6 +1554,9 @@ int main(int argc, char * argv[])
             }
             else if( p_dio_mmap->rtc_cmd == 3 ) {
                 time_syncrtc();
+            }
+            else if( p_dio_mmap->rtc_cmd == 10 ) {      // Ex command, calibrate gforce sensor
+                gforce_calibration();
             }
             else {
                 p_dio_mmap->rtc_cmd=-1;		// command error, (unknown cmd)
@@ -2024,34 +2085,36 @@ int main(int argc, char * argv[])
         
         // adjust system time with RTC
         static unsigned int adjtime_timer ;
-        if( gpsvalid != p_dio_mmap->gps_valid ) {
-            gpsvalid = p_dio_mmap->gps_valid ;
-            if( gpsvalid ) {
-                time_syncgps () ;
-                adjtime_timer=runtime ;
-                gpsavailable = 1 ;
-            }
-            // sound the bell on gps data
-            if( gpsvalid ) {
-                buzzer( 2, 300, 300 );
-            }
-            else {
-                buzzer( 3, 300, 300 );
-            }
-        }
-        if( (runtime - adjtime_timer)> 600000 ||
-            (runtime < adjtime_timer) )
-        {    // call adjust time every 10 minute
-            if( g_syncrtc ) {
-                if( gpsavailable ) {
-                    if( gpsvalid ) {
-                        time_syncgps();
-                        adjtime_timer=runtime ;
-                    }
+        if( p_dio_mmap->iomode==IOMODE_RUN ) {
+            if( gpsvalid != p_dio_mmap->gps_valid ) {
+                gpsvalid = p_dio_mmap->gps_valid ;
+                if( gpsvalid ) {
+                    time_syncgps () ;
+                    adjtime_timer=runtime ;
+                    gpsavailable = 1 ;
+                }
+                // sound the bell on gps data
+                if( gpsvalid ) {
+                    buzzer( 2, 300, 300 );
                 }
                 else {
-                    time_syncmcu();
-                    adjtime_timer=runtime ;
+                    buzzer( 3, 300, 300 );
+                }
+            }
+            if( (runtime - adjtime_timer)> 600000 ||
+               (runtime < adjtime_timer) )
+            {    // call adjust time every 10 minute
+                if( g_syncrtc ) {
+                    if( gpsavailable ) {
+                        if( gpsvalid ) {
+                            time_syncgps();
+                            adjtime_timer=runtime ;
+                        }
+                    }
+                    else {
+                        time_syncmcu();
+                        adjtime_timer=runtime ;
+                    }
                 }
             }
         }

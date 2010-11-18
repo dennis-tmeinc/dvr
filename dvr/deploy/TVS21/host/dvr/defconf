@@ -28,7 +28,7 @@ temp_logfile=/davinci/dvrlog
 
 #logfile name on usb disk
 logfile=dvrlog.txt
-logfilesize=8000000
+logfilesize=4000000
 
 # current recording disk
 currentdisk=/var/dvr/dvrcurdisk
@@ -87,7 +87,7 @@ wifi_ip=192.168.3.100
 wifi_mask=255.255.255.0
 wifi_essid=DVRTEST
 wifi_enc=0
-wifi_key=wifi
+wifi_key=
 
 [ptz]
 #enable ptz
@@ -284,12 +284,24 @@ Mexico/BajaNorte=PST+8PDT+7,M4.1.0/2,M10.4.0/2 (GMT-8:00) Tijuana, Baja Californ
 
 # parameters for io module
 [io]
-gsensor_up_trigger=-3.0
-gsensor_down_trigger=5.0
-gsensor_left_trigger=-0.5
-gsensor_right_trigger=0.5
-gsensor_backward_trigger=-0.5
 gsensor_forward_trigger=0.5
+gsensor_backward_trigger=0.5
+gsensor_right_trigger=0.5
+gsensor_left_trigger=0.5
+gsensor_down_trigger=2.0
+gsensor_up_trigger=2.0
+gsensor_forward_base=0.3
+gsensor_backward_base=0.3
+gsensor_right_base=0.3
+gsensor_left_base=0.3
+gsensor_down_base=0.5
+gsensor_up_base=0.5
+gsensor_forward_crash=3
+gsensor_backward_crash=3
+gsensor_right_crash=3
+gsensor_left_crash=3
+gsensor_down_crash=5
+gsensor_up_crash=5
 gsensor_upward=5
 gsensor_forward=1
 serialport=/dev/ttyS1

@@ -68,6 +68,12 @@ app_tvs:
 	echo "EAGLE=eagle32" >> config
 	ln -sf cfg.h.TVS21 cfg.h
 
+app_tvs22:
+	echo PROJDIR=`pwd` > config
+	echo "proj=TVS22" >> config
+	echo "EAGLE=eagle32" >> config
+	ln -sf cfg.h.TVS21 cfg.h
+
 app_pwii:
 	echo PROJDIR=`pwd` > config
 	echo "proj=PWII" >> config

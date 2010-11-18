@@ -90,4 +90,5 @@ sfxrun.upd sfxrun
 ./dvr/www/cgi/mcufwupd
 ./dvr/www/cgi/dvrstatus.cgi
 ./dvr/www/cgi/cfgdown.cgi
+./dvr/www/cgi/gcal.cgi
 ./dvr/firmwareid

@@ -315,7 +315,7 @@ int serial_open(int * handle, char * serial_dev, int serial_baudrate )
 {
 	int i;
     int serial_handle = *handle ;
-	if( serial_handle >= 0 ) {
+	if( serial_handle > 0 ) {
 		return serial_handle ;		// opened already
 	}
     
@@ -972,6 +972,13 @@ void gps_check()
     }
 }
 
+void gps_done()
+{
+    gps_close();
+    gps_logclose();
+    p_dio_mmap->gps_valid = 0 ;
+}
+
 // log sensor event
 int	sensor_log()
 {
@@ -1542,7 +1549,7 @@ void tab102b_init(config &dvrconfig)
     tab102b_start=0 ;
 }
 
-int tab102b_finish()
+int tab102b_done()
 {
     if( tab102b_start ) {
         tab102b_cmd_disablepeak();
@@ -1808,14 +1815,10 @@ void appfinish()
 //        pthread_join( tab102b_threadid, NULL );
 //    }
 //    tab102b_threadid = 0 ;
-    tab102b_finish();
+    tab102b_done();
+    // stop gps 
+    gps_done();
     
-	// close serial port
-	gps_close();
-
-    // close log file
-    gps_logclose();
-
     // clean up shared memory
     dio_lock();
     p_dio_mmap->gps_valid = 0 ;
@@ -1855,18 +1858,28 @@ int main()
 	glog_poweroff = 1 ;         // start from power off
     
 	while( app_state ) {
-        
-        serial_mready(50000) ;
-        
-        // check table102b
-        if( tab102b_enable ) {
-            tab102b_check();
+
+        if( app_state==1 &&
+           ( p_dio_mmap->iomode == IOMODE_RUN  ||
+             p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) )
+        {
+                serial_mready(50000) ;
+
+                // check table102b
+                if( tab102b_enable ) {
+                    tab102b_check();
+                }
+                // check gps
+                if( gps_port_disable==0 ) {
+                    gps_check();
+                }
+                sensor_log();
+        } 
+        else {
+            tab102b_done();
+            gps_done();
+            usleep( 500000 ) ;
         }
-        // check gps
-        if( gps_port_disable==0 ) {
-            gps_check();
-        }
-        sensor_log();
         
         if( sigcap ) {
             int cap = sigcap ;
@@ -1875,13 +1888,10 @@ int main()
                 app_state=0 ;
             }
             if( cap&1 ) {       // SigUsr1? 
-                appfinish();
                 app_state=2 ;           // suspend running
             }
             if( cap&2 ) {        // SigUsr2
-                if( app_state!=2 ) {
-                    appfinish();
-                }
+                appfinish();
                 appinit();
                 app_state=1 ;
             }

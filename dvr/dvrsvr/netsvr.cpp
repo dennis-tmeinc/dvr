@@ -83,8 +83,8 @@ int net_onframe(cap_frame * pframe)
     //        sendto( ) ;
     //    }
     
-    net_lock();
     if( net_run == 1 ) {
+        net_lock();
         pconn = dvrsvr::head();
         while (pconn != NULL) {
             sends += pconn->onframe(pframe);
@@ -94,8 +94,8 @@ int net_onframe(cap_frame * pframe)
         if( noreclive && sends>0 ) {
             rec_pause = 50 ;            // temperary pause recording, for 5 seconds
         }
+        net_unlock();
     }
-    net_unlock();
     return sends;
 }
 
@@ -233,7 +233,7 @@ int net_detectsmartserver()
             if( n>0 ) {
                 wifi_interface[n]=0;
                 //  net_broadcast("rausb0", 49954, "lookingforsmartserver", 21 );
-                n = net_broadcast( wifi_interface, net_smartserverport, smartserver_detection, strlen(smartserver_detection) ) ;
+                n = net_broadcast(  str_trim(wifi_interface), net_smartserverport, smartserver_detection, strlen(smartserver_detection) ) ;
             }
             fclose( wifi_interface_f ) ;
         }
@@ -618,9 +618,6 @@ void net_init()
 
     net_addr(NULL, net_port, &loopback);	// get loopback addr
 
-    char net_smartserver[128] ;
-    int  net_smartserverport ;
-    
     v = dvrconfig.getvalue("network", "smartserver");
     if( v.length()>0 ) {
         char * p ;

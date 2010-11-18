@@ -428,6 +428,7 @@ void dio_devicepower(int onoffmaps)
     dio_unlock();
 }
 
+// return 0: no g-force data, 1: new g-force data, 2: existing g-force data
 int dio_getgforce( float * gf, float * gr, float *gd )
 {
     static int gforceupdtime ;  
@@ -441,7 +442,7 @@ int dio_getgforce( float * gf, float * gr, float *gd )
             gforceserialno = p_dio_mmap->gforce_serialno ;
         }
         else if( (g_timetick-gforceupdtime)<5000 ) {
-            v=1 ;
+            v=2 ;
         }
         if( v ) {
             *gf = p_dio_mmap->gforce_forward ;

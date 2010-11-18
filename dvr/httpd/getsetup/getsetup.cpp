@@ -548,6 +548,17 @@ int main()
 */                
             }
 
+            // g-force trigger recording
+            ivalue = dvrconfig.getvalueint(section, "gforce_trigger");
+            if( ivalue>0 ) {
+                fprintf(fvalue, "\"gforce_record_trigger\":\"on\"," );
+            }  
+
+            ivalue = dvrconfig.getvalueint(section, "gforce_lock");
+            if( ivalue>0 ) {
+                fprintf(fvalue, "\"gforce_record_lock\":\"on\"," );
+            }  
+
             // pre_recording_time
             value = dvrconfig.getvalue(section, "prerecordtime");
             if( value.length()>0 ) {

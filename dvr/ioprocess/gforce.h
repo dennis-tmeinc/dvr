@@ -4,6 +4,7 @@
 
 extern int gforce_log_enable;
 
+int gforce_calibration();
 void gforce_log( int x, int y, int z );
 void gforce_init( config & dvrconfig ) ;
 void gforce_finish();

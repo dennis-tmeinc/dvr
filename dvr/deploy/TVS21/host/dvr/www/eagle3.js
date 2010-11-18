@@ -136,7 +136,7 @@ function ajaxload(mode, url, loaded, fail)
             }
             else {
                 if( fail ) {
-                    fail(ajaxhttp.statusText);
+                    fail(xmlhttp.statusText);
                 }
                 else {
                     alert("Problem retrieving data:" + xmlhttp.statusText);

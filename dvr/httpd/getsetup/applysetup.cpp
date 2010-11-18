@@ -710,6 +710,27 @@ int main()
                 }
             }
 
+            // g-force trigger recording
+            if( getsetvalue( "bool_gforce_record_trigger" )!=NULL ) {
+                v=getsetvalue( "gforce_record_trigger" );
+                if( v ) {
+                    dvrconfig.setvalueint(section,"gforce_trigger",1);
+                }
+                else {
+                    dvrconfig.setvalueint(section,"gforce_trigger",0);
+                }
+            }
+            
+            if( getsetvalue( "bool_gforce_record_lock" )!=NULL ) {
+                v=getsetvalue( "gforce_record_lock" );
+                if( v ) {
+                    dvrconfig.setvalueint(section,"gforce_lock",1);
+                }
+                else {
+                    dvrconfig.setvalueint(section,"gforce_lock",0);
+                }
+            }
+            
             // pre_recording_time
             v=getsetvalue( "pre_recording_time" );
             if( v ) {

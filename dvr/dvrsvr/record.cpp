@@ -148,6 +148,12 @@ class rec_channel {
 
         dvrfile m_prelock_file;			// pre-lock recording file
 
+        // g-force trigger record parameters
+        int m_gforce_trigger ;
+        int m_gforce_lock ;
+        int m_gforce_gf ;
+        int m_gforce_gr ;
+        int m_gforce_gd ;
         
     public:
         rec_channel(int channel);
@@ -217,6 +223,7 @@ rec_channel::rec_channel(int channel)
     int i;
     char buf[64];
     config dvrconfig(dvrconfigfile);
+    string v ;
     char cameraname[80] ;
 
     m_fifohead = m_fifotail = NULL;
@@ -302,6 +309,53 @@ rec_channel::rec_channel(int channel)
     m_lock_endtime=0;
     m_rec_endtime=0;
 
+    // g-force trigger record parameters
+    m_gforce_trigger = dvrconfig.getvalueint(cameraname, "gforce_trigger") ;
+    m_gforce_lock    = dvrconfig.getvalueint(cameraname, "gforce_lock") ;
+
+    float a, b ;
+    a=3.0 ;
+    b=3.0 ;
+    v = dvrconfig.getvalue("io", "gsensor_forward_crash") ;
+    if( v.length()>0 ) {
+        sscanf( v.getstring(), "%f", &a );
+    }
+    v = dvrconfig.getvalue("io", "gsensor_backward_crash") ;
+    if( v.length()>0 ) {
+        sscanf( v.getstring(), "%f", &b );
+    }
+    if( a<0.0 ) a=-a ;
+    if( b<0.0 ) b=-b ;
+    m_gforce_gf=a<b?a:b ;
+
+    a=3.0 ;
+    b=3.0 ;
+    v = dvrconfig.getvalue("io", "gsensor_right_crash") ;
+    if( v.length()>0 ) {
+        sscanf( v.getstring(), "%f", &a );
+    }
+    v = dvrconfig.getvalue("io", "gsensor_left_crash") ;
+    if( v.length()>0 ) {
+        sscanf( v.getstring(), "%f", &b );
+    }
+    if( a<0.0 ) a=-a ;
+    if( b<0.0 ) b=-b ;
+    m_gforce_gr=a<b?a:b ;
+
+    a=3.0 ;
+    b=3.0 ;
+    v = dvrconfig.getvalue("io", "gsensor_down_crash") ;
+    if( v.length()>0 ) {
+        sscanf( v.getstring(), "%f", &a );
+    }
+    v = dvrconfig.getvalue("io", "gsensor_up_crash") ;
+    if( v.length()>0 ) {
+        sscanf( v.getstring(), "%f", &b );
+    }
+    if( a<0.0 ) a=-a ;
+    if( b<0.0 ) b=-b ;
+    m_gforce_gd=a<b?a:b ;
+    
     // start recording	
     start();
 
@@ -899,7 +953,9 @@ void rec_channel::update()
     int i;
 
     if( m_recstate == REC_STOP || dio_record==0 ) {
-        onframe(NULL);
+        if (m_file.isopen()) {
+            onframe(NULL);
+        }
         return ;
     }
 
@@ -915,9 +971,13 @@ void rec_channel::update()
         }
     }    
 
+    if( event_tm ) {
+        trigger = 2 ;
+    }
+    
     if( m_recordmode==0 || m_recordmode==1 || m_recordmode==3 ) {	// check sensor for trigggering and event marker
         // check sensors
-        for(i=0; i<num_sensors; i++) {
+        for(i=0; i<num_sensors && trigger<2 ; i++) {
             int tr = sensors[i]->eventmarker()? 2 : 1 ;
             if( ( m_triggersensor[i] & 1 ) )              // sensor on 
             {
@@ -945,16 +1005,27 @@ void rec_channel::update()
                     trigger = tr ;
                 }
             }
-            if( trigger==2 ) {
-                break ;
+        }
+    }
+
+    if( m_gforce_trigger && 
+       ( trigger==0 || (trigger==1 && m_gforce_lock!=0 ) ) )
+    {
+        // G-Force sensor triggering check
+        float gf, gr, gd ;
+        if( dio_getgforce( &gf, &gr, &gd) ) {
+            if(gf<0.0) gf=-gf ;
+            if(gr<0.0) gr=-gr ;
+            if(gd<0.0) gd=-gd ;
+            if( gf>=m_gforce_gf ||
+               gr>=m_gforce_gr ||
+               gd>=m_gforce_gd ) 
+            {
+                trigger =  m_gforce_lock?2:1 ;
             }
         }
     }
 
-    if( event_tm ) {
-        trigger = 2 ;
-    }
-    
     if( trigger == 2 ) {
 #ifdef PWII_APP    
         if( m_recstate != REC_LOCK ) {
@@ -1155,7 +1226,8 @@ void rec_uninit()
 
 void rec_onframe(cap_frame * pframe)
 {
-    if ( rec_run && 
+    if ( dio_record &&
+        rec_run && 
         pframe->channel < rec_channels &&
         recchannel[pframe->channel]!=NULL )
     {

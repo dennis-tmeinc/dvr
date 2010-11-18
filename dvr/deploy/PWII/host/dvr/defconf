@@ -332,7 +332,7 @@ inputnum=6
 outputnum=4
 watchdogtimeout=15
 usewatchdog=1
-
+hdtimeout=900
 output1_inverted=0
 output2_inverted=0
 output3_inverted=0

@@ -90,6 +90,7 @@ echo "Copy cgi files"
 cp -v ${APPROOT}/httpd/cfgdown/cfgdown.cgi .
 cp -v ${APPROOT}/httpd/cfgdown/cfgreport .
 cp -v ${APPROOT}/httpd/cfgdown/dvrstatus.cgi .
+cp -v ${APPROOT}/httpd/cfgdown/gcal.cgi .
 
 cp -v ${APPROOT}/httpd/eagle_setup/cfgupload .
 cp -v ${APPROOT}/httpd/eagle_setup/firmwareupd .
@@ -100,6 +101,7 @@ cp -v ${APPROOT}/httpd/eagle_setup/pagevalue .
 
 cp -v ${APPROOT}/httpd/getsetup/applysetup .
 cp -v ${APPROOT}/httpd/getsetup/getsetup .
+
 
 for f in * ; do ${STRIP} $f ; done
 cd ..

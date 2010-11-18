@@ -213,6 +213,7 @@ void dio_pwii_standby( int standby );
 #ifdef PWII_APP
 
 static int screen_nostartmenu ;  //  do not show police id input menu on startup
+static int screen_menustartup=0 ;
 
 // status window on video screen
 class pwii_menu : public window {
@@ -488,9 +489,10 @@ class video_screen : public window {
             m_statuswin = new video_status(this, 1, 30, 60, 200, 50 );
             m_icon = new video_icon(this, 2, (m_pos.w-75)/2, (m_pos.h-75)/2, 75, 75 );
 #ifdef PWII_APP
-            if( screen_nostartmenu==0 && id == ID_VIDEO_SCREEN ) {
+            if( screen_menustartup==0 && screen_nostartmenu==0 && id == ID_VIDEO_SCREEN ) {
                 // this timer would open POLICE ID menu
                 settimer( 2000, ID_VIDEO_SCREEN ) ;
+                screen_menustartup=1 ;
             }
 #endif                
         }

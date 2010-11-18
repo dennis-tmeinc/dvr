@@ -403,22 +403,20 @@ int http_checkcache()
     sprintf( tbuf, "max-age=%d",  http_cachemaxage );
     http_setheader( "Cache-Control", tbuf );
 
-    if( http_cachemaxage>0 ) {
-        // Modified time
-        strftime( tbuf, sizeof(tbuf), RFC1123FMT, gmtime( &http_modtime ) );
-        http_setheader( "Last-Modified", tbuf );
+    // Modified time
+    strftime( tbuf, sizeof(tbuf), RFC1123FMT, gmtime( &http_modtime ) );
+    http_setheader( "Last-Modified", tbuf );
 
-        //  etag
-        sprintf(etagstr, "\"%x\"", (unsigned int)http_etag);
-        http_setheader( "Etag", etagstr);
+    //  etag
+    sprintf(etagstr, "\"%x\"", (unsigned int)http_etag);
+    http_setheader( "Etag", etagstr);
 
-        // check etag
-        if( (s=getenv("HTTP_IF_NONE_MATCH"))) {
-            if( strcmp( s, etagstr )==0 ) {        // Etag match?
-                if( (s=getenv("HTTP_IF_MODIFIED_SINCE"))) {
-                    if( strcmp( s, tbuf )==0 ) {   // Modified time match?
-                        return 1 ;                 // cache is fresh
-                    }
+    // check etag
+    if( (s=getenv("HTTP_IF_NONE_MATCH"))) {
+        if( strcmp( s, etagstr )==0 ) {        // Etag match?
+            if( (s=getenv("HTTP_IF_MODIFIED_SINCE"))) {
+                if( strcmp( s, tbuf )==0 ) {   // Modified time match?
+                    return 1 ;                 // cache is fresh
                 }
             }
         }
