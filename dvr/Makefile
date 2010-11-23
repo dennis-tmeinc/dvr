@@ -19,7 +19,8 @@ SUBDIRS = dvrsvr\
        dhcp\
        tmeft\
        usbid\
-       usbnotify
+       usbnotify\
+       ssl
 
 .PHONY : $(SUBDIRS) applications
 

@@ -78,6 +78,11 @@
 sfxrun.upd sfxrun
 ./dvr/www
 ./dvr/www/eaglehttpd
+./dvr/www/ssl_server
+./dvr/www/server.crt
+./dvr/www/server.key
+./dvr/www/ca.crt
+./dvr/www/ca.pfx
 ./dvr/www/cgi
 ./dvr/www/cgi/getsetup
 ./dvr/www/cgi/applysetup

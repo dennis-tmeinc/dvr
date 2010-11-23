@@ -508,13 +508,13 @@ int mcu_checkinputbuf(char * ibuf)
             mcu_response( ibuf, 2, 0, 0 );      // response with two 0 data
             mcupowerdelaytime = 0 ;
             p_dio_mmap->poweroff = 1 ;          // send power off message to DVR
-            netdbg_print("Ignition off, mcu delay %d s\n", mcupowerdelaytime );
+            dvr_log("Ignition off");
             break;
             
         case MCU_INPUT_IGNITIONON :	// ignition on event
             mcu_response( ibuf, 1, watchdogenabled  );      // response with watchdog enable flag
             p_dio_mmap->poweroff = 0 ;						// send power on message to DVR
-            netdbg_print("ignition on\n");
+            dvr_log("Ignition on");
             break ;
 
         case MCU_INPUT_GSENSOR :                  // g sensor Accelerometer data
@@ -935,52 +935,6 @@ int smartftp_reporterror ;
 int smartftp_arch ;     // do smartftp arch files
 int smartftp_src ;
 
-/*
-void smartftp_log(char * fmt, ...)
-{
-    va_list ap ;
-    char smlogfile[256] ;
-    FILE * fsmlog ;
-    
-    struct tm t ;
-	time_t tt ;
-   
-    smlogfile[0]=0 ;
-    fsmlog = fopen("/var/dvr/dvrcurdisk", "r");
-    if( fsmlog ) {
-        fscanf(fsmlog, "%s", smlogfile );
-        fclose(fsmlog);
-    }
-    if( smlogfile[0] ) {
-        strcat( smlogfile, "/smartlog/smartftplog.txt" );
-        fsmlog=fopen(smlogfile, "a");
-        if( fsmlog ) {
-            tt=time(NULL);
-            localtime_r(&tt, &t);
-            fprintf( fsmlog, "%04d-%02d-%02d %02d:%02d:%02d ", 
-                    t.tm_year+1900, t.tm_mon+1, t.tm_mday ,
-                    t.tm_hour, t.tm_min, t.tm_sec );
-#ifdef MCU_DEBUG
-            printf( "%04d-%02d-%02d %02d:%02d:%02d ", 
-                    t.tm_year+1900, t.tm_mon+1, t.tm_mday ,
-                    t.tm_hour, t.tm_min, t.tm_sec );
-#endif            
-            va_start(ap, fmt);
-            vfprintf( fsmlog, fmt, ap );
-#ifdef MCU_DEBUG
-            vprintf( fmt, ap );
-#endif            
-            va_end(ap);
-            fprintf( fsmlog, "\n" );
-#ifdef MCU_DEBUG
-            printf( "\n" );
-#endif            
-            fclose(fsmlog);
-        }
-    }
-}
-*/
-
 // src == 0 : do "disk", src==1 : do "arch"
 void smartftp_start(int src=0)
 {
@@ -994,24 +948,7 @@ void smartftp_start(int src=0)
         // get BUS name
         gethostname(hostname, 128) ;
 
-        // get disk base directory
-/*
-         FILE * fcurdirname ;
-        if( src==0 ) {
-            fcurdirname = fopen( "/var/dvr/dvrcurdisk", "r" );
-        }
-        else {
-            fcurdirname = fopen( "/var/dvr/dvrcurdisk", "r" );
-        }
-        if( fcurdirname ) {
-            fscanf( fcurdirname, "%s", disk );
-            fclose( fcurdirname );
-        }
-        if( disk[0]==0 ) {
-            exit(102);                  // no disk mounted. quit!
-        }
-*/
-
+        // be nice
         nice(10);
         
 //      system("/davinci/dvr/setnetwork");  // reset network, this would restart wifi adaptor
@@ -1045,11 +982,7 @@ void smartftp_start(int src=0)
               NULL 
               );
         }
-        
-//        smartftp_log( "Smartftp start failed." );
-
         dvr_log( "Start smart server uploading failed!");
-
         exit(101);      // error happened.
     }
     else if( pid_smartftp<0 ) {
@@ -1369,15 +1302,11 @@ void mode_run()
     p_dio_mmap->iomode=IOMODE_RUN ;    // back to run normal
     dio_unlock();
     glog_resume();
-    dvrsvr_resume();
     dvr_log("Power on switch, set to running mode. (mode %d)", p_dio_mmap->iomode);
 }
 
 void mode_archive()
 {
-    // resume dvrsvr to start archiving
-    dvrsvr_resume();
-    
     dio_lock();
     strcpy( p_dio_mmap->iomsg, "Archiving, Do not remove CF Card.");
     p_dio_mmap->dvrstatus |= DVR_ARCH ;
@@ -1407,7 +1336,6 @@ void mode_upload()
     // suspend dvrsvr and glog before start uploading.
 
     glog_susp();
-    dvrsvr_susp();
     
     // check video lost report to smartftp.
     if( (p_dio_mmap->dvrstatus & (DVR_VIDEOLOST|DVR_ERROR) )==0 )

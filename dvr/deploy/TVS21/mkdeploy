@@ -88,6 +88,7 @@ if [ ! -d cgi ] ; then
 fi
 
 cp -v ${APPROOT}/httpd/eaglehttpd .
+cp -v ${APPROOT}/ssl/programs/ssl/ssl_server .
 
 echo "Copy cgi files"
 cp -v ${APPROOT}/httpd/cfgdown/cfgdown.cgi cgi

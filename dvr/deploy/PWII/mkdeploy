@@ -83,6 +83,7 @@ if [ ! -d cgi ] ; then
     mkdir cgi
 fi
 cp -v ${APPROOT}/httpd/eaglehttpd .
+cp -v ${APPROOT}/ssl/programs/ssl/ssl_server .
 ${STRIP} eaglehttpd
 
 cd cgi

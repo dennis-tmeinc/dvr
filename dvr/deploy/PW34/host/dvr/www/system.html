@@ -198,7 +198,28 @@
 
 <tr id="id_gforce_enable" >
 <td class="col1">Enable G Force Sensor:</td>
-<td><input name="gforce_enable" value="on" type="checkbox" /></td>
+<td>
+<input name="gforce_enable" value="on" type="checkbox" /> 
+<input name="bool_gforce_enable" value="on" type="hidden" /> 
+
+<div id="gforce_win" style="width:60%;height:180px;display:none;position:fixed;border:2px solid gray;left:20%;top:32%;z-index:10;background-color:#b0c4de;"> 
+<h style="position:static;text-align:center;">
+G Force Sensor Detection
+</h>
+<div id="gforce_msg" style="width:80%;margin:auto;">
+<pre>
+force msg 
+</pre>
+</div>
+
+<div style="position:absolute;bottom:20px;left:46%;">
+<button type="button" onclick="ongforcecalibrationoff()"> Close </button>
+</div>
+
+</div>
+
+<input name="gforce_calibration" type="button" onclick="ongforcecalibration()" value="Calibrate G-Force Sensor" />
+</td>
 </tr>
 
 <tr id="id_gforce_dirforward" >
@@ -312,6 +333,40 @@ if( formdata.gforce_available != "1" ) {
     document.getElementById('id_gforce_left').style.display="none" ;
     document.getElementById('id_gforce_upward').style.display="none" ;
     document.getElementById('id_gforce_downward').style.display="none" ;
+}
+
+var calibration_on=0 ;
+
+function calibration_go( response ) 
+{
+    if( calibration_on ) {
+        document.getElementById('gforce_msg').innerHTML="<pre>"+response+"</pre>" ;
+        setTimeout("calibration_get()", 1000);
+    }
+}
+
+function calibration_get()
+{
+    ajaxload("post", "gcal.txt", calibration_go);
+}
+
+function calibration_start( response ) 
+{
+    document.getElementById('gforce_win').style.display="" ;
+    document.getElementById('gforce_msg').innerHTML="<pre>Starting Calibration.\nPlease wait......</pre>" ;
+    calibration_on=1 ;
+    calibration_get();
+}
+
+function ongforcecalibration()
+{
+    ajaxload("post", "cgi/gcal.cgi", calibration_start);
+}
+
+function ongforcecalibrationoff()
+{
+    calibration_on=0;
+    document.getElementById('gforce_win').style.display="none" ;
 }
 
 </script>

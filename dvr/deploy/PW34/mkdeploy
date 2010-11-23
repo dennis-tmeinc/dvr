@@ -83,6 +83,7 @@ if [ ! -d cgi ] ; then
     mkdir cgi
 fi
 cp -v ${APPROOT}/httpd/eaglehttpd .
+cp -v ${APPROOT}/ssl/programs/ssl/ssl_server .
 ${STRIP} eaglehttpd
 
 cd cgi
@@ -90,6 +91,7 @@ echo "Copy cgi files"
 cp -v ${APPROOT}/httpd/cfgdown/cfgdown.cgi .
 cp -v ${APPROOT}/httpd/cfgdown/cfgreport .
 cp -v ${APPROOT}/httpd/cfgdown/dvrstatus.cgi .
+cp -v ${APPROOT}/httpd/cfgdown/gcal.cgi .
 
 cp -v ${APPROOT}/httpd/eagle_setup/cfgupload .
 cp -v ${APPROOT}/httpd/eagle_setup/firmwareupd .

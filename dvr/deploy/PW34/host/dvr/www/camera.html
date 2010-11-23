@@ -370,6 +370,42 @@ for( i=1; i<=num_sensor; i++ ) {
 </td>
 </tr>
 
+<script type="text/javascript">
+function oncrashlock()
+{
+    var brec=document.getElementsByName("gforce_record_lock");
+    if( brec[0].checked=true ) {
+        brec=document.getElementsByName("gforce_record_trigger");
+        brec[0].checked=true ;
+    }
+}
+
+function oncrashrec()
+{
+    var brec=document.getElementsByName("gforce_record_trigger");
+    if( brec[0].checked=false ) {
+        brec=document.getElementsByName("gforce_record_lock");
+        brec[0].checked=false ;
+    }
+}
+</script>
+
+<tr>
+<td class="col1">Record when crash detected:</td>
+<td>
+<input name="gforce_record_trigger" value="on" type="checkbox" onclick="oncrashrec()" />
+<input name="bool_gforce_record_trigger" value="on" type="hidden" />
+</td>
+</tr>
+
+<tr>
+<td class="col1">Lock video when crash detected:</td>
+<td>
+<input name="gforce_record_lock" value="on" type="checkbox" onclick="oncrashlock()"/>
+<input name="bool_gforce_record_lock" value="on" type="hidden" />
+</td>
+</tr>
+
 <tr>
 <td class="col1">Pre-Recording Time (s):</td>
 <td><input name="pre_recording_time" /></td>

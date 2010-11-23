@@ -1,0 +1,22 @@
+
+# Makefile for polarssl ssl_server
+#
+
+include ../config
+include $(PROJDIR)/arm_tool
+
+CFLAGS=-g -Wall
+
+HEADERS=
+
+LDFLAGS= 
+
+ssl:
+	cd library  && $(MAKE) all && cd ..
+	cd programs && $(MAKE) ssl/ssl_server && cd ..
+	cp programs/ssl/ssl_server $(debug_folder)/www
+
+clean:
+	cd library  && $(MAKE) clean && cd ..
+	cd programs && $(MAKE) clean && cd ..
+	rm -f programs/ssl/ssl_server

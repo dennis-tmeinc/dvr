@@ -107,7 +107,7 @@ void set_cookie( char * cname, char * cvalue )
     }
 }
 
-char redirformat[] = "<meta http-equiv=\"REFRESH\" content=\"0;url=http:%s\">" ;
+char redirformat[] = "<meta http-equiv=\"REFRESH\" content=\"0;url=%s\">" ;
 
 int main()
 {
@@ -120,6 +120,6 @@ int main()
         // set cookie
         set_cookie( "ser", serno );
 		// output a redirect http to system.html
-		printf( redirformat, "/system.html" );
+		printf( redirformat, "system.html" );
     }
 }

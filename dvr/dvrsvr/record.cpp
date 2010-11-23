@@ -151,9 +151,9 @@ class rec_channel {
         // g-force trigger record parameters
         int m_gforce_trigger ;
         int m_gforce_lock ;
-        int m_gforce_gf ;
-        int m_gforce_gr ;
-        int m_gforce_gd ;
+        float m_gforce_gf ;
+        float m_gforce_gr ;
+        float m_gforce_gd ;
         
     public:
         rec_channel(int channel);

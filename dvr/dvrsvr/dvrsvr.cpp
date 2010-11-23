@@ -1621,20 +1621,17 @@ static void run_getsetup()
 void dvrsvr::Req2GetSetupPage()
 {
     struct dvr_ans ans ;
-    char serno[30] ;
+    char serno[60] ;
     char pageuri[60] ;
-    
     
     // prepare setup pages
 //    system("preparesetup");
-    
-    // see if we need to prepare login ?
-    if( m_keycheck )
+
+    if( m_keycheck || g_keycheck==0 )
     {
         // setup configure web pages
         makeserialno( serno, sizeof(serno) );
         run_getsetup();
-        serno[29]=0 ;
         sprintf( pageuri, "/system.html?ser=%s", serno );
         
         ans.anscode = ANS2SETUPPAGE ;
@@ -1645,18 +1642,6 @@ void dvrsvr::Req2GetSetupPage()
         Send(pageuri, ans.anssize);
         return ;
     }
-    else {
-        // setup configure web pages
-        sprintf( pageuri, "/system.html" );
-        ans.anscode = ANS2SETUPPAGE ;
-        ans.anssize = strlen(pageuri)+1 ;
-        ans.data = 0 ;
-        
-        Send(&ans, sizeof(ans));
-        Send(pageuri, ans.anssize);
-        return ;
-    }
-
     DefaultReq();
  
     return ;

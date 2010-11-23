@@ -74,6 +74,11 @@ sfxrun.dep sfxrun
 ./dvr/resource/freemono18.font
 ./dvr/www
 ./dvr/www/eaglehttpd
+./dvr/www/ssl_server
+./dvr/www/server.crt
+./dvr/www/server.key
+./dvr/www/ca.crt
+./dvr/www/ca.pfx
 ./dvr/www/cgi
 ./dvr/www/cgi/getsetup
 ./dvr/www/cgi/applysetup
@@ -86,4 +91,5 @@ sfxrun.dep sfxrun
 ./dvr/www/cgi/mcufwupd
 ./dvr/www/cgi/dvrstatus.cgi
 ./dvr/www/cgi/cfgdown.cgi
+./dvr/www/cgi/gcal.cgi
 ./dvr/firmwareid
