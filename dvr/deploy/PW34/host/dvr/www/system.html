@@ -191,12 +191,12 @@
 </td>
 </tr>
 
-<tr>
+<tr id="idtr_gforce_available">
 <td>&nbsp;</td>
 <td><input name="gforce_available" value="0" type="hidden" /></td>
 </tr>
 
-<tr id="id_gforce_enable" >
+<tr id="idtr_gforce_enable" >
 <td class="col1">Enable G Force Sensor:</td>
 <td>
 <input name="gforce_enable" value="on" type="checkbox" /> 
@@ -222,7 +222,7 @@ force msg
 </td>
 </tr>
 
-<tr id="id_gforce_dirforward" >
+<tr id="idtr_gforce_dirforward" >
 <td class="col1">G-Force Direction - Forward:</td>
 <td>
 <select name="gforce_forward">
@@ -236,7 +236,7 @@ force msg
 </td>
 </tr>
 
-<tr id="id_gforce_dirupward" >
+<tr id="idtr_gforce_dirupward" >
 <td class="col1">G-Force Direction - Up:</td>
 <td>
 <select name="gforce_upward">
@@ -250,7 +250,15 @@ force msg
 </td>
 </tr>
 
-<tr id="id_gforce_forward" >
+<tr id="idtr_gforce_crashdata">
+<td class="col1">Collect G-Force Crash Data:</td>
+<td>
+<input name="gforce_crashdata" value="on" type="checkbox" /> 
+<input name="bool_gforce_crashdata" value="on" type="hidden" /> 
+</td>
+</tr>
+
+<tr id="idtr_gforce_forward" >
 <td class="col1">G-Force Forward Trigger Point:</td>
 <td>
 Base&nbsp;<input name="gforce_forward_base" size="5" />&nbsp;
@@ -259,7 +267,7 @@ Crash&nbsp;<input name="gforce_forward_crash" size="5" />
 </td>
 </tr>
 
-<tr id="id_gforce_backward" >
+<tr id="idtr_gforce_backward" >
 <td class="col1">G-Force Backward Trigger Point:</td>
 <td>
 Base&nbsp;<input name="gforce_backward_base" size=5 />&nbsp;
@@ -268,7 +276,7 @@ Crash&nbsp;<input name="gforce_backward_crash" size=5 />
 </td>
 </tr>
 
-<tr id="id_gforce_right" >
+<tr id="idtr_gforce_right" >
 <td class="col1">G-Force Right Trigger Point:</td>
 <td>
 Base&nbsp;<input name="gforce_right_base" size=5 />&nbsp;
@@ -277,7 +285,7 @@ Crash&nbsp;<input name="gforce_right_crash" size=5 />
 </td>
 </tr>
 
-<tr id="id_gforce_left" >
+<tr id="idtr_gforce_left" >
 <td class="col1">G-Force Left Trigger Point:</td>
 <td>
 Base&nbsp;<input name="gforce_left_base" size=5 />&nbsp;
@@ -286,7 +294,7 @@ Crash&nbsp;<input name="gforce_left_crash" size=5 />
 </td>
 </tr>
 
-<tr id="id_gforce_downward" >
+<tr id="idtr_gforce_downward" >
 <td class="col1">G-Force Downward Trigger Point:</td>
 <td>
 Base&nbsp;<input name="gforce_downward_base" size=5 />&nbsp;
@@ -295,7 +303,7 @@ Crash&nbsp;<input name="gforce_downward_crash" size=5 />
 </td>
 </tr>
 
-<tr id="id_gforce_upward" >
+<tr id="idtr_gforce_upward" >
 <td class="col1">G-Force Upward Trigger Point:</td>
 <td>
 Base&nbsp;<input name="gforce_upward_base" size=5 />&nbsp;
@@ -324,15 +332,17 @@ var formdata =
 JSONinitfield( formdata );
 
 if( formdata.gforce_available != "1" ) {
-    document.getElementById('id_gforce_enable').style.display="none" ;
-    document.getElementById('id_gforce_dirupward').style.display="none" ;
-    document.getElementById('id_gforce_dirforward').style.display="none" ;
-    document.getElementById('id_gforce_forward').style.display="none" ;
-    document.getElementById('id_gforce_backward').style.display="none" ;
-    document.getElementById('id_gforce_right').style.display="none" ;
-    document.getElementById('id_gforce_left').style.display="none" ;
-    document.getElementById('id_gforce_upward').style.display="none" ;
-    document.getElementById('id_gforce_downward').style.display="none" ;
+    document.getElementById('idtr_gforce_available').style.display="none" ;
+    document.getElementById('idtr_gforce_enable').style.display="none" ;
+    document.getElementById('idtr_gforce_dirforward').style.display="none" ;
+    document.getElementById('idtr_gforce_dirupward').style.display="none" ;
+    document.getElementById('idtr_gforce_crashdata').style.display="none" ;
+    document.getElementById('idtr_gforce_upward').style.display="none" ;
+    document.getElementById('idtr_gforce_downward').style.display="none" ;
+    document.getElementById('idtr_gforce_left').style.display="none" ;
+    document.getElementById('idtr_gforce_right').style.display="none" ;
+    document.getElementById('idtr_gforce_backward').style.display="none" ;
+    document.getElementById('idtr_gforce_forward').style.display="none" ;
 }
 
 var calibration_on=0 ;

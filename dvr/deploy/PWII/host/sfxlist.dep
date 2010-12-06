@@ -8,6 +8,7 @@
 ./dvr/dvrtime
 ./dvr/glog
 ./dvr/ioprocess
+./dvr/iowait
 ./dvr/panelled
 ./dvr/devicepower
 ./dvr/buzzer
@@ -97,5 +98,6 @@ sfxrun.dep sfxrun
 ./dvr/www/cgi/mcufwupd
 ./dvr/www/cgi/dvrstatus.cgi
 ./dvr/www/cgi/cfgdown.cgi
+./dvr/www/cgi/gangle.cgi
 ./dvr/www/cgi/gcal.cgi
 ./dvr/firmwareid

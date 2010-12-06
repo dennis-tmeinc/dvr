@@ -16,31 +16,36 @@ OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 LDFLAGS= -lstdc++  -L../dvrsvr/$(EAGLE) -lsdk -ldadsp ../dvrsvr/$(EAGLE)/dsplink.lib
 
 CFLAGS=-I../dvrsvr -g -Wall
+TARGET=ioprocess panelled devicepower buzzer iowait
 
-all: ioprocess panelled devicepower buzzer
+all: $(TARGET)
 
 ioprocess : $(OBJS) $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(EXTSOURCES) $(LDFLAGS)
-	cp ioprocess  $(debug_folder)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(EXTSOURCES) $(LDFLAGS) -lm
+	cp $@  $(debug_folder)
 
 
 panelled : panelled.o diomap.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ panelled.o diomap.o $(EXTSOURCES) $(LDFLAGS)
-	cp panelled  $(debug_folder)
+	cp $@  $(debug_folder)
 
 devicepower : devicepower.o diomap.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ devicepower.o diomap.o $(EXTSOURCES) $(LDFLAGS)
-	cp devicepower  $(debug_folder)
+	cp $@  $(debug_folder)
+
+iowait : iowait.o diomap.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
+	$(CC) $(CFLAGS) -o $@ iowait.o diomap.o $(EXTSOURCES) $(LDFLAGS)
+	cp $@  $(debug_folder)
 
 buzzer : buzzer.o diomap.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ buzzer.o diomap.o $(EXTSOURCES) $(LDFLAGS)
-	cp buzzer  $(debug_folder)
+	cp $@  $(debug_folder)
 
 %.o : %.cpp $(HEADERS) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean :
 	rm -f *.o
-	rm -f ioprocess panelled devicepower buzzer
+	rm -f $(TARGET)
 
 

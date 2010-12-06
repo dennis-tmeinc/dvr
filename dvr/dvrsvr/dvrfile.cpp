@@ -1187,7 +1187,7 @@ int dvrfile::repairpartiallock()
         int busywait ;
         for( busywait=0; busywait<100; busywait++) {
             if( rec_busy || disk_busy || g_cpu_usage>0.5 ) {
-                usleep(100000);
+                usleep(10000);
             }
             else {
                 break ;

@@ -777,7 +777,7 @@ int rec_channel::recorddata(rec_fifo * data)
             rec_basedir.getstring(), 
             g_hostname,
             m_channel, jpegnum++ );
-        FILE * jpegf = fopen( jpegfile, "w") ;
+        FILE * jpegf = fopen( jpegfile, "wb") ;
         if( jpegf ) {
             unsigned char * jpegb = (unsigned char *)(data->buf) ;
             int be, end ;

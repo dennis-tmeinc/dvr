@@ -280,6 +280,18 @@ int main()
             fprintf(fvalue, "\"gforce_upward\":\"%s\",", value.getstring() );
         }
 
+        ivalue = dvrconfig.getvalueint(  "io", "gsensor_mountangle") ;
+        fprintf(fvalue, "\"gforce_mountangle\":\"%d\",", ivalue);
+
+        // testing, let web display angle calibrate option
+        if( dvrconfig.getvalueint(  "io", "gsensor_show_mountangle") ) {
+            fprintf(fvalue, "\"show_mountangle\":\"1\",");
+        }
+        
+        if( dvrconfig.getvalueint( "io", "gsensor_crashdata" ) ) {
+            fprintf(fvalue, "\"gforce_crashdata\":\"on\",");
+        }
+
         // gforce trigger value (peak value?)
         value = dvrconfig.getvalue( "io", "gsensor_forward_trigger");	
         if( value.length()>0 ) {

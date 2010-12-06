@@ -134,12 +134,14 @@ int main()
         else if( strcmp( page, "network" )==0 ) {
             network_savevalue();
        }
-
 #ifdef POWERCYCLETEST         
         else if( strcmp( page, "cycletest" )==0 ) {
             cycletest_savevalue();
        }
 #endif        
+        else {
+            savequery(page);
+        }
     }
     return 0;
 }

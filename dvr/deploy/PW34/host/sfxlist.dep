@@ -31,6 +31,7 @@ sfxrun.dep sfxrun
 ./dvr/libcurl.so.4
 ./dvr/mountdisks
 ./dvr/ioprocess
+./dvr/iowait
 ./dvr/tdevmount
 ./dvr/cfg
 ./dvr/buzzer
@@ -91,5 +92,6 @@ sfxrun.dep sfxrun
 ./dvr/www/cgi/mcufwupd
 ./dvr/www/cgi/dvrstatus.cgi
 ./dvr/www/cgi/cfgdown.cgi
+./dvr/www/cgi/gangle.cgi
 ./dvr/www/cgi/gcal.cgi
 ./dvr/firmwareid

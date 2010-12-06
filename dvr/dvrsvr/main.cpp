@@ -70,9 +70,13 @@ void dvr_cleanlog1(FILE * flog)
 }
 
 // clean log file
-void dvr_cleanlog(FILE * flog)
+void dvr_cleanlogfile(char * logfilename)
 {
     int pos1, pos2, rsize ;
+    FILE * flog ;
+    flog = fopen(logfilename, "r+");
+    if( flog==NULL ) 
+        return ;
     fseek( flog, 0, SEEK_END );
     pos1 = ftell(flog);
     if( pos1>logfilesize ) {
@@ -95,6 +99,7 @@ void dvr_cleanlog(FILE * flog)
         fflush( flog );
         ftruncate( fileno(flog), pos2 );
     }
+    fclose( flog );
 }
 
 // write log to log file. 
@@ -103,8 +108,8 @@ void dvr_cleanlog(FILE * flog)
 //       0: log to temperary file
 int dvr_log(char *fmt, ...)
 {
-    int res = 0 ;
     static char logfilename[512] ;
+    int res = 0 ;
     char lbuf[512];
     FILE *flog=NULL;
     FILE *ftmplog=NULL;
@@ -117,10 +122,11 @@ int dvr_log(char *fmt, ...)
         if (rec_basedir.length() > 0) {
             sprintf(logfilename, "%s/_%s_/%s", rec_basedir.getstring(), g_hostname, logfile.getstring());
             symlink(logfilename, "/var/dvr/dvrlogfile");
+            dvr_cleanlogfile(logfilename);
         }
     }
 
-   flog = fopen(logfilename, "a");
+    flog = fopen(logfilename, "a");
     if (flog) {
         ftmplog = fopen(tmplogfile.getstring(), "r");	// copy temperary log to logfile        
         if (ftmplog) {
@@ -157,12 +163,7 @@ int dvr_log(char *fmt, ...)
         else {
             fprintf(flog, "\n");		
         }
-        if( ftell(flog) > logfilesize ) {		// log file oversize ?
-            dvr_cleanlog( flog );
-        }
-        if( fclose(flog)!=0 ) {
-            res = 0 ;
-        }
+        fclose(flog);
     }
     va_end( ap );
     return res ;
@@ -175,21 +176,22 @@ static int keylogsettings ;
 static FILE * dvr_logkey_file()
 {
     static char logfilename[512] ;
-    FILE * flog ;
-
-    flog = file_open(logfilename, "a");
-    if ( flog==NULL ) {
+    FILE * lfile=NULL ;
+    if( logfilename[0]==0 ) {
         if (rec_basedir.length() > 0) {
             sprintf(logfilename, "%s/_%s_/%s", rec_basedir.getstring(), g_hostname, keylogfile.getstring());
             symlink(logfilename, "/var/dvr/tvslogfile" );
+            dvr_cleanlogfile(logfilename);
+            lfile=fopen(logfilename,"a");
         }
     }
     else {
-        file_close( flog );
+        lfile=fopen(logfilename,"a");
     }
-
-    return file_open(logfilename, "a");
-
+    if( lfile==NULL ) {
+        logfilename[0]=0;
+    }
+    return lfile ;
 }
 
 static void dvr_logkey_settings()
@@ -305,10 +307,6 @@ void dvr_logkey( int op, struct key_data * key )
             if( flog ) {
                 fprintf(flog, "\n%s:Viewer connected, key ID: %s\n%s", 
                     lbuf, key->usbid, ((char *)&(key->size))+key->keyinfo_start );
-                l = ftell(flog) ;
-                if( l>logfilesize ) {
-                    dvr_cleanlog( flog );
-                }
                 file_close( flog );
             }
         }
@@ -615,7 +613,7 @@ void sig_check()
 
 static string pidfile ;
 // one time application initialization
-void app_init()
+void app_init( config & dvrconfig )
 {
     static int app_start=0;
     string t ;
@@ -623,7 +621,6 @@ void app_init()
     string tzi ;
     char * p ;					// general pointer
     FILE * fid = NULL ;
-    config dvrconfig(dvrconfigfile);
     
     pid_t mypid ;
     mypid=getpid();
@@ -803,7 +800,7 @@ void do_init()
     config dvrconfig(dvrconfigfile);
     dvr_log("Start initializing.");
 
-    app_init();
+    app_init(dvrconfig);
     
     time_init();
     event_init();

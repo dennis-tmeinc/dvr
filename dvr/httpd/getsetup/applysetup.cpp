@@ -384,6 +384,21 @@ int main()
             dvrconfig.setvalue(  "io", "gsensor_upward", v );
         }
 
+        // mount angle
+        v = getsetvalue( "gforce_mountangle" );
+        if( v ) {
+            dvrconfig.setvalue( "io", "gsensor_mountangle", v );
+        }
+            
+        // upload crash data
+        v = getsetvalue( "gforce_crashdata" );
+        if( v ) {
+            dvrconfig.setvalueint(  "io", "gsensor_crashdata", 1 );
+        }
+        else {
+            dvrconfig.setvalueint(  "io", "gsensor_crashdata", 0 );
+        }
+
         // triggering value. (peak)
         v = getsetvalue( "gforce_forward_trigger" );
         if( v ) {

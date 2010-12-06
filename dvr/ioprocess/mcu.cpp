@@ -30,7 +30,7 @@
 // functions from ioprocess.cpp
 int dvr_log(char *fmt, ...);
 
-#define MCU_BUFFER_SIZE (100)
+#define MCU_BUFFER_SIZE (200)
 static char mcu_buffer[MCU_BUFFER_SIZE] ;
 static int  mcu_buffer_len ;
 static int  mcu_buffer_pointer ;
@@ -260,20 +260,23 @@ void mcu_clear(int delay)
 #endif                
 }
 
-// check data check sum
-// return 0: checksum correct
-signed char mcu_checksum( char * data ) 
+unsigned char checksum( unsigned char * data, int datalen ) 
 {
-    signed char ck;
-    signed char i = *data;
-    if( i<6 || i>60 ) {
-        return -1 ;
-    }
-    ck=0;
-    while(i-->0) {
+    unsigned char ck=0;
+    while( datalen-->0 ) {
         ck+=*data++;
     }
     return ck ;
+}
+
+// check data check sum
+// return 0: checksum correct
+char mcu_checksum( char * data ) 
+{
+    if( *data<6 || *data>60 ) {
+        return (char)-1;
+    }
+    return (char)checksum((unsigned char *)data, *data);
 }
 
 // calculate check sum of data
@@ -281,6 +284,7 @@ void mcu_calchecksum( char * data )
 {
     char ck = 0 ;
     char i = *data ;
+    
     while( --i>0 ) {
         ck-=*data++ ;
     }
@@ -295,7 +299,7 @@ int mcu_send( char * cmd )
     if( *cmd<5 || *cmd>40 ) { 	// wrong data
         return 0 ;
     }
-    mcu_calchecksum( cmd );
+    mcu_calchecksum(cmd );
 
 #ifdef  MCU_DEBUG
 // for debugging    
@@ -315,8 +319,6 @@ int mcu_send( char * cmd )
     return mcu_write(cmd, (int)(*cmd));
 #endif
 }
-
-
 
 // receive one data package from mcu
 // return : received msg
@@ -764,10 +766,10 @@ int mcu_dinput()
 void mcu_initsensor2(int invert)
 {
     char * rsp ;
-    rsp = mcu_cmd(0x14);
+    rsp = mcu_cmd(MCU_CMD_GETSENSOR2INV);
     if( rsp ) {
         if( invert != ((int)rsp[5]) ) {         // settings are from whats in MCU
-            mcu_cmd(0x13,1,invert);
+            mcu_cmd(MCU_CMD_SETSENSOR2INV,1,invert);
         }
     }
 }
@@ -792,14 +794,14 @@ int mcu_w_rtc(time_t tt)
     return 0 ;
 }
 
-static int delay_inc = 10 ;
-
 // set more mcu power off delay (keep power alive), (called every few seconds)
-void mcu_poweroffdelay()
+void mcu_poweroffdelay(int delay)
 {
+    int inc ;
     char * responds ;
-    if( mcupowerdelaytime < 50 ) {
-        responds = mcu_cmd( MCU_CMD_POWEROFFDELAY, 2, delay_inc/256, delay_inc%256 );
+    if( mcupowerdelaytime < delay ) {
+        inc = delay-mcupowerdelaytime ;
+        responds = mcu_cmd( MCU_CMD_POWEROFFDELAY, 2, inc/256, inc%256 );
     }
     else {
         responds = mcu_cmd( MCU_CMD_POWEROFFDELAY, 2, 0, 0 );
@@ -810,31 +812,39 @@ void mcu_poweroffdelay()
     }
 }
 
-extern int watchdogtimeout;
-extern int watchdogenabled;
-
-void mcu_watchdogenable()
+void mcu_watchdogenable(int timeout)
 {
-    netdbg_print("mcu watchdog enable, timeout %d s.\n", watchdogtimeout );
     // set watchdog timeout
-    mcu_cmd( MCU_CMD_SETWATCHDOGTIMEOUT, 2, watchdogtimeout/256, watchdogtimeout%256 ) ;
+    mcu_cmd( MCU_CMD_SETWATCHDOGTIMEOUT, 2, timeout/256, timeout%256 ) ;
     // enable watchdog
-    mcu_cmd( MCU_CMD_ENABLEWATCHDOG  );
-    watchdogenabled = 1 ;
+    if( mcu_cmd( MCU_CMD_ENABLEWATCHDOG  ) ) {
+        watchdogenabled = 1 ;
+        netdbg_print("mcu watchdog enable, timeout %d s.\n", timeout );
+    }
 }
 
 void mcu_watchdogdisable()
 {
-    netdbg_print("mcu watchdog disabled.\n" );
-    mcu_cmd( MCU_CMD_DISABLEWATCHDOG  );
-    watchdogenabled = 0 ;
+    if( watchdogenabled ) {
+        if(mcu_cmd( MCU_CMD_DISABLEWATCHDOG  )) {
+            watchdogenabled=0 ;
+            netdbg_print("mcu watchdog disabled.\n" );
+        }
+    }
 }
 
 // return 0: error, >0 success
 int mcu_watchdogkick()
 {
-    netdbg_print("mcu watchdog kick.\n" );
-    mcu_cmd(MCU_CMD_KICKWATCHDOG);
+    if( usewatchdog ) {
+        if( watchdogenabled==0 ) {
+            mcu_watchdogenable(watchdogtimeout);
+        }
+
+        if( mcu_cmd(MCU_CMD_KICKWATCHDOG) ) {
+            netdbg_print("mcu watchdog kick.\n" );
+        }
+    }
     return 0;
 }
 

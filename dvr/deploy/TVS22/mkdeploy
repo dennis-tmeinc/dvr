@@ -34,7 +34,7 @@ if [ ${appid} = "clean" ]; then
 # clean host firmware filesa
     cd ${DEPROOT}/host/dvr
     rm -f httpd.sfx firmwareid rsa_host_key
-    rm -f dvrsvr dvrtime eaglehost udhcpc glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
+    rm -f dvrsvr dvrtime eaglehost udhcpc glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
     
     cd ${DEPROOT}/host/ID
     rm -f BOARDNUM APPID BOARDID
@@ -133,6 +133,7 @@ cp -v ${APPROOT}/dvrtime/dvrtime .
 cp -v ${APPROOT}/eaglehost/eaglehost .
 cp -v ${APPROOT}/glog/glog .
 cp -v ${APPROOT}/ioprocess/ioprocess .
+cp -v ${APPROOT}/ioprocess/iowait .
 cp -v ${APPROOT}/ioprocess/devicepower  .
 cp -v ${APPROOT}/ioprocess/panelled  .
 cp -v ${APPROOT}/ioprocess/buzzer  .
@@ -149,7 +150,7 @@ echo "Generate RSA key for ssh"
 rm -f rsa_host_key
 dropbearkey -t rsa -f rsa_host_key
 
-${STRIP} dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg
+${STRIP} dvrsvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg
 cd ${DEPROOT}/host
 echo ${firmwareid} > dvr/firmwareid
 ${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.dep ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW

@@ -374,7 +374,7 @@ for( i=1; i<=num_sensor; i++ ) {
 function oncrashlock()
 {
     var brec=document.getElementsByName("gforce_record_lock");
-    if( brec[0].checked=true ) {
+    if( brec[0].checked==true ) {
         brec=document.getElementsByName("gforce_record_trigger");
         brec[0].checked=true ;
     }
@@ -383,7 +383,7 @@ function oncrashlock()
 function oncrashrec()
 {
     var brec=document.getElementsByName("gforce_record_trigger");
-    if( brec[0].checked=false ) {
+    if( brec[0].checked==false ) {
         brec=document.getElementsByName("gforce_record_lock");
         brec[0].checked=false ;
     }

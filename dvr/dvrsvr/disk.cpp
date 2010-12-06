@@ -346,7 +346,7 @@ static int repairfile(const char *filename)
 {
     dvrfile vfile;
     
-    if (vfile.open(filename, "r+") == 0) {	// can't open it
+    if (vfile.open(filename, "r+b") == 0) {	// can't open it
         disk_removefile( filename );		// try delete it.
         return 0;
     }
@@ -373,7 +373,7 @@ int  repairepartiallock(const char * filename)
     length = f264length (filename) ;
     locklength = f264locklength (filename);
     if( locklength>0 && locklength<length ) {       // partial locked file ?
-        if (vfile.open(filename, "r+") ) {	// can't open it
+        if (vfile.open(filename, "r+b") ) {	// can't open it
             return vfile.repairpartiallock() ;
         }
     }
@@ -1120,7 +1120,7 @@ int disk_archive_copyfile( char * srcfile, char * destfile )
     while( (r=file_read( filebuf, ARCH_BUFSIZE, fsrc ))>0 ) {
         file_write( filebuf, r, fdest ) ;
         while( rec_busy || disk_busy || g_cpu_usage>0.6 ) {
-            usleep( 100000 );
+            usleep( 10000 );
             if( disk_archive_run != 1 ) {
                 break;
             }
@@ -1240,7 +1240,9 @@ static int disk_archive_cplogfile( char * srcdir, char * destdir)
     dfind.open( srcfile );
     while( dfind.find() ) {
         if( dfind.isfile() ) {
-            if( strstr( dfind.filename(), "_L.001" ) ) {
+            if( strstr( dfind.filename(), "_L.001" ) || 
+               strstr( dfind.filename(), "_L.log" ) )
+            {
                 sprintf( destfile, "%s/smartlog", destdir );
                 mkdir( destfile, 0755 );
                 sprintf( destfile, "%s/smartlog/%s", destdir, dfind.filename() );

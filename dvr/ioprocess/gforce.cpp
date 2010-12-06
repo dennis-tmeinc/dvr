@@ -52,6 +52,7 @@ Vihecle direction :
 #include <stdarg.h>
 #include <time.h>
 #include <sched.h>
+#include <math.h>
 #include <sys/mman.h>
 #include <sys/reboot.h>
 #include <sys/types.h>
@@ -67,11 +68,15 @@ Vihecle direction :
 #include "netdbg.h"
 #include "mcu.h"
 #include "diomap.h"
+#include "gforce.h"
 
 // functions from ioprocess.cpp
 int dvr_log(char *fmt, ...);
 
-int gforce_log_enable=0 ;
+int gforce_log_enable;
+int gforce_available;
+int gforce_crashdata_enable;
+int gforce_mountangle;
 
 // g value converting vectors ,
 // for sensor to unit convertion :
@@ -326,59 +331,98 @@ static void direction_convertor( int &x, int &y, int &z, int direction, int reve
     z=cz ;
 }
 
-void gforce_writeTab102Data(unsigned char *buf, int len)
+unsigned char * gforce_crashdata=NULL ;
+int             gforce_crashdatalen=0 ;
+
+void gforce_freecrashdata()
 {
-    char filename[256];
-    struct tm tm;
-    char hostname[128] ;
-
-    gethostname(hostname, 128) ;
-
-    time_t t = time(NULL);
-    localtime_r(&t, &tm);
-    snprintf(filename, sizeof(filename),
-             "/var/dvr/%s_%04d%02d%02d%02d%02d%02d_TAB102log_L.log",
-             hostname,
-             tm.tm_year + 1900,
-             tm.tm_mon + 1,
-             tm.tm_mday,
-             tm.tm_hour,
-             tm.tm_min,
-             tm.tm_sec );
-    FILE *fp;   
-    fp = fopen(filename, "w");
-    if (fp) {
-
-        /*
-         todo:
-         convert origin X/Y/Z -> Unit Direction -> Vehicle Direction
-         before save to disk.
-         */
-
-        fwrite(buf, 1, len, fp);
-        fclose(fp);
+    if( gforce_crashdata ) {
+        free(gforce_crashdata) ;
+        gforce_crashdata=NULL ;
     }
+    gforce_crashdatalen=0 ;
 }
 
-int gforce_checksum(unsigned char * buf, int bsize)
+int gforce_savecrashdata()
 {
-    unsigned char cs = 0;
-    int i;
+    char hostname[128] ;
+    char crashdatafilename[256] ;
+    struct tm t ;
+    time_t tt ;
+    unsigned char dbuf[256] ;
+    FILE * crashdatafile  ;
+    FILE * diskfile ;
 
-    for (i = 0; i < bsize; i++) {
-        cs += buf[i];
+    if( gforce_crashdata == NULL || gforce_crashdatalen<=0 ) {
+        gforce_freecrashdata();
+        return 0;
     }
+    
+    diskfile = fopen( "/var/dvr/dvrcurdisk", "r");
 
-    return cs==0 ;
+    netdbg_print("gforce: write file size:%d\n", gforce_crashdatalen);
+
+    if( diskfile ) {
+        if( fscanf( diskfile, "%s", dbuf )>0 ) {
+
+            tt=time(NULL);
+            localtime_r(&tt, &t);
+            gethostname( hostname, 127 );
+            
+            sprintf(crashdatafilename, "%s/smartlog/%s_%04d%02d%02d%02d%02d%02d_TAB102log_L.log",
+                    dbuf,
+                    hostname,
+                    t.tm_year+1900,
+                    t.tm_mon+1,
+                    t.tm_mday,
+                    t.tm_hour,
+                    t.tm_min,
+                    t.tm_sec );
+            crashdatafile = fopen( crashdatafilename, "w" );
+            if( crashdatafile ) {
+                fwrite( gforce_crashdata, 1, gforce_crashdatalen, crashdatafile );
+                fclose( crashdatafile );
+                gforce_freecrashdata();
+            }
+        }
+        fclose(diskfile);
+    }
+    return 0;
 }
 
 #define UPLOAD_ACK_SIZE (10)
 
-int gforce_upload()
+int gforce_getcrashdata()
 {
     unsigned char * responds ;
     unsigned int uploadSize ;
     unsigned int nbytes ;
+    int success=0;
+    int iomode ;
+
+    if( gforce_log_enable==0  || gforce_crashdata_enable==0 ) {
+        return 0 ;
+    }
+    
+    iomode = p_dio_mmap->iomode ;
+    p_dio_mmap->iomode=0;
+
+    // free previous data
+    gforce_freecrashdata();
+    
+    dvr_log( "Start gforce crash data reading." );
+    dvrsvr_susp() ;
+    glog_susp();
+    if( usewatchdog ) {
+        mcu_watchdogenable(100) ;   // set watchdog to 100 seconds. (usally uploading last 65 seconds)
+    }
+    
+    if( p_dio_mmap->poweroff ) {
+        // extend power off delay
+        mcu_poweroffdelay(100);
+    }
+    sleep(3);
+    
     responds = (unsigned char *)mcu_cmd( MCU_CMD_GSENSORUPLOAD, 1, 
         (int)(direction_table[gsensor_direction][2]) );      // direction
     if( responds!=NULL && *responds>=10 ) {
@@ -387,35 +431,44 @@ int gforce_upload()
             (responds[6] << 16) | 
             (responds[7] << 8) |
             responds[8];
-        netdbg_print("gforce: upload size:%d\n", uploadSize);
-        if (uploadSize) {
+        if (uploadSize>0) {
             //1024 for room, actually UPLOAD_ACK_SIZE(upload ack)
             // + 8(0g + checksum)
             int bufsize = uploadSize + 1024;
-            unsigned char *tbuf = (unsigned char *)malloc(bufsize);
-            if (!tbuf) {
-                netdbg_print("gforce: no enough memory!");
-                return 0 ;
-            }
-            nbytes = mcu_read((char *)tbuf, bufsize, 1000000, 1000000 );
-            netdbg_print("gforce: uploaded %d bytes", nbytes );
+            gforce_crashdata =(unsigned char *)malloc(bufsize);
 
-            int success=0 ;
-            if (nbytes >= uploadSize + UPLOAD_ACK_SIZE + 8) {
-                if (gforce_checksum(tbuf + UPLOAD_ACK_SIZE, uploadSize + 8)) {
-                    success = 1;
-                    gforce_writeTab102Data(tbuf, uploadSize + UPLOAD_ACK_SIZE + 8);
+            netdbg_print("gforce upload, requst: %d bytes\n", uploadSize );
+            nbytes = mcu_read((char *)gforce_crashdata, bufsize, 1000000, 1000000 );
+            netdbg_print("gforce upload, read: %d bytes\n", nbytes );
+
+//            if (nbytes >= uploadSize + UPLOAD_ACK_SIZE + 8) {
+            if (nbytes >= uploadSize) {
+                if (checksum(gforce_crashdata, nbytes)==0) {
+                    success=1 ;
+                    gforce_crashdatalen=nbytes ;
+                    dvr_log( "Read gforce crash data success, data size %d", gforce_crashdatalen );
+                    // ack
                 } else {
-                    netdbg_print("gforce: upload checksum error.");
+                    dvr_log( "Gforce crash data checksum error" );
+                    gforce_freecrashdata();
                 }
             }
-            free(tbuf);
-            responds = (unsigned char *)mcu_cmd( MCU_CMD_GSENSORUPLOADACK, success );
-            if( responds ) {
-                return 1 ;
+            else {
+                dvr_log("Read gforce crash data error");
+                gforce_freecrashdata();
             }
+            mcu_cmd( MCU_CMD_GSENSORUPLOADACK, !success );
+        }
+        else {
+            dvr_log( "No gforce crash data" );
         }
     }
+
+    gforce_reinit();
+    dvrsvr_resume() ;
+    glog_resume();
+    p_dio_mmap->iomode=iomode;
+
     return 0;
 }
 
@@ -424,6 +477,21 @@ void gforce_log( int x, int y, int z )
 {
     int gback, gright, gbuttom ;            // in unit direction
     int gbusforward, gbusright, gbusdown ;  // in vehicle direction
+    float gf, gr, gd, mountangle ;          // in vehicle direction
+
+    if( gforce_log_enable==0 )              // gforce not enabled
+        return ;
+
+    if( gforce_available == 0 ) {           // gforce_init may not return correct availability answer, so we do it here. 
+        FILE * fgsensor ;
+        dvr_log("G force sensor available!");
+        fgsensor = fopen( "/var/dvr/gsensor", "w" );
+        if( fgsensor ) {
+            fprintf(fgsensor, "1");
+            fclose(fgsensor);
+        }
+        gforce_available = 1 ;
+    }        
 
     netdbg_print("Gsensor value X=%d, Y=%d, Z=%d\n",     
            x,
@@ -448,19 +516,34 @@ void gforce_log( int x, int y, int z )
     gbusdown=gbuttom ;
     direction_convertor( gbusforward, gbusright, gbusdown, unit_direction ) ;
 
-    netdbg_print("G vehicle v   F=%d, R=%d, D=%d\n",
+    netdbg_print("G vehicle    F=%d, R=%d, D=%d\n",
            gbusforward,
            gbusright,
            gbusdown );
-       
+
+    if( gforce_mountangle ) {
+        mountangle = M_PI * gforce_mountangle / 180.0 ;
+        gf = (gbusforward * cos( mountangle ) - gbusdown * sin( mountangle ))/14.0 ;
+        gd = (gbusforward * sin( mountangle ) + gbusdown * cos( mountangle ))/14.0 ;
+    }
+    else {
+        gf = gbusforward/14.0 ;
+        gd = gbusdown/14.0 ;
+    }
+    gr = gbusright/14.0 ;
+
+    if( netdbg_on ) {
+        netdbg_print("G value after adjusted,  F=%5.2f, R=%5.2f, D=%5.2f, angle=%.0f\n",
+                     gf,gr,gd, 180.0*atan( gf/gd )/M_PI );
+    }
+
     // save to log
     dio_lock();
     p_dio_mmap->gforce_serialno++ ;
-    p_dio_mmap->gforce_forward = gbusforward/14.0 ;
-    p_dio_mmap->gforce_right = gbusright/14.0 ;
-    p_dio_mmap->gforce_down = gbusdown/14.0 ;
+    p_dio_mmap->gforce_forward = gf ;
+    p_dio_mmap->gforce_right = gr ;
+    p_dio_mmap->gforce_down = gd ;
     dio_unlock();
-    
 }
 
 // calibrate g-sensor.
@@ -488,7 +571,37 @@ int gforce_calibration()
     }
 }
 
-// initialize serial port
+
+// Enter/Leave g-sensor mount angle calibration.
+void gforce_calibrate_mountangle(int cal)
+{
+    if( cal ) {
+        // send small trigger init value to mcu
+        mcu_cmd( MCU_CMD_GSENSORINIT, 
+                20,      // 20 parameters 
+                1,       // enable GForce
+                direction_table[unit_direction][2],   // unit direction code
+                1, -1, 1, -1, 1, -1,                  // small trigger value to make gforce output every time.
+                2, -2, 2, -2, 2, -2,
+                100, -100, 100, -100, 100, -100 );    // big crash value to stop it playing
+        // set mount angle to zero while calibrating
+        gforce_mountangle = 0 ;                                             
+    }
+    else {
+        dvr_log("Mounting angle calibration stopped!");
+        gforce_reinit();
+    }
+}
+
+// re-initialize gforce sensor
+void gforce_reinit()
+{
+    config dvrconfig(dvrconfigfile);
+    dvr_log("Re-initialize gforce sensor");
+    gforce_init( dvrconfig );
+}
+
+// initialize gforce sensor
 void gforce_init( config & dvrconfig ) 
 {
     int i ;
@@ -503,7 +616,13 @@ void gforce_init( config & dvrconfig )
     p_dio_mmap->gforce_serialno=0 ;
     // gforce log enabled ?
     gforce_log_enable = dvrconfig.getvalueint( "glog", "gforce_log_enable");
+    gforce_available = 0 ;
+    gforce_crashdata_enable = dvrconfig.getvalueint( "io", "gsensor_crashdata" );
+    if( gforce_log_enable==0 ) 
+        return ;                    // no need to initialize gforce sensor
 
+    gforce_mountangle = dvrconfig.getvalueint( "io", "gsensor_mountangle" );
+    
     // unit direction
     int dforward, dupward ;
     dforward = dvrconfig.getvalueint( "io", "gsensor_forward");	
@@ -796,6 +915,7 @@ void gforce_init( config & dvrconfig )
                        base_x_pos, base_x_neg, base_y_pos, base_y_neg, base_z_pos, base_z_neg,
                        trigger_x_pos, trigger_x_neg, trigger_y_pos, trigger_y_neg, trigger_z_pos, trigger_z_neg,
                        crash_x_pos, crash_x_neg, crash_y_pos, crash_y_neg, crash_z_pos, crash_z_neg ) ;
+
     if( responds && responds[5] ) { // g_sensor available
         FILE * fgsensor ;
         dvr_log("G force sensor detected!");
@@ -804,14 +924,13 @@ void gforce_init( config & dvrconfig )
             fprintf(fgsensor, "1");
             fclose(fgsensor);
         }
+        gforce_available = 1 ;
     }
     else {
-        dvr_log("No G force sensor.");
-        gforce_log_enable=0;                // dont' log and show gforce
+        dvr_log("G force sensor init failed!");
     }
 }
 
 void gforce_finish()
 {
-
 }

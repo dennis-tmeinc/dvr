@@ -16,7 +16,7 @@ OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 LDFLAGS=
 
 CFLAGS= -g -Wall -Wno-write-strings
-TARGET=cfgdown.cgi dvrstatus.cgi cfgreport gcal.cgi
+TARGET=cfgdown.cgi dvrstatus.cgi cfgreport gcal.cgi gcrash.cgi
 
 all: $(TARGET)
 
@@ -26,6 +26,10 @@ cfgdown.cgi: cfgdown.c $(EXTSOURCES) $(EXTHEADERS)
 
 gcal.cgi : gcal.cpp ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h
 	$(CC) $(CFLAGS) -o $@ gcal.cpp ../../ioprocess/diomap.cpp $(LDFLAGS)
+	cp $@  $(debug_folder)/www
+
+gcrash.cgi : gcrash.cpp ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h
+	$(CC) $(CFLAGS) -o $@ gcrash.cpp ../../ioprocess/diomap.cpp $(LDFLAGS)
 	cp $@  $(debug_folder)/www
 
 dvrstatus.cgi : dvrstatus.cpp ../eagle_setup/getquery.cpp $(EXTHEADERS) $(EXTSOURCES) ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h

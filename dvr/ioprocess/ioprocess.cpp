@@ -1056,6 +1056,8 @@ float cpuusage()
     return s_usage ;
 }
 
+int io_firstrun=0 ;
+
 // return 
 //        0 : failed
 //        1 : success
@@ -1107,19 +1109,28 @@ int appinit()
     if( iomapfile && strlen(iomapfile)>0 ) {
         strncpy( dvriomap, iomapfile, sizeof(dvriomap));
     }
-    fd = open(dvriomap, O_RDWR | O_CREAT, S_IRWXU);
+
+    // create io map file
+    fd = open( dvriomap, O_RDWR ) ;
+    if( fd<0 ) {    // file not exist
+        fd = open( dvriomap, O_RDWR | O_CREAT, S_IRWXU);
+        io_firstrun=1 ;
+        dvr_log("IO first time running!");
+    }
+    
     if( fd<=0 ) {
         dvr_log("Can't create io map file (%s).", dvriomap);
         return 0 ;
     }
     ftruncate(fd, sizeof(struct dio_mmap));
     close(fd);
+    
     if( dio_mmap( dvriomap )==NULL ) {
         dvr_log( "IO memory map failed!");
         return 0 ;
     }
     
-    if( p_dio_mmap->usage <=0 ) {
+    if( io_firstrun ) {
         memset( p_dio_mmap, 0, sizeof( struct dio_mmap ) );
     }
     
@@ -1130,13 +1141,16 @@ int appinit()
         // kill it
         if( kill( pid,  SIGTERM )==0 ) {
             // wait for it to quit
+            p_dio_mmap->iomode=0 ;
             waitpid( pid, NULL, 0 );
             sleep(2);
         }
         else {
+            p_dio_mmap->iomode=0 ;
             sleep(5);
         }
     }
+    p_dio_mmap->iomode=0 ;
 
     // initialize shared memory
     p_dio_mmap->inputnum = dvrconfig.getvalueint( "io", "inputnum");	
@@ -1248,7 +1262,7 @@ int appinit()
     }
 
     archivetime = dvrconfig.getvalueint( "system", "archivetime");
-    if(archivetime<=0 || archivetime>7200 ) {
+    if(archivetime<=0 || archivetime>14400 ) {
         archivetime=1800 ;
     }
 
@@ -1274,9 +1288,7 @@ void appfinish()
     zoomcam_close();
 #endif
         
-    if( watchdogenabled ) {
-        mcu_watchdogdisable();
-    }
+    mcu_watchdogdisable();
 
     gforce_finish();
     mcu_finish();
@@ -1385,9 +1397,6 @@ int main(int argc, char * argv[])
 //    signal(SIGUSR1, sig_handler);
 //    signal(SIGUSR2, sig_handler);
     
-    // disable watchdog at begining
-//  mcu_watchdogdisable();
-
     // check if we need to update firmware
     if( argc>=2 ) {
         for(i=1; i<argc; i++ ) {
@@ -1413,17 +1422,15 @@ int main(int argc, char * argv[])
                     delay=100;
                 }
 //                sleep(delay);
-                watchdogtimeout=delay ;
-                mcu_watchdogenable () ;
+                mcu_watchdogenable (delay) ;
                 sleep(delay+20) ;
                 mcu_reset();
                 return 1;
             }
         }
     }
-  
-    // setup signal handler	
-    p_dio_mmap->iomode = IOMODE_RUN ;
+
+    // setup signal handler
     signal(SIGQUIT, sig_handler);
     signal(SIGINT,  sig_handler);
     signal(SIGTERM, sig_handler);
@@ -1444,6 +1451,11 @@ int main(int argc, char * argv[])
     // initialize device power
     devicepower = 0 ;
     p_dio_mmap->devicepower = 0xffff;				// assume all device is power on
+
+    if( io_firstrun && gforce_crashdata_enable )  {
+        gforce_getcrashdata();                      // iomode is set to IOMODE_REINITAPP
+    }
+    p_dio_mmap->iomode = IOMODE_RUN ;
     
     while( p_dio_mmap->iomode ) {
         runtime=getruntime() ;
@@ -1485,6 +1497,18 @@ int main(int argc, char * argv[])
             }
             else if( p_dio_mmap->rtc_cmd == 10 ) {      // Ex command, calibrate gforce sensor
                 gforce_calibration();
+            }
+            else if( p_dio_mmap->rtc_cmd == 11 ) {      // Ex command, save gforce crash data
+                p_dio_mmap->rtc_cmd = 0 ;
+                gforce_getcrashdata();
+            }
+            else if( p_dio_mmap->rtc_cmd == 15 ) {      // Ex command, calibrate gforce mount angle
+                p_dio_mmap->rtc_cmd = 0 ;
+                gforce_calibrate_mountangle(1);
+            }
+            else if( p_dio_mmap->rtc_cmd == 16 ) {      // Ex command, stop calibrate gforce mount angle
+                p_dio_mmap->rtc_cmd = 0 ;
+                gforce_calibrate_mountangle(0);
             }
             else {
                 p_dio_mmap->rtc_cmd=-1;		// command error, (unknown cmd)
@@ -1589,14 +1613,9 @@ int main(int argc, char * argv[])
         if( (runtime - appmode_timer)> 3000 ) {    // 3 seconds mode timer
             appmode_timer=runtime ;
 
-            // updating watch dog state
-            if( usewatchdog && watchdogenabled==0 ) {
-                mcu_watchdogenable();
+            if( usewatchdog ) {
+                mcu_watchdogkick();
             }
-
-            // kick watchdog
-            if( watchdogenabled )
-                mcu_watchdogkick () ;
 
             if( p_dio_mmap->dvrstatus & DVR_FAILED ) {
                 mcu_reset();
@@ -1612,7 +1631,15 @@ int main(int argc, char * argv[])
                     app_run_bell=1 ;                    // dvr started bell
                     buzzer(1, 1000, 100);
                 }
-
+                
+                if( p_dio_mmap->dvrpid>0 && 
+                   (p_dio_mmap->dvrstatus & DVR_DISKREADY) ) 
+                {
+                    if( gforce_crashdatalen>0 )  {
+                        gforce_savecrashdata();               
+                    }
+                }
+                
                 if( p_dio_mmap->poweroff )              // ignition off detected
                 {
                     modeendtime = runtime + shutdowndelaytime*1000;
@@ -1684,6 +1711,14 @@ int main(int argc, char * argv[])
                             (p_dio_mmap->dvrstatus & DVR_ARCH )==0 ) ||
                         runtime>modeendtime )
                     {
+                        // do gforce crashdata collection here. (any other choice?)
+                        if( gforce_crashdata_enable )  {
+                            gforce_getcrashdata(); 
+                            // save data right away, of data may get lost if power turn off
+                            if( gforce_crashdatalen>0 )  {
+                                gforce_savecrashdata();               
+                            }
+                        }                        
                         // enter standby mode
                         mode_standby();
                     }
@@ -1784,10 +1819,8 @@ int main(int argc, char * argv[])
                         kill(p_dio_mmap->glogpid, SIGTERM);
                     }
                     // let MCU watchdog kick in to reboot the system
-                    watchdogtimeout=10 ;                    // 10 seconds watchdog time out
-                    mcu_watchdogenable() ;
-                    usewatchdog=0 ;                         // don't call watchdogenable again!
-                    watchdogenabled=0 ;                     // don't kick watchdog ;
+                    mcu_watchdogenable(3) ;                 // let watchdog time out in 3 seconds
+                    usewatchdog=0 ;                         // don't kick watchdog
                     reboot_begin=1 ;                        // rebooting in process
                     modeendtime=runtime+20000 ;             // 20 seconds time out, watchdog should kick in already!
                 }
@@ -1795,7 +1828,7 @@ int main(int argc, char * argv[])
                     // program should not go throught here,
                     mcu_reset();
                     system("/bin/reboot");                  // do software reboot
-                    p_dio_mmap->iomode=IOMODE_QUIT ;                 // quit IOPROCESS
+                    p_dio_mmap->iomode=IOMODE_QUIT ;        // quit IOPROCESS
                 }
             }
             else if( p_dio_mmap->iomode==IOMODE_REINITAPP ) {

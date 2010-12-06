@@ -191,12 +191,12 @@
 </td>
 </tr>
 
-<tr>
+<tr id="idtr_gforce_available">
 <td>&nbsp;</td>
 <td><input name="gforce_available" value="0" type="hidden" /></td>
 </tr>
 
-<tr id="id_gforce_enable" >
+<tr id="idtr_gforce_enable" >
 <td class="col1">Enable G Force Sensor:</td>
 <td>
 <input name="gforce_enable" value="on" type="checkbox" /> 
@@ -204,7 +204,7 @@
 
 <div id="gforce_win" style="width:60%;height:180px;display:none;position:fixed;border:2px solid gray;left:20%;top:32%;z-index:10;background-color:#b0c4de;"> 
 <h style="position:static;text-align:center;">
-G Force Sensor Detection
+G Force Sensor Calibration
 </h>
 <div id="gforce_msg" style="width:80%;margin:auto;">
 <pre>
@@ -222,7 +222,7 @@ force msg
 </td>
 </tr>
 
-<tr id="id_gforce_dirforward" >
+<tr id="idtr_gforce_dirforward" >
 <td class="col1">G-Force Direction - Forward:</td>
 <td>
 <select name="gforce_forward">
@@ -236,7 +236,7 @@ force msg
 </td>
 </tr>
 
-<tr id="id_gforce_dirupward" >
+<tr id="idtr_gforce_dirupward" >
 <td class="col1">G-Force Direction - Up:</td>
 <td>
 <select name="gforce_upward">
@@ -250,7 +250,43 @@ force msg
 </td>
 </tr>
 
-<tr id="id_gforce_forward" >
+<input id="id_show_mountangle" name="show_mountangle" type="hidden" />
+<tr id="idtr_gforce_mountangle">
+<td class="col1">Unit Mounting Angle (Tilt Forward):</td>
+<td>
+<input id="id_gforce_mountangle" name="gforce_mountangle"/> 
+
+<div id="gforce_dlg_mountangle" style="width:60%;height:240px;display:none;position:fixed;border:2px solid gray;left:20%;top:32%;z-index:50;background-color:#b0c4de;"> 
+<h4 style="position:static;text-align:center;">Unit Mounting Angle Calibration</h4>
+<h5 style="position:static;text-align:center;">Do not move unit!</h5>
+<table style="border:0px;width:80%;">
+<tr><td>Forward/Backward G-Value : </td><td id="gvalue_Forword"></td></tr>
+<tr><td>Up/Down G-Value :          </td><td id="gvalue_Down"></td></tr>
+<tr><td>Left/Right G-Value :       </td><td id="gvalue_Right"></td></tr>
+<tr><td>Detected Mounting Angle :  </td><td id="gvalue_Angle"></td></tr>
+</table>
+
+<div style="position:absolute;bottom:20px;left:35%;">
+<button type="button" onclick="ongforceMountdlgClose(1)"> Use Detected Angle </button>
+<button type="button" onclick="ongforceMountdlgClose(0)"> Cancel </button>
+</div>
+
+</div>
+
+<input type="button" onclick="ongforceMountdlg()" value="Calibrate" />
+</td>
+</tr>
+
+
+<tr id="idtr_gforce_crashdata">
+<td class="col1">Collect G-Force Crash Data:</td>
+<td>
+<input name="gforce_crashdata" value="on" type="checkbox" /> 
+<input name="bool_gforce_crashdata" value="on" type="hidden" /> 
+</td>
+</tr>
+
+<tr id="idtr_gforce_forward" >
 <td class="col1">G-Force Forward Trigger Point:</td>
 <td>
 Base&nbsp;<input name="gforce_forward_base" size="5" />&nbsp;
@@ -259,7 +295,7 @@ Crash&nbsp;<input name="gforce_forward_crash" size="5" />
 </td>
 </tr>
 
-<tr id="id_gforce_backward" >
+<tr id="idtr_gforce_backward" >
 <td class="col1">G-Force Backward Trigger Point:</td>
 <td>
 Base&nbsp;<input name="gforce_backward_base" size=5 />&nbsp;
@@ -268,7 +304,7 @@ Crash&nbsp;<input name="gforce_backward_crash" size=5 />
 </td>
 </tr>
 
-<tr id="id_gforce_right" >
+<tr id="idtr_gforce_right" >
 <td class="col1">G-Force Right Trigger Point:</td>
 <td>
 Base&nbsp;<input name="gforce_right_base" size=5 />&nbsp;
@@ -277,7 +313,7 @@ Crash&nbsp;<input name="gforce_right_crash" size=5 />
 </td>
 </tr>
 
-<tr id="id_gforce_left" >
+<tr id="idtr_gforce_left" >
 <td class="col1">G-Force Left Trigger Point:</td>
 <td>
 Base&nbsp;<input name="gforce_left_base" size=5 />&nbsp;
@@ -286,7 +322,7 @@ Crash&nbsp;<input name="gforce_left_crash" size=5 />
 </td>
 </tr>
 
-<tr id="id_gforce_downward" >
+<tr id="idtr_gforce_downward" >
 <td class="col1">G-Force Downward Trigger Point:</td>
 <td>
 Base&nbsp;<input name="gforce_downward_base" size=5 />&nbsp;
@@ -295,7 +331,7 @@ Crash&nbsp;<input name="gforce_downward_crash" size=5 />
 </td>
 </tr>
 
-<tr id="id_gforce_upward" >
+<tr id="idtr_gforce_upward" >
 <td class="col1">G-Force Upward Trigger Point:</td>
 <td>
 Base&nbsp;<input name="gforce_upward_base" size=5 />&nbsp;
@@ -324,15 +360,22 @@ var formdata =
 JSONinitfield( formdata );
 
 if( formdata.gforce_available != "1" ) {
-    document.getElementById('id_gforce_enable').style.display="none" ;
-    document.getElementById('id_gforce_dirupward').style.display="none" ;
-    document.getElementById('id_gforce_dirforward').style.display="none" ;
-    document.getElementById('id_gforce_forward').style.display="none" ;
-    document.getElementById('id_gforce_backward').style.display="none" ;
-    document.getElementById('id_gforce_right').style.display="none" ;
-    document.getElementById('id_gforce_left').style.display="none" ;
-    document.getElementById('id_gforce_upward').style.display="none" ;
-    document.getElementById('id_gforce_downward').style.display="none" ;
+    document.getElementById('idtr_gforce_available').style.display="none" ;
+    document.getElementById('idtr_gforce_enable').style.display="none" ;
+    document.getElementById('idtr_gforce_dirforward').style.display="none" ;
+    document.getElementById('idtr_gforce_dirupward').style.display="none" ;
+    document.getElementById('idtr_gforce_mountangle').style.display="none" ;
+    document.getElementById('idtr_gforce_crashdata').style.display="none" ;
+    document.getElementById('idtr_gforce_upward').style.display="none" ;
+    document.getElementById('idtr_gforce_downward').style.display="none" ;
+    document.getElementById('idtr_gforce_left').style.display="none" ;
+    document.getElementById('idtr_gforce_right').style.display="none" ;
+    document.getElementById('idtr_gforce_backward').style.display="none" ;
+    document.getElementById('idtr_gforce_forward').style.display="none" ;
+}
+
+if( !document.getElementsByName('show_mountangle')[0].value ) {
+    document.getElementById('idtr_gforce_mountangle').style.display="none" ;
 }
 
 var calibration_on=0 ;
@@ -352,7 +395,19 @@ function calibration_get()
 
 function calibration_start( response ) 
 {
-    document.getElementById('gforce_win').style.display="" ;
+    var dlg = document.getElementById('gforce_win') ;
+    dlg.style.display="" ;
+    if( navigator.appName.match(/Microsoft Internet Explorer/i) &&
+        navigator.appVersion.match( /4.0/ ) )
+    {
+        var scrolly = document.body.scrollTop ;
+        if ( document.documentElement.scrollTop ) {
+            scrolly = document.documentElement.scrollTop ;
+        }
+        dlg.style.position="absolute" ;
+        dlg.style.top = (scrolly+100) + 'px'  ;
+        dlg.style.left = '20%' ;
+    }
     document.getElementById('gforce_msg').innerHTML="<pre>Starting Calibration.\nPlease wait......</pre>" ;
     calibration_on=1 ;
     calibration_get();
@@ -369,6 +424,64 @@ function ongforcecalibrationoff()
     document.getElementById('gforce_win').style.display="none" ;
 }
 
+
+var gsensor_mount_cal ;
+var gsensor_mount_calvalue ;
+
+function ongforceMountdlgClose( useangle )
+{
+    if( useangle ) {
+       document.getElementById('id_gforce_mountangle').value = gsensor_mount_calvalue.gvalue_angle ;
+    }
+    document.getElementById('gforce_dlg_mountangle').style.display="none" ;
+    gsensor_mount_cal=0 ;
+}
+
+function gforceMount_readval()
+{
+    ajaxload("get", "cgi/gangle.cgi?op=read", gforceMount_val);
+}
+
+function gforceMount_val( JSONval )
+{
+    if( gsensor_mount_cal==1 ) {
+        gsensor_mount_calvalue = eval('(' + JSONval + ')'); 
+        if( gsensor_mount_calvalue.gvalue_f ) 
+            document.getElementById('gvalue_Forword').innerHTML=gsensor_mount_calvalue.gvalue_f ;
+        if( gsensor_mount_calvalue.gvalue_f ) 
+            document.getElementById('gvalue_Down').innerHTML=gsensor_mount_calvalue.gvalue_d ;
+        if( gsensor_mount_calvalue.gvalue_f ) 
+            document.getElementById('gvalue_Right').innerHTML=gsensor_mount_calvalue.gvalue_r ;
+        if( gsensor_mount_calvalue.gvalue_f ) 
+            document.getElementById('gvalue_Angle').innerHTML=gsensor_mount_calvalue.gvalue_angle+"&deg;" ;
+        setTimeout("gforceMount_readval()", 800);
+    }
+    else {
+       ajaxload("get", "cgi/gangle.cgi?op=stop");
+    }
+}
+
+function ongforceMountdlg()
+{
+    var dlg = document.getElementById('gforce_dlg_mountangle') ;
+    dlg.style.display="" ;
+    
+    if( navigator.appName.match(/Microsoft Internet Explorer/i) &&
+        navigator.appVersion.match( /4.0/ ) )
+    {
+        var scrolly = document.body.scrollTop ;
+        if ( document.documentElement.scrollTop ) {
+            scrolly = document.documentElement.scrollTop ;
+        }
+        dlg.style.position="absolute" ;
+        dlg.style.top = (scrolly+100) + 'px'  ;
+        dlg.style.left = '20%' ;
+    }
+    gsensor_mount_cal = 1 ;
+    ajaxload("get", "cgi/gangle.cgi?op=start", gforceMount_val);
+}
+
 </script>
 </body>
 </html>
+

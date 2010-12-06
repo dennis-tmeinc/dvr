@@ -4,6 +4,7 @@
 ./dvr/dvrtime
 ./dvr/glog
 ./dvr/ioprocess
+./dvr/iowait
 ./dvr/panelled
 ./dvr/devicepower
 ./dvr/buzzer

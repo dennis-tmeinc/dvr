@@ -79,6 +79,15 @@ kill -TERM ${inetdpid}
 sleep 1
 inetd  /davinci/dvr/inetd.conf < /dev/null > /dev/null 2> /dev/null &
 
+#smartftp support
+ln -sf /davinci/dvr/librt-0.9.28.so /lib/librt.so.0
+ln -sf /lib/libm.so /lib/libm.so.0
+
+# start io module
+/davinci/dvr/ioprocess < /dev/null > /dev/null 2> /dev/null &
+sleep 1
+/davinci/dvr/iowait
+
 # ext3 file system modules
 insmod /davinci/jbd.ko
 insmod /davinci/mbcache.ko
@@ -94,13 +103,8 @@ insmod /davinci/ext3.ko
 #    exit ;
 #fi
 
-# start io module
-ioprocess < /dev/null > /dev/null 2> /dev/null &
-
 # start hotplug deamond
 tdevd /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &
-
-sleep 1
 
 # setup ip network for ipcamera board. (slave boards)
 /davinci/dvr/eaglehost `cat /davinci/ID/BOARDNUM`
@@ -115,9 +119,6 @@ sleep 3
 
 # mount disk already found
 tdevmount /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &
-
-#smartftp support
-ln -sf /davinci/dvr/librt-0.9.28.so /lib/librt.so.0
 
 sleep 60
 # install usb-serial driver

@@ -495,6 +495,7 @@ class eagle_capture : public capture {
 
 	char m_motiondata[256] ;
 	int m_motionupd;				// motion status changed ;
+    int m_codecrun ;                // codec running
 
   public:
 	eagle_capture(int channel, int hikchannel);

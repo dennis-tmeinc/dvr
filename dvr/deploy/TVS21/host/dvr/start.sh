@@ -81,32 +81,28 @@ kill -TERM ${inetdpid}
 sleep 1
 /bin/inetd /davinci/dvr/inetd.conf  < /dev/null > /dev/null 2> /dev/null
 
+cd /davinci/dvr
+
+#smartftp support
+ln -sf /davinci/dvr/librt-0.9.28.so /lib/librt.so.0
+
+ln -sf /lib/libm.so /lib/libm.so.0
+
+# start io module
+/davinci/dvr/ioprocess < /dev/null > /dev/null 2> /dev/null &
+sleep 1
+/davinci/dvr/iowait
+
 # ext3 file system modules
 insmod /davinci/jbd.ko
 insmod /davinci/mbcache.ko
 insmod /davinci/ext2.ko
 insmod /davinci/ext3.ko
 
-# mount debugging disks
-mount -t nfs 192.168.247.100:/home/dennis/nfsroot /mnt/nfs0 -o nolock
-
-# see if I want to debug it
-if [ -f /mnt/nfs0/eagletest/debugon ]; then
-    echo Enter debugging mode.
-    exit ;
-fi
-
-cd /davinci/dvr
-
-# start io module
-/davinci/dvr/ioprocess < /dev/null > /dev/null 2> /dev/null &
-
 # start hotplug deamond
 /davinci/dvr/tdevd /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &
 # setup ip network for ipcamera board. (slave boards)
 /davinci/dvr/eaglehost `cat /davinci/ID/BOARDNUM`
-
-sleep 1
 
 # start dvr server
 /davinci/dvr/dvrsvr < /dev/null > /dev/null 2> /dev/null &
@@ -118,9 +114,6 @@ sleep 3
 
 # wifi driver
 # insmod /davinci/rt73.ko
-
-#smartftp support
-ln -sf /davinci/dvr/librt-0.9.28.so /lib/librt.so.0
 
 sleep 100
 # install usb-serial driver

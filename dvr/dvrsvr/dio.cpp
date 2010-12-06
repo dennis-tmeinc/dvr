@@ -435,7 +435,7 @@ int dio_getgforce( float * gf, float * gr, float *gd )
     static int gforceserialno ;
     int v=0 ;
     dio_lock();
-    if( p_dio_mmap && p_dio_mmap->glogpid>0 && p_dio_mmap->gforce_serialno ) {
+    if( p_dio_mmap && p_dio_mmap->gforce_serialno ) {
         if( gforceserialno !=  p_dio_mmap->gforce_serialno ) {
             v=1 ;
             gforceupdtime=g_timetick ;
@@ -563,6 +563,13 @@ void dio_init()
     p_dio_mmap->dvrstatus = DVR_RUN ;
     dio_unlock();
 
+    // wait io module ready
+    if( p_dio_mmap->iomode==0 ) {
+        dvr_log( "Wait IO module to be ready!");
+        while( p_dio_mmap->iomode==0 ) {
+            sleep(1);
+        }
+    }
     return ;
 }
 

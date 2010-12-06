@@ -365,7 +365,7 @@ case $1 in
             wifi_dhcp=`/davinci/dvr/cfg get network wifi_dhcp`
             if [ ${wifi_dhcp} = "1" ]; then
                 # to use dhcp on wifi
-                /davinci/dvr/udhcpc -n -q -i ${devname} -s /davinci/dvr/udhcpc.script
+                /davinci/dvr/udhcpc -b -p /var/dvr/wifiudhcpc.pid -i ${devname} -s /davinci/dvr/udhcpc.script
             fi
 
         fi
@@ -418,8 +418,21 @@ case $1 in
             rm ${xmountdir}/mount_${devname}
 
         fi;
-               
         
+        # remove wifi interface      
+        if [  ${devclass} = "class" -a ${subsys} = "net" ]; then
+            if [ -f /var/dvr/wifidev ] ; then
+                wifidev=`cat /var/dvr/wifidev`
+                if [ ${wifidev} = ${devname} ]; then
+                    rm /var/dvr/wifidev
+                fi
+            fi ;
+
+            if [ -f /var/dvr/wifiudhcpc.pid ] ; then
+                kill `cat /var/dvr/wifiudhcpc.pid`
+            fi
+        fi; 
+
         ;;
 esac 
 

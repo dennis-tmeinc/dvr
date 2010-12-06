@@ -29,6 +29,7 @@ eagle_capture::eagle_capture( int channel, int hikchannel )
     m_motionupd = 1 ;
 
     m_started = 0 ;                 // no started.
+    m_codecrun = 0 ;                // codec not running
 
     if( hikchannel<0 || hikchannel>=MAX_EAGLE_CHANNEL ) {   // invalid handle, don't enable
         return ;
@@ -105,7 +106,7 @@ void eagle_capture::streamcallback(
 {
     struct cap_frame capframe;
     capframe.frametype = FRAMETYPE_UNKNOWN  ;
-    if( m_started && (dio_record || net_active) ) {            // record or send frame only when necessary. 
+    if( m_started ) {            // record or send frame only when necessary. 
         switch(frame_type){
 #ifdef EAGLE32    
             case FRAME_TYPE_AUDIO:
@@ -318,8 +319,6 @@ void eagle_capture::start()
         // start encoder
         eagle_capture_array[m_hikhandle-1]=this ;
 
-        StartCodec( m_hikhandle, m_chantype );
-
         m_started = 1 ;
         
         // Update OSD
@@ -332,7 +331,10 @@ void eagle_capture::stop()
     int res ;
     if( m_started ) {
         res=EnalbeMotionDetection(m_hikhandle, 0);	// disable motion detection
-        res=StopCodec(m_hikhandle, m_chantype);
+        if( m_codecrun ) {
+            res=StopCodec(m_hikhandle, m_chantype);
+            m_codecrun = 0 ;
+        }
         eagle_capture_array[m_hikhandle-1]=NULL ;
         m_started = 0 ;
     }
@@ -413,6 +415,20 @@ void eagle_capture::setosd( struct hik_osd_type * posd )
 void eagle_capture::update(int updosd)
 {
     if( m_started ) {
+        if( (dio_record || net_active) ) {            // record or send frame only when necessary. 
+            // start encoder
+            if( m_codecrun == 0 ) {
+                StartCodec( m_hikhandle, m_chantype );
+                m_codecrun = 1 ;
+            }
+        }
+        else {
+            // stop encoder
+            if( m_codecrun ) {
+                StopCodec(m_hikhandle, m_chantype);
+                m_codecrun = 0 ;
+            }
+        }
         if( m_motionupd ) {
             m_motionupd = 0 ;
             updosd=1;

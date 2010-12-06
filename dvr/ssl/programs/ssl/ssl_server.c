@@ -243,7 +243,7 @@ int main( int argc, char * argv[] )
         close( pipe_in[0] ) ;
         close( pipe_out[1] ) ;
 
-        execl (httpd, httpd, argv[1], (char *)0);
+        execl (httpd, httpd, argv[1], NULL);
         exit(0);
     }
     close( pipe_in[0] );

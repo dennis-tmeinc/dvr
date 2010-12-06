@@ -72,7 +72,7 @@ int playback::seek( struct dvrtime * seekto )
         fl = f264length( filename );
         ft = ft + fl ;		// ft become file end time
         if(!(*seekto > ft) ) {	// found the file
-            if( m_file.open(filename, "r") ) {	// open success
+            if( m_file.open(filename, "rb") ) {	// open success
                 if( m_autodecrypt ) {
                     m_file.autodecrypt(1);
                 }
@@ -126,7 +126,7 @@ int playback::opennextfile()
                 return 0 ;
             }
         }
-        m_file.open( m_filelist[m_curfile].getstring(), "r") ;
+        m_file.open( m_filelist[m_curfile].getstring(), "rb") ;
     }
     if( m_autodecrypt ) {
         m_file.autodecrypt(1);

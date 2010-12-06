@@ -1369,10 +1369,9 @@ int tab102b_logdata( unsigned char * tab102b_data, int datalength )
     FILE * tab102b_datafile = NULL ;
     FILE * diskfile = fopen( dvrcurdisk.getstring(), "r");
     if( diskfile ) {
-        len=fread( dbuf, 1, 255, diskfile );
+        len=fscanf(diskfile, "%s", dbuf);
         fclose( diskfile );
-        if( len>2 ) {
-            dbuf[len]=0 ;  // null terminate char
+        if( len>0 ) {
             tt=time(NULL);
             localtime_r(&tt, &t);
             gethostname( hostname, 127 );
@@ -1390,12 +1389,11 @@ int tab102b_logdata( unsigned char * tab102b_data, int datalength )
                     t.tm_min,
                     t.tm_sec );
             tab102b_datafile = fopen(tab102b_datafilename, "wb");
+            if( tab102b_datafile ) {
+                fwrite( tab102b_data, 1, datalength, tab102b_datafile );
+                fclose( tab102b_datafile );
+            }
         }
-    }
-
-    if( tab102b_datafile ) {
-        fwrite( tab102b_data, 1, datalength, tab102b_datafile );
-        fclose( tab102b_datafile );
     }
 
     return 1 ;
@@ -1623,8 +1621,8 @@ void tab102b_check()
     }
 }
 
-pthread_t sensorthreadid=0 ;
-pthread_t tab102b_threadid=0 ;
+//pthread_t sensorthreadid=0 ;
+//pthread_t tab102b_threadid=0 ;
 
 // return 
 //        0 : failed

@@ -6,7 +6,7 @@ include ../config
 include $(PROJDIR)/arm_tool
 
 INCS=../dvrsvr/cfg.h ../dvrsvr/genclass.h
-EXTRASOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp
+EXTRASOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp ../ioprocess/diomap.cpp
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 

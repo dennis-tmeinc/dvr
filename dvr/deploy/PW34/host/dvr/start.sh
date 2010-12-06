@@ -74,24 +74,24 @@ kill -TERM ${inetdpid}
 sleep 1
 /bin/inetd  /davinci/dvr/inetd.conf < /dev/null > /dev/null 2> /dev/null &
 
-# ext3 file system modules
-insmod /davinci/jbd.ko
-insmod /davinci/mbcache.ko
-#insmod /davinci/ext2.ko
-insmod /davinci/ext3.ko
-
 #smartftp support
 #ln -sf /davinci/dvr/librt-0.9.28.so /lib/librt.so.0
 ln -sf /davinci/dvr/libcurl.so.4 /lib/libcurl.so.4
 ln -sf /lib/librt.so /lib/librt.so.0
 
 # start io module
-ioprocess < /dev/null > /dev/null 2> /dev/null &
+/davinci/dvr/ioprocess < /dev/null > /dev/null 2> /dev/null &
+sleep 2
+/davinci/dvr/iowait
+
+# ext3 file system modules
+insmod /davinci/jbd.ko
+insmod /davinci/mbcache.ko
+#insmod /davinci/ext2.ko
+insmod /davinci/ext3.ko
 
 # start hotplug deamond
 tdevd /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &
-
-sleep 1
 
 # setup ip network for ipcamera board. (slave boards)
 eaglehost `cat /davinci/ID/BOARDNUM`

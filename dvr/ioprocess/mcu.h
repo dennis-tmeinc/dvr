@@ -10,6 +10,8 @@
 #define MCU_CMD_IOTEMPERATURE   (0x0b)
 #define MCU_CMD_HDTEMPERATURE   (0x0c)
 #define MCU_CMD_BOOTUPREADY     (0x11)
+#define MCU_CMD_SETSENSOR2INV   (0x13)
+#define MCU_CMD_GETSENSOR2INV   (0x14)
 #define MCU_CMD_KICKWATCHDOG    (0x18)
 #define MCU_CMD_SETWATCHDOGTIMEOUT (0x19)
 #define MCU_CMD_ENABLEWATCHDOG  (0x1a)
@@ -80,15 +82,22 @@ inline int bcd(int v)
     return (((v/10)%10)*0x10 + v%10) ;
 }
 
+extern char dvrconfigfile[];
+
 // open serial port
 int serial_open(char * device, int buadrate) ;
 int serial_dataready(int handle, int usdelay=MIN_SERIAL_DELAY, int * usremain=NULL);
+
+
+// watchdog variables
+extern int watchdogtimeout;
+extern int watchdogenabled;
+extern int usewatchdog;
 
 extern int mcupowerdelaytime ;
 extern int mcu_baud ;
 extern unsigned int mcu_doutputmap ;
 extern int mcu_inputmissed ;
-
 
 
 // check if data from mcu is ready          
@@ -104,6 +113,8 @@ void mcu_clear(int delay=MIN_SERIAL_DELAY);
 int mcu_input(int usdelay);
 void mcu_response(char * msg, int datalen=0, ... );
 
+unsigned char checksum( unsigned char * data, int datalen ) ;
+char mcu_checksum( char * data ) ;
 void mcu_calchecksum( char * data );
 int mcu_sendcmd(int cmd, int datalen=0, ...);
 char * mcu_cmd(int cmd, int datalen=0, ...);
@@ -117,8 +128,8 @@ void mcu_readrtc();
 void mcu_led(int led, int flash);
 void mcu_devicepower(int device, int poweron );
 int mcu_version(char * version);
-void mcu_poweroffdelay();
-void mcu_watchdogenable();
+void mcu_poweroffdelay(int delay=50);
+void mcu_watchdogenable(int timeout=10);
 void mcu_watchdogdisable();
 int mcu_watchdogkick();
 int mcu_iotemperature();
