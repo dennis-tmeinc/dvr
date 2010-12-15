@@ -1321,8 +1321,8 @@ void mode_archive()
 {
     dio_lock();
     strcpy( p_dio_mmap->iomsg, "Archiving, Do not remove CF Card.");
-    p_dio_mmap->dvrstatus |= DVR_ARCH ;
     p_dio_mmap->iomode=IOMODE_ARCHIVE  ;
+    p_dio_mmap->dvrcmd = 5 ;
     dio_unlock();
     modeendtime = runtime+archivetime*1000 ;   
     dvr_log("Enter archiving mode. (mode %d).", p_dio_mmap->iomode);
@@ -1706,19 +1706,25 @@ int main(int argc, char * argv[])
                 if( p_dio_mmap->poweroff ) {
                     mcu_poweroffdelay ();               // keep system alive
                 
+                    if( runtime>modeendtime &&
+                       p_dio_mmap->dvrpid>0 &&
+                       (p_dio_mmap->dvrstatus & DVR_ARCH ) )
+                    {
+                        // try to stop archiving
+                        p_dio_mmap->dvrcmd=6 ;
+                    }
                     if( p_dio_mmap->dvrpid<=0 ||
-                        ( (p_dio_mmap->dvrstatus & DVR_RECORD )==0 &&
-                            (p_dio_mmap->dvrstatus & DVR_ARCH )==0 ) ||
-                        runtime>modeendtime )
+                       ( (p_dio_mmap->dvrstatus & DVR_RECORD )==0 &&
+                         (p_dio_mmap->dvrstatus & DVR_ARCH )==0 ) )
                     {
                         // do gforce crashdata collection here. (any other choice?)
                         if( gforce_crashdata_enable )  {
                             gforce_getcrashdata(); 
                             // save data right away, of data may get lost if power turn off
                             if( gforce_crashdatalen>0 )  {
-                                gforce_savecrashdata();               
+                                gforce_savecrashdata();
                             }
-                        }                        
+                        }
                         // enter standby mode
                         mode_standby();
                     }
@@ -1732,7 +1738,7 @@ int main(int argc, char * argv[])
 #ifdef PWII_APP
                     // pwii jump out of standby
                     dio_lock();
-                    p_dio_mmap->pwii_output |= 0x800 ;      // LCD on                   
+                    p_dio_mmap->pwii_output |= 0x800 ;      // LCD on
                     p_dio_mmap->pwii_output &= ~0x1000 ;    // standby off
                     dio_unlock();
 #endif                    

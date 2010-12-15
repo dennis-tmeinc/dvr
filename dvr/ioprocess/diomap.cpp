@@ -46,7 +46,7 @@ void dio_unlock()
     }
 }
 
-struct dio_mmap * p_dio_mmap ;
+struct dio_mmap * p_dio_mmap=NULL ;
 
 struct dio_mmap * dio_mmap(char * mmapfile)
 {
@@ -72,6 +72,8 @@ struct dio_mmap * dio_mmap(char * mmapfile)
 
 void dio_munmap()
 {
-    munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
-    p_dio_mmap=NULL ;
+    if( p_dio_mmap!=NULL ) {
+        munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
+        p_dio_mmap=NULL ;
+    }
 }

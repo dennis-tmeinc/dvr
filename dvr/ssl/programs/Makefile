@@ -1,5 +1,5 @@
 
-CFLAGS	= -I../include -Wall
+CFLAGS	= -g -I../include -Wall
 OFLAGS	= -O
 LDFLAGS	= -L../library -lpolarssl
 

@@ -316,7 +316,7 @@ int dio_check()
     if( p_dio_mmap && p_dio_mmap->iopid ){
         dio_lock();
         if( p_dio_mmap->dvrcmd ) {
-            // dvrcmd :  1: restart(resume), 2: suspend, 3: stop record, 4: start record
+            // dvrcmd :  1: restart(resume), 2: suspend, 3: stop record, 4: start record, 5: start archiving
             if( p_dio_mmap->dvrcmd == 1 ) {
                 app_state = APPRESTART ;
             }
@@ -333,16 +333,19 @@ int dio_check()
                 rec_start ();
                 dio_lock();
             }
-            p_dio_mmap->dvrcmd = 0 ;
-        }
-
-        if( p_dio_mmap->iomode == IOMODE_ARCHIVE ) {
-            disk_archive_start();
-        }
-        else {
-            if( disk_archive_runstate() ) {
-                disk_archive_stop();
+            else if( p_dio_mmap->dvrcmd == 5 ) {
+                p_dio_mmap->dvrstatus |= DVR_ARCH ;
+                dio_unlock();
+                disk_archive_start();
+                dio_lock();
             }
+            else if( p_dio_mmap->dvrcmd == 6 ) {
+                dio_unlock();
+                disk_archive_stop();
+                dio_lock();
+            }
+            p_dio_mmap->dvrcmd = 0 ;
+            res=1 ;
         }
 
         dio_record = ( p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) ;

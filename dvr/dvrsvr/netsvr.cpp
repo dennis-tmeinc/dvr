@@ -512,6 +512,17 @@ void *net_thread(void *param)
                     flag = 1 ;
                     // turn on TCP_NODELAY, to increase performance
                     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
+
+                    // turn on KEEPALIVE
+                    flag = 1 ;
+                    setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *) &flag, sizeof(int));
+                    flag = 10 ;
+                    setsockopt(fd, SOL_TCP, TCP_KEEPCNT, (char *) &flag, sizeof(int));
+                    flag = 60 ;
+                    setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, (char *) &flag, sizeof(int));
+                    flag = 60 ;
+                    setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, (char *) &flag, sizeof(int));
+                        
                     pconn =	new dvrsvr(fd);
                     continue ;
                 }

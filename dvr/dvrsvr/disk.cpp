@@ -749,8 +749,7 @@ int disk_renew( char * filename, int add )
     if( disk_llen>disk_tlen ) {
         disk_llen=disk_tlen ;
     }
-    
-    disk_archive_start();
+
 /*    
     disk_lock();
     
@@ -1089,7 +1088,7 @@ int disk_archive_mkfreespace( char * diskdir, int minfreespace )
 
 
 static char disk_archive_tmpfile[]=".DVRARCH" ;
-static int  disk_archive_unlock ; // = dvrconfig.getvalueint( "system", "archive_upload");
+static int  disk_archive_unlock = 1 ;           // default to unlock archived file
 
 // return 1: success, 0: fail, -1: to quit
 int disk_archive_copyfile( char * srcfile, char * destfile )
@@ -1176,7 +1175,7 @@ int disk_archive_arch( char * filename, char * srcdir, char * destdir )
             if( disk_archive_unlock ) {
                 dvrfile::unlock( filename );
             }
-            return 0;
+            return 1;
         }
     }
 
@@ -1190,7 +1189,7 @@ int disk_archive_arch( char * filename, char * srcdir, char * destdir )
                 if( disk_archive_unlock ) {
                     dvrfile::unlock( filename );
                 }
-                return 0;
+                return 1;
             }
         }
         p[1] = 'L' ;
@@ -1235,13 +1234,21 @@ static int disk_archive_cplogfile( char * srcdir, char * destdir)
     int l ;
     char srcfile[256] , destfile[256] ;
     dir_find dfind ;
+
+    extern string logfile ;
+// copy dvrlog file
+    if( logfile.length()>0 ) {
+        sprintf(srcfile, "%s/_%s_/%s", srcdir, g_hostname, logfile.getstring());
+        sprintf(destfile, "%s/_%s_/%s", destdir, g_hostname, logfile.getstring());
+        disk_archive_copyfile(srcfile, destfile ) ;
+    }
+
     // copy smartlog
     sprintf( srcfile, "%s/smartlog", srcdir );
     dfind.open( srcfile );
-    while( dfind.find() ) {
+    while( disk_archive_run == 1 && dfind.find() ) {
         if( dfind.isfile() ) {
-            if( strstr( dfind.filename(), "_L.001" ) || 
-               strstr( dfind.filename(), "_L.log" ) )
+            if( strstr( dfind.filename(), "_L." ) )
             {
                 sprintf( destfile, "%s/smartlog", destdir );
                 mkdir( destfile, 0755 );
@@ -1259,14 +1266,6 @@ static int disk_archive_cplogfile( char * srcdir, char * destdir)
             }
         }
     }
-
-    extern string logfile ;
-// copy dvrlog file
-    if( logfile.length()>0 ) {
-        sprintf(srcfile, "%s/_%s_/%s", srcdir, g_hostname, logfile.getstring());
-        sprintf(destfile, "%s/_%s_/%s", destdir, g_hostname, logfile.getstring());
-        disk_archive_copyfile(srcfile, destfile ) ;
-    }
     return 1 ;
 }
 
@@ -1277,24 +1276,19 @@ static void disk_archive_round(char * srcdir, char * destdir)
     array <f264name> flist ;
     FILE * archupdfile ;
     char   archupdfilename[128] ;
-    int    upd_date[cap_channels] ;
-    int    upd_time[cap_channels] ;
+    int    upd_date ;
+    int    upd_time ;
 
-    // get lasted archived file time
-    for( i=0; i<cap_channels; i++) {
-        upd_date[i]=0;
-        upd_time[i]=0;
-    }
+    // get last archived file time
+    upd_date=upd_time=0;
     sprintf( archupdfilename, "%s/.archupd", srcdir);
     archupdfile = file_open( archupdfilename, "r" );
     if( archupdfile ) {
-        for( i=0; i<cap_channels; i++ ) {
-            if( fscanf(archupdfile, "%d %d", 
-             &(upd_date[i]),
-             &(upd_time[i]) )<2 ) 
-            {
-                break;
-            }
+        if( fscanf(archupdfile, "%d %d", 
+             &upd_date,
+             &upd_time )<2 ) 
+        {
+            upd_date=upd_time=0 ;
         }
         file_close( archupdfile );
     }
@@ -1304,11 +1298,7 @@ static void disk_archive_round(char * srcdir, char * destdir)
 
     for( j=0; j<daylist.size(); j++ ) {
         day = daylist[j] ;
-        for( i=0; i<cap_channels; i++ ) {
-            if( day>=upd_date[i] )
-                break;
-        }
-        if( i>=cap_channels ) 
+        if( day<upd_date ) 
             continue ;
         flist.empty();
         disk_listday_help(srcdir, flist, day, -1 );
@@ -1327,18 +1317,11 @@ static void disk_archive_round(char * srcdir, char * destdir)
                 f264time(flist[i].getstring(), &ft);
                 fday = ft.year*10000+ft.month*100+ft.day ;
                 ftime = ft.hour*10000+ft.minute*100+ft.second ;
-                if( fday>=upd_date[ch] && ftime>upd_time[ch] ) {
+                if( fday>upd_date || ftime>=upd_time ) {
                     if( disk_archive_arch( flist[i].getstring(), srcdir, destdir ) ) {
-                        // successfully archived.
-                        archupdfile = file_open( archupdfilename, "w" );
-                        if( archupdfile ) {
-                            upd_date[ch]=fday ;
-                            upd_time[ch]=ftime ;
-                            for( ch=0; ch<cap_channels; ch++ ) {
-                                fprintf( archupdfile, "%d %d\n", upd_date[ch], upd_time[ch]) ;
-                            }
-                            file_close( archupdfile );
-                        }
+                        // successfully archived. update latest archive file date & time
+                        upd_date=fday ;
+                        upd_time=ftime ;
                     }
                 }
 			}
@@ -1346,6 +1329,13 @@ static void disk_archive_round(char * srcdir, char * destdir)
         }
         if( disk_archive_run != 1 ) break;
     }
+
+    archupdfile = file_open( archupdfilename, "w" );
+    if( archupdfile ) {
+        fprintf( archupdfile, "%d %d", upd_date, upd_time) ;
+        file_close( archupdfile );
+    }
+
     if( disk_archive_run == 1 ) {
         // copy log files, smartlog files
         disk_archive_cplogfile(srcdir, destdir);
@@ -1418,12 +1408,12 @@ void disk_archive_start()
 
 void disk_archive_stop()
 {
-    disk_archive_run = 0 ;
+    disk_archive_run = -1 ;
 }
 
 int disk_archive_runstate()
 {
-    return disk_archive_run ;   // arch is actively run
+    return disk_archive_run!=0 ;   // arch is actively run
 }
 
 // regular disk check, every 3 seconds
@@ -1560,8 +1550,6 @@ void disk_init()
         disk_archdiskfile="/var/dvr/dvrarchdisk" ;
     }
 
-    disk_archive_unlock = dvrconfig.getvalueint( "system", "archive_upload");
-
     // init archiving variable
     disk_archive_run = 0 ;
     
@@ -1581,12 +1569,13 @@ void disk_uninit()
     disk_base="";
     disk_disklist.empty();
     disk_busy=0 ;
-    
+
+// make these file persistant    
     // un-mark current recording disk
-    unlink( disk_curdiskfile.getstring() );
+//    unlink( disk_curdiskfile.getstring() );
 
     // un-mark archieving disk
-    unlink( disk_archdiskfile.getstring() );
+//    unlink( disk_archdiskfile.getstring() );
 
     sync();
 

@@ -33,7 +33,7 @@ if [ ${appid} = "clean" ]; then
 
 # clean host firmware filesa
     cd ${DEPROOT}/host/dvr
-    rm -f httpd.sfx firmwareid rsa_host_key
+    rm -f httpd.sfx firmwareid
     rm -f dvrsvr dvrtime eaglehost udhcpc glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
     
     cd ${DEPROOT}/host/ID
@@ -145,10 +145,6 @@ cp -v ${APPROOT}/volumeid/md5check .
 cp -v ${APPROOT}/volumeid/volumeid .
 cp -v ${APPROOT}/cfg/cfg .
 cp -v ${APPROOT}/dhcp/udhcpc .
-
-echo "Generate RSA key for ssh"
-rm -f rsa_host_key
-dropbearkey -t rsa -f rsa_host_key
 
 ${STRIP} dvrsvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg
 cd ${DEPROOT}/host

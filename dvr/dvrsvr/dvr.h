@@ -469,9 +469,9 @@ class capture {
     virtual void captureIFrame(){        // force to capture I frame
     }
     // to capture one jpeg frame
-    virtual int captureJPEG(unsigned char * img, int * imgsize, int quality, int pic)
+    virtual unsigned char * captureJPEG(int * imgsize, int quality, int pic)
     {
-        return -1 ;                      // not supported 
+        return NULL ;                           // not supported 
     }
     virtual int getsignal(){return m_signal;}	// get signal available status, 1:ok,0:signal lost
     virtual int getmotion(){return m_motion;}	// get motion detection status
@@ -483,7 +483,7 @@ extern capture * cap_channel[];
 
 extern int eagle32_channels ;
 int eagle32_hikhandle(int channel);
-int  eagle32_init();
+int  eagle32_init(config &dvrconfig);
 void eagle32_uninit();
 
 class eagle_capture : public capture {
@@ -517,7 +517,7 @@ class eagle_capture : public capture {
 	virtual void start();
 	virtual void stop();
     virtual void captureIFrame();       // force to capture I frame
-    virtual int captureJPEG(unsigned char * img, int * imgsize, int quality, int pic);
+    virtual unsigned char * captureJPEG(int * imgsize, int quality, int pic);
     virtual int getsignal();        // get signal available status, 1:ok,0:signal lost
 };
 

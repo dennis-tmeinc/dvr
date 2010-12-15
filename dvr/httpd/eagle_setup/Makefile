@@ -25,7 +25,8 @@ TARGET= login\
         firmwareupd\
         mcufwupd\
         mfid\
-        gangle.cgi
+        gangle.cgi\
+        getjpeg.cgi
         
 
 all: $(TARGET)
@@ -62,6 +63,10 @@ mfid : mfid.cpp ../../dvrsvr/md5.cpp getquery.o
 
 gangle.cgi : gangle.cpp getquery.o ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h
 	$(CC) $(CFLAGS) -o $@ gangle.cpp getquery.o ../../ioprocess/diomap.cpp -lm $(LDFLAGS)
+	cp $@  $(debug_folder)/www
+
+getjpeg.cgi : getjpeg.cpp getquery.o ../../dvrsvr/dvr.h
+	$(CC) $(CFLAGS) -o $@ getjpeg.cpp getquery.o $(LDFLAGS)
 	cp $@  $(debug_folder)/www
 
 eagle_setup : $(OBJS)

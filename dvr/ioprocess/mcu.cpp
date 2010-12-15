@@ -355,7 +355,7 @@ char * mcu_recvmsg()
             }
             if( strncmp(msgbuf, "Enter", 5 )==0 ) {
                 // MCU reboots, why?
-                dvr_log("MCU is powering down!");
+                dvr_log("MCU power down!!!");
                 sync();sync();sync();
             }
         }
@@ -703,7 +703,6 @@ int mcu_bootupready()
         mcu_readcode();
         return 1 ;
     }
-    dvr_log("Ooops, MCU is mad on me!!! System power could be cut off! Sync, sync, sync!");
     sync();
     sync();
     sync();
@@ -808,7 +807,7 @@ void mcu_poweroffdelay(int delay)
     }
     if( responds ) {
         mcupowerdelaytime = ((unsigned)(responds[5]))*256+((unsigned)responds[6]) ;
-        netdbg_print("extend mcu power for %ds\n", mcupowerdelaytime );
+        netdbg_print("extend mcu power for %ds remain %ds\n", delay, mcupowerdelaytime );
     }
 }
 

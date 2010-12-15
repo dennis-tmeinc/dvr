@@ -360,8 +360,6 @@ int gforce_savecrashdata()
     
     diskfile = fopen( "/var/dvr/dvrcurdisk", "r");
 
-    netdbg_print("gforce: write file size:%d\n", gforce_crashdatalen);
-
     if( diskfile ) {
         if( fscanf( diskfile, "%s", dbuf )>0 ) {
 
@@ -380,6 +378,7 @@ int gforce_savecrashdata()
                     t.tm_sec );
             crashdatafile = fopen( crashdatafilename, "w" );
             if( crashdatafile ) {
+                dvr_log( "Write crash data, size: %d", gforce_crashdatalen);
                 fwrite( gforce_crashdata, 1, gforce_crashdatalen, crashdatafile );
                 fclose( crashdatafile );
                 gforce_freecrashdata();
@@ -414,12 +413,13 @@ int gforce_getcrashdata()
     dvrsvr_susp() ;
     glog_susp();
     if( usewatchdog ) {
-        mcu_watchdogenable(100) ;   // set watchdog to 100 seconds. (usally uploading last 65 seconds)
+        mcu_watchdogdisable();      // disable watchdog
+//        mcu_watchdogenable(100) ;   // set watchdog to 100 seconds. (usally uploading last 65 seconds)
     }
     
     if( p_dio_mmap->poweroff ) {
         // extend power off delay
-        mcu_poweroffdelay(100);
+        mcu_poweroffdelay(120);
     }
     sleep(3);
     
@@ -613,7 +613,14 @@ void gforce_init( config & dvrconfig )
     int base_x_pos, base_x_neg, base_y_pos, base_y_neg, base_z_pos, base_z_neg ;
     int crash_x_pos, crash_x_neg, crash_y_pos, crash_y_neg, crash_z_pos, crash_z_neg ;
 
+    // reset gforce value
+    dio_lock();
     p_dio_mmap->gforce_serialno=0 ;
+    p_dio_mmap->gforce_forward = 0.0 ;
+    p_dio_mmap->gforce_right = 0.0 ;
+    p_dio_mmap->gforce_down = 1.0 ;
+    dio_unlock();
+    
     // gforce log enabled ?
     gforce_log_enable = dvrconfig.getvalueint( "glog", "gforce_log_enable");
     gforce_available = 0 ;
@@ -929,6 +936,7 @@ void gforce_init( config & dvrconfig )
     else {
         dvr_log("G force sensor init failed!");
     }
+
 }
 
 void gforce_finish()

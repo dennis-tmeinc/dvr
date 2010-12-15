@@ -91,11 +91,10 @@ void my_debug( void *ctx, int level, const char *str )
     }
 }
 
-/*
 void dbg_print( char * format, ... )
 {
+#if (DEBUG_LEVEL>0)    
     va_list ap ;
-
     if( debugout==NULL ) {
         debugout=fopen("/dev/ttyp0", "w");
     }
@@ -105,11 +104,7 @@ void dbg_print( char * format, ... )
         fflush(debugout);
         va_end(ap);
     }
-}
-*/
-
-void dbg_print( char * format, ... )
-{
+#endif    
 }
 
 /*
@@ -201,7 +196,7 @@ static int io_ready(int sec, int fd1, int fd2)
     FD_ZERO(&fds);
     FD_SET(fd1, &fds);
     FD_SET(fd2, &fds);
-    if (select(fd1+fd2+1, &fds, NULL, NULL, &timeout) > 0) {
+    if (select(fd1>fd2?(fd1+1):(fd2+1), &fds, NULL, NULL, &timeout) > 0) {
         if( FD_ISSET( fd1, &fds ) ) {
             return 1 ;
         }
@@ -212,12 +207,14 @@ static int io_ready(int sec, int fd1, int fd2)
     return 0;
 }
 
+#define BUFSIZE (2000)
+
 int main( int argc, char * argv[] )
 {
     int ret, len;
     int fd_in, fd_out ;
     int pipe_in[2], pipe_out[2] ;
-    unsigned char buf[2000];
+    unsigned char buf[BUFSIZE+1];
 
     havege_state hs;
     ssl_context ssl;
@@ -355,9 +352,10 @@ int main( int argc, char * argv[] )
         io=io_ready( 10, fd_in, pipe_out[0] ) ;
         if( io==1 ) {       // fd_in available
             do {
-                ret = ssl_read( &ssl, buf, sizeof( buf ) );
-                if( ret>0 ) {
-                    dbg_print( " read %d bytes\n", ret );
+                ret = ssl_read( &ssl, buf, BUFSIZE );
+                if( ret>0 && ret<=BUFSIZE ) {
+                    buf[ret]=0 ;
+                    dbg_print( " read %d bytes\n%s\n", ret, buf );
                     len = write(pipe_in[1],buf,ret);
                     // for eagle board, 
                     // give CPU a break, so it don't reach 100% usage
@@ -365,7 +363,7 @@ int main( int argc, char * argv[] )
                 }
             } while( ssl_get_bytes_avail( &ssl )>0 && ret>0 ) ;
 
-            if( ret<0 ) {
+            if( ret<=0 ) {
                 if( ret == POLARSSL_ERR_NET_TRY_AGAIN ) {
                     dbg_print( " net retry\n\n" );
                     continue;
@@ -390,10 +388,11 @@ int main( int argc, char * argv[] )
         }
         else if( io==2 ) {      // pipe_out available
 
-            len = read(pipe_out[0],buf,sizeof(buf) );
-            if( len<=0 ) {
+            len = read(pipe_out[0],buf, BUFSIZE );
+            if( len<=0 || len>BUFSIZE ) {
                 break;
             }
+            buf[len]=0 ;
             
             dbg_print( " %d bytes to send, cipher: %s\n", len, ssl_get_cipher( &ssl ) );
 
@@ -412,8 +411,6 @@ int main( int argc, char * argv[] )
                 break;
             }
 
-            len = ret;
-            buf[len]=0 ;
             dbg_print( " %d bytes written\n\n%s\n", len, (char *) buf );
         }
     }

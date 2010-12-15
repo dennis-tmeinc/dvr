@@ -1699,21 +1699,17 @@ void dvrsvr::Req2GetJPEG()
     jpeg_quality = (m_req.data>>8) & 0xff  ;        //0-best, 1-better, 2-average
     jpeg_pic = (m_req.data>>16) & 0xff  ;           // 0-cif , 1-qcif, 2-4cif
     if( ch >=0 && ch < cap_channels ) {
-        int imgsize = 300000 ;
-        unsigned char * img = new unsigned char [imgsize] ;
-        ch = cap_channel[ch]->captureJPEG(img, &imgsize, jpeg_quality, jpeg_pic);
-        if( ch>0 ) {
-            ans.anssize = imgsize-ch ;
-            if( ans.anssize>0 ) {
-                ans.data = 0 ;
-                ans.anscode = ANS2JPEG ;
-                Send( &ans, sizeof(ans));
-                Send( img+ch, ans.anssize );
-                delete img ;
-                return ;
-            }
+        int imgsize=0 ;
+        unsigned char * img ;
+        img = cap_channel[ch]->captureJPEG(&imgsize, jpeg_quality, jpeg_pic);
+        if( img && imgsize>0 ) {
+            ans.anssize = imgsize ;
+            ans.data = 0 ;
+            ans.anscode = ANS2JPEG ;
+            Send( &ans, sizeof(ans));
+            Send( img, imgsize );
+            return ;
         }
-        delete img ;
     }
     DefaultReq();
 }

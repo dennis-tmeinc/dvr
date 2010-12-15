@@ -347,35 +347,59 @@ void eagle_capture::captureIFrame()
     }
 }
 
-int jpeg_quality ;
-int jpeg_mode ;
-int jpeg_size ;
+int jpeg_quality=1 ;
+int jpeg_mode=0 ;
+int jpeg_size=100000 ;
+unsigned char * jpeg_buf=NULL ;
 
 // to capture one jpeg frame
-int eagle_capture::captureJPEG(unsigned char * img, int * imgsize, int quality, int pic)
+unsigned char * eagle_capture::captureJPEG(int * imgsize, int quality, int pic)
 {
+    int res ;
     if( m_hikhandle>0 ) {
-        int overhead = 200 ;
-        unsigned int isize = (unsigned int)*imgsize-overhead ;
-        if( img && isize>0 ) {
-            if( GetJPEGImage(m_hikhandle, quality, pic, img+overhead, &isize )==0 ) {
+        unsigned int isize = jpeg_size ;
+        if( isize>1000 ) {
+//            res = GetJPEGImage(m_hikhandle, quality, pic, jpeg_buf, &isize ) ;
+            dvr_log( "GetJpeg channel: %d, quality: %d, mode: %d, bufsize: %d", m_channel,  quality, pic, isize );
+            int retry = 5 ;
+            while( retry-- > 0 ) {
+                res = GetJPEGImage(m_hikhandle, quality, pic, jpeg_buf, &isize ) ;
+                if( res==0 ) break;
+            }
+            dvr_log( "GetJpeg result: %d, imgsize: %d", res, isize );
+            if( res==0 ) {
+                // adjust/add jpeg tag
+                int be, end ;
+                end = isize ;
+                // look for jpeg file ending tag
+                for( be=0; be<200 ; be++,end-- ) {
+                    if( jpeg_buf[end-1] == 0xd9 &&
+                       jpeg_buf[end-2] == 0xff ) {
+                           break;
+                       }
+                }
+                // look for jpeg file begin tag
+                for( be=0; be<200; be++ ) {
+                    if( jpeg_buf[be]==0xff &&
+                       jpeg_buf[be+1]==0xd8 &&
+                       jpeg_buf[be+2]==0xff ) 
+                        break;
+                }
+                *imgsize = end-be ;
 /*
+                // if required to be saved in files!
                 struct cap_frame capframe;
                 capframe.channel = m_channel ;
-                capframe.framesize = imgsize ;
+                capframe.framesize = *imgsize ;
                 capframe.frametype = FRAMETYPE_JPEG ;
-                capframe.framedata = (char *) img ;
+                capframe.framedata = (char *) buf+overhead+be ;
                 onframe( &capframe );
 */
-                // adjust/add mjpeg tag
-                 
-                
-                
-                return overhead ;
+                return &jpeg_buf[be] ;
             }
         }
     }
-    return -1 ;
+    return NULL ;
 }
 
 void eagle_capture::setosd( struct hik_osd_type * posd )
@@ -472,12 +496,10 @@ int eagle32_hikhandle(int channel)
 
 static int eagle32_sysinit=0 ;
 
-int eagle32_init()
+int eagle32_init(config &dvrconfig)
 {
     int res ;
     int i;
-    
-    config dvrconfig(dvrconfigfile);
     
     struct board_info binfo ;
     if( eagle32_sysinit==0 ) {
@@ -509,13 +531,13 @@ int eagle32_init()
         }
     }
 
-
     jpeg_quality = dvrconfig.getvalueint( "system", "jpeg_quality" );
     jpeg_mode = dvrconfig.getvalueint( "system", "jpeg_mode" );
     jpeg_size = dvrconfig.getvalueint( "system", "jpeg_size" );
-    if( jpeg_size<=0 ) {
-        jpeg_size=500000 ;
+    if( jpeg_size<=0 || jpeg_size>1000000 ) {
+        jpeg_size=300000 ;
     }
+    jpeg_buf=(unsigned char *)malloc( jpeg_size );
     
     return eagle32_channels ;
 }
@@ -534,5 +556,7 @@ void eagle32_uninit()
         eagle32_sysinit=0 ;
     }
 */
+    free( jpeg_buf );
+    jpeg_buf=NULL ;
 }
 

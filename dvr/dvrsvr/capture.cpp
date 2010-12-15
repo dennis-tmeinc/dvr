@@ -15,6 +15,7 @@
 #define	_OSD_HOUR12		_OSD_BASE+8
 #define	_OSD_MINUTE		_OSD_BASE+9
 #define _OSD_SECOND		_OSD_BASE+10
+// degree symbol (Code page 437, 0xf8)
 #define _OSD_DEGREESIGN '\xf8'
 
 // for Eagle34 boards, OSD support exp
@@ -1191,7 +1192,7 @@ void cap_init()
         cap_channel[i]=NULL ;
     }
 
-    eagle32_init();
+    eagle32_init(dvrconfig);
 
     //    dvr_log("%d capture card (local) channels detected.", dvrchannels);
     if( cap_ch<=0 ) {

@@ -288,12 +288,11 @@ int disk_usage( int * disk_total, int * disk_free)
 
 int get_temperature( int * sys_temp, int * disk_temp)
 {
-    if( dio_mmap() ) {
+    if( p_dio_mmap ) {
         dio_lock();
         *sys_temp = p_dio_mmap->iotemperature ;
         *disk_temp = p_dio_mmap->hdtemperature ;
         dio_unlock();
-        dio_munmap();
         return 1 ;
     }
     return 0 ;
@@ -317,10 +316,6 @@ void print_status()
     struct channelstate cs[16] ;
     struct dvrstat stat ;
 
-#ifdef NETDBG
-	net_dprint( "print_status: 1.\n"); 
-#endif	
-	
     memset( &savedstat, 0, sizeof( savedstat ) );
     statfile = fopen( "savedstat", "rb");
     if( statfile ) {
@@ -328,10 +323,6 @@ void print_status()
         fclose( statfile );
     }
 
-#ifdef NETDBG
-	net_dprint( "print_status: 2.\n"); 
-#endif	
-		
     // set timezone
     char tz[128] ;
     FILE * ftz = fopen("tz_env", "r");
@@ -341,10 +332,6 @@ void print_status()
         setenv("TZ", tz, 1);
     }
 
-#ifdef NETDBG
-	net_dprint( "print_status: 3.\n"); 
-#endif	
-		
     //JSON head
     printf("{");
         
@@ -367,10 +354,6 @@ void print_status()
             (double)(stat.checktime.tv_usec - savedstat.checktime.tv_usec)/1000000.0 ;
     }
 
-#ifdef NETDBG
-	net_dprint( "print_status: 4.\n"); 
-#endif	
-		
     // get status from dvrsvr
     memset( cs, 0, sizeof(cs) );
     chno=getchannelstate(cs, stat.streambytes, 16);
@@ -395,10 +378,6 @@ void print_status()
         
     }
 
-#ifdef NETDBG
-	net_dprint( "print_status: 5.\n"); 
-#endif	
-		
     // calculate CPU usage
     FILE * uptimefile = fopen("/proc/uptime", "r" );
     if( uptimefile ) {
@@ -423,10 +402,6 @@ void print_status()
         printf("\"memory_free\":\"%.1f\",", ((float)stfree)/1000.0 );
     }
 
-#ifdef NETDBG
-	net_dprint( "print_status: 6.\n"); 
-#endif	
-		
     // print disk usage
     if( disk_usage(&sttotal, &stfree) ) {
         printf("\"disk_total\":\"%d\",", sttotal );
@@ -436,7 +411,9 @@ void print_status()
         printf("\"disk_total\":\"%d\",", 0 );
         printf("\"disk_free\":\"%d\",", 0 );
     }
-    
+
+    // information from dio_map
+    dio_mmap();
     // print system temperature
     int systemperature=-128, hdtemperature=-128 ;
     get_temperature(&systemperature, &hdtemperature) ;
@@ -457,10 +434,8 @@ void print_status()
         printf("\"temperature_disk_f\":\" \"," );
     }    
 
-#ifdef NETDBG
-	net_dprint( "print_status: 7.\n"); 
-#endif	
-		
+    dio_munmap();
+
     printf("\"objname\":\"status_value\"}\r\n" );
 
     statfile = fopen( "savedstat", "wb");
@@ -508,19 +483,11 @@ void check_synctime()
 // return 0: for keep alive
 int main()
 {
-#ifdef NETDBG
-	net_dprint( "dvrstatus started.\n"); 
-#endif
-		
     check_synctime();
 	
     // printf headers
     printf( "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nCache-Control: no-cache\r\n\r\n" );
     print_status();
 
-#ifdef NETDBG
-	net_dprint( "dvrstatus ended.\n"); 
-#endif
-		
 	return 1;
 }
