@@ -412,6 +412,10 @@ class capture {
     int m_headerlen ;
   	char m_header[256] ;
 
+    // jpeg capture 
+    int m_jpeg_mode;            // -1: no capture, >=0 : capture resolution
+    int m_jpeg_quality ;        // capture quality
+        
   public:
 	capture(int channel) ;
     virtual ~capture(){};
@@ -469,9 +473,12 @@ class capture {
     virtual void captureIFrame(){        // force to capture I frame
     }
     // to capture one jpeg frame
-    virtual unsigned char * captureJPEG(int * imgsize, int quality, int pic)
+    virtual int captureJPEG(int quality, int pic)
     {
-        return NULL ;                           // not supported 
+        return 0 ;                     // not supported
+    }
+    virtual void docaptureJPEG()
+    {
     }
     virtual int getsignal(){return m_signal;}	// get signal available status, 1:ok,0:signal lost
     virtual int getmotion(){return m_motion;}	// get motion detection status
@@ -485,6 +492,8 @@ extern int eagle32_channels ;
 int eagle32_hikhandle(int channel);
 int  eagle32_init(config &dvrconfig);
 void eagle32_uninit();
+// jpeg capture
+void eagle_captureJPEG();
 
 class eagle_capture : public capture {
   protected:
@@ -517,7 +526,9 @@ class eagle_capture : public capture {
 	virtual void start();
 	virtual void stop();
     virtual void captureIFrame();       // force to capture I frame
-    virtual unsigned char * captureJPEG(int * imgsize, int quality, int pic);
+    // to capture one jpeg frame
+    virtual int captureJPEG(int quality, int pic) ;
+    virtual void docaptureJPEG() ;
     virtual int getsignal();        // get signal available status, 1:ok,0:signal lost
 };
 
@@ -955,7 +966,7 @@ enum anscode_type { ANSERROR =1, ANSOK,
 };
 
 
-enum conn_type { CONN_NORMAL = 0, CONN_REALTIME, CONN_LIVESTREAM };
+enum conn_type { CONN_NORMAL = 0, CONN_REALTIME, CONN_LIVESTREAM, CONN_JPEG };
 
 #define closesocket(s) close(s)
 

@@ -1290,14 +1290,16 @@ int dvrfile::rename(const char * oldfilename, const char * newfilename)
 int dvrfile::remove(const char * filename)
 {
     int res ;
-    char kfile[256] ;
     int l ;
+    string kfile ;
+    char * extension ;
     res = ::remove( filename );
-    strcpy( kfile, filename );
-    l = strlen( kfile );
-    if( strcmp( &kfile[l-4], g_264ext ) == 0 ) {
-        strcpy( &kfile[l-4], ".k" ) ;
-        ::remove( kfile );
+    kfile = filename ;
+    l = kfile.length() ;
+    extension = kfile.getstring()+l-4 ;
+    if( strcmp( extension, g_264ext ) == 0 ) {
+        strcpy( extension, ".k" ) ;
+        ::remove( kfile.getstring() );
     }
     return res ;
 }

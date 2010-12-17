@@ -101,6 +101,7 @@ cp -v ${APPROOT}/httpd/eagle_setup/login cgi
 cp -v ${APPROOT}/httpd/eagle_setup/mcufwupd cgi
 cp -v ${APPROOT}/httpd/eagle_setup/mfid cgi
 cp -v ${APPROOT}/httpd/eagle_setup/pagevalue cgi
+cp -v ${APPROOT}/httpd/eagle_setup/getjpeg.cgi cgi
 
 cp -v ${APPROOT}/httpd/getsetup/applysetup cgi
 cp -v ${APPROOT}/httpd/getsetup/getsetup cgi

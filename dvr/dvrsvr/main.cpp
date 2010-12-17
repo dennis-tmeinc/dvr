@@ -45,31 +45,6 @@ unsigned dvr_random()
 }
 
 // clean log file
-void dvr_cleanlog1(FILE * flog)
-{
-    int i ;
-    array <string> alog ;
-    string line ;
-    int pos = ftell(flog);
-    if( pos>logfilesize ) {
-        pos = (logfilesize/4) ;							// cut 1/4 file
-        fseek( flog, pos, SEEK_SET );
-        line.setbufsize(2048) ;
-        fgets( line.getstring(), 2048, flog );	// skip this line.
-        while (fgets(line.getstring(), 2048, flog)) {
-            if( line.length()>2 ) {
-                alog.add( line );
-            }
-        }
-        fseek( flog, 0, SEEK_SET ) ;
-        for( i=0; i<alog.size(); i++ ) {
-            fputs(alog[i].getstring(), flog);
-        }
-        ftruncate( fileno(flog), ftell(flog) );
-    }
-}
-
-// clean log file
 void dvr_cleanlogfile(char * logfilename)
 {
     int pos1, pos2, rsize ;
@@ -81,14 +56,14 @@ void dvr_cleanlogfile(char * logfilename)
     pos1 = ftell(flog);
     if( pos1>logfilesize ) {
         char fbuf[4096] ;
-        fseek( flog, logfilesize/4, SEEK_SET );         // cut first 1/4 log data
+        fseek( flog, pos1-(logfilesize/3)*2, SEEK_SET );         // cut 1/3 log data
         // skip one line
-        fgets( fbuf, 4096, flog );	// skip this line.
+        fgets( fbuf, 4096, flog );	// skip current line.
         pos2 = 0 ;
-        while( (rsize=file_read(fbuf, 4096, flog))>0 ) {
+        while( (rsize=fread(fbuf, 1, 4096, flog))>0 ) {
             pos1 = ftell(flog) ;
             fseek( flog, pos2, SEEK_SET );
-            file_write( fbuf, rsize, flog );
+            fwrite( fbuf, 1, rsize, flog );
             pos2 = ftell(flog) ;
             if( rsize<4096 ) {
                 break;

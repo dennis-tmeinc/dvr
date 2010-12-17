@@ -9,7 +9,7 @@ int disk_busy ;
 
 static int disk_minfreespace;              // minimum free space for current disk, in Magabytes
 static int disk_lockfile_percentage ;      // how many percentage locked file can occupy.
-
+static int disk_removeprerecordfile ;       // if pre-recorded file be removed
 static int disk_tlen ;
 static int disk_llen ;
 
@@ -421,21 +421,28 @@ void disk_repair264(char *dir)
             disk_repair264(  dfind.pathname() );
         }
         else if( dfind.isfile() ) {
+            char * lp ;
             char * filename = dfind.filename() ;
             int l = strlen(filename);
             if ( l > 20 && strcmp(&filename[l - 4], g_264ext ) == 0 ) {
-                if( strstr( filename, "_P_" ) ) {
-                    disk_removefile(dfind.pathname());                      // remove pre-recording file
+                if( (lp=strstr( filename, "_P_" ))!=NULL ) {
+                    if( disk_removeprerecordfile ) {
+                        dvrfile::remove(dfind.pathname());                      // remove pre-recording file
+                        continue ;
+                    }
+                    else {
+                        string cpfname(dfind.pathname());
+                        lp[1]='N' ;
+                        dvrfile::rename(cpfname.getstring(), dfind.pathname());
+                    }
                 }
-                else {
-                    int fl = f264length( filename );
-                    int ll = f264locklength(filename);
-                    if( fl == 0 ) {
-                        r264+=repairfile(dfind.pathname());
-                    }
-                    if( ll>0 && ll<fl ) {
-                        r264+=repairepartiallock(dfind.pathname()) ;
-                    }
+                int fl = f264length( filename );
+                int ll = f264locklength(filename);
+                if( fl == 0 ) {
+                    r264+=repairfile(dfind.pathname());
+                }
+                if( ll>0 && ll<fl ) {
+                    r264+=repairepartiallock(dfind.pathname()) ;
                 }
             }
         }
@@ -1533,6 +1540,8 @@ void disk_init()
     if( disk_lockfile_percentage < 1 || disk_lockfile_percentage > 100 ) {
         disk_lockfile_percentage = 30 ;
     }
+
+    disk_removeprerecordfile=dvrconfig.getvalueint("system", "removeprerecordfile");
 
     disk_maxdirty=dvrconfig.getvalueint("system", "maxdirty");
     if( disk_maxdirty < 50 || disk_maxdirty > 10000 ) {

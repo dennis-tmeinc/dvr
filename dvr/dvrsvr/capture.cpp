@@ -88,6 +88,8 @@ capture::capture( int channel )
     m_remoteosd = 0 ;	// local OSD by default
     m_signal_standard = 1 ;
     m_started = 0 ;
+    m_jpeg_mode = -1 ;
+    m_jpeg_quality = 0 ;
     loadconfig();
 
     // default file header

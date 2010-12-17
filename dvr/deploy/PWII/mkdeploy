@@ -100,6 +100,7 @@ cp -v ${APPROOT}/httpd/eagle_setup/mcufwupd .
 cp -v ${APPROOT}/httpd/eagle_setup/mfid .
 cp -v ${APPROOT}/httpd/eagle_setup/pagevalue .
 cp -v ${APPROOT}/httpd/eagle_setup/gangle.cgi .
+cp -v ${APPROOT}/httpd/eagle_setup/getjpeg.cgi .
 
 cp -v ${APPROOT}/httpd/getsetup/applysetup .
 cp -v ${APPROOT}/httpd/getsetup/getsetup .

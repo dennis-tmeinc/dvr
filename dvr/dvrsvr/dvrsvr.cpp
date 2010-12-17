@@ -281,42 +281,53 @@ void dvrsvr::Send(void *buf, int bufsize)
 
 int dvrsvr::onframe(cap_frame * pframe)
 {
+    struct dvr_ans ans ;
+
     if( isdown() ) {
         return 0;
     }
-    if (m_conntype == CONN_REALTIME && m_connchannel == pframe->channel) {
-        if ( pframe->frametype == FRAMETYPE_KEYVIDEO &&	// for keyframes
-            m_fifosize > (net_livefifosize+pframe->framesize) )
-        {
-            cleanfifo();
-        }
-        Send(pframe->framedata, pframe->framesize);
-        return 1;
-    }
-    else if (m_conntype == CONN_LIVESTREAM && m_connchannel == pframe->channel) {
-        if (pframe->frametype == FRAMETYPE_KEYVIDEO ) {	// for keyframes
-            if( pframe->framesize > net_livefifosize ) {
-                net_livefifosize = pframe->framesize+10000 ;
+    if( m_connchannel == pframe->channel ) {
+        if (m_conntype == CONN_REALTIME ) {
+            if ( pframe->frametype == FRAMETYPE_KEYVIDEO &&	// for keyframes
+                m_fifosize > (net_livefifosize+pframe->framesize) )
+            {
+                cleanfifo();
             }
-            m_fifodrop=0;
+            Send(pframe->framedata, pframe->framesize);
+            return 1;
         }
-        if( m_fifosize > net_livefifosize ) {
-            m_fifodrop=1;
+        else if (m_conntype == CONN_LIVESTREAM ) {
+            if (pframe->frametype == FRAMETYPE_KEYVIDEO ) {	// for keyframes
+                if( pframe->framesize > net_livefifosize ) {
+                    net_livefifosize = pframe->framesize+10000 ;
+                }
+                m_fifodrop=0;
+            }
+            if( m_fifosize > net_livefifosize ) {
+                m_fifodrop=1;
+            }
+            if( m_fifodrop ) {
+                return 0 ;
+            }
+            ans.anscode = ANSSTREAMDATA ;
+            ans.anssize = pframe->framesize ;
+            ans.data = pframe->frametype ;
+            Send(&ans, sizeof(struct dvr_ans));
+            Send(pframe->framedata, pframe->framesize);
+            return 1;
         }
-        if( m_fifodrop ) {
-            return 0 ;
+        else if (m_conntype == CONN_JPEG && pframe->frametype==FRAMETYPE_JPEG ) {
+            ans.anscode = ANS2JPEG ;
+            ans.anssize = pframe->framesize ;
+            ans.data = pframe->frametype ;
+            Send(&ans, sizeof(struct dvr_ans));
+            Send(pframe->framedata, pframe->framesize);
+            return 1;
         }
-        struct dvr_ans ans ;
-        ans.anscode = ANSSTREAMDATA ;
-        ans.anssize = pframe->framesize ;
-        ans.data = pframe->frametype ;
-        Send(&ans, sizeof(struct dvr_ans));
-        Send(pframe->framedata, pframe->framesize);
-        return 1;
+        //	else if( m_live ) {
+        //		m_live->onframe( pframe );
+        //	}
     }
-    //	else if( m_live ) {
-    //		m_live->onframe( pframe );
-    //	}
     return 0;
 }
 
@@ -1693,21 +1704,17 @@ void dvrsvr::Req2PanelLights()
 
 void dvrsvr::Req2GetJPEG()
 {
-    struct dvr_ans ans ;
     int ch, jpeg_quality, jpeg_pic ;
     ch = m_req.data & 0xff  ;
     jpeg_quality = (m_req.data>>8) & 0xff  ;        //0-best, 1-better, 2-average
     jpeg_pic = (m_req.data>>16) & 0xff  ;           // 0-cif , 1-qcif, 2-4cif
     if( ch >=0 && ch < cap_channels ) {
-        int imgsize=0 ;
-        unsigned char * img ;
-        img = cap_channel[ch]->captureJPEG(&imgsize, jpeg_quality, jpeg_pic);
-        if( img && imgsize>0 ) {
-            ans.anssize = imgsize ;
-            ans.data = 0 ;
-            ans.anscode = ANS2JPEG ;
-            Send( &ans, sizeof(ans));
-            Send( img, imgsize );
+        // problem is JPEG capture doesn't work if called from here, JPEG capturing only works in main thread
+        // so this call is just a signal to trigger jpeg capture
+        if( cap_channel[ch]->captureJPEG(jpeg_quality, jpeg_pic) ) {
+            // set connection type to JPEG
+            m_conntype = CONN_JPEG ;
+            m_connchannel = ch ;
             return ;
         }
     }

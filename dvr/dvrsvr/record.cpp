@@ -90,6 +90,9 @@ class rec_channel {
         int     m_channel;
         
         int     m_recordmode ;			// 0: continue mode, 123: triggering mode, other: no recording
+
+        int     m_recordjpeg ;			// 1: to record jpeg files
+        
         unsigned int m_triggersensor[MAX_TRIGGERSENSOR] ;  // trigger sensor bit maps
 
         int     m_recordalarm ;
@@ -239,6 +242,8 @@ rec_channel::rec_channel(int channel)
         m_triggersensor[i] = dvrconfig.getvalueint( cameraname, buf );
     }
 
+    m_recordjpeg = dvrconfig.getvalueint( cameraname, "recordjpeg" );
+        
     m_recordalarm = dvrconfig.getvalueint( cameraname, "recordalarm" );
     m_recordalarmpattern = dvrconfig.getvalueint( cameraname, "recordalarmpattern" );
     
@@ -770,32 +775,28 @@ int rec_channel::recorddata(rec_fifo * data)
         }
     }
     else if( data->frametype == FRAMETYPE_JPEG ) {
-        dvr_log("Jpeg frame captured." );
-        static int jpegnum=1 ;
-        char jpegfile[128] ;
-        sprintf(jpegfile, "%s/_%s_/jpeg/CH%02d_%d.jpg", 
-            rec_basedir.getstring(), 
-            g_hostname,
-            m_channel, jpegnum++ );
-        FILE * jpegf = fopen( jpegfile, "wb") ;
-        if( jpegf ) {
-            unsigned char * jpegb = (unsigned char *)(data->buf) ;
-            int be, end ;
-            end = data->bufsize ;
-            for( be=0; be<20 ; be++,end-- ) {
-                if( jpegb[end-1] == 0xd9 &&
-                    jpegb[end-2] == 0xff ) {
-                        break;
-                    }
+        if( m_recordjpeg ) {
+            dvr_log("Jpeg frame captured." );
+            sprintf(newfilename, "%s/_%s_/%04d%02d%02d/CH%02d/CH%02d_%04d%02d%02d%02d%02d%02d%03d.JPG", 
+                    rec_basedir.getstring(), 
+                    g_hostname,
+                    data->time.year,
+                    data->time.month,
+                    data->time.day,
+                    m_channel,
+                    m_channel,
+                    data->time.year,
+                    data->time.month,
+                    data->time.day,
+                    data->time.hour,
+                    data->time.minute,
+                    data->time.second,
+                    data->time.milliseconds ) ;
+            FILE * jpegf = fopen( newfilename, "wb") ;
+            if( jpegf ) {
+                fwrite( data->buf, 1, data->bufsize, jpegf );
+                fclose( jpegf );
             }
-            for( be=0; be<20; be++ ) {
-                if( jpegb[be]==0xff &&
-                    jpegb[be+1]==0xd8 &&
-                    jpegb[be+2]==0xff ) 
-                    break;
-            }
-            fwrite( &jpegb[be], 1, end-be, jpegf );
-            fclose( jpegf );
         }
         return 1 ;
     }

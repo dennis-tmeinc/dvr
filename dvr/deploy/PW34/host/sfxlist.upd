@@ -91,5 +91,6 @@ sfxrun.upd sfxrun
 ./dvr/www/cgi/dvrstatus.cgi
 ./dvr/www/cgi/cfgdown.cgi
 ./dvr/www/cgi/gangle.cgi
+./dvr/www/cgi/getjpeg.cgi
 ./dvr/www/cgi/gcal.cgi
 ./dvr/firmwareid

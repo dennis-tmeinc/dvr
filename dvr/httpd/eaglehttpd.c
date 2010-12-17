@@ -493,6 +493,8 @@ int cgi_run()
         }
         fseek( fp, 0, SEEK_SET );
 
+        http_nocache();             // default no cache for cgi result
+        
         // parse cgi output header
         char * p ;
         while ( fgets( cgibuf, sizeof(cgibuf), fp )  )
@@ -509,7 +511,6 @@ int cgi_run()
             }
         }
 
-        http_nocache();             // no cache for cgi result
         http_header( 200, NULL, NULL, len-ftell(fp) );
 
         // output cgi 

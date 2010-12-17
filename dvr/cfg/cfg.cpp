@@ -73,7 +73,7 @@ int main( int argc, char * argv[] )
     if( strcasecmp(cmd.getstring(), "get")==0 ) {
         str=dvrconfig.getvalue( section.getstring(), key.getstring());
         if( str.length()>0 ) {
-            printf("%s\n", str.getstring());
+            printf("%s", str.getstring());
             return 0;
         }
         else {

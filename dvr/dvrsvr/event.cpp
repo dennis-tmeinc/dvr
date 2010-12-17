@@ -139,6 +139,9 @@ int event_check()
     int videolost, videodata, diskready ;
     static int timer_1s ;
     int ev = dio_check() || screen_io() ;
+
+    // check jpeg capturing
+    eagle_captureJPEG();
     
     if( ev ||
         g_timetick-timer_1s > 1000 ||

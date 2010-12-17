@@ -91,12 +91,21 @@ firmware:
 	$(MAKE) applications
 	$(MAKE) -C deploy/$(proj)
 
-tvs: app_tvs firmware
+all:
+	$(MAKE) rel
+	$(MAKE) app_tvs
+	$(MAKE) firmware
+	$(MAKE) clean
+	$(MAKE) app_tvs22
+	$(MAKE) firmware
+	$(MAKE) clean
+	$(MAKE) app_pwii
+	$(MAKE) firmware
+	$(MAKE) clean
+	$(MAKE) app_pw34
+	$(MAKE) firmware
+	$(MAKE) clean
 
-pwii: app_pwii firmware
-
-pw34: app_pw34 firmware
-	
 clean:
 	for dir in $(SUBDIRS); do $(MAKE) -C $$dir clean ; done
 	$(MAKE) -C dropbear clean

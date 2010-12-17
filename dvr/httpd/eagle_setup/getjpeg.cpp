@@ -170,7 +170,7 @@ void dvr_getjpeg()
     int ch, jpeg_quality, jpeg_pic ;
     char buf[2000] ;
     
-    port=15111 ;
+    port=15112 ;
     portfile = fopen("dvrsvr_port", "r");
     if( portfile ) {
         fscanf(portfile, "%d", &port);
@@ -242,7 +242,7 @@ int main()
 #endif
 
     // print headers
-    printf( "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\n\r\n" );
+    printf( "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nCache-Control: no-store\r\n\r\n" );
     fflush(stdout);
     dvr_getjpeg();
 

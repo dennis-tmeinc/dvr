@@ -347,30 +347,38 @@ void eagle_capture::captureIFrame()
     }
 }
 
-int jpeg_quality=1 ;
-int jpeg_mode=0 ;
-int jpeg_size=100000 ;
-unsigned char * jpeg_buf=NULL ;
+// this is call from main thread to do actural jpeg capture
+void eagle_captureJPEG()
+{
+    int ch ;
+    for( ch=0; ch<cap_channels ; ch++ ) {
+        cap_channel[ch]->docaptureJPEG();
+    }
+}
 
 // to capture one jpeg frame
-unsigned char * eagle_capture::captureJPEG(int * imgsize, int quality, int pic)
+int eagle_capture::captureJPEG(int quality, int pic) 
+{
+    m_jpeg_quality = quality ;     // capture quality
+    m_jpeg_mode = pic ;            // -1: no capture, >=0 : capture resolution
+    return 1 ;
+}
+
+void eagle_capture::docaptureJPEG()
 {
     int res ;
-    if( m_hikhandle>0 ) {
-        unsigned int isize = jpeg_size ;
-        if( isize>1000 ) {
-//            res = GetJPEGImage(m_hikhandle, quality, pic, jpeg_buf, &isize ) ;
-            dvr_log( "GetJpeg channel: %d, quality: %d, mode: %d, bufsize: %d", m_channel,  quality, pic, isize );
-            int retry = 5 ;
-            while( retry-- > 0 ) {
-                res = GetJPEGImage(m_hikhandle, quality, pic, jpeg_buf, &isize ) ;
-                if( res==0 ) break;
-            }
-            dvr_log( "GetJpeg result: %d, imgsize: %d", res, isize );
+    if( m_jpeg_mode>=0 && m_hikhandle>0 ) {
+        unsigned char * jpeg_buf ;
+        unsigned int jpeg_size ;
+        jpeg_size=500000 ;
+        jpeg_buf = (unsigned char *)malloc( jpeg_size ) ;
+        if( jpeg_buf ) {
+            // strange thing here, this function should be called from main thread in order to work.
+            res = GetJPEGImage(m_hikhandle, m_jpeg_quality, m_jpeg_mode, jpeg_buf, &jpeg_size ) ;
             if( res==0 ) {
                 // adjust/add jpeg tag
                 int be, end ;
-                end = isize ;
+                end = jpeg_size ;
                 // look for jpeg file ending tag
                 for( be=0; be<200 ; be++,end-- ) {
                     if( jpeg_buf[end-1] == 0xd9 &&
@@ -385,21 +393,25 @@ unsigned char * eagle_capture::captureJPEG(int * imgsize, int quality, int pic)
                        jpeg_buf[be+2]==0xff ) 
                         break;
                 }
-                *imgsize = end-be ;
-/*
-                // if required to be saved in files!
                 struct cap_frame capframe;
                 capframe.channel = m_channel ;
-                capframe.framesize = *imgsize ;
+                capframe.framesize = end-be ;
                 capframe.frametype = FRAMETYPE_JPEG ;
-                capframe.framedata = (char *) buf+overhead+be ;
-                onframe( &capframe );
-*/
-                return &jpeg_buf[be] ;
+
+                capframe.framedata = (char *) mem_alloc( capframe.framesize );
+                if( capframe.framedata ) {
+                    mem_cpy32(capframe.framedata, &jpeg_buf[be], capframe.framesize ) ;
+                    onframe(&capframe);
+                    mem_free(capframe.framedata);
+                }
             }
+            else {
+                dvr_log( "GetJPEGImage failed, result: %d", res );
+            }
+            free( jpeg_buf ) ;
         }
     }
-    return NULL ;
+    m_jpeg_mode=-1 ;
 }
 
 void eagle_capture::setosd( struct hik_osd_type * posd )
@@ -531,14 +543,6 @@ int eagle32_init(config &dvrconfig)
         }
     }
 
-    jpeg_quality = dvrconfig.getvalueint( "system", "jpeg_quality" );
-    jpeg_mode = dvrconfig.getvalueint( "system", "jpeg_mode" );
-    jpeg_size = dvrconfig.getvalueint( "system", "jpeg_size" );
-    if( jpeg_size<=0 || jpeg_size>1000000 ) {
-        jpeg_size=300000 ;
-    }
-    jpeg_buf=(unsigned char *)malloc( jpeg_size );
-    
     return eagle32_channels ;
 }
 
@@ -556,7 +560,5 @@ void eagle32_uninit()
         eagle32_sysinit=0 ;
     }
 */
-    free( jpeg_buf );
-    jpeg_buf=NULL ;
 }
 
