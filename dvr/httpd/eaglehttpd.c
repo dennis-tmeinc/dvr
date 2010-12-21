@@ -950,6 +950,9 @@ void smallssi_run()
     dup2( orgstdout, 1 );
     close( orgstdout );
 
+    // add IE document mode support
+    http_setheader("X-UA-Compatible", "IE=EmulateIE8" );
+    
     if( http_checkcache() ) {       // check if cache fresh?
         // use cahce
         http_header( 304, NULL, NULL, 0 );        // let browser to use cache

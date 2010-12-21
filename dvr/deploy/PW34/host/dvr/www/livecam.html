@@ -4,6 +4,7 @@
 <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
 <meta content="Dennis Chen" name="author" />
 <title>Live Camera View</title>
+<script type="text/javascript" src="eagle3.js"></script>
 <script type="text/javascript">
 var singlescreen=-1 ;
 var relo=0 ;
@@ -39,16 +40,15 @@ function reloadimg(channel)
   var quality = document.getElementById("id_quality"+channel) ;
   var picture = document.getElementById("id_res"+channel) ;
   if( img && ch && quality && picture ) {
-//     img.height = 4.0 * img.width / 3.0 ;
-          ser=ser+1;
-          img.src=
+          var stime = new Date();
+          img.src =
           "cgi/getjpeg.cgi?channel="
           + ch.value
           +"&quality="
           + quality.value 
           +"&picture="
           + picture.value 
-          + "&ser="+ser;
+          + "&tmark="+stime.getTime();
    }
 }
 
@@ -70,16 +70,18 @@ function imgdblclick(channel)
       singlescreen=-1 ;
       // display all camera
       for( i=0; i<camera_number; i++) {
-          if( i!=channel ) {
-              document.getElementById("id_imgarea"+i).style.display="" ;
-              reloadimg(i);
-          }
+          document.getElementById("id_imgarea"+i).style.width="50%" ;
+          document.getElementById("id_imgarea"+i).style.display="" ;
+          reloadimg(i);
       }
   }
   else {
       // hide all camera
       for( i=0; i<camera_number; i++) {
-          if( i!=channel ) {
+          if( i==channel ) {
+              document.getElementById("id_imgarea"+i).style.width="100%" ;
+          }
+          else {
               document.getElementById("id_imgarea"+i).style.display="none" ;
           }
       }
@@ -90,7 +92,6 @@ function imgdblclick(channel)
 function cameraoption()
 {
    var buttonoption = document.getElementById("cameraopt");
-   
    if( buttonoption.value == "Show Options" ) {
        buttonoption.value = "Hide Options" ;
        for( i=0; i<camera_number; i++) {
@@ -105,6 +106,27 @@ function cameraoption()
    }
 }
 
+function badbrowser()
+{
+    if( navigator.appName.match(/Microsoft Internet Explorer/i) ) {
+        if( document.documentMode ) {
+            if( document.documentMode < 8 ) {
+               return 1;    // bad
+            }
+            else {
+               return 0 ;
+            }
+        }
+        else {
+            return 1 ;
+        }
+    }
+    else {
+        // all other browser are good.
+        return 0 ;
+    }
+}
+
 </script>
 </head>
 
@@ -113,7 +135,7 @@ function cameraoption()
 <table id="id_imgarea" width="100%" >
 <tr>
 
-<td width="50%" id="id_imgarea0" style="display:none">
+<td id="id_imgarea0" style="display:none;width:50%">
 <img id="myImage0" width="100%" onload="imgload(0)" ondblclick="imgdblclick(0)" />
 <div id="id_option0">
 <p/>
@@ -156,7 +178,7 @@ Speed:
 </div>
 </td>
 
-<td width="50%" id="id_imgarea1" style="display:none" >
+<td id="id_imgarea1" style="display:none;width:50%" >
 <img id="myImage1" width="100%" onload="imgload(1)" ondblclick="imgdblclick(1)" />
 <div id="id_option1">
 <p/>
@@ -203,7 +225,7 @@ Speed:
 
 <tr>
 
-<td width="50%" id="id_imgarea2" style="display:none">
+<td id="id_imgarea2" style="display:none;width:50%">
 <img id="myImage2" width="100%" onload="imgload(2)" ondblclick="imgdblclick(2)" />
 <div id="id_option2">
 <p/>
@@ -246,7 +268,7 @@ Speed:
 </div>
 </td>
 
-<td width="50%" id="id_imgarea3" style="display:none" >
+<td id="id_imgarea3" style="display:none;width:50%" >
 <img id="myImage3" width="100%" onload="imgload(3)" ondblclick="imgdblclick(3)" />
 <div id="id_option3">
 <p/>
@@ -296,6 +318,7 @@ Speed:
 <p/>
 <input type="button" id="startbutton" onclick="imgstart()" value="Start" />
 <input type="button" id="cameraopt" onclick="cameraoption()" value="Hide Options" />
+<input type="button" onclick="window.location.assign('system.html')" value="System Setup" />
 <p/>
 </body>
 <script type="text/javascript">
