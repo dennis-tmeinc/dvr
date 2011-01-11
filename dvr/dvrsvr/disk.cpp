@@ -500,13 +500,13 @@ static void disk_listday_help(char *dir, array <f264name> & flist, int day, int 
 }
 
 // get .264 file list by day and channel (for playback)
-void disk_listday(array <f264name> & flist, struct dvrtime * day, int channel)
+int disk_listday(array <f264name> & flist, struct dvrtime * day, int channel)
 {
     flist.empty();
     disk_listday_help(disk_play.getstring(), flist, day->year * 10000 + day->month*100 + day->day, channel );
     flist.sort();
     if( flist.size()<2 ) {
-        return ;
+        return flist.size();
     }
     
     // remove duplicated files
@@ -532,6 +532,7 @@ void disk_listday(array <f264name> & flist, struct dvrtime * day, int channel)
         }
     }
     flist.compact();
+    return flist.size();
 }
 
 static void disk_getdaylist_help( char * dir, array <int> & daylist, int ch )
@@ -1095,7 +1096,7 @@ int disk_archive_mkfreespace( char * diskdir, int minfreespace )
 
 
 static char disk_archive_tmpfile[]=".DVRARCH" ;
-static int  disk_archive_unlock = 1 ;           // default to unlock archived file
+static int  disk_archive_unlock = 0 ;           // by default not to unlock archived file
 
 // return 1: success, 0: fail, -1: to quit
 int disk_archive_copyfile( char * srcfile, char * destfile )
@@ -1559,6 +1560,8 @@ void disk_init()
         disk_archdiskfile="/var/dvr/dvrarchdisk" ;
     }
 
+    disk_archive_unlock = dvrconfig.getvalueint("system", "arch_unlock");
+        
     // init archiving variable
     disk_archive_run = 0 ;
     

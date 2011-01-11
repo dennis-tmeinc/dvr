@@ -92,7 +92,7 @@ int net_onframe(cap_frame * pframe)
         }
 
         if( noreclive && sends>0 ) {
-            rec_pause = 50 ;            // temperary pause recording, for 5 seconds
+            rec_pause = 5 ;         // temperary pause recording, for 5 seconds
         }
         net_unlock();
     }
@@ -549,7 +549,6 @@ void *net_thread(void *param)
             }
         }
         else if( sres == 0 ) {
-            rec_pause = 0 ;
             // time out
             if( net_active ) {
                 if( (g_timetick-net_activetime)>(15*60*1000) ) {            // 15 minutes time out for network activity

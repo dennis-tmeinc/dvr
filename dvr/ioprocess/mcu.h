@@ -42,7 +42,7 @@
 #define MCU_INPUT_GSENSOR       (0x40)
 
 #define MCU_CMD_DELAY       (500000)
-#define MIN_SERIAL_DELAY	(10000)
+#define MIN_SERIAL_DELAY	(100000)
 #define DEFSERIALBAUD	    (115200)
 
 #define MCU_INPUTNUM (6)

@@ -55,12 +55,12 @@ int main()
         if( id_file ) {
             // now we check file format
             char * usbid = new char [400] ;
-            char * c_key = new char [4096] ;
+            char * c_key = new char [8192] ;
             struct key_data * key = (struct key_data *)c_key ;
             int keysize=0 ;
             fread( usbid, 1, 256, id_file ) ;
             usbid[256]=0;
-            keysize = fread( c_key, 1, 4096, id_file ) ;
+            keysize = fread( c_key, 1, 8192, id_file ) ;
             if( checktvskey( usbid, key, keysize ) ) {
                 if( key->usbid[0] == 'M' && key->usbid[1] == 'F' ) {
                     bin2c64((unsigned char *)(key->videokey), 256, usbid);		// convert to c64

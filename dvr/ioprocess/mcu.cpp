@@ -688,7 +688,6 @@ int mcu_bootupready()
     if( mcuready ) {
         return 1 ;
     }
-    mcu_clear() ;
     if( (rsp=mcu_cmd(MCU_CMD_BOOTUPREADY, 1, 0 ))!=NULL ) {
         int rlen = *rsp - 6 ;
         char status[200] ;
@@ -1198,7 +1197,6 @@ char * mcu_pwii_cmd(int cmd, int datalen, ...)
 
 int mcu_pwii_bootupready()
 {
-    mcu_clear() ;
     if( mcu_pwii_cmd(PWII_CMD_BOOTUPREADY)!=NULL ) {
         return 1 ;
     }

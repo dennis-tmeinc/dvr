@@ -41,10 +41,10 @@ mountdir=/var/dvr/disks
 
 #minimum free disk space
 # last letter: M=megabytes, K=kilobytes, B=bytes
-mindiskspace=96M
+mindiskspace=1000M
 
 #maximum file size
-maxfilesize=32M
+maxfilesize=200M
 
 # file length in time
 # last letter: s=seconds, m=minutes, h=hoursglade

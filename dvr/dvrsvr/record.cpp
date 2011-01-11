@@ -409,7 +409,7 @@ void rec_channel::onframe(cap_frame * pframe)
 
     if( m_recstate == REC_STOP ||
         pframe == NULL ||
-        rec_pause ||
+        rec_pause>0 ||
         dio_record == 0 ||
         rec_basedir.length()<=0 )
     {
@@ -1309,6 +1309,9 @@ void rec_update()
 {
     int i;
     if( rec_run ) {
+        if( rec_pause>0 ) {
+            rec_pause--;
+        }
         for(i=0; i<rec_channels; i++) {
             recchannel[i]->update();
         }

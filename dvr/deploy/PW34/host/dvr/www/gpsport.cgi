@@ -9,10 +9,16 @@ for ss in /dev/ttyS? /dev/ttyUSB? ; do
         ssn="COM3"
   elif [ $ss = "/dev/ttyS3" ] ; then
         ssn="COM4"
+  elif [ $ss = "/dev/ttyS4" ] ; then
+        ssn="COM5"
+  elif [ $ss = "/dev/ttyS5" ] ; then
+        ssn="COM6"
   elif [ ${ss%?} = "/dev/ttyUSB" ] ; then
         ssn=${ss#/dev/tty}
   else
         continue
   fi
-  echo "<option value=\"${ss}\"> ${ssn} </option>"
+  if [ -c ${ss} ] ; then
+    echo "<option value=\"${ss}\"> ${ssn} </option>"
+  fi
 done

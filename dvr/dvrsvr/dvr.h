@@ -720,7 +720,7 @@ public:
         }
 };
 
-void disk_listday(array <f264name> & list, struct dvrtime * day, int channel);
+int disk_listday(array <f264name> & list, struct dvrtime * day, int channel);
 void disk_getdaylist(array <int> & daylist, int channel);
 int disk_unlockfile( dvrtime * begin, dvrtime * end );
 void disk_check();

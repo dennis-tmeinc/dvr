@@ -556,7 +556,7 @@ void gforce_log( int x, int y, int z )
 //            failed  => p_dio_mmap->rtc_cmd = -1
 int gforce_calibration()
 {
-         // send init value to mcu
+    // send init value to mcu
     char * responds = mcu_cmd( MCU_CMD_GSENSORCALIBRATION, 0 ) ;
     if( responds && *responds>=7 ) {    // command success
         dio_lock();
@@ -625,9 +625,6 @@ void gforce_init( config & dvrconfig )
     gforce_log_enable = dvrconfig.getvalueint( "glog", "gforce_log_enable");
     gforce_available = 0 ;
     gforce_crashdata_enable = dvrconfig.getvalueint( "io", "gsensor_crashdata" );
-    if( gforce_log_enable==0 ) 
-        return ;                    // no need to initialize gforce sensor
-
     gforce_mountangle = dvrconfig.getvalueint( "io", "gsensor_mountangle" );
     
     // unit direction
@@ -932,6 +929,17 @@ void gforce_init( config & dvrconfig )
             fclose(fgsensor);
         }
         gforce_available = 1 ;
+        if( gforce_log_enable==0 ) {
+            // disable GFORCE
+            mcu_cmd( MCU_CMD_GSENSORINIT, 
+                    20,      // 20 parameters 
+                    0,       // disable GForce
+                    direction_table[unit_direction][2],                      // unit direction code
+                    base_x_pos, base_x_neg, base_y_pos, base_y_neg, base_z_pos, base_z_neg,
+                    trigger_x_pos, trigger_x_neg, trigger_y_pos, trigger_y_neg, trigger_z_pos, trigger_z_neg,
+                    crash_x_pos, crash_x_neg, crash_y_pos, crash_y_neg, crash_z_pos, crash_z_neg ) ;
+
+        }
     }
     else {
         dvr_log("G force sensor init failed!");

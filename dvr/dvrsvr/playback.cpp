@@ -118,17 +118,19 @@ int playback::opennextfile()
                     dvrt.month = m_day%10000/100 ;
                     dvrt.day   = m_day%100 ;
                     m_filelist.setsize(0);						// empty day file list
-                    disk_listday( m_filelist, &dvrt, m_channel );
-                    break;
+                    if( disk_listday( m_filelist, &dvrt, m_channel )>0 ) 
+                        break;
                 }
             }
             if( i>=m_daylist.size() ) {
                 return 0 ;
             }
         }
-        m_file.open( m_filelist[m_curfile].getstring(), "rb") ;
+        if( m_filelist.size()>0 ) {
+            m_file.open( m_filelist[m_curfile].getstring(), "rb") ;
+        }
     }
-    if( m_autodecrypt ) {
+    if( m_file.isopen() && m_autodecrypt ) {
         m_file.autodecrypt(1);
     }
     return 1;
@@ -167,7 +169,7 @@ void playback::readframe()
 void playback::getstreamdata(void ** getbuf, int * getsize, int * frametype)
 {
     if( norecplayback ) {
-        rec_pause = 50 ;            // temperary pause recording, for 5 seconds
+        rec_pause = 5 ;         // temperary pause recording, for 5 seconds
     }
     if( m_framesize==0 )
         readframe();
@@ -304,7 +306,6 @@ int playback::getprevcliptime(struct dvrtime * begin, struct dvrtime * end)
 }
 
 
-
 void playback::getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * pday)
 {
     struct dvrtime t ;
@@ -312,26 +313,18 @@ void playback::getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * 
     int i;
     struct dayinfoitem di ;
     struct dayinfoitem di_x ;
-    array <f264name> * filelist ;
-    int bcdday ;
+    array <f264name> filelist ;
     
     di.ontime=0; 
     di.offtime=0;
 
-    bcdday = pday->year*10000 + pday->month*100 + pday->day ;
-    if( bcdday != m_day ) {			// not current day list
-        filelist = new array <f264name> ;
-        disk_listday( *filelist, pday, m_channel );
-    }
-    else {
-        filelist = &m_filelist ;
-    }
+    disk_listday( filelist, pday, m_channel );
 
     dayinfo.setsize(0);
-    for( i=0; i<filelist->size(); i++) {
-        char * fname = (*filelist)[i].getstring();
+    for( i=0; i<filelist.size(); i++) {
+        char * fname = filelist[i].getstring();
         len=f264length(fname) ;
-        if( len<=0 ) {
+        if( len<=0 || len>5000 ) {
             continue ;
         }
         f264time(fname, &t);
@@ -344,10 +337,6 @@ void playback::getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * 
             di.ontime=di_x.ontime ;
         }
         di.offtime=di_x.offtime ;
-    }
-
-    if( bcdday != m_day ) {
-        delete filelist ;
     }
 
     if( di.offtime>di.ontime ) {
@@ -388,27 +377,20 @@ void playback::getlockinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime *
     int i;
     struct dayinfoitem di ;
     struct dayinfoitem di_x ;
-    array <f264name> * filelist ;
-    int bcdday ;
+    array <f264name> filelist ;
     
     di.ontime=0; 
     di.offtime=0;
 
-    bcdday = pday->year*10000 + pday->month*100 + pday->day ;
-    if( bcdday != m_day ) {
-        filelist = new array <f264name> ;
-        disk_listday( *filelist, pday, m_channel );
-    }
-    else {
-        filelist = &m_filelist ;
-    }
-    
-    for( i=0; i<filelist->size(); i++) {
-        char * fname = (*filelist)[i].getstring();
+    disk_listday( filelist, pday, m_channel );
+
+    dayinfo.setsize(0);
+    for( i=0; i<filelist.size(); i++) {
+        char * fname = filelist[i].getstring();
         if( strstr(fname, "_L_") ) {
             len=f264length(fname) ;
             locklen = f264locklength( fname );
-            if( len<=0 || locklen<=0 ) {
+            if( len<=0 || locklen<=0 || len>5000 || locklen>len ) {
                 continue ;
             }
             f264time(fname, &t);
@@ -423,10 +405,6 @@ void playback::getlockinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime *
             }
             di.offtime=di_x.offtime ;
         }
-    }
-    
-    if( bcdday != m_day ) {
-        delete filelist ;
     }
     
     if( di.offtime>di.ontime ) {

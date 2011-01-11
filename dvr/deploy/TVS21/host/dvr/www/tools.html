@@ -96,6 +96,16 @@
 <td><input value="Update MCU Firmware" type="button" onclick="on_uploadsubmit('id_mcu_firmware_file')" /></td>
 </tr>
 </form>
+
+<tr>
+<td></td>
+<td>
+<form enctype="multipart/form-data" method="post" action="reset.cgi">
+<input name="mcu_reboot" title="Reset Unit" type="submit" value="Reset" />
+</form>
+</td>
+</tr>
+
 <!--#exec cmd="./master_form.cgi"-->
 </tbody>
 <script type="text/javascript">
