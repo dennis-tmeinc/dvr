@@ -1187,7 +1187,7 @@ int http_input()
     char * uri ;	// request URI
     char * query ;	// request query string
     char * protocol ;	// request protocol
-    char linebuf[512] ;
+    char linebuf[1024] ;
 
     char * ext ;
     char * pc ;

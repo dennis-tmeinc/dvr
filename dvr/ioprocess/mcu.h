@@ -27,13 +27,14 @@
 #define MCU_CMD_DEVICEPOWER     (0x2e)
 #define MCU_CMD_PANELLED        (0x2f)
 #define MCU_CMD_DIGITALOUTPUT	(0x31)
-#define MCU_CMD_READCODE	    (0x41)
 // gforce sensor cmd
 #define MCU_CMD_GSENSORINIT	    (0x34)
 #define MCU_CMD_GSENSORUPLOAD   (0x35)
 #define MCU_CMD_GSENSORUPLOADACK (0x36)
 #define MCU_CMD_GSENSORCALIBRATION (0x3F)
 #define MCU_CMD_GSENSORPEAK     (0x40)
+
+#define MCU_CMD_READCODE	    (0x41)
 
 // mcu input
 #define MCU_INPUT_DIO           (0x1C)

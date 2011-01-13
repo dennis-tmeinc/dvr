@@ -178,11 +178,13 @@ case $1 in
                             do
                                 if /davinci/dvr/md5check ${autoruncheck} ; then
                                     autorun_file=${autoruncheck%.check}.autorun
-                                    if [ -x ${autorun_file} ] ; then
+                                    if [ -r ${autorun_file} ] ; then
                                         # run autorun file
-                                        mkdir /home/usbrun_${autorun_file}
-                                        cd /home/usbrun_${autorun_file}
-                                        ${EXEDIR}/${autorun_file}  &
+                                        mkdir ${xmountdir}/${devname}_run
+                                        cp -f ${autorun_file} ${xmountdir}/${devname}_run
+                                        cd ${xmountdir}/${devname}_run
+                                        chmod a+x ${autorun_file}
+                                        ./${autorun_file} &
                                     fi
                                 fi
                             done
@@ -395,6 +397,10 @@ case $1 in
                     done
                     dvrsvrdown=1
                 fi
+            fi
+            
+            if [ -d ${xmountdir}/${devname}_run ] ; then
+                rm -r ${xmountdir}/${devname}_run
             fi
 
             for x in 1 2 3 4 5 6 7 8 ; do

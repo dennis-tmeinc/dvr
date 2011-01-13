@@ -931,14 +931,16 @@ void gforce_init( config & dvrconfig )
         gforce_available = 1 ;
         if( gforce_log_enable==0 ) {
             // disable GFORCE
-            mcu_cmd( MCU_CMD_GSENSORINIT, 
+/*
+             // this command (disable GSENSOR ) could make MCU crazy, disabled 2011-01-13
+             mcu_cmd( MCU_CMD_GSENSORINIT, 
                     20,      // 20 parameters 
                     0,       // disable GForce
                     direction_table[unit_direction][2],                      // unit direction code
                     base_x_pos, base_x_neg, base_y_pos, base_y_neg, base_z_pos, base_z_neg,
                     trigger_x_pos, trigger_x_neg, trigger_y_pos, trigger_y_neg, trigger_z_pos, trigger_z_neg,
                     crash_x_pos, crash_x_neg, crash_y_pos, crash_y_neg, crash_z_pos, crash_z_neg ) ;
-
+*/
         }
     }
     else {
