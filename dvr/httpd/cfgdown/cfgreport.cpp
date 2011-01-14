@@ -441,7 +441,7 @@ int print_cfgreport()
         l = fread( buf, 1, 99, ifile );
         if( l>0 ) {
             buf[l]=0 ;
-            printf("TVS firmware version : %s\n", buf );
+            printf("Firmware version : %s\n", buf );
         }
         fclose( ifile );
     }
