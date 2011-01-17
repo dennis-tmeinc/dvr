@@ -42,6 +42,7 @@ int mcupowerdelaytime = 0 ;
 unsigned int mcu_doutputmap ;
 int mcu_inputmissed ;
 int output_inverted=0 ;
+int mcu_program_delay ;
 
 // translate output bits
 #define MAXOUTPUT    (8)
@@ -1003,7 +1004,7 @@ int mcu_update_firmware( char * firmwarefile)
     
     rd=0 ;
     if( mcu_write( cmd_updatefirmware, 5 ) ) {
-        rd=mcu_read( responds, sizeof(responds), 20000000, 500000 ) ;
+        rd=mcu_read( responds, sizeof(responds), 60000000, 500000 ) ;
     }
     
     if( rd>=5 && 
@@ -1056,6 +1057,9 @@ int mcu_update_firmware( char * firmwarefile)
     while( (c=fgetc( fwfile ))!=EOF ) {
         if( mcu_write( &c, 1)!=1 ) 
             break;
+        if( c=='\n' ) {
+            usleep( mcu_program_delay ) ;
+        }
         if( fwprogfile ) {
             proglen++ ;
             if( proglen%(mcufilelen/100)==9 ) {
@@ -1260,6 +1264,7 @@ void  mcu_restart()
 void mcu_init( config & dvrconfig ) 
 {
     string v ;
+    double dv ;
     int i ;
 
     // initilize serial port
@@ -1292,6 +1297,22 @@ void mcu_init( config & dvrconfig )
             output_inverted |= (1<<i) ;
         }
     }
+
+    v = dvrconfig.getvalue( "io", "mcu_program_delay" ) ;
+    if( v.length()>0 ) {
+        sscanf( v.getstring(), "%lf", &dv );
+        mcu_program_delay = (int)(dv*1000000.0) ;
+        if( mcu_program_delay>1000000 ) {
+            mcu_program_delay = 999999 ;
+        }
+        else if( mcu_program_delay<1000 ) {
+            mcu_program_delay = 0 ;
+        }
+    }
+    else {
+        mcu_program_delay = 20000 ;
+    }
+    
     // boot mcu (power processor)
     if( mcu_bootupready () ) {
         // get MCU version
