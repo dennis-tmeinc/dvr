@@ -204,20 +204,20 @@ int dvr_log(char *fmt, ...)
     return res ;
 }
 
-static unsigned int starttime=0 ;
+static time_t starttime=0 ;
 void initruntime()
 {
-    struct timeval tv ;
-    gettimeofday( &tv, NULL );
-    starttime=tv.tv_sec ;
+    struct timespec tp ;
+    clock_gettime(CLOCK_MONOTONIC, &tp );
+    starttime=tp.tv_sec ;
 }
 
 // return runtime in mili-seconds
 unsigned int getruntime()
 {
-    struct timeval tv ;
-    gettimeofday( &tv, NULL );
-    return (unsigned int)(tv.tv_sec-starttime)*1000 + tv.tv_usec/1000 ;
+    struct timespec tp ;
+    clock_gettime(CLOCK_MONOTONIC, &tp );
+    return (unsigned int)(tp.tv_sec-starttime)*1000 + tp.tv_nsec/1000000 ;
 }
 
 // set onboard rtc 

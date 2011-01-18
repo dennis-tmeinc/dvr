@@ -68,13 +68,13 @@ sync
 /davinci/dvr/panelled 0
 
 if [ -n "${FWUPDMSG}" ] ; then 
-    echo "Fireware update success." >> ${FWUPDMSG}
+    echo "Firmware update success." >> ${FWUPDMSG}
     echo "New firmware version:" >> ${FWUPDMSG}
     cat /davinci/dvr/firmwareid >> ${FWUPDMSG} 
     echo "Resetting system......" >> ${FWUPDMSG}
     /davinci/dvr/ioprocess -reboot 5
 else 
-    echo "Fireware update success."
+    echo "Firmware update success."
     echo "New firmware version:"
     cat /davinci/dvr/firmwareid 
     echo "Please reset system."
