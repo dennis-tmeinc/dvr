@@ -67,7 +67,7 @@ lowmemory=15000
 lockfile_percentage = 99
 
 #shutdown delay time in seconds
-shutdowndelay=180
+shutdowndelay=20
 uploadingtime=1800
 archivetime=1800
 standbytime=1800
@@ -148,9 +148,9 @@ showgps=1
 gpsunit=0
 
 # pre-recording time in seconds
-prerecordtime=150
+prerecordtime=10
 # post-recording time in seconds
-postrecordtime=150
+postrecordtime=30
 
 # show sensor on OSD
 sensorosd1=1
@@ -190,7 +190,7 @@ bitrateen=1
 # Bitrate mode, 0: VBR, 1:CBR
 bitratemode=0
 # bitrate, bps
-bitrate=1750000
+bitrate=2000000
 
 # frame rate
 framerate=30
@@ -242,8 +242,8 @@ gpsunit=0
 showgps=1
 show_vri=1
 show_policeid=1
-postrecordtime=150
-prerecordtime=150
+postrecordtime=30
+prerecordtime=10
 sensorosd1=1
 trigger1=1
 sensorosd2=1
@@ -261,11 +261,11 @@ brightness=5
 contrast=5
 saturation=5
 hue=5
-bitrate=768000
+bitrate=1000000
 bitratemode=0
 bitrateen=1
 framerate=15
-resolution=2
+resolution=3
 recordmode=1
 
 ptzaddr=2
@@ -276,7 +276,7 @@ gpsen=1
 [camera3]
 name=Camera3
 channel=2
-enable=1
+enable=0
 show_gforce=1
 forcerecordontime = 7200
 forcerecordofftime = 0
@@ -297,8 +297,8 @@ gpsunit=0
 showgps=1
 show_vri=1
 show_policeid=1
-postrecordtime=150
-prerecordtime=150
+postrecordtime=30
+prerecordtime=10
 sensorosd1=1
 trigger1=1
 sensorosd2=1
@@ -330,7 +330,7 @@ gpsen=1
 [camera4]
 name=Camera4
 channel=1
-enable=1
+enable=0
 show_gforce=1
 forcerecordontime = 7200
 forcerecordofftime = 0
@@ -351,8 +351,8 @@ gpsunit=0
 showgps=1
 show_vri=1
 show_policeid=1
-postrecordtime=150
-prerecordtime=150
+postrecordtime=30
+prerecordtime=10
 sensorosd1=1
 trigger1=1
 sensorosd2=1
@@ -455,7 +455,7 @@ zoomcam_enable=0
 
 # sensor number start from 1
 [sensor1]
-name=EMR
+name=MIC
 inverted=0
 eventmarker=1
 [sensor2]
@@ -482,10 +482,10 @@ eventmarker=0
 # for gps log process
 [glog]
 gpsdisable=0
-serialport=/dev/ttyS0
+serialport=/dev/ttyUSB1
 serialbaudrate=4800
 
-gforce_log_enable=0
+gforce_log_enable=1
 tab102b_enable=0
 
 #convert parameter 1km ~= 0.012 degree
