@@ -504,7 +504,7 @@ int eagle32_hikhandle(int channel)
     }
     return 0 ;
 }
-    
+
 
 static int eagle32_sysinit=0 ;
 

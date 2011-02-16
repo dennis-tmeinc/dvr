@@ -580,7 +580,6 @@ void smallssi_include( char * ssicmd )
     }
 }
 
-
 // ex: <!--#echo var="envname" -->
 void smallssi_echo( char * ssicmd )
 {
@@ -901,6 +900,7 @@ int check_access()
 				}
 				else {
 					setenv("REQUEST_URI", DENIED_PAGE, 1);	// replace denied page
+                    setenv("HTTP_CACHE_CONTROL", "no-cache", 1 );   // force no cache on denied page
 					res=0 ;
 				}
 				break;

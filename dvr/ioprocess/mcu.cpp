@@ -60,14 +60,15 @@ unsigned int output_map_table [MAXOUTPUT] = {
 static struct baud_table_t {
     speed_t baudv ;
     int baudrate ;
-} baud_table[7] = {
+} baud_table[] = {
     { B2400, 	2400},
     { B4800,	4800},
     { B9600,	9600},
     { B19200,	19200},
     { B38400,	38400},
     { B57600,	57600},
-    { B115200,	115200} 
+    { B115200,	115200},
+    { 0, 0 }
 } ;
 
 // open serial port
@@ -111,14 +112,15 @@ int serial_open(char * device, int buadrate)
             tios.c_lflag = 0;       // ICANON;
             tios.c_cc[VMIN]=10;		// minimum char 
             tios.c_cc[VTIME]=1;		// 0.1 sec time out
-            baud_t = B115200 ;
-            for( i=0; i<7; i++ ) {
+            baud_t = buadrate ;
+            i=0 ;
+            while( baud_table[i].baudrate ) {
                 if( buadrate == baud_table[i].baudrate ) {
                     baud_t = baud_table[i].baudv ;
                     break;
                 }
+                i++ ;
             }
-            
             cfsetispeed(&tios, baud_t);
             cfsetospeed(&tios, baud_t);
             

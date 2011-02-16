@@ -38,23 +38,18 @@
 
 #include "netdbg.h"
 
-
-struct baud_table_t {
-	speed_t baudv ;
-	int baudrate ;
+static struct baud_table_t {
+    speed_t baudv ;
+    int baudrate ;
 } baud_table[] = {
-	{ B230400,	230400},
-	{ B115200,	115200},
-	{ B57600,	57600},
-	{ B38400,	38400},
-	{ B19200,	19200},
-	{ B9600,	9600},
-	{ B4800,	4800},
-	{ B2400, 	2400},
-	{ B1800,    1800},
-	{ B1200, 	1200},
-	{ B600,     600},
-	{ B0,       0}
+    { B2400, 	2400},
+    { B4800,	4800},
+    { B9600,	9600},
+    { B19200,	19200},
+    { B38400,	38400},
+    { B57600,	57600},
+    { B115200,	115200},
+    { 0, 0 }
 } ;
 
 #define SPEEDTABLESIZE (10)
@@ -354,17 +349,17 @@ int serial_open(int * handle, char * serial_dev, int serial_baudrate )
         tios.c_lflag = 0;       // ICANON;
         tios.c_cc[VMIN]=50;  	// minimum char
         tios.c_cc[VTIME]=1;		// 0.1 sec time out
-		baud_t = B115200 ;
-		for( i=0; i< (int)(sizeof(baud_table)/sizeof(baud_table[0])); i++ ) {
-			if( serial_baudrate >= baud_table[i].baudrate ) {
-				baud_t = baud_table[i].baudv ;
-				break;
-			}
-		}
-		cfsetispeed(&tios, baud_t);
-		cfsetospeed(&tios, baud_t);
-
-		tcflush(serial_handle, TCIOFLUSH);
+        baud_t = serial_baudrate ;
+        i=0 ;
+        while( baud_table[i].baudrate ) {
+            if( serial_baudrate == baud_table[i].baudrate ) {
+                baud_t = baud_table[i].baudv ;
+                break;
+            }
+            i++ ;
+        }
+        cfsetispeed(&tios, baud_t);
+        cfsetospeed(&tios, baud_t);
 		tcsetattr(serial_handle, TCSANOW, &tios);
 		tcflush(serial_handle, TCIOFLUSH);
 	}
