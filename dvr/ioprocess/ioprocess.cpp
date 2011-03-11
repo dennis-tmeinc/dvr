@@ -1252,7 +1252,7 @@ int appinit()
     }
 
     wifidetecttime = dvrconfig.getvalueint( "system", "wifidetecttime");
-    if(wifidetecttime<10 | wifidetecttime>600 ) {
+    if(wifidetecttime<10 || wifidetecttime>600 ) {
         wifidetecttime=60 ;
     }
 

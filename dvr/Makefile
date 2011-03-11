@@ -87,6 +87,12 @@ app_pw34:
 	echo "EAGLE=eagle34" >> config
 	ln -sf cfg.h.PW34 cfg.h
 
+app_mv:
+	echo PROJDIR=`pwd` > config
+	echo "proj=PW34" >> config
+	echo "EAGLE=mv" >> config
+	ln -sf cfg.h.MV cfg.h
+
 firmware:
 	$(MAKE) applications
 	$(MAKE) -C deploy/$(proj)

@@ -468,7 +468,7 @@ int gforce_getcrashdata()
     dvrsvr_resume() ;
     glog_resume();
     p_dio_mmap->iomode=iomode;
-
+	
     return 0;
 }
 

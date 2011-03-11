@@ -299,7 +299,13 @@ void mcu_calchecksum( char * data )
 //        >0 : success
 int mcu_send( char * cmd ) 
 {
-    if( *cmd<5 || *cmd>40 ) { 	// wrong data
+	// do receive buffer check. add 2011-03-11. to fix problem on mcu-reboot command
+	while( mcu_dataready(0) ) {
+		mcu_recv( 0, NULL );	// discard anything returned
+	}
+
+	// validate command
+    if( *cmd<5 || *cmd>40 ) { 	// wrong command packet
         return 0 ;
     }
     mcu_calchecksum(cmd );
@@ -374,7 +380,7 @@ char * mcu_recvmsg()
 }
 
 // to receive a respondes message from mcu
-char * mcu_recv( int usdelay = MIN_SERIAL_DELAY, int * usremain=NULL )
+char * mcu_recv( int usdelay, int * usremain)
 {
     char * mcu_msg ;
     while( mcu_dataready(usdelay, &usdelay) ) {
@@ -434,7 +440,7 @@ int mcu_sendcmd(int cmd, int datalen, ...)
 char * mcu_waitrsp(int target, int cmd, int delay=MCU_CMD_DELAY)
 {
     char * mcu_rsp ;
-    while( delay>0 ) {                          // wait until delay time out
+    while( delay>=0 ) {                          	// wait until delay time out
         mcu_rsp = mcu_recv( delay, &delay ) ;   
         if( mcu_rsp ) {     // received a responds
             if( mcu_rsp[2]==(char)target &&         // resp from correct target (MCU)
@@ -492,7 +498,7 @@ char * mcu_cmd(int cmd, int datalen, ...)
 
     mcu_buf[0] = (char)(datalen+6) ;
     mcu_buf[1] = (char)1 ;                      // target MCU
-    mcu_buf[2] = (char)0 ;
+    mcu_buf[2] = (char)0 ;						// source (HOST CPU)
     mcu_buf[3] = (char)cmd ;
     mcu_buf[4] = (char)2 ;
 
@@ -551,7 +557,7 @@ int mcu_reset()
     int r ;
     char enteracommand[200] ;
     mcu_sendcmd( MCU_CMD_RESET ) ;
-    r = mcu_read(enteracommand, sizeof(enteracommand)-1, 30000000, 1000000);
+    r = mcu_read(enteracommand, sizeof(enteracommand)-1, 30000000, 3000000);
     if( r>10 ) {
         enteracommand[r]=0 ;
         if( strcasestr( enteracommand, "command" ) ) {

@@ -1029,11 +1029,7 @@ void rec_channel::update()
     }
 
     if( trigger == 2 ) {
-#ifdef PWII_APP    
-        if( m_recstate != REC_LOCK ) {
-            screen_setliveview( -1 ) ;
-        }
-#endif
+
         m_recstate = REC_LOCK ;
 
         i = g_timetick + 1000*m_postlock_time ;

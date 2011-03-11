@@ -379,7 +379,7 @@ void status_page()
             long long int stime = 0 ;
             sscanf(synctime, "%Ld", &stime );
             if( stime>0 ) {                     // milliseconds since 1970/01/01
-                struct timeval tv ;
+				struct timeval tv ;
                 tv.tv_sec = stime/1000 ;
                 tv.tv_usec = (stime%1000)*1000 ;
                 settimeofday( &tv, NULL );

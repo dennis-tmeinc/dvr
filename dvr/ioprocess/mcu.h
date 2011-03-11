@@ -113,6 +113,7 @@ int mcu_write(void * buf, int bufsize);
 void mcu_clear(int delay=MIN_SERIAL_DELAY);
 int mcu_input(int usdelay);
 void mcu_response(char * msg, int datalen=0, ... );
+char * mcu_recv( int usdelay = MIN_SERIAL_DELAY, int * usremain=NULL );
 
 unsigned char checksum( unsigned char * data, int datalen ) ;
 char mcu_checksum( char * data ) ;
