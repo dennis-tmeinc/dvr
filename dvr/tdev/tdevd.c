@@ -10,11 +10,13 @@
 #include <asm/types.h>
 #include <linux/netlink.h>
 
+#include "../cfg.h"
+
 /* environment buffer, the kernel's size in lib/kobject_uevent.c should fit in */
 #define HOTPLUG_BUFFER_SIZE		2048
 #define HOTPLUG_NUM_ENVP		16
 
-char * pidfile = "/var/dvr/tdevd.pid" ;
+char * pidfile = VAR_DIR"/tdevd.pid" ;
 
 int main(int argc, char *argv[])
 {

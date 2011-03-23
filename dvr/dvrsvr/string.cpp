@@ -31,7 +31,7 @@ char * str_trim(char *line)
     return  str_trimtail(str_skipspace(line)) ;
 }
 
-int savetxtfile(char *filename, array <string> & strlist )
+int savetxtfile(const char *filename, array <string> & strlist )
 {
 	FILE *sfile ;
 	int i;
@@ -47,7 +47,7 @@ int savetxtfile(char *filename, array <string> & strlist )
 	return strlist.size();
 }
 
-int readtxtfile(char *filename, array <string> & strlist)
+int readtxtfile(const char *filename, array <string> & strlist)
 {
 	FILE *rfile;
 	char buffer[1024];

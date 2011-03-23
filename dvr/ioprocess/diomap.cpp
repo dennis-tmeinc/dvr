@@ -1,3 +1,5 @@
+
+#include "../cfg.h"
 #include "diomap.h"
 
 /*
@@ -53,7 +55,7 @@ struct dio_mmap * dio_mmap(char * mmapfile)
     int fd ;
     void * p ;
     if( mmapfile==NULL ) {
-        fd = open("/var/dvr/dvriomap", O_RDWR );
+		fd = open( VAR_DIR"/dvriomap", O_RDWR, S_IRWXU);
     }
     else {
         fd = open( mmapfile, O_RDWR, S_IRWXU);

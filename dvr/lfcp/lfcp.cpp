@@ -10,6 +10,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+
+#include "../cfg.h"
 #include "../ioprocess/diomap.h"
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
@@ -145,8 +147,6 @@ class dir_find {
 
 struct dio_mmap * p_dio_mmap ;
 char dvriomap[128] = "/var/dvr/dvriomap" ;
-char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
-
 
 // verify if destination folder available, or create them
 int lf_createfolder( char * destfile )
@@ -257,7 +257,7 @@ int appinit()
 {
     int fd ;
     char * p ;
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     string v ;
     v = dvrconfig.getvalue( "system", "iomapfile");
     char * iomapfile = v.getstring();

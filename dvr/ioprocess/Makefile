@@ -13,7 +13,13 @@ HEADERS=diomap.h netdbg.h mcu.h gforce.h
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
+
+#no eagle boards
+ifeq ($(EAGLE),mv)
+LDFLAGS= -lpthread -lstdc++ -lrt -Wl,-rpath,.
+else
 LDFLAGS= -lstdc++  -L../dvrsvr/$(EAGLE) -lsdk -ldadsp ../dvrsvr/$(EAGLE)/dsplink.lib
+endif
 
 CFLAGS=-I../dvrsvr -g -Wall
 TARGET=ioprocess panelled devicepower buzzer iowait

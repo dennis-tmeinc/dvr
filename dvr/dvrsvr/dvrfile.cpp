@@ -15,8 +15,7 @@ unsigned char g_filekey[256] ;
 const char g_264ext[]=".264" ;
 #define H264FILEFLAG  (0x484b4834)
 #define FRAMESYNC   (0x00000001)
-#endif
-#ifdef EAGLE34
+#else	// EAGLE34 , or other
 const char g_264ext[]=".265" ;
 #define H264FILEFLAG  (0x484b4d49)
 #define FRAMESYNC   (0xBA010000)
@@ -1351,11 +1350,10 @@ int file_close(FILE *fp)
     return fclose( fp );
 }
 
-void file_init()
+void file_init(config &dvrconfig)
 {
     int iv ;
     string v;
-    config dvrconfig(dvrconfigfile);
     
     file_encrypt=dvrconfig.getvalueint("system", "fileencrypt");
     v = dvrconfig.getvalue("system", "filepassword");

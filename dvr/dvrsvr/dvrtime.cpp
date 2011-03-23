@@ -24,7 +24,7 @@ void time_uninit()
 void time_inittimezone()
 {
     char * p ;
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     string tz ;
     string tzi ;
     FILE * tzfile ;
@@ -47,7 +47,7 @@ void time_inittimezone()
         }
         p = getenv("TZ") ;
         if( p ) {
-            tzfile = fopen( "/var/dvr/TZ", "w" );
+            tzfile = fopen( VAR_DIR"/TZ", "w" );
             if( tzfile ) {
                 fprintf(tzfile, "%s", p );
                 fclose( tzfile );
@@ -80,7 +80,7 @@ void time_settimezone(char * timezone)
     *endtz=0 ;
     if( strlen(tz)>0 && time_gettimezone (oldtz) ) {
         if( strcmp( tz, oldtz )!=0 ) {
-            config dvrconfig(dvrconfigfile);
+            config dvrconfig(CFG_FILE);
             dvrconfig.setvalue( "system", "timezone", tz );
             dvrconfig.save();
             time_inittimezone();
@@ -93,7 +93,7 @@ int time_gettimezone(char * tz)
 {
     string tzstr ;
     char * tzenv ;
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     tzstr = dvrconfig.getvalue("system", "timezone");
     if( tzstr.length()>0 ) {
         strncpy( tz, tzstr.getstring(), 250 );

@@ -133,7 +133,6 @@ class dir_find {
 
 char * mountcmd ;
 
-
 void tdev_mount(char * path, int level )
 {
     dir_find dfind(path);

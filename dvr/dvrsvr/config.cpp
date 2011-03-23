@@ -1,8 +1,8 @@
 
+#include "../cfg.h"
+
 #include "genclass.h"
 #include "cfg.h"
-
-static char defconf[]="/davinci/dvr/defconf" ;
 
 config::config()
 {
@@ -16,7 +16,7 @@ config::~config()
 
 #include <time.h>
 
-void config::open(char *configfilename)
+void config::open(const char *configfilename)
 {
     close();
     m_configfile=configfilename;
@@ -25,12 +25,12 @@ void config::open(char *configfilename)
     if( m_strlist.size()<=0 ||
         strncmp( m_strlist[0].getstring(), "#DEFCONF", 8 )!=0 ) 
     {
-        mergedefconf( defconf );
+        mergedefconf( CFG_DEFFILE );
     }
 	m_dirty = 0;
 }
 
-config::config(char *configfilename)
+config::config(const char *configfilename)
 {
     open( configfilename );
 }
@@ -41,7 +41,7 @@ void config::close()
 }
 
 // merge default configure
-void config::mergedefconf( char * defconffile )
+void config::mergedefconf( const char * defconffile )
 {
     char * mgvalue ;
     char * line ;
@@ -100,7 +100,7 @@ int config::nextsection(int idx)
 }
 
 // search for section
-int config::findsection(char *section)
+int config::findsection(const char *section)
 {
 	int index ;
 	char *line;
@@ -126,7 +126,7 @@ int config::findsection(char *section)
 	return -1;					// not found ;
 }
 
-int config::findkey(int sectionline, char *key)
+int config::findkey(int sectionline, const char *key)
 {
 	char * line;
 	int l ;
@@ -151,7 +151,7 @@ int config::findkey(int sectionline, char *key)
 	return -1;
 }
 
-int config::findkey(char *section, char *key)
+int config::findkey(const char *section, const char *key)
 {
     int i;
     i = findsection( section );
@@ -161,7 +161,7 @@ int config::findkey(char *section, char *key)
     return findkey( i, key );
 }
 
-char * config::getvalue(char *section, char *key, string & value)
+char * config::getvalue(const char *section, const char *key, string & value)
 {
 	int keyindex;
     char * p ;
@@ -188,7 +188,7 @@ char * config::getvalue(char *section, char *key, string & value)
 	return value.getstring();
 }
 
-char * config::getvalue(char *section, char *key)
+char * config::getvalue(const char *section, const char *key)
 {
     return getvalue( section, key, m_tempstr);
 }
@@ -220,7 +220,7 @@ char * config::enumsection(struct config_enum * enumkey)
 	return NULL;					// not found ;
 }
 
-char * config::enumkey(char *section, struct config_enum * enumkey )
+char * config::enumkey(const char *section, struct config_enum * enumkey )
 {
 	char *line;
 	int i;
@@ -258,7 +258,7 @@ char * config::enumkey(char *section, struct config_enum * enumkey )
 }
 
 
-int config::getvalueint(char *section, char *key)
+int config::getvalueint(const char *section, const char *key)
 {
 	string pv ;
 	int v = 0;
@@ -281,7 +281,7 @@ int config::getvalueint(char *section, char *key)
 	}
 }
 
-void config::setvalue(char *section, char *key, char *value)
+void config::setvalue(const char *section, const char *key, const char *value)
 {
     int sectionindex ;
 	int keyindex;
@@ -321,14 +321,14 @@ void config::setvalue(char *section, char *key, char *value)
 	m_dirty = 1;
 }
 
-void config::setvalueint(char *section, char *key, int value)
+void config::setvalueint(const char *section, const char *key, int value)
 {
 	char cvalue[40] ;
 	sprintf(cvalue, "%d", value);
 	setvalue(section, key, cvalue);
 }
 
-void config::removekey(char *section, char *key)
+void config::removekey(const char *section, const char *key)
 {
 	int keyindex;
 	keyindex = findkey(section, key);
@@ -350,7 +350,7 @@ void config::save()
         }
         else {
             FILE *sfile ;
-            config def(defconf);
+            config def(CFG_DEFFILE);
             sfile = fopen(m_configfile.getstring(), "w");
             if( sfile ) {
                 int i ;

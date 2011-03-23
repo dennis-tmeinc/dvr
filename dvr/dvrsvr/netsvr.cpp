@@ -227,7 +227,7 @@ int net_detectsmartserver()
         // "rausb0", 49954, "lookingforsmartserver", 21 );
         FILE * wifi_interface_f ;
         char   wifi_interface[40] ;
-        wifi_interface_f = fopen( "/var/dvr/wifidev", "r" );
+        wifi_interface_f = fopen( VAR_DIR"/wifidev", "r" );
         if( wifi_interface_f ) {
             int n=fread( wifi_interface, 1, sizeof( wifi_interface ), wifi_interface_f );
             if( n>0 ) {
@@ -574,9 +574,8 @@ void *net_thread(void *param)
 }
 
 // initialize network
-void net_init()
+void net_init(config &dvrconfig)
 {
-    config dvrconfig(dvrconfigfile);
     string v ;
     int   iv ;
 

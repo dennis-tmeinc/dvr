@@ -10,6 +10,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "../../cfg.h"
+
 #define CFGTAG (0x5f7da992)
     
 char * cfgfiles[] = {    

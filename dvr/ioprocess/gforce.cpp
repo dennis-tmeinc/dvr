@@ -78,6 +78,8 @@ int gforce_available;
 int gforce_crashdata_enable;
 int gforce_mountangle;
 
+static char disk_curdiskfile[260] ;
+
 // g value converting vectors ,
 // for sensor to unit convertion :
 //      (Back, Right, Buttom)  = [vecttabe] * (X, Y, -Z)        // X,Y,Z are based on value from sensor
@@ -231,36 +233,6 @@ static char direction_table[24][2] =
 
 // direction table from harrison.
 // 0:Front,1:Back, 2:Right, 3:Left, 4:Bottom, 5:Top 
-#ifdef TVS_APP
-static char direction_table[24][3] = 
-{
-  {0, 2, 0x62}, // Forward:front, Upward:right    Leftward:top
-  {0, 3, 0x52}, // Forward:Front, Upward:left,    Leftward:bottom
-  {0, 4, 0x22}, // Forward:Front, Upward:bottom,  Leftward:right 
-  {0, 5, 0x12}, // Forward:Front, Upward:top,    Leftward:left 
-  {1, 2, 0x61}, // Forward:back,  Upward:right,    Leftward:bottom 
-  {1, 3, 0x51}, // Forward:back,  Upward:left,    Leftward:top
-  {1, 4, 0x21}, // Forward:back,  Upward:bottom,    Leftward:left
-  {1, 5, 0x11}, // Forward:back, Upward:top,    Leftward:right 
-  {2, 0, 0x42}, // Forward:right, Upward:front,    Leftward:bottom
-  {2, 1, 0x32}, // Forward:right, Upward:back,    Leftward:top
-  {2, 4, 0x28}, // Forward:right, Upward:bottom,    Leftward:back
-  {2, 5, 0x18}, // Forward:right, Upward:top,    Leftward:front
-  {3, 0, 0x41}, // Forward:left, Upward:front,    Leftward:top
-  {3, 1, 0x31}, // Forward:left, Upward:back,    Leftward:bottom
-  {3, 4, 0x24}, // Forward:left, Upward:bottom,    Leftward:front
-  {3, 5, 0x14}, // Forward:left, Upward:top,    Leftward:back
-  {4, 0, 0x48}, // Forward:bottom, Upward:front,    Leftward:left
-  {4, 1, 0x38}, // Forward:bottom, Upward:back,    Leftward:right
-  {4, 2, 0x68}, // Forward:bottom, Upward:right,    Leftward:front
-  {4, 3, 0x58}, // Forward:bottom, Upward:left,    Leftward:back
-  {5, 0, 0x44}, // Forward:top, Upward:front,    Leftward:right
-  {5, 1, 0x34}, // Forward:top, Upward:back,    Leftward:left
-  {5, 2, 0x64}, // Forward:top, Upward:right,    Leftward:back
-  {5, 3, 0x54}  // Forward:top, Upward:left,    Leftward:front
-};
-#endif
-
 #ifdef PWII_APP
 static char direction_table[24][3] = 
 {
@@ -286,6 +258,34 @@ static char direction_table[24][3] =
   {4, 3, 0x58}, // Forward:bottom, Upward:left,    Leftward:back
   {5, 0, 0x34}, // Forward:top, Upward:front,    Leftward:right
   {5, 1, 0x44}, // Forward:top, Upward:back,    Leftward:left
+  {5, 2, 0x64}, // Forward:top, Upward:right,    Leftward:back
+  {5, 3, 0x54}  // Forward:top, Upward:left,    Leftward:front
+};
+#else		// TVS APP
+static char direction_table[24][3] = 
+{
+  {0, 2, 0x62}, // Forward:front, Upward:right    Leftward:top
+  {0, 3, 0x52}, // Forward:Front, Upward:left,    Leftward:bottom
+  {0, 4, 0x22}, // Forward:Front, Upward:bottom,  Leftward:right 
+  {0, 5, 0x12}, // Forward:Front, Upward:top,    Leftward:left 
+  {1, 2, 0x61}, // Forward:back,  Upward:right,    Leftward:bottom 
+  {1, 3, 0x51}, // Forward:back,  Upward:left,    Leftward:top
+  {1, 4, 0x21}, // Forward:back,  Upward:bottom,    Leftward:left
+  {1, 5, 0x11}, // Forward:back, Upward:top,    Leftward:right 
+  {2, 0, 0x42}, // Forward:right, Upward:front,    Leftward:bottom
+  {2, 1, 0x32}, // Forward:right, Upward:back,    Leftward:top
+  {2, 4, 0x28}, // Forward:right, Upward:bottom,    Leftward:back
+  {2, 5, 0x18}, // Forward:right, Upward:top,    Leftward:front
+  {3, 0, 0x41}, // Forward:left, Upward:front,    Leftward:top
+  {3, 1, 0x31}, // Forward:left, Upward:back,    Leftward:bottom
+  {3, 4, 0x24}, // Forward:left, Upward:bottom,    Leftward:front
+  {3, 5, 0x14}, // Forward:left, Upward:top,    Leftward:back
+  {4, 0, 0x48}, // Forward:bottom, Upward:front,    Leftward:left
+  {4, 1, 0x38}, // Forward:bottom, Upward:back,    Leftward:right
+  {4, 2, 0x68}, // Forward:bottom, Upward:right,    Leftward:front
+  {4, 3, 0x58}, // Forward:bottom, Upward:left,    Leftward:back
+  {5, 0, 0x44}, // Forward:top, Upward:front,    Leftward:right
+  {5, 1, 0x34}, // Forward:top, Upward:back,    Leftward:left
   {5, 2, 0x64}, // Forward:top, Upward:right,    Leftward:back
   {5, 3, 0x54}  // Forward:top, Upward:left,    Leftward:front
 };
@@ -358,7 +358,7 @@ int gforce_savecrashdata()
         return 0;
     }
     
-    diskfile = fopen( "/var/dvr/dvrcurdisk", "r");
+    diskfile = fopen( disk_curdiskfile, "r");
 
     if( diskfile ) {
         if( fscanf( diskfile, "%s", dbuf )>0 ) {
@@ -485,7 +485,7 @@ void gforce_log( int x, int y, int z )
     if( gforce_available == 0 ) {           // gforce_init may not return correct availability answer, so we do it here. 
         FILE * fgsensor ;
         dvr_log("G force sensor available!");
-        fgsensor = fopen( "/var/dvr/gsensor", "w" );
+        fgsensor = fopen( VAR_DIR"/gsensor", "w" );
         if( fgsensor ) {
             fprintf(fgsensor, "1");
             fclose(fgsensor);
@@ -596,7 +596,7 @@ void gforce_calibrate_mountangle(int cal)
 // re-initialize gforce sensor
 void gforce_reinit()
 {
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     dvr_log("Re-initialize gforce sensor");
     gforce_init( dvrconfig );
 }
@@ -923,7 +923,7 @@ void gforce_init( config & dvrconfig )
     if( responds && responds[5] ) { // g_sensor available
         FILE * fgsensor ;
         dvr_log("G force sensor detected!");
-        fgsensor = fopen( "/var/dvr/gsensor", "w" );
+        fgsensor = fopen( VAR_DIR"/gsensor", "w" );
         if( fgsensor ) {
             fprintf(fgsensor, "1");
             fclose(fgsensor);
@@ -947,6 +947,11 @@ void gforce_init( config & dvrconfig )
         dvr_log("G force sensor init failed!");
     }
 
+	strncpy( disk_curdiskfile, dvrconfig.getvalue("system", "currentdisk"), sizeof(disk_curdiskfile));
+    if( strlen( disk_curdiskfile )<2) {
+		strcpy( disk_curdiskfile, VAR_DIR"/dvrcurdisk" ) ;
+    }
+	
 }
 
 void gforce_finish()

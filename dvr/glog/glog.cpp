@@ -64,7 +64,6 @@ float max_distance=500 ;
 // converting parameter
 float degree1km = 0.012 ;
 
-char dvriomap[256] = "/var/dvr/dvriomap" ;
 char gpslogfilename[512] ;
 int glog_poweroff=1 ;           // start from power off
 string dvrcurdisk;
@@ -99,14 +98,13 @@ double sensorbouncetime[MAXSENSORNUM] ;
 double sensorbouncevalue[MAXSENSORNUM] ;
 
 // unsigned int outputmap ;	// output pin map cache
-char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
-char * pidfile = "/var/dvr/glog.pid" ;
+char * pidfile = VAR_DIR"/glog.pid" ;
 
 int app_state ;     // 0: quit, 1: running: 2: restart
 
 unsigned int sigcap = 0 ;
 
-char disksroot[128] = "/var/dvr/disks" ;
+char disksroot[260] ;
 
 class dir_find {
     protected:
@@ -1630,7 +1628,7 @@ int appinit()
 	string serialport ;
 	string iomapfile ;
     string tstr ;
-	config dvrconfig(dvrconfigfile);
+	config dvrconfig(CFG_FILE);
     string v ;
 
     // setup dbg host
@@ -1690,7 +1688,12 @@ int appinit()
 	if( i>=1200 && i<=115200 ) {
 		tab102b_port_baudrate=i ;
 	}
-    
+
+	strcpy( disksroot, dvrconfig.getvalue("system", "mountdir"));
+	if( strlen( disksroot)<2 ) {
+		strcpy( disksroot, VAR_DIR"/disks" );
+	}
+		
 	// initialize time zone
 	string tz ;
 	string tzi ;

@@ -9,6 +9,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/socket.h>
+#include <netdb.h>
+
 
 #define SERVER_NAME "Eagle HTTP 0.21"
 #define PROTOCOL "HTTP/1.1"
@@ -1333,11 +1336,97 @@ void sigpipe(int sig)
     _exit(0);
 }
 
+
+// listen on port 80 for http connections, make this program a stand alone http server
+void http_listen()
+{
+
+    struct addrinfo hints;
+    struct addrinfo *res;
+    struct addrinfo *ressave;
+	union {
+		struct sockaddr_in sin ;
+		struct sockaddr_in6 sin6 ;
+	} saddr ;
+	socklen_t saddrlen;
+    int sockfd;
+	int asockfd ;
+    int val;
+    
+    memset(&hints, 0, sizeof(struct addrinfo));
+    hints.ai_flags = AI_PASSIVE;
+    hints.ai_family = PF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM ;
+    
+    res = NULL;
+    if (getaddrinfo(NULL, "80", &hints, &res) != 0) {
+        printf("Error:getaddrinfo!");
+        exit(1);
+    }
+    if (res == NULL) {
+        printf("Error:getaddrinfo!");
+        exit(1);
+    }
+    ressave = res;
+    
+    /*
+     Try open socket with each address getaddrinfo returned,
+     until getting a valid listening socket.
+     */
+    sockfd = -1;
+    while (res) {
+        sockfd = socket(res->ai_family,
+                        res->ai_socktype, res->ai_protocol);
+        
+        if (sockfd != -1) {
+            val = 1;
+            setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &val,
+                       sizeof(val));
+            if (bind(sockfd, res->ai_addr, res->ai_addrlen) == 0) {
+                break;
+			}
+            close(sockfd);
+            sockfd = -1;
+        }
+        res = res->ai_next;
+    }
+    
+    freeaddrinfo(ressave);
+    
+    if (sockfd == -1) {
+        printf("Error:listen!");
+		exit(1);
+    }
+    listen(sockfd, 10);
+
+	while( (asockfd=accept( sockfd, (struct sockaddr *)&saddr, &saddrlen  ))>0 ) {
+		if( fork()==0 ) {
+			// child process
+			dup2( asockfd, 0 );	// dup to 0, 1
+			dup2( asockfd, 1 );
+			close( sockfd );	// close listening socket
+			close( asockfd );
+			break;
+		}
+		close( asockfd ) ;
+	}
+
+   
+    return ;
+}
+
+
+
 int main(int argc, char * argv[])
 {
     if( argc>1 ) {
         document_root=argv[1] ;
     }
+	if( argc>2 ) {
+		if( argv[2][0]=='-' && argv[2][1]=='l' ) {
+			http_listen();
+		}
+	}
 
 	// set document root dir
     setenv( "DOCUMENT_ROOT", document_root, 1);

@@ -15,10 +15,11 @@
 #include <stdarg.h>
 #include <time.h>
 
+#include "../cfg.h"
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
 
-char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
+char dvrconfigfile[] = CFG_FILE ;
 
 int main( int argc, char * argv[] )
 {

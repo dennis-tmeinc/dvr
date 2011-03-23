@@ -19,3 +19,15 @@
 #define PWIIMCU_SUPPORT 1
 
 #endif
+
+#define	APPNAME	"PW34"
+
+// default config file
+#define	CFG_DEFFILE	"/davinci/dvr/defconf" 
+#define	CFG_FILE	"/etc/dvr/dvr.conf" 
+
+#define VAR_DIR		"/var/dvr"
+
+#define WWWROOT	"/home/www"
+#define WWWSERIALFILE "/tmp/wwwserialnofile"
+

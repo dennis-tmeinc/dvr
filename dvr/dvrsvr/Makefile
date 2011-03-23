@@ -4,6 +4,34 @@
 include ../config
 include $(PROJDIR)/arm_tool
 
+#no eagle boards
+ifeq ($(EAGLE),mv)
+SOURCES=main.cpp \
+		dvrtime.cpp \
+		dvrsvr.cpp \
+		netsvr.cpp \
+		msg.cpp \
+		ptz.cpp \
+		record.cpp \
+		capture.cpp \
+		ipcapture.cpp \
+		memory.cpp \
+		dvrfile.cpp \
+		playback.cpp \
+		string.cpp \
+		disk.cpp \
+		idx.cpp \
+		config.cpp \
+		event.cpp \
+		live.cpp \
+		crypt.cpp \
+		dio.cpp \
+		md5.cpp \
+		screen.cpp
+		
+LDFLAGS= -lpthread -lstdc++ -lrt -Wl,-rpath,.
+		
+else
 SOURCES=main.cpp \
 		dvrtime.cpp \
 		dvrsvr.cpp \
@@ -28,6 +56,11 @@ SOURCES=main.cpp \
 		screen.cpp \
 		md5.cpp \
 		draw.cpp
+		
+#LDFLAGS= -lpthread -lstdc++ -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib -Wl,-rpath,.
+LDFLAGS= -lpthread -lstdc++ -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib
+		
+endif	
 
 EXTRASOURCES=../ioprocess/diomap.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
 
@@ -69,8 +102,6 @@ OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 # LIBRARY=libdio.so
 
 CCFLAGS= -Wall -g
-#LDFLAGS= -lpthread -lstdc++ -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib -Wl,-rpath,.
-LDFLAGS= -lpthread -lstdc++ -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib
 
 all : dvrsvr
 

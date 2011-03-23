@@ -1,5 +1,3 @@
-#include "../../cfg.h"
-
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -11,11 +9,9 @@
 #include <fcntl.h>
 #include <time.h>
 
+#include "../../cfg.h"
 #include "../../dvrsvr/crypt.h"
 #include "../../dvrsvr/dvr.h"
-
-char dvrconfigfile[]="/etc/dvr/dvr.conf" ;
-char defconfigfile[]="/davinci/dvr/defconf" ;
 
 extern void md5_checksum( char * checksum, unsigned char * data, int datalen );
 
@@ -65,7 +61,7 @@ int main()
                 if( key->usbid[0] == 'M' && key->usbid[1] == 'F' ) {
                     bin2c64((unsigned char *)(key->videokey), 256, usbid);		// convert to c64
                     
-                    config defconfig(defconfigfile);    
+                    config defconfig(CFG_DEFFILE);    
 #ifdef TVS_APP		                    
                     defconfig.setvalue( "system", "tvsmfid", key->usbid );
 #endif // TVS_APP                    
@@ -77,7 +73,7 @@ int main()
                     defconfig.setvalue("system", "filepassword", usbid);	// save password to config file
                     defconfig.save();
 
-                    config dvrconfig(dvrconfigfile);    
+                    config dvrconfig(CFG_FILE);    
 #ifdef TVS_APP		                    
                     dvrconfig.setvalue( "system", "tvsmfid", key->usbid );
 #endif // TVS_APP                    
@@ -107,7 +103,7 @@ int main()
         printf( "Manufacturer ID file upload failed!" );
     }
     if( res ) {
-        id_file = fopen( "/var/dvr/dvrsvr.pid", "r" ) ;
+        id_file = fopen( VAR_DIR"/dvrsvr.pid", "r" ) ;
         if( id_file ) {
             dvrpid=0;
             fscanf(id_file, "%d", &dvrpid ) ;

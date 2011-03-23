@@ -1,5 +1,3 @@
-#include "../../cfg.h"
-
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -10,6 +8,8 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <time.h>
+
+#include "../../cfg.h"
 
 int main()
 {
@@ -68,7 +68,7 @@ int main()
         // if dvrsvr running, suspend it
         FILE * dvrpidfile ;
         pid_t dvrpid ;
-        dvrpidfile=fopen("/var/dvr/dvrsvr.pid", "r");
+        dvrpidfile=fopen(VAR_DIR"/dvrsvr.pid", "r");
         if( dvrpidfile ) {
             dvrpid=0 ;
             fscanf(dvrpidfile, "%d", &dvrpid);
@@ -78,7 +78,7 @@ int main()
             }
         }
         // updating MCU firmware
-        execlp("/davinci/dvr/ioprocess", "ioprocess", "-fw", mcumsgfile, NULL );
+        execlp( APP_DIR"/ioprocess", "ioprocess", "-fw", mcumsgfile, NULL );
         exit(2);    // error exec
     }
 
@@ -98,7 +98,7 @@ int main()
         dup2(fd, 2);
         close(fd);
         // reboot system
-        execlp("/davinci/dvr/ioprocess", "ioprocess", "-reboot", "5", NULL );
+        execlp( APP_DIR"/ioprocess", "ioprocess", "-reboot", "5", NULL );
         return 2;
     }
 */

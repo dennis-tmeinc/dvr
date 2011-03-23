@@ -1327,7 +1327,7 @@ void mcu_init( config & dvrconfig )
         char mcu_firmware_version[80] ;
         if( mcu_version( mcu_firmware_version ) ) {
             dvr_log("MCU version: %s", mcu_firmware_version );
-            FILE * mcuversionfile=fopen("/var/dvr/mcuversion", "w");
+            FILE * mcuversionfile=fopen(VAR_DIR"/mcuversion", "w");
             if( mcuversionfile ) {
                 fprintf( mcuversionfile, "%s", mcu_firmware_version );
                 fclose( mcuversionfile );

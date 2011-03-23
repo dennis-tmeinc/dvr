@@ -60,8 +60,6 @@ typedef unsigned long int DWORD;
 typedef unsigned short int WORD;
 typedef unsigned char BYTE;
 
-#define MAXCHANNEL		16
-
 // application variables, functions
 
 #define APPQUIT 	(0)
@@ -70,7 +68,6 @@ typedef unsigned char BYTE;
 #define APPRESTART	(3)
 
 extern pthread_mutex_t mutex_init ;
-extern char dvrconfigfile[];
 extern int app_state;
 extern int system_shutdown;
 extern float g_cpu_usage ;
@@ -97,7 +94,7 @@ extern char g_vri[128];
 extern string g_policeidlistfile ;
 extern char g_policeid[32];
 
-int  dvr_log(char *str, ...);
+int  dvr_log(const char *str, ...);
 void dvr_logkey( int op, struct key_data * key ) ;
 //void dvr_lock();
 //void dvr_unlock();
@@ -301,7 +298,7 @@ int file_write(const void *ptr, int size, FILE *stream);
 int file_close(FILE *fp);
 int file_flush(FILE *stream);
 
-void file_init();
+void file_init(config &dvrconfig);
 void file_uninit();
 
 // capture
@@ -355,7 +352,7 @@ void cap_stop();
 void cap_restart(int channel);
 void cap_capIframe(int channel);
 char * cap_fileheader(int channel);
-void cap_init();
+void cap_init(config &dvrconfig);
 void cap_uninit();
 
 #define CAP_TYPE_UNKNOWN	(-1)
@@ -454,16 +451,16 @@ class capture {
 	int getptzaddr() {
 		return m_attr.ptz_addr;
 	}
-
-	virtual void update(int updosd);	// periodic update procedure, updosd: require to update OSD
-
     void setremoteosd() { m_remoteosd=1; } 
 	void updateOSD ();          		// to update OSD text
-   	virtual void setosd( struct hik_osd_type * posd )=0;
-
 	void alarm();                   	// update alarm relate to capture channel
-	virtual void start(){m_started=1;}	// start capture
-	virtual void stop(){m_started=0;}	// stop capture
+    int getheaderlen(){return m_headerlen;}
+    char * getheader(){return m_header;}
+
+	virtual void update(int updosd);	// periodic update procedure, updosd: require to update OSD
+	virtual void setosd( struct hik_osd_type * posd ){};
+	virtual void start(){}				// start capture
+	virtual void stop(){}				// stop capture
 	virtual void restart(){				// restart capture
 		stop();
 		if( m_enable ) {
@@ -482,11 +479,11 @@ class capture {
     }
     virtual int getsignal(){return m_signal;}	// get signal available status, 1:ok,0:signal lost
     virtual int getmotion(){return m_motion;}	// get motion detection status
-    int getheaderlen(){return m_headerlen;}
-    char * getheader(){return m_header;}
 };
 
-extern capture * cap_channel[];
+extern capture * * cap_channel;
+
+#ifndef NO_ONBOARD_EAGLE
 
 extern int eagle32_channels ;
 int eagle32_hikhandle(int channel);
@@ -532,6 +529,8 @@ class eagle_capture : public capture {
     virtual int getsignal();        // get signal available status, 1:ok,0:signal lost
 };
 
+#endif 	// NO_ONBOARD_EAGLE
+
 class ipeagle32_capture : public capture {
 protected:
 	int m_sockfd ;		//  control socket for ip camera
@@ -558,7 +557,7 @@ public:
 } ;
 
 // ptz service
-void ptz_init();
+void ptz_init(config &dvrconfig);
 void ptz_uninit();
 int ptz_msg( int channel, DWORD command, int param );
 
@@ -669,7 +668,8 @@ extern string rec_basedir;
 extern int rec_pause;           // pause recording temperary
 extern int rec_busy ;
 extern int rec_watchdog ;      // recording watchdog
-void rec_init();
+extern int rec_norecord ;
+void rec_init(config &dvrconfig);
 void rec_uninit();
 void rec_onframe(struct cap_frame *pframe);
 void rec_record(int channel);
@@ -730,7 +730,7 @@ void disk_archive_stop();
 int disk_archive_runstate();
 int disk_stat(int * recordtime, int * lockfiletime, int * remaintime);
 int disk_renew(char * newfilename, int add=1);
-void disk_init();
+void disk_init(config &dvrconfig);
 void disk_uninit();
 extern int disk_busy ;
 
@@ -758,8 +758,7 @@ class live {
 
 
 // playback service
-
-void play_init();
+void play_init(config &dvrconfig);
 void play_uninit();
 
 class playback {
@@ -807,12 +806,8 @@ class playback {
 };
 
 // network service
-#ifdef EAGLE32
 #define DVRPORT 15111
-#endif
-#ifdef EAGLE34
-#define DVRPORT 15112
-#endif
+
 #define REQDVREX	0x7986a348
 #define REQDVRTIME	0x7986a349
 #define DVRSVREX	0x95349b63
@@ -854,7 +849,7 @@ int net_send(int sockfd, void * data, int datasize);
 int net_recv(int sockfd, void * data, int datasize);
 int net_onframe(cap_frame * pframe);
 // initialize network
-void net_init();
+void net_init(config &dvrconfig);
 void net_uninit();
 
 
@@ -1227,7 +1222,7 @@ extern int msgfd;
 // event 
 void setdio(int onoff);
 int  event_check();
-void event_init();
+void event_init( config &dvrconfig );
 void event_uninit();
 void event_run();
 extern int event_tm ;          // To support PWII Trace Mark 
@@ -1349,7 +1344,7 @@ void dio_smartserveron();
 int dio_getpwiikeycode( int * keycode, int * keydown) ;
 #endif    // PWII_APP
 
-void dio_init();
+void dio_init(config &dvrconfig);
 void dio_uninit();
 double gps_speed();
 int gps_location( double * latitude, double * longitude, double * speed );
@@ -1409,7 +1404,7 @@ public:
 extern alarm_t ** alarms ;
 extern int num_alarms ;
 
-void screen_init();
+void screen_init(config &dvrconfig);
 void screen_uninit();
 int screen_key( int keycode, int keydown ) ;
 int screen_io(int usdelay=0);

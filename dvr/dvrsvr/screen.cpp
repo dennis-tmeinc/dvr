@@ -14,6 +14,50 @@
 
 #include "dvr.h"
 
+#ifdef NO_ONBOARD_EAGLE
+// define all dummy screen functions
+int screen_setliveview( int channel )
+{
+    return 0;
+}
+
+int screen_menu( int level ) 
+{
+    return 0;
+}
+
+int screen_key( int keycode, int keydown ) 
+{
+    return 0;
+}
+
+int screen_draw()
+{
+    return 0;
+}
+
+// called periodically by main process
+int screen_io(int usdelay)
+{
+    return 0;
+}
+
+int screen_onframe( cap_frame * capframe )
+{
+    return 0;
+}
+
+// initialize screen
+void screen_init(config &dvrconfig)
+{
+}
+
+// screen finish, clean up
+void screen_uninit()
+{
+}
+#else	// ONBOAR EAGLE
+
 #include "fbwindow.h"
 
 #ifdef EAGLE32
@@ -1734,9 +1778,8 @@ int screen_onframe( cap_frame * capframe )
 }
 
 // initialize screen
-void screen_init()
+void screen_init(config &dvrconfig)
 {
-    config dvrconfig(dvrconfigfile);
     string v ;
     ScreenNum = dvrconfig.getvalueint("VideoOut", "screennum" );
     if( ScreenNum!=4 && ScreenNum!=2 ) {		// support 4, 2, 1 screen mode
@@ -1831,4 +1874,6 @@ void screen_uninit()
 
     draw_finish();
 }
+
+#endif	// NO_ONBOARD_EAGLE
 

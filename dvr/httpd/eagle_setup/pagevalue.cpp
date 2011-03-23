@@ -1,5 +1,3 @@
-#include "../../cfg.h"
-
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -10,6 +8,8 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <time.h>
+
+#include "../../cfg.h"
 
 int decode(const char * in, char * out, int osize );
 char * getquery( const char * qname );

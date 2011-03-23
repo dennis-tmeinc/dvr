@@ -21,10 +21,10 @@
 
 /* Default hostkey paths - these can be specified on the command line */
 #ifndef DSS_PRIV_FILENAME
-#define DSS_PRIV_FILENAME "/davinci/dvr/dss_host_key"
+#define DSS_PRIV_FILENAME "./dss_host_key"
 #endif
 #ifndef RSA_PRIV_FILENAME
-#define RSA_PRIV_FILENAME "/davinci/dvr/rsa_host_key"
+#define RSA_PRIV_FILENAME "./rsa_host_key"
 #endif
 
 /* Set NON_INETD_MODE if you require daemon functionality (ie Dropbear listens
@@ -37,9 +37,9 @@
  *
  * Both of these flags can be defined at once, don't compile without at least
  * one of them. */
-/*
+
 #define NON_INETD_MODE
-*/
+
 #define INETD_MODE
 
 /* Setting this disables the fast exptmod bignum code. It saves ~5kB, but is

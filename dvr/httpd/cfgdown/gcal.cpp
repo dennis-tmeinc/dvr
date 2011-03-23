@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdio.h>
 
+#include "../../cfg.h"
 #include "../../ioprocess/diomap.h"
 
 void dio_cmd_calibrate()

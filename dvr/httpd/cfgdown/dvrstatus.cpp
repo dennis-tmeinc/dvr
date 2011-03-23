@@ -1,9 +1,10 @@
 
-//#include "../../cfg.h"
-#include "../../dvrsvr/dvr.h"
-#include "../../ioprocess/diomap.h"
 #include <sys/mman.h>
 #include <sys/ioctl.h>
+
+#include "../../cfg.h"
+#include "../../dvrsvr/dvr.h"
+#include "../../ioprocess/diomap.h"
 
 // #define NETDBG
 
@@ -272,7 +273,7 @@ int disk_usage( int * disk_total, int * disk_free)
     char filename[256] ;
     struct statfs stfs;
     filename[0]=0;
-    FILE * curdisk = fopen("/var/dvr/dvrcurdisk", "r");
+    FILE * curdisk = fopen(VAR_DIR"/dvrcurdisk", "r");
     if( curdisk ) {
         if( fscanf(curdisk, "%s", filename ) ) {
             if (statfs(filename, &stfs) == 0) {
@@ -463,7 +464,7 @@ void check_synctime()
                 settimeofday( &tv, NULL );
 
                 // kill -USR2 dvrsvr.pid
-                FILE * fvalue = fopen( "/var/dvr/dvrsvr.pid", "r" );
+                FILE * fvalue = fopen( VAR_DIR"/dvrsvr.pid", "r" );
                 if( fvalue ) {
                     int i=0 ;
                     fscanf(fvalue, "%d", &i) ;
@@ -473,8 +474,8 @@ void check_synctime()
                     }
                 }
                 
-                system( "/davinci/dvr/dvrtime utctomcu > /dev/null" );
-                system( "/davinci/dvr/dvrtime utctortc > /dev/null" );
+                system( APP_DIR"/dvrtime utctomcu > /dev/null" );
+                system( APP_DIR"/dvrtime utctortc > /dev/null" );
             }
     }
     return ;

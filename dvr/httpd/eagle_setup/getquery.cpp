@@ -1,4 +1,3 @@
-#include "../../cfg.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -10,6 +9,8 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <time.h>
+
+#include "../../cfg.h"
 
 int hextoint(int c)
 {

@@ -1497,22 +1497,21 @@ void disk_logdir(char * logfilename)
 }
 */
 
-void disk_init()
+void disk_init(config &dvrconfig)
 {
-    char * pcfg;
+    const char * pcfg;
     int l;
-
-    config dvrconfig(dvrconfigfile);
 
     rec_basedir = "";
     disk_base = dvrconfig.getvalue("system", "mountdir");
     if (disk_base.length() == 0) {
-        disk_base = "/var/dvr/disks";
+        disk_base = VAR_DIR"/disks";
     }
     disk_play = dvrconfig.getvalue("system", "playbackdir");
     if (disk_play.length() == 0) {
         disk_play = disk_base ;
     }
+
     disk_arch = dvrconfig.getvalue("system", "archivedir");
 
     pcfg = dvrconfig.getvalue("system", "mindiskspace");
@@ -1533,7 +1532,7 @@ void disk_init()
     
     disk_curdiskfile = dvrconfig.getvalue("system", "currentdisk");
     if( disk_curdiskfile.length()<2) {
-        disk_curdiskfile="/var/dvr/dvrcurdisk" ;
+        disk_curdiskfile=VAR_DIR"/dvrcurdisk" ;
     }
 
     // percentage of minimum locked file can be kept
@@ -1557,7 +1556,7 @@ void disk_init()
 
     disk_archdiskfile = dvrconfig.getvalue("system", "archdisk");
     if( disk_archdiskfile.length()<2) {
-        disk_archdiskfile="/var/dvr/dvrarchdisk" ;
+        disk_archdiskfile=VAR_DIR"/dvrarchdisk" ;
     }
 
     disk_archive_unlock = dvrconfig.getvalueint("system", "arch_unlock");

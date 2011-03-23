@@ -23,7 +23,7 @@ int _osd_vert_exp = 4 ;
 int _osd_hori_exp = 4 ;
 
 int cap_channels;
-capture * cap_channel[MAXCHANNEL];
+capture * * cap_channel;
 
 #ifdef EAGLE32
 char Dvr264Header[40] = 
@@ -34,9 +34,7 @@ char Dvr264Header[40] =
     '\x80', '\x3E', '\x00', '\x00', '\x10', '\x02', '\x40', '\x01',
     '\x11', '\x10', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00'
 };
-
 #endif
-
 #ifdef EAGLE34
 char Dvr264Header[40] =
 {
@@ -108,7 +106,7 @@ void capture::loadconfig()
     // loading osd bitmaps ;
     m_sensorosd=0 ;
 
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     
     m_attr.structsize = sizeof(m_attr);
     
@@ -1174,43 +1172,40 @@ char * cap_fileheader(int channel)
 }
 
 // initial capture card, return channel numbers
-void cap_init()
+void cap_init(config &dvrconfig)
 {
     int i;
     int videostandard ;
     int enabled_channels ;
-    int cap_ch ;
-    int ilocal=0 ;		// local camera idx
     enabled_channels = 0 ;
     
-    config dvrconfig(dvrconfigfile);
-    
-    cap_ch = dvrconfig.getvalueint("system", "totalcamera");
-    
+	cap_channels = dvrconfig.getvalueint("system", "totalcamera");
+#ifndef NO_ONBOARD_EAGLE
+    int ilocal=0 ;		// local camera idx
+	eagle32_init(dvrconfig);
+	if( cap_channels==0 ) {
+		cap_channels = eagle32_channels ;			// use local channel only
+	}
+#endif	// NO_ONBOARD_EAGLE
+	if( cap_channels<=0 || cap_channels>64 ) {
+		cap_channels = 4 ;
+	}
+    cap_channel = new capture * [cap_channels] ;
+
     // initialize local capture card (eagle32)
     videostandard = dvrconfig.getvalueint("system", "videostandard");
 
-    for( i=0; i<MAXCHANNEL; i++ ) {
-        cap_channel[i]=NULL ;
-    }
-
-    eagle32_init(dvrconfig);
-
     //    dvr_log("%d capture card (local) channels detected.", dvrchannels);
-    if( cap_ch<=0 ) {
-        cap_ch=eagle32_channels ;
-    }
-    if( cap_ch > MAXCHANNEL ) {
-        cap_ch = MAXCHANNEL ;
-    }
-
-    for (i = 0; i < cap_ch; i++ ) {
+    for (i = 0; i < cap_channels; i++ ) {
         char cameraid[16] ;
         int cameratype ;
         sprintf(cameraid, "camera%d", i+1 );
         cameratype = dvrconfig.getvalueint(cameraid, "type");	
         if( cameratype == 0 ) {			// local capture card
-            int lch = dvrconfig.getvalueint(cameraid, "channel");	
+#ifdef	NO_ONBOARD_EAGLE
+                cap_channel[i]=new capture(i);				// dummy channel
+#else			
+			int lch = dvrconfig.getvalueint(cameraid, "channel");	
             if( lch==0 ) {
                 lch = ++ilocal ;
             }
@@ -1218,14 +1213,15 @@ void cap_init()
                 cap_channel[i]=new eagle_capture(i, lch-1);
             }
             else {
-                cap_channel[i]=new eagle_capture(i, -1);		// dummy channel
+                cap_channel[i]=new capture(i);				// dummy channel
             }
-        }
+#endif
+		}
         else if( cameratype == 1 ) {	// ip camera
             cap_channel[i] = new ipeagle32_capture(i);
         }
         else {
-            cap_channel[i]=new eagle_capture(i, -1);		// dummy channel
+            cap_channel[i]=new capture(i);					// dummy channel
         }
         
         if( cap_channel[i]->enabled() ) {
@@ -1233,13 +1229,11 @@ void cap_init()
         }
     }
     
-    cap_channels = cap_ch ;
-    
 //    if( enabled_channels<=0 ) {
 //        printf("No camera available, DVR QUIT!\n");
 //        exit(1);
 //    }
-    dvr_log("Total %d cameras initialized.", enabled_channels);
+    dvr_log("Total %d cameras initialized, %d cameras enabled.", cap_channels, enabled_channels);
 }
 
 // uninitial capture card
@@ -1247,16 +1241,18 @@ void cap_uninit()
 {
     int i;
     cap_stop();
-    eagle32_uninit ();
+#ifndef	NO_ONBOARD_EAGLE
+	eagle32_uninit ();
+#endif	
     if( cap_channels > 0 ) {
         cap_channels=0 ;
     }
-    for( i=0; i<MAXCHANNEL; i++ ) {
+    for( i=0; i<cap_channels; i++ ) {
         if( cap_channel[i] ) {
             delete cap_channel[i] ;
-            cap_channel[i]=NULL ;
         }
     }
+	delete [] cap_channel ;
     // un initialize local capture card
     dvr_log("Capture card uninitialized.");
 }

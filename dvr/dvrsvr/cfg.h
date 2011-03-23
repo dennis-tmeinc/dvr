@@ -22,25 +22,25 @@ class config {
 	string  m_configfile;
 	string  m_tempstr;
 	int 	m_dirty;
-    void mergedefconf( char * defconffile );
+    void mergedefconf( const char * defconffile );
     int nextsection(int idx);
-    int findsection(char *section);
-    int findkey(int sectionline, char *key);
-    int findkey(char *section, char *key);
+    int findsection(const char *section);
+    int findkey(int sectionline, const char *key);
+    int findkey(const char *section, const char *key);
   public:
 	config();
-	config(char *configfilename);
+	config(const char *configfilename);
     ~config();
-	void open(char *configfilename);
+	void open(const char *configfilename);
     void close();
-    char * getvalue(char *section, char *key);
-    char * getvalue(char *section, char *key, string & value);
-	int getvalueint(char *section, char *key);
-	void setvalue(char *section, char *key, char *value);
-  	void setvalueint(char *section, char *key, int value);
+    char * getvalue(const char *section, const char *key);
+    char * getvalue(const char *section, const char *key, string & value);
+	int getvalueint(const char *section, const char *key);
+	void setvalue(const char *section, const char *key, const char *value);
+  	void setvalueint(const char *section, const char *key, int value);
 	char * enumsection(struct config_enum * enumkey);
-	char * enumkey(char *section, struct config_enum * enumkey);
-	void removekey(char *section, char *key);
+	char * enumkey(const char *section, struct config_enum * enumkey);
+	void removekey(const char *section, const char *key);
 	void save();
 };
 

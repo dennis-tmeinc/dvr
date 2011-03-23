@@ -108,8 +108,8 @@ int hdinserted=0 ;
 #define PANELLEDNUM (3)
 #define DEVICEPOWERNUM (5)
 
-char dvriomap[100] = "/var/dvr/dvriomap" ;
-char * pidfile = "/var/dvr/ioprocess.pid" ;
+char dvriomap[100] = VAR_DIR"/dvriomap" ;
+const char pidfile[] = VAR_DIR"/ioprocess.pid" ;
 
 int shutdowndelaytime ;
 int wifidetecttime ;
@@ -118,8 +118,7 @@ int archivetime ;
 int standbytime ;
 
 // unsigned int outputmap ;	// output pin map cache
-char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
-char logfile[]="/var/dvr/dvrlogfile";
+const char logfile[]=VAR_DIR"/dvrlogfile";
 char temp_logfile[128] ;
 int watchdogenabled=0 ;
 int watchdogtimeout=30 ;
@@ -760,7 +759,7 @@ void dvrsvr_down()
 void dvrsvr_susp()
 {
     int pid ;
-    FILE * fpid = fopen("/var/dvr/dvrsvr.pid", "r");
+    FILE * fpid = fopen(VAR_DIR"/dvrsvr.pid", "r");
     if( fpid ) {
         if( fscanf( fpid, "%d", &pid )==1 ) {
             kill( pid, SIGUSR1 );
@@ -772,7 +771,7 @@ void dvrsvr_susp()
 void dvrsvr_resume()
 {
     int pid ;
-    FILE * fpid = fopen("/var/dvr/dvrsvr.pid", "r");
+    FILE * fpid = fopen(VAR_DIR"/dvrsvr.pid", "r");
     if( fpid ) {
         if( fscanf( fpid, "%d", &pid )==1 ) {
             kill( pid, SIGUSR2 );
@@ -784,7 +783,7 @@ void dvrsvr_resume()
 void glog_susp()
 {
     int pid ;
-    FILE * fpid = fopen("/var/dvr/glog.pid", "r");
+    FILE * fpid = fopen(VAR_DIR"/glog.pid", "r");
     if( fpid ) {
         if( fscanf( fpid, "%d", &pid )==1 ) {
             kill( pid, SIGUSR1 );
@@ -796,7 +795,7 @@ void glog_susp()
 void glog_resume()
 {
     int pid ;
-    FILE * fpid = fopen("/var/dvr/glog.pid", "r");
+    FILE * fpid = fopen(VAR_DIR"/glog.pid", "r");
     if( fpid ) {
         if( fscanf( fpid, "%d", &pid )==1 ) {
             kill( pid, SIGUSR2 );
@@ -816,8 +815,7 @@ void setnetwork()
     }
     pid_network = fork ();
     if( pid_network==0 ) {
-        static char snwpath[]="/davinci/dvr/setnetwork" ;
-        execl(snwpath, snwpath, NULL);
+        execl(APP_DIR"/setnetwork", "setnetwork", NULL);
         exit(0);    // should not return to here
     }
 }
@@ -836,9 +834,7 @@ void mountdisks()
     pid_disk_mount = fork ();
     if( pid_disk_mount==0 ) {
         sleep(5) ;
-        static char cmdmountdisks[]="/davinci/dvr/mountdisks" ;
-        sleep(5) ;
-        execl(cmdmountdisks, cmdmountdisks, NULL);
+        execl(APP_DIR"/mountdisks", "mountdisks", NULL);
         exit(0);    // should not return to here
     }
 }
@@ -853,8 +849,7 @@ void umountdisks()
     }
     pid_disk_mount = fork ();
     if( pid_disk_mount==0 ) {
-        static char cmdumountdisks[]="/davinci/dvr/umountdisks" ;
-        execl(cmdumountdisks, cmdumountdisks, NULL);
+        execl(APP_DIR"/umountdisks", "umountdisks", NULL);
         exit(0);    // should not return to here
     }
 }
@@ -863,8 +858,7 @@ void umountdisks()
 static int wifi_run=0 ;
 void wifi_up()
 {
-    static char wifi_up_script[]="/davinci/dvr/wifi_up" ;
-    system( wifi_up_script );
+    system( APP_DIR"/wifi_up" );
     // turn on wifi power. mar 04-2010
     dio_lock();
     p_dio_mmap->pwii_output |= 0x2000 ;
@@ -876,12 +870,11 @@ void wifi_up()
 // bring down wifi adaptor
 void wifi_down()
 {
-    static char wifi_down_script[]="/davinci/dvr/wifi_down" ;
     if( wifi_on ) {
         return ;
     }
     if( wifi_run ) {
-        system( wifi_down_script );
+        system( APP_DIR"/wifi_down" );
         // turn off wifi power
         dio_lock();
         p_dio_mmap->pwii_output &= ~0x2000 ;
@@ -934,6 +927,8 @@ int smartftp_disable ;
 int smartftp_reporterror ;
 int smartftp_arch ;     // do smartftp arch files
 int smartftp_src ;
+char disk_dir[260] ;
+char disk_archdir[260] ;
 
 // src == 0 : do "disk", src==1 : do "arch"
 void smartftp_start(int src=0)
@@ -951,13 +946,13 @@ void smartftp_start(int src=0)
         // be nice
         nice(10);
         
-//      system("/davinci/dvr/setnetwork");  // reset network, this would restart wifi adaptor
+//      system(APP_DIR"/setnetwork");  // reset network, this would restart wifi adaptor
         if( src==0 ) {
-            execl( "/davinci/dvr/smartftp", "/davinci/dvr/smartftp",
+            execl( APP_DIR"/smartftp", "smartftp",
               "rausb0",
               hostname,
               "247SECURITY",
-              "/var/dvr/disks",
+              disk_dir,
               "510",
               "247ftp",
               "247SECURITY",
@@ -968,11 +963,11 @@ void smartftp_start(int src=0)
               );
         }
         else {
-            execl( "/davinci/dvr/smartftp", "/davinci/dvr/smartftp",
+            execl( APP_DIR"/smartftp", "smartftp",
               "rausb0",
               hostname,
               "247SECURITY",
-              "/var/dvr/arch",
+              disk_archdir,
               "510",
               "247ftp",
               "247SECURITY",
@@ -1066,7 +1061,7 @@ int appinit()
     FILE * pidf ;
     int fd ;
     char * p ;
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     string v ;
     int i;
 
@@ -1188,7 +1183,7 @@ int appinit()
         char pwii_version[100] ;
         if( mcu_pwii_version( pwii_version ) ) {
             dvr_log("PWII version: %s", pwii_version );
-            FILE * pwiiversionfile=fopen("/var/dvr/pwiiversion", "w");
+            FILE * pwiiversionfile=fopen(VAR_DIR"/pwiiversion", "w");
             if( pwiiversionfile ) {
                 fprintf( pwiiversionfile, "%s", pwii_version );
                 fclose( pwiiversionfile );
@@ -1266,6 +1261,9 @@ int appinit()
         archivetime=1800 ;
     }
 
+	strcpy( disk_dir, dvrconfig.getvalue("system", "mountdir"));
+	strcpy( disk_archdir, dvrconfig.getvalue("system", "archivedir"));
+	
     smartftp_arch = dvrconfig.getvalueint( "system", "archive_upload");
 
     pidf = fopen( pidfile, "w" );
@@ -1961,7 +1959,7 @@ int main(int argc, char * argv[])
                         hdkeybounce++ ;
                         sync();
                         // umount disks
-                        system("/davinci/dvr/umountdisks") ;
+                        system(APP_DIR"/umountdisks") ;
                     }
                 }
                 else if( hdkeybounce==12 ) {

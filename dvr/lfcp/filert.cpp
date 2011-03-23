@@ -24,7 +24,7 @@
 #include "../ioprocess/diomap.h"
 
 char dvriomap[128] = "/var/dvr/dvriomap" ;
-char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
+char dvrconfigfile[] = CFG_FILE ;
 
 void dio_iomsg(char * msg=NULL, int suspend=0)
 {

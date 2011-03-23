@@ -532,10 +532,9 @@ int dio_syncrtc()
 }
 
 
-void dio_init()
+void dio_init(config &dvrconfig)
 {
     string iomapfile ;
-    config dvrconfig(dvrconfigfile);
     
     dio_inputmap = 0 ;
     dio_record = 1 ;

@@ -9,6 +9,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include "../../cfg.h"
+
 // fucntion from getquery.cpp
 int decode(const char * in, char * out, int osize );
 char * getquery( const char * qname );

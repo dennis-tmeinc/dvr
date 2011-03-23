@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+#include "../cfg.h"
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
 #include "../ioprocess/diomap.h"
@@ -26,8 +27,6 @@ char nistserver[]="64.90.182.55" ;
 // check http://support.ntp.org/bin/view/Servers/WebHome
 char ntpserver[]="64.90.182.55" ;
 
-char dvrconfigfile[]="/etc/dvr/dvr.conf" ;
-
 #ifdef MCU_SUPPORT
 
 char dvriomap[256] = "/var/dvr/dvriomap" ;
@@ -37,7 +36,7 @@ char dvriomap[256] = "/var/dvr/dvriomap" ;
 void inittz()
 {
     char * p ;
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     string tz ;
     string tzi ;
     
@@ -237,7 +236,7 @@ int readmcu(struct tm * t)
 {
     int res=0;
     int i;
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     string iomapfile ;
     iomapfile = dvrconfig.getvalue( "system", "iomapfile");
     if( iomapfile.length()>0 ) {
@@ -290,7 +289,7 @@ int writemcu(struct tm * t)
 {
     int res=0;
     int i;
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     string iomapfile( dvrconfig.getvalue( "system", "iomapfile") ) ;
     if( iomapfile.length()>0 ) {
         strncpy( dvriomap, iomapfile.getstring(), sizeof(dvriomap));
@@ -407,7 +406,7 @@ int mcutolocal()
 int readgps(struct tm * t)
 {
     int res=0;
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     string iomapfile( dvrconfig.getvalue( "system", "iomapfile")) ;
     if( iomapfile.length()>0 ) {
         strncpy( dvriomap, iomapfile.getstring(), sizeof(dvriomap));

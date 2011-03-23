@@ -19,9 +19,6 @@
 
 int app_quit=0 ;
 
-// unsigned int outputmap ;	// output pin map cache
-char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
-
 void sig_handler(int signum)
 {
    app_quit=1 ;

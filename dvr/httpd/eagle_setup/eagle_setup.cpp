@@ -1,4 +1,3 @@
-#include "../../cfg.h"
 
 #include <stdio.h>
 #include <unistd.h>
@@ -11,10 +10,8 @@
 #include <fcntl.h>
 #include <time.h>
 
+#include "../../cfg.h"
 #include "../../dvrsvr/crypt.h"
-
-char dvrconfigfile[]="/etc/dvr/dvr.conf" ;
-char defconfigfile[]="/davinci/dvr/defconf" ;
 
 int hextoint(int c)
 {
@@ -385,7 +382,7 @@ void status_page()
                 settimeofday( &tv, NULL );
 
                 // kill -USR2 dvrsvr.pid
-                fvalue = fopen( "/var/dvr/dvrsvr.pid", "r" );
+                fvalue = fopen( VAR_DIR"/dvrsvr.pid", "r" );
                 if( fvalue ) {
                     i=0 ;
                     fscanf(fvalue, "%d", &i) ;
@@ -395,8 +392,8 @@ void status_page()
                     }
                 }
                 
-                system( "/davinci/dvr/dvrtime utctomcu > /dev/null" );
-                system( "/davinci/dvr/dvrtime utctortc > /dev/null" );
+                system( APP_DIR"/dvrtime utctomcu > /dev/null" );
+                system( APP_DIR"/dvrtime utctortc > /dev/null" );
             }
         }
     }
@@ -538,7 +535,7 @@ void firmwareupload_page()
             // if dvrsvr running, kill it, (Suspend it)
             FILE * dvrpidfile ;
             pid_t dvrpid ;
-            dvrpidfile=fopen("/var/dvr/dvrsvr.pid", "r");
+            dvrpidfile=fopen(VAR_DIR"/dvrsvr.pid", "r");
             if( dvrpidfile ) {
                 dvrpid=0 ;
                 fscanf(dvrpidfile, "%d", &dvrpid);
@@ -585,7 +582,7 @@ void mcu_firmwareupload_page()
         // if dvrsvr running, kill it
         FILE * dvrpidfile ;
         pid_t dvrpid ;
-        dvrpidfile=fopen("/var/dvr/dvrsvr.pid", "r");
+        dvrpidfile=fopen(VAR_DIR"/dvrsvr.pid", "r");
         if( dvrpidfile ) {
             dvrpid=0 ;
             fscanf(dvrpidfile, "%d", &dvrpid);
@@ -595,7 +592,7 @@ void mcu_firmwareupload_page()
             }
         }
         // updating MCU firmware
-        execlp("/davinci/dvr/ioprocess", "ioprocess", "-fw", mcu_firmwarefilename, NULL );
+        execlp(APP_DIR"/ioprocess", "ioprocess", "-fw", mcu_firmwarefilename, NULL );
         exit(2);    // error exec
     }
     else if( mcu_upd_pid>0 ) {
@@ -621,7 +618,7 @@ void mcu_firmwareupload_page()
         dup2(fd, 2);
         close(fd);
         // reboot system
-        execlp("/davinci/dvr/ioprocess", "ioprocess", "-reboot", "5", NULL );
+        execlp(APP_DIR"/ioprocess", "ioprocess", "-reboot", "5", NULL );
         exit(2);
     }
 }
@@ -673,8 +670,8 @@ void mfid_page()
             if( checktvskey( usbid, key, keysize ) ) {
                 if( key->usbid[0] == 'M' && key->usbid[1] == 'F' ) {
                     bin2c64((unsigned char *)(key->videokey), 256, usbid);		// convert to c64
-                    
-                    config defconfig(defconfigfile);    
+
+                    config defconfig(CFG_DEFFILE);    
 #ifdef TVS_APP		                    
                     defconfig.setvalue( "system", "tvsmfid", key->usbid );
 #endif // TVS_APP                    
@@ -733,7 +730,7 @@ void mfid_page()
         fclose( id_file );
     }
     if( res ) {
-        id_file = fopen( "/var/dvr/dvrsvr.pid", "r" ) ;
+        id_file = fopen( VAR_DIR"/dvrsvr.pid", "r" ) ;
         if( id_file ) {
             dvrpid=0;
             fscanf(id_file, "%d", &dvrpid ) ;

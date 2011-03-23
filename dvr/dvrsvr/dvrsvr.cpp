@@ -1447,10 +1447,10 @@ void dvrsvr::Req2GetZoneInfo()
     int i;
     array <string> zoneinfo ;
     string s ;
-    char * p ;
+    const char * p ;
 
     config_enum enumkey ;
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     string tzi ;
 
     // initialize enumkey
@@ -1582,9 +1582,7 @@ void dvrsvr::Req2GetChState()
     }
 }
 
-       
-static char serfile[]="/tmp/wwwserialnofile" ;
-static char * makeserialno( char * buf, int bufsize ) 
+static char * www_genserialno( char * buf, int bufsize ) 
 {
     time_t t ;
     FILE * sfile ;
@@ -1606,7 +1604,7 @@ static char * makeserialno( char * buf, int bufsize )
     buf[i]=0;
     fclose(sfile);
     
-    sfile=fopen(serfile, "w");
+    sfile=fopen(WWWSERIALFILE, "w");
     time(&t);
     if(sfile) {
         fprintf(sfile, "%u %s", (unsigned int)t, buf);
@@ -1614,13 +1612,14 @@ static char * makeserialno( char * buf, int bufsize )
     }
     return buf ;
 }
-            
-static void run_getsetup()
+
+// initialize www data for setup page
+static void www_setup()
 {
     pid_t childpid ;
     childpid=fork();
     if( childpid==0 ) {
-        chdir("/home/www");
+        chdir(WWWROOT);
         execl("cgi/getsetup", "cgi/getsetup", NULL );
         exit(0);
     }
@@ -1641,8 +1640,8 @@ void dvrsvr::Req2GetSetupPage()
     if( m_keycheck || g_keycheck==0 )
     {
         // setup configure web pages
-        makeserialno( serno, sizeof(serno) );
-        run_getsetup();
+        www_genserialno( serno, sizeof(serno) );
+        www_setup();
         sprintf( pageuri, "/system.html?ser=%s", serno );
         
         ans.anscode = ANS2SETUPPAGE ;

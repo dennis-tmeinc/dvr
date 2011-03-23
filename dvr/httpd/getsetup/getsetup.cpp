@@ -1,15 +1,13 @@
 
-#include "../../cfg.h"
 
 #include <stdio.h>
 
+#include "../../cfg.h"
 #include "../../dvrsvr/crypt.h"
 #include "../../dvrsvr/genclass.h"
 #include "../../dvrsvr/cfg.h"
 
-char dvrconfigfile[]="/etc/dvr/dvr.conf" ;
 char tzfile[] = "tz_option" ;
-char * dvrworkdir = "/davinci/dvr" ;
 
 int main()
 {
@@ -19,7 +17,7 @@ int main()
     int l;
     int i;
     config_enum enumkey ;
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     string tzi ;
     string value ;
     int ivalue ;
@@ -371,7 +369,7 @@ int main()
         }
         
         ivalue=0 ;
-        f_id = fopen( "/var/dvr/gsensor", "r" );
+        f_id = fopen( VAR_DIR"/gsensor", "r" );
         if( f_id ) {
             fscanf( f_id, "%d", &ivalue);
             fclose(f_id);
@@ -767,8 +765,7 @@ int main()
     // write network_value
     fvalue = fopen("network_value", "w");
     if( fvalue ) {
-        FILE * ipfile ;
-        
+
         // JSON head
         fprintf(fvalue, "{" );
 
@@ -923,8 +920,8 @@ int main()
         fclose(fvalue);
     }
 
-    // write firmware version
-    system("cp /davinci/dvr/firmwareid ./firmware_version");
+    // link firmware version
+	symlink( APP_DIR"/firmwareid", "./firmware_version");
     
     // write dvrsvr port number, used by eagle_setup
     value = dvrconfig.getvalue("network", "port") ;

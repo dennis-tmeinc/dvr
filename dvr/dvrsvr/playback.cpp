@@ -423,9 +423,8 @@ int playback::readfileheader(char *hdbuf, int hdsize)
     }    
 }
 
-void play_init()
+void play_init(config &dvrconfig)
 {
-    config dvrconfig(dvrconfigfile);
     norecplayback=dvrconfig.getvalueint("system", "norecplayback");
 }
 

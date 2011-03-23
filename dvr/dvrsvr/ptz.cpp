@@ -60,11 +60,10 @@ int ptz_msg( int channel, DWORD command, int param )
     return 0;
 }
 
-void ptz_init()
+void ptz_init(config &dvrconfig)
 {
     string t ;
     struct termios serialattributes;
-    config dvrconfig(dvrconfigfile);
     string ptz_device;
     int ptz_baudrate;
     ptz_enable = dvrconfig.getvalueint("ptz", "enable");

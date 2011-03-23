@@ -1,8 +1,6 @@
-    
+
 #include "dvr.h"
 #include "../ioprocess/diomap.h"
-
-char dvrconfigfile[] = "/etc/dvr/dvr.conf";
 
 static char deftmplogfile[] = "/tmp/dvrlog.txt";
 static char deflogfile[] = "dvrlog.txt";
@@ -81,7 +79,7 @@ void dvr_cleanlogfile(char * logfilename)
 // return 
 //       1: log to recording hd
 //       0: log to temperary file
-int dvr_log(char *fmt, ...)
+int dvr_log(const char *fmt, ...)
 {
     static char logfilename[512] ;
     int res = 0 ;
@@ -96,7 +94,7 @@ int dvr_log(char *fmt, ...)
     if( logfilename[0]==0 ) {
         if (rec_basedir.length() > 0) {
             sprintf(logfilename, "%s/_%s_/%s", rec_basedir.getstring(), g_hostname, logfile.getstring());
-            symlink(logfilename, "/var/dvr/dvrlogfile");
+            symlink(logfilename, VAR_DIR"/dvrlogfile");
             dvr_cleanlogfile(logfilename);
         }
     }
@@ -155,7 +153,7 @@ static FILE * dvr_logkey_file()
     if( logfilename[0]==0 ) {
         if (rec_basedir.length() > 0) {
             sprintf(logfilename, "%s/_%s_/%s", rec_basedir.getstring(), g_hostname, keylogfile.getstring());
-            symlink(logfilename, "/var/dvr/tvslogfile" );
+            symlink(logfilename, VAR_DIR"/tvslogfile" );
             dvr_cleanlogfile(logfilename);
             lfile=fopen(logfilename,"a");
         }
@@ -178,7 +176,7 @@ static void dvr_logkey_settings()
     if( g_usbid[0] == 'I' && g_usbid[1] == 'N' ) {		// log installer only 
         //			write down some settings changes
         string v ;
-        config dvrconfig(dvrconfigfile);
+        config dvrconfig(CFG_FILE);
         
 #ifdef TVS_APP
         fprintf(flog, "\nTVS settings\n" );
@@ -257,7 +255,8 @@ void dvr_logkey( int op, struct key_data * key )
     if( op==0  ) {     // disconnect
         if( g_usbid[0] ) {
             g_usbid[0]=0 ;
-            unlink( "/var/dvr/connectid" );
+            unlink( VAR_DIR"/connectid" );
+            unlink( WWWSERIALFILE );			// remove setup serial no, so setup page would failed
             if( keylogsettings ) {
                 dvr_logkey_settings();
             }
@@ -273,7 +272,7 @@ void dvr_logkey( int op, struct key_data * key )
             memcmp( TVSchecksum, key->checksum, sizeof( TVSchecksum ) )!=0 ) {
             memcpy( TVSchecksum, key->checksum, sizeof( TVSchecksum ) );
             strcpy( g_usbid, key->usbid );
-            flog = fopen("/var/dvr/connectid", "w" ) ;
+            flog = fopen(VAR_DIR"/connectid", "w" ) ;
             if( flog ) {
                 fprintf( flog, "%s", g_usbid );
                 fclose( flog );
@@ -303,8 +302,8 @@ int dvr_getsystemsetup(struct system_stru * psys)
     string tmpstr;
     char buf[40] ;
     string v ;
-    char * pv ;
-    config dvrconfig(dvrconfigfile);
+    const char * pv ;
+    config dvrconfig(CFG_FILE);
 
 #ifdef MDVR_APP    
     strcpy(  psys->productid, "DIOTME");
@@ -444,7 +443,7 @@ int dvr_setsystemsetup(struct system_stru * psys)
     string tmpstr;
     char buf[40] ;
     char system[]="system" ;
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     
     if( strcmp( g_hostname, psys->ServerName )!=0 ) {	// set hostname
         FILE * phostname = NULL;
@@ -548,12 +547,11 @@ void sig_check()
     if( sigmap & (1<<SIGTERM) ) 
     {
         dvr_log("Signal <SIGTERM> captured.");
-#ifdef EAGLE32        
-        app_state = APPQUIT ;
-#endif
 #ifdef EAGLE34
-        app_state = APPDOWN ;       // APPQUIT make system reset in eagle34 board, so we just APPDOWN
-#endif        
+        app_state = APPDOWN ;       // APPQUIT make system reset in eagle34 board, so we just do APPDOWN
+#else	// EAGLE34
+        app_state = APPQUIT ;
+#endif	// EAGLE34
     }
     else if( sigmap & (1<<SIGQUIT) ) 
     {
@@ -600,12 +598,12 @@ void app_init( config & dvrconfig )
     pid_t mypid ;
     mypid=getpid();
     
-    // make directory /var/dvr
-    mkdir( "/var/dvr", 0777 );
+    // make var directory ("/var/dvr") if it is not there.
+    mkdir( VAR_DIR, 0777 );
     
     pidfile=dvrconfig.getvalue("system", "pidfile");
     if( pidfile.length()<=0 ) {
-        pidfile="/var/dvr/dvrsvr.pid" ;
+        pidfile=VAR_DIR"/dvrsvr.pid" ;
     }
     
     fid=fopen(pidfile.getstring(), "w");
@@ -661,7 +659,7 @@ void app_init( config & dvrconfig )
     t = dvrconfig.getvalue("system", "tvsmfid" );
     if( t.length()>0 ) {
         strncpy( g_mfid, t.getstring(), sizeof(g_mfid) );
-        fid=fopen("/var/dvr/tvsmfid", "w");
+        fid=fopen(VAR_DIR"/tvsmfid", "w");
         if( fid ) {
             fprintf(fid, "%s", g_mfid );
             fclose(fid);
@@ -698,7 +696,7 @@ void app_init( config & dvrconfig )
     t = dvrconfig.getvalue("system", "mfid" );
     if( t.length()>0 ) {
         strncpy( g_mfid, t.getstring(), sizeof(g_mfid) );
-        fid=fopen("/var/dvr/mfid", "w");
+        fid=fopen(VAR_DIR"/mfid", "w");
         if( fid ) {
             fprintf(fid, "%s", g_mfid );
             fclose(fid);
@@ -772,21 +770,21 @@ void app_exit()
 
 void do_init()
 {
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     dvr_log("Start initializing.");
 
     app_init(dvrconfig);
     
     time_init();
-    event_init();
-    disk_init();
-    file_init();
-    play_init();
-    cap_init();
-    rec_init();
-    ptz_init();
-    screen_init();	
-    net_init();
+    event_init(dvrconfig);
+    disk_init(dvrconfig);
+    file_init(dvrconfig);
+    play_init(dvrconfig);
+    cap_init(dvrconfig);
+    rec_init(dvrconfig);
+    ptz_init(dvrconfig);
+    screen_init(dvrconfig);	
+    net_init(dvrconfig);
 
     cap_start();	// start capture 
 }

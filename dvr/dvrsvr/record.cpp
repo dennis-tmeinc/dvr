@@ -9,7 +9,8 @@ int    rec_busy ;
 int    rec_pause = 0 ;             // 1: to pause recording, while network playback
 static int rec_fifo_size = 4000000 ;
 int    rec_fifobusy ;
-int    rec_lock_all = 0 ;			// all files save as locked file
+int    rec_lock_all ;			// all files save as locked file
+int    rec_norecord ;
 
 static pthread_mutex_t rec_mutex;
 static pthread_cond_t  rec_cond;
@@ -159,7 +160,7 @@ class rec_channel {
         float m_gforce_gd ;
         
     public:
-        rec_channel(int channel);
+        rec_channel(int channel, config & dvrconfig);
         ~rec_channel();
         
         void start();				// set start record stat
@@ -215,17 +216,16 @@ class rec_channel {
 
 };
 
-static rec_channel * recchannel[MAXCHANNEL];
+static rec_channel * recchannel[64];
 static int rec_channels;
 
 int rec_maxfilesize;
 int rec_maxfiletime;
 
-rec_channel::rec_channel(int channel)
+rec_channel::rec_channel(int channel, config &dvrconfig)
 {
     int i;
     char buf[64];
-    config dvrconfig(dvrconfigfile);
     string v ;
     char cameraname[80] ;
 
@@ -1087,12 +1087,11 @@ void rec_channel::alarm()
     }
 }
 
-void rec_init()
+void rec_init(config &dvrconfig)
 {
     int i;
     string v;
-    char * p ;
-    config dvrconfig(dvrconfigfile);
+    const char * p ;
 
     // initialize fifo lock
     pthread_mutex_init(&rec_mutex, NULL);
@@ -1151,24 +1150,23 @@ void rec_init()
     rec_threadid=0 ;
     rec_channels=0 ;
 
-    for (i = 0; i < MAXCHANNEL; i++) {
+    for (i = 0; i < 64; i++) {
         recchannel[i]=NULL ;
     }
 
     if( dvrconfig.getvalueint("system", "norecord")>0 ) {
+		rec_norecord = 1 ;
         dvr_log( "Dvr no recording mode."); 
     }
     else {
+		rec_norecord = 0 ;
         rec_channels = dvrconfig.getvalueint("system", "totalcamera");
         if( rec_channels<=0 ) {
             rec_channels = cap_channels ;
         }
-        if( rec_channels>MAXCHANNEL ) {
-            rec_channels = MAXCHANNEL ;
-        }
         if( rec_channels > 0 ) {
             for (i = 0; i < rec_channels; i++) {
-                recchannel[i]=new rec_channel( i ) ;
+                recchannel[i]=new rec_channel( i, dvrconfig ) ;
             }
             rec_run = 1;
             pthread_create(&rec_threadid, NULL, rec_thread, NULL);

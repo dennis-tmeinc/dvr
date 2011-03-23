@@ -90,7 +90,7 @@ int main()
             // if dvrsvr running, kill it, (Suspend it)
             FILE * dvrpidfile ;
             pid_t dvrpid ;
-            dvrpidfile=fopen("/var/dvr/dvrsvr.pid", "r");
+            dvrpidfile=fopen(VAR_DIR"/dvrsvr.pid", "r");
             if( dvrpidfile ) {
                 dvrpid=0 ;
                 fscanf(dvrpidfile, "%d", &dvrpid);

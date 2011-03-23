@@ -6,6 +6,7 @@
 #include <string.h>
 #include <math.h>
 
+#include "../../cfg.h"
 #include "../../ioprocess/diomap.h"
 
 char * getquery( const char * qname );

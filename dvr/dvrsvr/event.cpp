@@ -21,7 +21,7 @@ double g_gpsspeed ;
 
 sensor_t::sensor_t(int n) 
 {
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     char section[64] ;	
     sprintf(section, "sensor%d", n+1);
     m_name=dvrconfig.getvalue(section, "name");
@@ -140,9 +140,11 @@ int event_check()
     static int timer_1s ;
     int ev = dio_check() || screen_io() ;
 
+#ifndef NO_ONBOARD_EAGLE
     // check jpeg capturing
     eagle_captureJPEG();
-    
+#endif
+	
     if( ev ||
         g_timetick-timer_1s > 1000 ||
         g_timetick<timer_1s ) 
@@ -214,7 +216,7 @@ int event_check()
             dio_setstate (DVR_NODATA);
         }
         diskready = rec_basedir.length()>0 ;
-        if( diskready ) {
+        if( diskready || rec_norecord ) {
             dio_setstate (DVR_DISKREADY);
         }
         else {
@@ -310,18 +312,17 @@ int event_check()
     return ev ;
 }
 
-void event_init()
+void event_init( config &dvrconfig )
 {
     int i;
 
 #ifdef  POWERCYCLETEST
-    config dvrconfig(dvrconfigfile);
     cycletest = dvrconfig.getvalueint("debug", "cycletest" );
     cyclefile = dvrconfig.getvalue("debug", "cyclefile" );
     cycleserver = dvrconfig.getvalue("debug", "cycleserver" );
 #endif
     
-    dio_init();
+    dio_init(dvrconfig);
     num_sensors=dio_inputnum();
     dvr_log("%d sensors detected!", num_sensors );
     if( num_sensors>0 ) {

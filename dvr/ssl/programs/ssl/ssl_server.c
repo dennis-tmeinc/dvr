@@ -39,6 +39,8 @@
 #include "polarssl/ssl.h"
 #include "polarssl/net.h"
 
+#include "../../cfg.h"
+
 /*
  * Computing a "safe" DH-1024 prime can take a very
  * long time, so a precomputed value is provided below.
@@ -182,10 +184,10 @@ static int my_set_session( ssl_context *ssl )
 }
 
 // supporting files
-char httpd[] = "/davinci/dvr/www/eaglehttpd" ;
-char server_crt[]="/davinci/dvr/www/server.crt";
-char server_key[]="/davinci/dvr/www/server.key";
-char ca_crt[]="/davinci/dvr/www/ca.crt";
+char httpd[] = APP_DIR"/www/eaglehttpd" ;
+char server_crt[]=APP_DIR"/www/server.crt";
+char server_key[]=APP_DIR"/www/server.key";
+char ca_crt[]=APP_DIR"/www/ca.crt";
 
 static int io_ready(int sec, int fd1, int fd2)
 {

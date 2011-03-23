@@ -6,7 +6,7 @@
 ipeagle32_capture::ipeagle32_capture( int channel )
 : capture(channel)
 {
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     char cameraid[16] ;
     
     m_sockfd = -1 ;

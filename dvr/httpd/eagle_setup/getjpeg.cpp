@@ -1,5 +1,5 @@
 
-//#include "../../cfg.h"
+#include "../../cfg.h"
 #include "../../dvrsvr/dvr.h"
 
 // #define NETDBG

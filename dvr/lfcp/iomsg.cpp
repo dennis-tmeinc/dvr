@@ -11,7 +11,7 @@
 
 struct dio_mmap * p_dio_mmap ;
 char dvriomap[128] = "/var/dvr/dvriomap" ;
-char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
+char dvrconfigfile[] = CFG_FILE ;
 
 
 /*

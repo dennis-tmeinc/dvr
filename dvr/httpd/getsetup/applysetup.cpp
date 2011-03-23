@@ -1,6 +1,4 @@
 
-#include "../../cfg.h"
-
 #include <sys/types.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
@@ -9,20 +7,19 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include "../../cfg.h"
 #include "../../dvrsvr/crypt.h"
 #include "../../dvrsvr/genclass.h"
 #include "../../dvrsvr/cfg.h"
 
-char dvrconfigfile[]="/etc/dvr/dvr.conf" ;
 char tzfile[] = "tz_option" ;
-char * dvrworkdir = "/davinci/dvr" ;
 
 pid_t  dvrpid=0 ;
 
 void dvrsvr_down()
 {
     dvrpid = 0 ;
-    FILE * fdvrpid = fopen( "/var/dvr/dvrsvr.pid", "r");
+    FILE * fdvrpid = fopen( VAR_DIR"/dvrsvr.pid", "r");
     if( fdvrpid ) {
         fscanf(fdvrpid, "%d", &dvrpid );
         fclose( fdvrpid );
@@ -150,11 +147,11 @@ void setuserpassword()
         // set user name and password on second line
         key = crypt(password, salt);
         if( key ) {
-            fprintf( fpasswd, "admin:%s:101:101:admin:/home/www/:/bin/false", key );
+            fprintf( fpasswd, "admin:%s:101:101:admin:/home/admin/:/bin/false", key );
         }
         fclose( fpasswd);
     }
-    system("cp /etc/passwd /davinci/dvr/passwd");
+    system("cp /etc/passwd "APP_DIR"/passwd");
 }
 
 // c64 key should be 400bytes
@@ -186,7 +183,7 @@ int main()
     FILE * fvalue ;
     char section[20] ;
     int  sensor_number = 31;
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     
     // suspend dvrsvr
     dvrsvr_down();
@@ -1039,14 +1036,13 @@ int main()
     run( "./getsetup", NULL, 0 );
     
     // reset network settings
-    sprintf(buf, "%s/setnetwork", dvrworkdir );
-    run( buf, NULL, 1 );
+	run( APP_DIR"/setnetwork", NULL, 1 );
 
     // resume dvrsvr
     dvrsvr_up();
     
     // re-initialize glog
-    fvalue = fopen("/var/dvr/glog.pid", "r");
+    fvalue = fopen(VAR_DIR"/glog.pid", "r");
     if( fvalue ) {
         r=0;
         if( fscanf(fvalue, "%d", &r)==1 ) {
@@ -1058,7 +1054,7 @@ int main()
     }
     
     // re-initialize ioprocess
-    fvalue = fopen("/var/dvr/ioprocess.pid", "r");
+    fvalue = fopen(VAR_DIR"/ioprocess.pid", "r");
     if( fvalue ) {
         r=0;
         if( fscanf(fvalue, "%d", &r)==1 ) {

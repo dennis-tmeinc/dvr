@@ -6,8 +6,10 @@
 //#define EAGLE32
 #define EAGLE34
 
-//#define MDVR_APP
-#define PWII_APP
+#define NO_ONBOARD_EAGLE
+
+#define MDVR_APP
+//#define PWII_APP
 //#define TVS_APP
 
 //#define EAGLESVR
@@ -22,3 +24,17 @@
 // #define POWERCYCLETEST
 
 #endif
+
+#define	APPNAME	"MV16"
+
+// default config file
+#define	CFG_DEFFILE	"/davinci/dvr/defconf" 
+#define	CFG_FILE	"/etc/dvr/dvr.conf" 
+
+// applications dir
+#define APP_DIR		"/davinci/dvr"
+#define VAR_DIR		"/var/dvr"
+
+#define WWWROOT	"/home/www"
+#define WWWSERIALFILE "/tmp/wwwserialnofile"
+

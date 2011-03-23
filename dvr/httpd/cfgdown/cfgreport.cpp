@@ -11,7 +11,6 @@
 #include "../../dvrsvr/genclass.h"
 #include "../../dvrsvr/cfg.h"
 
-char dvrconfigfile[]="/etc/dvr/dvr.conf" ;
 char tzfile[] = "tz_option" ;
 
 // wait for socket ready to read (timeout in micro-seconds)
@@ -208,7 +207,7 @@ int disk_usage( int * disk_total, int * disk_free)
     char filename[256] ;
     struct statfs stfs;
     filename[0]=0;
-    FILE * curdisk = fopen("/var/dvr/dvrcurdisk", "r");
+    FILE * curdisk = fopen(VAR_DIR"/dvrcurdisk", "r");
     if( curdisk ) {
         if( fscanf(curdisk, "%s", filename ) ) {
             if (statfs(filename, &stfs) == 0) {
@@ -391,7 +390,7 @@ int print_cfgreport()
     int l;
     int i;
     config_enum enumkey ;
-    config dvrconfig(dvrconfigfile);
+    config dvrconfig(CFG_FILE);
     string tzi ;
     string value ;
     int ivalue ;
@@ -436,7 +435,7 @@ int print_cfgreport()
         printf( "TVS controller serial No : %s\n", value.getstring() );
     }
 
-    ifile = fopen( "/davinci/dvr/firmwareid", "r" );
+    ifile = fopen( APP_DIR"/firmwareid", "r" );
     if( ifile ) {
         l = fread( buf, 1, 99, ifile );
         if( l>0 ) {
@@ -446,7 +445,7 @@ int print_cfgreport()
         fclose( ifile );
     }
     
-    ifile = fopen( "/var/dvr/mcuversion", "r" );
+    ifile = fopen( VAR_DIR"/mcuversion", "r" );
     if( ifile ) {
         l = fread( buf, 1, 99, ifile );
         if( l>0 ) {
@@ -765,7 +764,7 @@ int main()
 {
     FILE * f ;
     char id[10] ;
-    f=fopen( "/var/dvr/connectid", "r" ) ;
+    f=fopen( VAR_DIR"/connectid", "r" ) ;
     if( f==NULL ) {
         return 0;
     }
