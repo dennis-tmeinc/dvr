@@ -506,6 +506,16 @@ int eagle32_hikhandle(int channel)
 }
 
 
+// check if hik channel enabled ?
+int eagle32_hikchanelenabled(int channel)
+{
+    if( channel < cap_channels ) {
+        return cap_channel[channel]->enabled() ;
+    }
+    return 0 ;
+}
+
+
 static int eagle32_sysinit=0 ;
 
 int eagle32_init(config &dvrconfig)

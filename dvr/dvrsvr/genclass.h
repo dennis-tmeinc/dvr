@@ -228,25 +228,31 @@ class array {
             int i;
             m_arraysize=newsize+ARRAYSTEPSIZE ;
             T ** newarray = new T * [m_arraysize] ;
-            for( i=0; i<m_size; i++ ) {
-                newarray[i] = m_array[i] ;
-            }
-            delete [] m_array ;
+			if( m_array ) {
+				for( i=0; i<m_size; i++ ) {
+					newarray[i] = m_array[i] ;
+				}
+				delete [] m_array ;
+			}
             m_array = newarray ;
         }
     }
     public:
-        array(int initialsize=0){
+        array(){
+            m_array=NULL ;
+            m_size=0;
+            m_arraysize = 0 ;
+        }
+        array(int initialsize){
+            m_array=NULL ;
             m_size=0;
             m_arraysize = initialsize ;
-            if( m_arraysize<=0 ) {
-                m_arraysize = ARRAYSTEPSIZE ;
+            if( m_arraysize>0 ) {
+	            m_array=new T *  [m_arraysize] ;
             }
-            m_array=new T *  [m_arraysize] ;
         }
         ~array(){
             empty();
-            delete [] m_array ;
         }
         int size() {
             return m_size;
@@ -318,6 +324,11 @@ class array {
         }
         void empty(){
             setsize(0);
+			if( m_array ) {
+				delete [] m_array ;
+				m_array = NULL ;
+			}
+            m_arraysize = 0 ;
         }
         void compact(){
         }
@@ -343,6 +354,9 @@ class string {
         char *m_str;
 
 		void set(const char *str){
+			if( m_str ) {
+				delete [] m_str ;
+			}
             if( str ) {
                 m_str=new char [strlen(str)+1];
                 strcpy(m_str, str);
@@ -355,46 +369,62 @@ class string {
 
 
     public:
-        string() {
-			set(NULL);
-		} 
+		string(){
+			m_str=NULL;
+		}
 		string(const char *str) {
+			m_str=NULL;
 			set(str);
 		}
 		string(string & str) {
+			m_str=NULL;
 			set(str.getstring());
 		}
-		string(string * pstr) {
-			set(pstr->getstring());
-		}
 		~string() {
-            delete [] m_str ;
+			if( m_str ) {
+            	delete [] m_str ;
+			}
         }
+		operator char * (){
+			if( m_str==NULL ) {
+				set(NULL);
+			}
+			return m_str ;
+		}
+		
         char *getstring(){
+			if( m_str==NULL ) {
+				set(NULL);
+			}
             return m_str;
         }
         void setstring(const char *str){
-            delete [] m_str ;
 			set(str);
         }
 
         string & operator =(const char *str) {
-            delete [] m_str ;
 			set(str);
             return *this;
         }
         string & operator =(string & str) {
-            delete [] m_str ;
 			set(str.getstring());
             return *this;
         }
 
         int length(){
-            return strlen(m_str);
+			if( m_str ) {
+				return strlen(m_str);
+			}
+			else {
+				return 0 ;
+			}
         }
 		// make buffer not less then given size
         char * setbufsize(int nsize){
-			if (nsize > (int)strlen(m_str)) {		// re alloc
+			if( m_str==NULL ) {
+				set(NULL);
+			}
+			if( length()<nsize ) {
 				char * nbuf = new char [nsize+1] ;
 				strcpy( nbuf, m_str );
 				delete [] m_str ;
@@ -403,7 +433,12 @@ class string {
 			return m_str ;
 		}
         int isempty() {
-            return (m_str[0] == 0);
+			if( m_str ) {
+				return (m_str[0] == 0);
+			}
+			else {
+				return 0;
+			}
         }
 };
 

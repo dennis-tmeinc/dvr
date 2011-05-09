@@ -1353,7 +1353,6 @@ void dvrsvr::ReqLockInfo()
 
 void dvrsvr::ReqUnlockFile()
 {
-    rec_index idx ;
     struct dvrtime * tbegin ;
     struct dvrtime * tend ;
     struct dvr_ans ans ;

@@ -54,6 +54,7 @@ struct dio_mmap {
 									// set 0 turn off, set 1 to flash
 	unsigned int	devicepower ;	// power on/off 
                                     // bit 0: GPS, bit 1:  Slave_Eagle32, bit 2: Network Switch, bit 3: POE, bit 4: camera power
+									// (another set device power, 2011-05-05) bit 8: Wifi, bit 9: POW, bit 10: Radar
     int    iotemperature ;          // io board temperature
     int    hdtemperature ;          // hard drive temperature
     

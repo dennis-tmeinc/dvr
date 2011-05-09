@@ -626,7 +626,7 @@ class video_screen : public window {
     	}
 
         void startliveview(int channel)    {
-            if( channel<0 || channel>10 ) {
+            if( channel<0 || channel>=eagle32_channels ) {
                 channel = m_playchannel ;
             }
             screen_liveaudio=1 ;
@@ -1188,11 +1188,18 @@ class video_screen : public window {
                 else if( keycode == VK_PRIOR ) { //  previous video clip
                     if( m_videomode==VIDEO_MODE_LIVE ) {   // live
                         // switch live view channel
-                        int ch = m_playchannel-ScreenNum ;
-                        while( ch<0 ) {
-                            ch+=eagle32_channels ;
-                        }
-                        startliveview(ch);
+						int retry = eagle32_channels ;
+                        int ch = m_playchannel ;
+						while( retry-->0 ) {
+	                        ch -= ScreenNum ;
+							while( ch<0 ) {
+								ch+=eagle32_channels ;
+							}
+							if( eagle32_hikchanelenabled(ch) ) {
+								startliveview(ch);
+								break;
+							}
+						}
                     }
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
                         m_decode_runmode = DECODE_MODE_PRIOR ;
@@ -1211,11 +1218,18 @@ class video_screen : public window {
                 else if( keycode == VK_NEXT ) { //  jump forward.
                     if( m_videomode==VIDEO_MODE_LIVE ) {   // live, black LCD
                         // switch live view channel
-                        int ch = m_playchannel+ScreenNum ;
-                        while( ch>=eagle32_channels ) {
-                            ch-=eagle32_channels ;
-                        }
-                        startliveview(ch);
+						int retry = eagle32_channels ;
+                        int ch = m_playchannel ;
+						while( retry-->0 ) {
+	                        ch += ScreenNum ;
+							while( ch>=eagle32_channels ) {
+								ch-=eagle32_channels ;
+							}
+							if( eagle32_hikchanelenabled(ch) ) {
+								startliveview(ch);
+								break;
+							}
+						}
                     }
                     else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
                         m_decode_runmode = DECODE_MODE_NEXT ;
@@ -1461,11 +1475,10 @@ class mainwin : public window {
         iomsg * iomessage ;
             
     public:
-    mainwin() :
+    mainwin(config &dvrconfig) :
         window( NULL, 0, 0, 0, 720, 480 )
     {
         int startchannel ;
-        config dvrconfig(dvrconfigfile);
         video_screen * vs ;
         m_pos.x=0 ;
         m_pos.y=0 ;
@@ -1826,7 +1839,7 @@ void screen_init(config &dvrconfig)
         screen_setmode();    
     }
 
-    topwindow = new mainwin();
+    topwindow = new mainwin(dvrconfig);
     topwindow->redraw();
     window::focuswindow = NULL ;
 

@@ -4,6 +4,7 @@
 
 
 #define MCU_CMD_RESET	        (0)
+#define MCU_CMD_REBOOT	        (0x01) 			// this command would send back response compare to MCU_CMD_RESET
 #define MCU_CMD_READRTC         (0x6)
 #define MCU_CMD_WRITERTC        (0x7)
 #define MCU_CMD_POWEROFFDELAY	(0x8)
@@ -36,6 +37,11 @@
 
 #define MCU_CMD_READCODE	    (0x41)
 
+#define MCU_CMD_WIFIPOWER	    (0x38)
+#define MCU_CMD_POEPOWER	    (0x3a)
+#define MCU_CMD_RADARPOWER	    (0x3b)
+
+
 // mcu input
 #define MCU_INPUT_DIO           (0x1C)
 #define MCU_INPUT_IGNITIONOFF   (0x08) 
@@ -48,6 +54,10 @@
 
 #define MCU_INPUTNUM (6)
 #define MCU_OUTPUTNUM (4)
+
+#define PANELLEDNUM (3)
+#define DEVICEPOWERNUM (16)
+
 
 #ifdef PWII_APP
 
@@ -100,6 +110,7 @@ extern int mcu_baud ;
 extern unsigned int mcu_doutputmap ;
 extern int mcu_inputmissed ;
 
+#define MCU_MAX_MSGSIZE (100)
 
 // check if data from mcu is ready          
 int mcu_dataready(int usdelay=MIN_SERIAL_DELAY, int * usremain=NULL) ;
@@ -113,15 +124,16 @@ int mcu_write(void * buf, int bufsize);
 void mcu_clear(int delay=MIN_SERIAL_DELAY);
 int mcu_input(int usdelay);
 void mcu_response(char * msg, int datalen=0, ... );
-char * mcu_recv( int usdelay = MIN_SERIAL_DELAY, int * usremain=NULL );
+int mcu_recv( char * mcu_msg, int bufsize, int usdelay = MIN_SERIAL_DELAY, int * usremain=NULL );
 
 unsigned char checksum( unsigned char * data, int datalen ) ;
 char mcu_checksum( char * data ) ;
 void mcu_calchecksum( char * data );
 int mcu_sendcmd(int cmd, int datalen=0, ...);
-char * mcu_cmd(int cmd, int datalen=0, ...);
+int mcu_cmd(char * rsp, int cmd, int datalen=0, ...);
 
 int mcu_reset();
+int mcu_reboot();
 int mcu_bootupready();
 time_t mcu_r_rtc( struct tm * ptm = NULL );
 int mcu_w_rtc(time_t tt);
@@ -149,7 +161,7 @@ void mcu_camera_zoom( int zoomin );
 
 extern unsigned int pwii_keyreltime ;
 
-char * mcu_pwii_cmd(int cmd, int datalen=0, ...);
+int mcu_pwii_cmd(char * rsp, int cmd, int datalen=0, ...);
 int mcu_pwii_bootupready();
 int mcu_pwii_version(char * version);
 unsigned int mcu_pwii_ouputstatus();

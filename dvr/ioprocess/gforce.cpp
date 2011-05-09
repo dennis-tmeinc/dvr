@@ -393,12 +393,13 @@ int gforce_savecrashdata()
 
 int gforce_getcrashdata()
 {
-    unsigned char * responds ;
     unsigned int uploadSize ;
     unsigned int nbytes ;
     int success=0;
     int iomode ;
-
+	char rsp[MCU_MAX_MSGSIZE] ;
+	int  rsize ;
+	
     if( gforce_log_enable==0  || gforce_crashdata_enable==0 ) {
         return 0 ;
     }
@@ -423,14 +424,14 @@ int gforce_getcrashdata()
     }
     sleep(3);
     
-    responds = (unsigned char *)mcu_cmd( MCU_CMD_GSENSORUPLOAD, 1, 
+    rsize = mcu_cmd(rsp, MCU_CMD_GSENSORUPLOAD, 1, 
         (int)(direction_table[gsensor_direction][2]) );      // direction
-    if( responds!=NULL && *responds>=10 ) {
+    if( rsize >= 10 ) {
         uploadSize = 
-            (responds[5] << 24) | 
-            (responds[6] << 16) | 
-            (responds[7] << 8) |
-            responds[8];
+            (rsp[5] << 24) | 
+            (rsp[6] << 16) | 
+            (rsp[7] << 8) |
+            rsp[8];
         if (uploadSize>0) {
             //1024 for room, actually UPLOAD_ACK_SIZE(upload ack)
             // + 8(0g + checksum)
@@ -457,7 +458,7 @@ int gforce_getcrashdata()
                 dvr_log("Read gforce crash data error");
                 gforce_freecrashdata();
             }
-            mcu_cmd( MCU_CMD_GSENSORUPLOADACK, !success );
+            mcu_cmd(NULL, MCU_CMD_GSENSORUPLOADACK, !success );
         }
         else {
             dvr_log( "No gforce crash data" );
@@ -556,11 +557,11 @@ void gforce_log( int x, int y, int z )
 //            failed  => p_dio_mmap->rtc_cmd = -1
 int gforce_calibration()
 {
+	char rsp[MCU_MAX_MSGSIZE] ;
     // send init value to mcu
-    char * responds = mcu_cmd( MCU_CMD_GSENSORCALIBRATION, 0 ) ;
-    if( responds && *responds>=7 ) {    // command success
+    if( mcu_cmd(rsp, MCU_CMD_GSENSORCALIBRATION, 0 )>=7 ) {    // command success
         dio_lock();
-        p_dio_mmap->rtc_year = responds[5] ;
+        p_dio_mmap->rtc_year = rsp[5] ;
         p_dio_mmap->rtc_cmd = 0 ;
         dio_unlock();
         return 0 ;
@@ -577,7 +578,7 @@ void gforce_calibrate_mountangle(int cal)
 {
     if( cal ) {
         // send small trigger init value to mcu
-        mcu_cmd( MCU_CMD_GSENSORINIT, 
+        mcu_cmd(NULL, MCU_CMD_GSENSORINIT, 
                 20,      // 20 parameters 
                 1,       // enable GForce
                 direction_table[unit_direction][2],   // unit direction code
@@ -606,6 +607,8 @@ void gforce_init( config & dvrconfig )
 {
     int i ;
     string v ;
+	char rsp[MCU_MAX_MSGSIZE];
+	int  rsize ;
     float fv ;
     int x, y, z ;
     // value in sensor's direction (X/Y/Z)
@@ -911,7 +914,7 @@ void gforce_init( config & dvrconfig )
         crash_z_neg=z ;
     }
      // send init value to mcu
-    char * responds = mcu_cmd( MCU_CMD_GSENSORINIT, 
+    rsize = mcu_cmd(rsp, MCU_CMD_GSENSORINIT, 
                        20,      // 20 parameters 
                        1,       // enable GForce
 //                       0x12,    // 0x12=keep all value in it original direction (@&$^-$)
@@ -920,7 +923,7 @@ void gforce_init( config & dvrconfig )
                        trigger_x_pos, trigger_x_neg, trigger_y_pos, trigger_y_neg, trigger_z_pos, trigger_z_neg,
                        crash_x_pos, crash_x_neg, crash_y_pos, crash_y_neg, crash_z_pos, crash_z_neg ) ;
 
-    if( responds && responds[5] ) { // g_sensor available
+    if( rsize>0 && rsp[5] ) { // g_sensor available
         FILE * fgsensor ;
         dvr_log("G force sensor detected!");
         fgsensor = fopen( VAR_DIR"/gsensor", "w" );

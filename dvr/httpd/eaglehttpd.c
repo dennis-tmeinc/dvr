@@ -1409,6 +1409,7 @@ void http_listen()
 			break;
 		}
 		close( asockfd ) ;
+		while( waitpid(0, NULL, WNOHANG)>0 );
 	}
 
    

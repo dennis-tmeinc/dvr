@@ -8,8 +8,8 @@
 
 #define NO_ONBOARD_EAGLE
 
-#define MDVR_APP
-//#define PWII_APP
+//#define MDVR_APP
+#define PWII_APP
 //#define TVS_APP
 
 //#define EAGLESVR

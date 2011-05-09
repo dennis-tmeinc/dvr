@@ -14,20 +14,20 @@ HEADERS=
 
 OBJS = $(patsubst %.c, %.o, $(SOURCES))
 
-#LDFLAGS= -lpthread -lstdc++ -L../dvrsvr/eagle32 -lsdk -ldadsp ../dvrsvr/eagle32/dsplink.lib
-LDFLAGS= -lpthread -lstdc++
+#LDFLAGS= -lpthread -lstdc++ -L../dvrsvr/eagle32 -lsdk -ldadsp ../dvrsvr/eagle32/dsplink.lib 
+LDFLAGS= -static -lstdc++
 
 #CFLAGS=-I../dvrsvr -g -Wall
-CFLAGS=-g -Wall
+CFLAGS=-g -Wall 
 
-all : serialtest
+all : gentest
 
 serialtest : $(OBJS) $(HEADERS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 	cp serialtest  $(debug_folder)
 
 gentest : gentest.cpp
-	gcc $(CFLAGS) -o gentest gentest.cpp $(LDFLAGS)
+#	gcc $(CFLAGS) -o gentest gentest.cpp $(LDFLAGS)
 	$(CC) $(CFLAGS) -o gentest1 gentest.cpp $(LDFLAGS)
 	cp gentest1  $(debug_folder)
 	

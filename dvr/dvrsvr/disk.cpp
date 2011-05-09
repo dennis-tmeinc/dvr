@@ -9,6 +9,7 @@ int disk_busy ;
 
 static int disk_minfreespace;              // minimum free space for current disk, in Magabytes
 static int disk_lockfile_percentage ;      // how many percentage locked file can occupy.
+static int disk_filekeepdays ;
 static int disk_removeprerecordfile ;       // if pre-recorded file be removed
 static int disk_tlen ;
 static int disk_llen ;
@@ -414,6 +415,8 @@ void disk_rmempty264dir(char *dir)
 // repaire all .264 files under dir
 void disk_repair264(char *dir)
 {
+	struct dvrtime today, fileday ;
+	time_now(&today);
     int r264 = 0 ;
     dir_find dfind(dir);
     while( dfind.find() ) {
@@ -425,6 +428,11 @@ void disk_repair264(char *dir)
             char * filename = dfind.filename() ;
             int l = strlen(filename);
             if ( l > 20 && strcmp(&filename[l - 4], g_264ext ) == 0 ) {
+				f264time( filename, &fileday );
+				if( time_dvrtime_diff( &today, &fileday )> disk_filekeepdays * (24*60*60) ) {
+					dvrfile::remove(dfind.pathname());                      // remove pre-recording file
+					continue ;
+				}					
                 if( (lp=strstr( filename, "_P_" ))!=NULL ) {
                     if( disk_removeprerecordfile ) {
                         dvrfile::remove(dfind.pathname());                      // remove pre-recording file
@@ -733,6 +741,9 @@ int disk_deloldfile( int lock )
 
 
 // To renew a file list on current disk
+// parameter:
+//    add :   1, add a new file
+//            0, removed a file
 int disk_renew( char * filename, int add )
 {
 //    int disk ;
@@ -1127,10 +1138,10 @@ int disk_archive_copyfile( char * srcfile, char * destfile )
     while( (r=file_read( filebuf, ARCH_BUFSIZE, fsrc ))>0 ) {
         file_write( filebuf, r, fdest ) ;
         while( rec_busy || disk_busy || g_cpu_usage>0.6 ) {
-            usleep( 10000 );
             if( disk_archive_run != 1 ) {
                 break;
             }
+            usleep( 10000 );
         }
         if( disk_archive_run != 1 ) {
             res = 0 ;
@@ -1416,7 +1427,9 @@ void disk_archive_start()
 
 void disk_archive_stop()
 {
-    disk_archive_run = -1 ;
+	if( disk_archive_run>0 ) {
+	    disk_archive_run = -1 ;
+	}
 }
 
 int disk_archive_runstate()
@@ -1501,7 +1514,7 @@ void disk_init(config &dvrconfig)
 {
     const char * pcfg;
     int l;
-
+	
     rec_basedir = "";
     disk_base = dvrconfig.getvalue("system", "mountdir");
     if (disk_base.length() == 0) {
@@ -1541,6 +1554,11 @@ void disk_init(config &dvrconfig)
         disk_lockfile_percentage = 30 ;
     }
 
+	disk_filekeepdays = dvrconfig.getvalueint("system", "filekeeydays");
+	if(disk_filekeepdays<10 || disk_filekeepdays>2000 ) {
+		disk_filekeepdays = 366 ;
+	}
+	
     disk_removeprerecordfile=dvrconfig.getvalueint("system", "removeprerecordfile");
 
     disk_maxdirty=dvrconfig.getvalueint("system", "maxdirty");

@@ -314,47 +314,48 @@ int dio_check()
     int res=0 ;
 
     if( p_dio_mmap && p_dio_mmap->iopid ){
+		int iocmd ;
         dio_lock();
-        if( p_dio_mmap->dvrcmd ) {
-            // dvrcmd :  1: restart(resume), 2: suspend, 3: stop record, 4: start record, 5: start archiving
-            if( p_dio_mmap->dvrcmd == 1 ) {
-                app_state = APPRESTART ;
-            }
-            else if( p_dio_mmap->dvrcmd == 2 ) {
-                app_state = APPDOWN ;
-            }
-            else if( p_dio_mmap->dvrcmd == 3 ) {
-                dio_unlock();
-                rec_stop();
-                dio_lock();
-            }
-            else if( p_dio_mmap->dvrcmd == 4 ) {
-                dio_unlock();
-                rec_start ();
-                dio_lock();
-            }
-            else if( p_dio_mmap->dvrcmd == 5 ) {
-                p_dio_mmap->dvrstatus |= DVR_ARCH ;
-                dio_unlock();
-                disk_archive_start();
-                dio_lock();
-            }
-            else if( p_dio_mmap->dvrcmd == 6 ) {
-                dio_unlock();
-                disk_archive_stop();
-                dio_lock();
-            }
-            p_dio_mmap->dvrcmd = 0 ;
-            res=1 ;
-        }
+		iocmd = p_dio_mmap->dvrcmd ;
+		p_dio_mmap->dvrcmd = 0 ;
+		dio_unlock();
+		// dvrcmd :  1: restart(resume), 2: suspend, 3: stop record, 4: start record, 5: start archiving
+		if( iocmd ) {
+			res=1 ;
+			switch (iocmd) {
+				case 1:
+					app_state = APPRESTART ;
+					break;
+				case 2:
+					app_state = APPDOWN ;
+					break;
+				case 3:
+					rec_stop();
+					break;
+				case 4:
+					rec_start();
+					break;
+				case 5:
+					dio_lock();
+					p_dio_mmap->dvrstatus |= DVR_ARCH ;
+					dio_unlock();
+					disk_archive_start();
+					break;
+				case 6:
+					disk_archive_stop();
+					break;
+				default:
+					res=0 ;
+					break;
+			}
+		}
 
+		dio_lock();
         dio_record = ( p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) ;
-
         if( dio_inputmap != p_dio_mmap->inputmap ) {
             dio_inputmap = p_dio_mmap->inputmap ;
             res = 1 ;
         }
-        
         dio_unlock();
     }
 

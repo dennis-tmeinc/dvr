@@ -84,10 +84,31 @@ int test_722_logo()
     return 0 ;
 }
 
+class ts {
+	public:
+		int member ;
+		ts() {
+			printf(" Construct ts %p\n", this );
+			member=55;
+		}
+		~ts() {
+			printf(" Destruct ts %p\n", this );
+		}
+		void print() {
+			printf( "member = %d\n", member );
+		}
+} ;
+
+ts t1, t2 ;
+int x = 50 ;	
+
 int main()
 {
-    
-    test_722_logo();
-    
+
+	printf("x=%d\n", x );
+  t1.print();  
+//    test_722_logo();
+     ts t ;
+	t.print();
     return 0;
 }

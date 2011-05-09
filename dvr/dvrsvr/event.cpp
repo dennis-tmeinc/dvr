@@ -275,7 +275,7 @@ int event_check()
                             disk,
                             video );
                     fclose( xfile );
-                    sprintf(sysbuf, "cd /home ; /davinci/dvr/tmefile p %s %s ", cyclefile.getstring(), cycleserver.getstring() );
+                    sprintf(sysbuf, "cd /home ; "APP_DIR"/tmefile p %s %s ", cyclefile.getstring(), cycleserver.getstring() );
                     system(sysbuf);
                 }
             }

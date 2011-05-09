@@ -487,6 +487,7 @@ extern capture * * cap_channel;
 
 extern int eagle32_channels ;
 int eagle32_hikhandle(int channel);
+int eagle32_hikchanelenabled(int channel);
 int  eagle32_init(config &dvrconfig);
 void eagle32_uninit();
 // jpeg capture

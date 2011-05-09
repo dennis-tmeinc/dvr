@@ -20,7 +20,8 @@ SUBDIRS = dvrsvr\
        tmeft\
        usbid\
        usbnotify\
-       ssl
+       ssl \
+       lpc21isp
 
 .PHONY : $(SUBDIRS) applications
 
@@ -87,6 +88,18 @@ app_pw34:
 	echo "EAGLE=eagle34" >> config
 	ln -sf cfg.h.PW34 cfg.h
 
+app_pwlite:
+	echo PROJDIR=`pwd` > config
+	echo "proj=PWLITE" >> config
+	echo "EAGLE=eagle34" >> config
+	ln -sf cfg.h.PWLITE cfg.h
+
+app_zeus:
+	echo PROJDIR=`pwd` > config
+	echo "proj=PWZEUS" >> config
+	echo "EAGLE=eagle34" >> config
+	ln -sf cfg.h.zeus cfg.h
+
 app_mv:
 	echo PROJDIR=`pwd` > config
 	echo "proj=PW34" >> config
@@ -109,6 +122,12 @@ all:
 	$(MAKE) firmware
 	$(MAKE) clean
 	$(MAKE) app_pw34
+	$(MAKE) firmware
+	$(MAKE) clean
+	$(MAKE) app_pwlite
+	$(MAKE) firmware
+	$(MAKE) clean
+	$(MAKE) app_pwzeus
 	$(MAKE) firmware
 	$(MAKE) clean
 
