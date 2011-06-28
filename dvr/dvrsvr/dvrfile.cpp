@@ -139,7 +139,7 @@ void dvrfile::close()
                 truncate(size);
             }
             if( file_close(m_handle)!=0 ) {
-                dvr_log("Close file failed : %s",m_filename.getstring());
+                dvr_log("Close file failed : %s", (char *)m_filename);
                 rec_basedir="" ;
             }
             if( m_keyarray.size()>0 ) {
@@ -842,7 +842,7 @@ int dvrfile::prevkeyframe()
 void dvrfile::readkey()
 {
     string keyfilename(m_filename) ;
-    char * pk = keyfilename.getstring() ;
+    char * pk = keyfilename ;
     int l=strlen(pk);
     FILE * keyfile = NULL;
     m_keyarray.empty();
@@ -868,7 +868,7 @@ void dvrfile::readkey()
 void dvrfile::writekey()
 {
     string keyfilename(m_filename) ;
-    char * pk = keyfilename.getstring() ;
+    char * pk = keyfilename ;
     int l=strlen(pk);
     int i;
     FILE * keyfile=NULL ;
@@ -1049,12 +1049,12 @@ int dvrfile::repair1()
     // rename file to include new length
     filelength = (endtimestamp - starttimestamp) / 64;          // repaired file length
     
-    strcpy( newfilename, m_filename.getstring() );
+    strcpy( newfilename, m_filename);
     rn = strstr(newfilename, "_0_");
     if( rn ) {
-        tail = strstr(m_filename.getstring(), "_0_")+3 ;
+        tail = strstr(m_filename, "_0_")+3 ;
         sprintf( rn, "_%d_%s", filelength, tail );
-        if( rename( m_filename.getstring(), newfilename )>=0 ) {         // success
+        if( rename( m_filename, newfilename )>=0 ) {         // success
             return 1;
         }
     }
@@ -1117,12 +1117,12 @@ int dvrfile::repair()
     char * rn ;
     char * tail ;
 
-    strcpy( newfilename, m_filename.getstring() );
+    strcpy( newfilename, m_filename );
     rn = strstr(newfilename, "_0_");
     if( rn ) {
-        tail = strstr(m_filename.getstring(), "_0_")+3 ;
+        tail = strstr(m_filename, "_0_")+3 ;
         sprintf( rn, "_%d_%s", m_frametime/1000, tail );
-        if( rename( m_filename.getstring(), newfilename )>=0 ) {         // success
+        if( rename( m_filename, newfilename )>=0 ) {         // success
             return 1;
         }
     }
@@ -1140,7 +1140,7 @@ int dvrfile::repairpartiallock()
     int i;
     int locklength ;
     
-    locklength = f264locklength( m_filename.getstring() );
+    locklength = f264locklength( m_filename );
     
     if( locklength >= m_filelen || locklength<2 ) {        // not a partial locked file
         return 0 ;
@@ -1159,7 +1159,7 @@ int dvrfile::repairpartiallock()
     breaktime = m_filetime ;
     time_dvrtime_addms( &breaktime, m_keyarray[breakindex].ktime );
     
-    strcpy( lockfilename, m_filename.getstring() );
+    strcpy( lockfilename, m_filename );
     lockfilenamebase = basefilename( lockfilename );
     sprintf(lockfilenamebase+5, "%04d%02d%02d%02d%02d%02d_0_L_%s%s", 
         breaktime.year,
@@ -1168,7 +1168,7 @@ int dvrfile::repairpartiallock()
         breaktime.hour,
         breaktime.minute,
         breaktime.second,
-        g_hostname,
+        (char *)g_servername,
         g_264ext);
     lockfile.open(lockfilename, "wb");
     if( !lockfile.isopen() ) {
@@ -1234,7 +1234,7 @@ int dvrfile::repairpartiallock()
         breaktime.minute,
         breaktime.second,
         m_filelen-locklength,
-        g_hostname,
+        (char *)g_servername,
         g_264ext );
     
     dvrfile::rename( lockfilename, lockfilename1 );
@@ -1249,7 +1249,7 @@ int dvrfile::repairpartiallock()
     dvr_log( "Event locked file breakdown success. (%s)", lockfilename1 );
 
     // rename old locked filename
-    strcpy( lockfilename1, m_filename.getstring() );
+    strcpy( lockfilename1, m_filename );
     lockfilenamebase = basefilename( lockfilename1 );
     sprintf(lockfilenamebase+5, "%04d%02d%02d%02d%02d%02d_%d_N_%s%s", 
             m_filetime.year,
@@ -1259,8 +1259,8 @@ int dvrfile::repairpartiallock()
             m_filetime.minute,
             m_filetime.second,
             locklength,
-            g_hostname, g_264ext );
-    dvrfile::rename( m_filename.getstring(), lockfilename1 );
+            (char *)g_servername, g_264ext );
+    dvrfile::rename( m_filename, lockfilename1 );
     return 1 ;
 }
    
@@ -1295,10 +1295,10 @@ int dvrfile::remove(const char * filename)
     res = ::remove( filename );
     kfile = filename ;
     l = kfile.length() ;
-    extension = kfile.getstring()+l-4 ;
+    extension = (char *)kfile+l-4 ;
     if( strcmp( extension, g_264ext ) == 0 ) {
         strcpy( extension, ".k" ) ;
-        ::remove( kfile.getstring() );
+        ::remove( kfile );
     }
     return res ;
 }
@@ -1308,12 +1308,12 @@ int dvrfile::chrecmod(string & filename, char oldmode, char newmode)
     static char rmod[] = "_M_" ;
     char oldname[512];
     char * p ;
-    strcpy( oldname, filename.getstring() );
+    strcpy( oldname, filename );
     rmod[1]=oldmode ;
-    p = strstr(basefilename(filename.getstring()), rmod);
+    p = strstr(basefilename(filename), rmod);
     if( p ) {
         p[1]=newmode ;
-        return dvrfile::rename( oldname, filename.getstring());
+        return dvrfile::rename( oldname, filename);
     }
     return 0 ;
 }
@@ -1358,7 +1358,7 @@ void file_init(config &dvrconfig)
     file_encrypt=dvrconfig.getvalueint("system", "fileencrypt");
     v = dvrconfig.getvalue("system", "filepassword");
     if( v.length()>=342 ) {
-        c642bin(v.getstring(), g_filekey, 256);
+        c642bin(v, g_filekey, 256);
         RC4_crypt_table( file_encrypt_RC4_table, 1024, g_filekey);
     }
     else {
@@ -1367,7 +1367,7 @@ void file_init(config &dvrconfig)
     
     v=dvrconfig.getvalue("system", "filebuffersize");
     char unit='b' ;
-    int n=sscanf(v.getstring(), "%d%c", &iv, &unit);
+    int n=sscanf(v, "%d%c", &iv, &unit);
     if( n==2 && (unit=='k' || unit=='K') ) {
          iv*=1024 ;
     }

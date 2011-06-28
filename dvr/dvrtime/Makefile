@@ -16,17 +16,12 @@ OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 CFLAGS=-I../dvrsvr -g -Wall
 LDFLAGS= -lstdc++
 
-
-dvrtime : $(OBJS) $(EXTSOURCES) $(EXTHEADERS)
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(EXTSOURCES) $(LDFLAGS)
+dvrtime : $(SOURCES) $(EXTSOURCES) $(EXTHEADERS)
+	$(CC) $(CFLAGS) -D DVR_APP -o $@ $(SOURCES) $(EXTSOURCES) $(LDFLAGS)
 	cp dvrtime  $(debug_folder)
 
-dtime : $(SOURCES) $(EXTSOURCES) $(EXTHEADERS)
-	gcc $(CFLAGS) -o $@ $(SOURCES) $(EXTSOURCES) $(LDFLAGS)
-
-%.o : %.cpp $(HEADERS)  $(EXTHEADERS)
-	$(CC) $(DBGFLAGS) -Wall -c $< -o $@
+dtime : $(SOURCES)
+	gcc $(CFLAGS) -o $@ $(SOURCES) $(LDFLAGS)
 
 clean :
-	rm -f *.o
 	rm -f dvrtime dtime

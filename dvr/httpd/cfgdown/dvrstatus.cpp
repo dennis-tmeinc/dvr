@@ -418,21 +418,21 @@ void print_status()
     // print system temperature
     int systemperature=-128, hdtemperature=-128 ;
     get_temperature(&systemperature, &hdtemperature) ;
-    if( systemperature>-127 && systemperature<127 )  {
+    if( systemperature>-125 && systemperature<125 )  {
         printf("\"temperature_system_c\":\"%d\",", systemperature );
         printf("\"temperature_system_f\":\"%d\",", systemperature*9/5+32 );
     }
     else {
-        printf("\"temperature_system_c\":\" \"," );
-        printf("\"temperature_system_f\":\" \"," );
+        printf("\"temperature_system_c\":\"\"," );
+        printf("\"temperature_system_f\":\"\"," );
     }
-    if( hdtemperature>-127 && hdtemperature<127 )  {
+    if( hdtemperature>-125 && hdtemperature<125 )  {
         printf("\"temperature_disk_c\":\"%d\",", hdtemperature );
         printf("\"temperature_disk_f\":\"%d\",", hdtemperature*9/5+32 );
     }
     else {
-        printf("\"temperature_disk_c\":\" \"," );
-        printf("\"temperature_disk_f\":\" \"," );
+        printf("\"temperature_disk_c\":\"\"," );
+        printf("\"temperature_disk_f\":\"\"," );
     }    
 
     dio_munmap();

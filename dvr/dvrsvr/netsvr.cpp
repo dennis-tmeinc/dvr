@@ -145,7 +145,44 @@ void net_message()
         }
         else if (strncmp(msgbuf, "iamserver", 9)==0) {
             // received response from a smartserver
-            dio_smartserveron();
+
+			// detecting which interface the packet coming from.
+			char          buf[1024];
+			struct ifconf ifc;
+			struct ifreq *ifr;
+			int           nInterfaces;
+			int           i;
+
+			/* Query available interfaces. */
+			memset( buf, 0, sizeof(buf));
+			memset( &ifc, 0, sizeof(ifc));
+			ifc.ifc_len = sizeof(buf);
+			ifc.ifc_buf = buf;
+			if(ioctl(msgfd, SIOCGIFCONF, &ifc) < 0)
+			{
+				return ;
+			}
+
+			/* Iterate through the list of interfaces. */
+			ifr         = ifc.ifc_req;
+			nInterfaces = ifc.ifc_len / sizeof(struct ifreq);
+			for(i = 0; i < nInterfaces; i++)
+			{
+				struct ifreq *item = &ifr[i];
+				struct ifreq ifrmask ;
+				ifrmask = *item ;
+
+				// get mask address
+				if(ioctl(msgfd, SIOCGIFNETMASK, &ifrmask) >= 0) {
+					if( ((((struct sockaddr_in *)&ifrmask.ifr_netmask)->sin_addr).s_addr & (((struct sockaddr_in *)&from.addr)->sin_addr).s_addr ) ==
+					   ((((struct sockaddr_in *)&ifrmask.ifr_netmask)->sin_addr).s_addr & (((struct sockaddr_in *)&item->ifr_addr)->sin_addr).s_addr ) ) 
+					{
+						dio_smartserveron( item->ifr_name );
+						return ;
+					}
+				}
+			}
+            dio_smartserveron("unknown");
         }
     }
 }
@@ -218,27 +255,43 @@ static char smartserver_detection[]="lookingforsmartserver" ;
 int net_detectsmartserver()
 {
     // find the broadcast address of given interface
-    //    "rausb0", 49954, "lookingforsmartserver", 21 );
-    int n ;
     if( net_smartserver[0]>' ' ) {
-        n=net_sendmsg( net_smartserver,  net_smartserverport, smartserver_detection, strlen(smartserver_detection) ) ;
+        net_sendmsg( net_smartserver,  net_smartserverport, smartserver_detection, strlen(smartserver_detection) ) ;
     }
     else {
         // "rausb0", 49954, "lookingforsmartserver", 21 );
-        FILE * wifi_interface_f ;
-        char   wifi_interface[40] ;
-        wifi_interface_f = fopen( VAR_DIR"/wifidev", "r" );
-        if( wifi_interface_f ) {
-            int n=fread( wifi_interface, 1, sizeof( wifi_interface ), wifi_interface_f );
-            if( n>0 ) {
-                wifi_interface[n]=0;
-                //  net_broadcast("rausb0", 49954, "lookingforsmartserver", 21 );
-                n = net_broadcast(  str_trim(wifi_interface), net_smartserverport, smartserver_detection, strlen(smartserver_detection) ) ;
-            }
-            fclose( wifi_interface_f ) ;
-        }
+		char          buf[1024];
+		struct ifconf ifc;
+		struct ifreq *ifr;
+		int           nInterfaces;
+		int           i;
+
+		/* Query available interfaces. */
+		memset( buf, 0, sizeof(buf));
+		memset( &ifc, 0, sizeof(ifc));
+		ifc.ifc_len = sizeof(buf);
+		ifc.ifc_buf = buf;
+		if(ioctl(msgfd, SIOCGIFCONF, &ifc) < 0)
+		{
+			return 0;
+		}
+
+		/* Iterate through the list of interfaces. */
+		ifr         = ifc.ifc_req;
+		nInterfaces = ifc.ifc_len / sizeof(struct ifreq);
+		for(i = 0; i < nInterfaces; i++)
+		{
+			struct ifreq *item = &ifr[i];
+
+			//    "rausb0", 49954, "lookingforsmartserver", 21 );
+			/* Get the broadcast address (added by Eric) */
+			if(ioctl(msgfd, SIOCGIFBRDADDR, item) >= 0) {
+		        net_sendmsg( inet_ntoa(((struct sockaddr_in *)&item->ifr_broadaddr)->sin_addr),  
+		                    net_smartserverport, smartserver_detection, strlen(smartserver_detection) ) ;
+			}
+		}
     }
-    return n;
+    return 1;
 }
 
 int net_connect(char *netname, int port)
@@ -617,7 +670,7 @@ void net_init(config &dvrconfig)
         string v ;
         v = dvrconfig.getvalue("network", "multicast_addr");
         if( v.length()>0 ) {
-            net_addr(v.getstring(), net_port, &multicast_addr);
+            net_addr(v, net_port, &multicast_addr);
             net_join( msgfd, &multicast_addr ) ;
         }
         else {
@@ -630,7 +683,7 @@ void net_init(config &dvrconfig)
     v = dvrconfig.getvalue("network", "smartserver");
     if( v.length()>0 ) {
         char * p ;
-        strncpy( net_smartserver, v.getstring(), sizeof(net_smartserver) );
+        strncpy( net_smartserver, v, sizeof(net_smartserver) );
         p = strchr( net_smartserver, ':' );
         if( p ) {
             sscanf( p+1, "%d", &net_smartserverport );
@@ -656,7 +709,7 @@ void net_init(config &dvrconfig)
     if( netdbg_on ) {
         v=dvrconfig.getvalue("debug","host");
         iv=dvrconfig.getvalueint("debug", "port");
-        net_addr( v.getstring(), iv, &netdbg_destaddr );
+        net_addr( v, iv, &netdbg_destaddr );
     }
     
     dvr_log("Network initialized.");

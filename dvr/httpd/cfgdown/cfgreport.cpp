@@ -416,23 +416,23 @@ int print_cfgreport()
     // write TVS mf id
     value = dvrconfig.getvalue("system", "tvsmfid" );
     if( value.length()>0 ) {
-        printf("TVS manufacturer ID : %s\n", value.getstring() );
+        printf("TVS manufacturer ID : %s\n", (char *)value );
     }
     
     // write system_value
     value = dvrconfig.getvalue("system","tvs_licenseplate");
     if( value.length()>0 ) {
-        printf("Cab license plate number : %s\n", value.getstring() );
+        printf("Cab license plate number : %s\n", (char *)value );
     }
     
     value = dvrconfig.getvalue("system","tvs_medallion");
     if( value.length()>0 ) {
-        printf("Cab medallion : %s\n", value.getstring() );
+        printf("Cab medallion : %s\n", (char *)value );
     }
 
     value = dvrconfig.getvalue("system","tvs_ivcs_serial");
     if( value.length()>0 ) {
-        printf( "TVS controller serial No : %s\n", value.getstring() );
+        printf( "TVS controller serial No : %s\n", (char *)value );
     }
 
     ifile = fopen( APP_DIR"/firmwareid", "r" );
@@ -476,25 +476,25 @@ int print_cfgreport()
     // dvr_time_zone
     value = dvrconfig.getvalue("system", "timezone");
     if( value.length()>0 ) {
-        printf("Time zone : %s\n", value.getstring() );
+        printf("Time zone : %s\n", (char *)value );
     }
 
     // shutdown_delay
     value = dvrconfig.getvalue("system", "shutdowndelay");
     if( value.length()>0 ) {
-        printf("Shutdown delay timer : %s\n", value.getstring() );
+        printf("Shutdown delay timer : %s\n", (char *)value );
     }
 
    // pre_lock_time
    value = dvrconfig.getvalue("system", "prelock");
    if( value.length()>0 ) {
-       printf("Event marker pre-lock time : %s\n", value.getstring() );
+       printf("Event marker pre-lock time : %s\n", (char *)value );
    }
 
     // post_lock_time
     value = dvrconfig.getvalue("system", "postlock");
     if( value.length()>0 ) {
-        printf("Event marker post-lock time : %s\n", value.getstring() );
+        printf("Event marker post-lock time : %s\n", (char *)value );
     }
         
     // no rec playback
@@ -512,13 +512,13 @@ int print_cfgreport()
     // gps port
     value = dvrconfig.getvalue("glog", "serialport");
     if( value.length()>0 ) {
-           printf("GPS port : %s\n", value.getstring() );
+           printf("GPS port : %s\n", (char *)value );
     }
         
     // gps baud rate
     value = dvrconfig.getvalue("glog", "serialbaudrate");
     if( value.length()>0 ) {
-        printf("GPS baud rate : %s\n", value.getstring() );
+        printf("GPS baud rate : %s\n", (char *)value );
     }
 
     // write camera_value
@@ -532,7 +532,7 @@ int print_cfgreport()
          // camera_name
          value = dvrconfig.getvalue(section, "name");
          if( value.length()>0 ) {
-            printf("Camera name : %s\n", value.getstring() );
+            printf("Camera name : %s\n", (char *)value );
          }
 
         // enable_camera
@@ -579,7 +579,7 @@ int print_cfgreport()
 
         // bit_rate
         value = dvrconfig.getvalue(section, "bitrate");
-        printf("Bit rate : %s\n",  value.getstring() );
+        printf("Bit rate : %s\n",  (char *)value );
 
         //          # picture quality, 0:lowest, 10:highest
         static char * picqua[11] = {
@@ -628,7 +628,7 @@ int print_cfgreport()
             sprintf(trigger, "trigger%d", ivalue );
             itrig = dvrconfig.getvalueint( section, trigger );
             if( itrig>0 ) {
-                printf( "        %s : ", sensornames[ivalue-1].getstring() );
+                printf( "        %s : ", (char *)sensornames[ivalue-1] );
                 if( itrig & 1 ) {
                     printf("on ");
                 }
@@ -657,7 +657,7 @@ int print_cfgreport()
                 if( l>0 ) {
                     printf(", ");
                 }
-                printf( "%s", sensornames[ivalue-1].getstring() );
+                printf( "%s", (char *)sensornames[ivalue-1] );
                 l++ ;
             }
         }
@@ -723,7 +723,7 @@ int print_cfgreport()
         printf( "Sensor #%d\n", i );
 
         value = dvrconfig.getvalue(section, "name") ;
-        printf( "    Name : %s\n", value.getstring() );
+        printf( "    Name : %s\n", (char *)value );
 
         // inverted value
         ivalue = dvrconfig.getvalueint(section, "inverted") ;
@@ -735,27 +735,27 @@ int print_cfgreport()
 
     // eth_ip
     value = dvrconfig.getvalue("network", "eth_ip");
-    printf( "Ethernet IP address : %s\n", value.getstring() );
+    printf( "Ethernet IP address : %s\n", (char *)value );
     
     // eth_mask
     value = dvrconfig.getvalue("network", "eth_mask");
-    printf( "Ethernet net mask : %s\n", value.getstring() );
+    printf( "Ethernet net mask : %s\n", (char *)value );
 
     // gateway
     value = dvrconfig.getvalue("network", "gateway");
-    printf( "Gateway : %s\n", value.getstring() );
+    printf( "Gateway : %s\n", (char *)value );
 
     // wifi_ip
     value = dvrconfig.getvalue("network", "wifi_ip");
-    printf( "Wireless IP address : %s\n", value.getstring() );
+    printf( "Wireless IP address : %s\n", (char *)value );
 
     // wifi_mask
     value = dvrconfig.getvalue("network", "wifi_mask");
-    printf( "Wireless net mask : %s\n", value.getstring() );
+    printf( "Wireless net mask : %s\n", (char *)value );
 
     // wifi_id
     value = dvrconfig.getvalue("network", "wifi_essid");
-    printf( "Wireless essid : %s\n", value.getstring() );
+    printf( "Wireless essid : %s\n", (char *)value );
     
     return 0;
 }

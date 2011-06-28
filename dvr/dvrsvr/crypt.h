@@ -66,27 +66,27 @@ void RC4_block_crypt( unsigned char * dest, unsigned char * src, int textsize, i
 //    num_rounds: 26 to 64
 //    v : data to encrypt, 64 bits
 //    k : key block, 128 bits   
-void XTEA_encipher(unsigned int num_rounds, unsigned long* v, unsigned long* k) ;
+void XTEA_encipher(unsigned int num_rounds, unsigned int* v, unsigned int* k) ;
 
 // XTEA decryption
 //    num_rounds: 26 to 64
 //    v : data to decrypt, 64 bits
 //    k : key block, 128 bits   
-void XTEA_decipher(unsigned int num_rounds, unsigned long* v, unsigned long* k) ;
+void XTEA_decipher(unsigned int num_rounds, unsigned int* v, unsigned int* k) ;
 
 // XTEA block encryption
 //      text:     data to encrypt
 //      textsize: data size, should be times of 8
 //      k: 128bits key block
 // because block size is 8 bytes, remain bytes (<7bytes) are not encrypted
-void XTEA_encrypt( unsigned char * text, int textsize, unsigned long * k );
+void XTEA_encrypt( unsigned char * text, int textsize, unsigned int * k );
 
 // XTEA block decryption
 //      text: data to encrypt
 //      textsize: data size, should be times of 8
 //      k: 128bits key block
 // because block size is 8 bytes, remain bytes (<7bytes) are not encrypted
-void XTEA_decrypt( unsigned char * text, int textsize, unsigned long * k );
+void XTEA_decrypt( unsigned char * text, int textsize, unsigned int * k );
 
 
 // convert binary codes into c64 code.
@@ -96,3 +96,21 @@ int bin2c64(unsigned char * bin, int binsize, char * c64 );
 // convert c64 codes to binary codes.
 // return size of bytes in c64.
 int c642bin(char * c64, unsigned char * bin, int binsize );
+
+// MD5
+
+/* typedef a 32 bit type */
+typedef unsigned int UINT4;
+
+/* Data structure for MD5 (Message Digest) computation */
+typedef struct {
+  UINT4 i[2];                   /* number of _bits_ handled mod 2^64 */
+  UINT4 buf[4];                                    /* scratch buffer */
+  unsigned char in[64];                              /* input buffer */
+  unsigned char digest[16];     /* actual digest after MD5Final call */
+} MD5_CTX;
+
+void MD5Init ( MD5_CTX * mdContext);
+void MD5Update (MD5_CTX * mdContext, unsigned char * inBuf, unsigned int inLen);
+void MD5Final (MD5_CTX * mdContext);
+

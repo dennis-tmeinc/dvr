@@ -102,7 +102,7 @@ void *mem_ref(void *pmem, int size)
 {
     int *pmemblk;
     mem_lock();
-    if (pmem && (((int)pmem)&3)==0 ){
+    if (pmem && (((int)pmem)&3)==0 ){		// check if this memory block is valid.
         pmemblk = ((int *)pmem)-2 ;
         if (pmemblk[0] == (int)pmem){
             pmemblk[1]++ ;

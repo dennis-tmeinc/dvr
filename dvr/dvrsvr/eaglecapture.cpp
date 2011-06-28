@@ -377,30 +377,35 @@ void eagle_capture::docaptureJPEG()
             res = GetJPEGImage(m_hikhandle, m_jpeg_quality, m_jpeg_mode, jpeg_buf, &jpeg_size ) ;
             if( res==0 ) {
                 // adjust/add jpeg tag
-                int be, end ;
+                int begin, end, i ;
+				begin = 0 ;
                 end = jpeg_size ;
                 // look for jpeg file ending tag
-                for( be=0; be<200 ; be++,end-- ) {
-                    if( jpeg_buf[end-1] == 0xd9 &&
-                       jpeg_buf[end-2] == 0xff ) {
+                for( i=1; i<200 ; i++ ) {
+                    if( jpeg_buf[jpeg_size-i] == 0xd9 &&
+                       jpeg_buf[jpeg_size-i-1] == 0xff ) {
+						   end = jpeg_size-i+1 ;
                            break;
                        }
                 }
                 // look for jpeg file begin tag
-                for( be=0; be<200; be++ ) {
-                    if( jpeg_buf[be]==0xff &&
-                       jpeg_buf[be+1]==0xd8 &&
-                       jpeg_buf[be+2]==0xff ) 
+                for( i=0; i<200; i++ ) {
+                    if( jpeg_buf[i]==0xff &&
+                       jpeg_buf[i+1]==0xd8 &&
+                       jpeg_buf[i+2]==0xff )  
+					{
+						begin=i ;
                         break;
+					}
                 }
                 struct cap_frame capframe;
                 capframe.channel = m_channel ;
-                capframe.framesize = end-be ;
+                capframe.framesize = end-begin ;
                 capframe.frametype = FRAMETYPE_JPEG ;
 
                 capframe.framedata = (char *) mem_alloc( capframe.framesize );
                 if( capframe.framedata ) {
-                    mem_cpy32(capframe.framedata, &jpeg_buf[be], capframe.framesize ) ;
+                    mem_cpy32(capframe.framedata, &jpeg_buf[begin], capframe.framesize ) ;
                     onframe(&capframe);
                     mem_free(capframe.framedata);
                 }

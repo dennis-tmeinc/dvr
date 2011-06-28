@@ -70,11 +70,11 @@ void ptz_init(config &dvrconfig)
     if( ptz_enable == 0 ) {
         return;
     }
-    sscanf(t.getstring(), "%d", &ptz_enable);
+    sscanf((char *)t, "%d", &ptz_enable);
     if (ptz_enable) {
         ptz_device = dvrconfig.getvalue("ptz", "device");
         
-        ptz_handle = open( ptz_device.getstring(), O_WRONLY|O_NONBLOCK );
+        ptz_handle = open( ptz_device, O_WRONLY|O_NONBLOCK );
         if( ptz_handle > 0 ) {
             tcgetattr(ptz_handle, &saved_serialattributes);
             memcpy( &serialattributes, &saved_serialattributes, sizeof( saved_serialattributes ) );
@@ -95,7 +95,7 @@ void ptz_init(config &dvrconfig)
             tcsetattr(ptz_handle, TCSANOW, &serialattributes);
             
             t = dvrconfig.getvalue("ptz", "protocol");
-            if( *t.getstring()=='P' )
+            if( *(char *)t=='P' )
                 ptz_protocol = 1 ;
             else
                 ptz_protocol = 0 ;

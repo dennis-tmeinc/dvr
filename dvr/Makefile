@@ -68,43 +68,37 @@ app_tvs:
 	echo PROJDIR=`pwd` > config
 	echo "proj=TVS21" >> config
 	echo "EAGLE=eagle32" >> config
-	ln -sf cfg.h.TVS21 cfg.h
+	cp cfg.h.TVS21 cfg.h
 
 app_tvs22:
 	echo PROJDIR=`pwd` > config
 	echo "proj=TVS22" >> config
 	echo "EAGLE=eagle32" >> config
-	ln -sf cfg.h.TVS21 cfg.h
+	cp cfg.h.TVS21 cfg.h
 
 app_pwii:
 	echo PROJDIR=`pwd` > config
 	echo "proj=PWII" >> config
 	echo "EAGLE=eagle32" >> config
-	ln -sf cfg.h.PWII cfg.h
+	cp cfg.h.PWII cfg.h
 	
 app_pw34:
 	echo PROJDIR=`pwd` > config
 	echo "proj=PW34" >> config
 	echo "EAGLE=eagle34" >> config
-	ln -sf cfg.h.PW34 cfg.h
-
-app_pwlite:
-	echo PROJDIR=`pwd` > config
-	echo "proj=PWLITE" >> config
-	echo "EAGLE=eagle34" >> config
-	ln -sf cfg.h.PWLITE cfg.h
+	cp cfg.h.PW34 cfg.h
 
 app_zeus:
 	echo PROJDIR=`pwd` > config
 	echo "proj=PWZEUS" >> config
 	echo "EAGLE=eagle34" >> config
-	ln -sf cfg.h.zeus cfg.h
+	cp cfg.h.zeus cfg.h
 
 app_mv:
 	echo PROJDIR=`pwd` > config
 	echo "proj=PW34" >> config
 	echo "EAGLE=mv" >> config
-	ln -sf cfg.h.MV cfg.h
+	cp cfg.h.MV cfg.h
 
 firmware:
 	$(MAKE) applications

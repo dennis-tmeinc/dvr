@@ -8,6 +8,7 @@
 int disk_busy ;
 
 static int disk_minfreespace;              // minimum free space for current disk, in Magabytes
+static int disk_minfreespace_percentage;   // minimum free space for current disk, in percentage
 static int disk_lockfile_percentage ;      // how many percentage locked file can occupy.
 static int disk_filekeepdays ;
 static int disk_removeprerecordfile ;       // if pre-recorded file be removed
@@ -107,7 +108,14 @@ class dir_find {
             int r=0 ;
             if( m_pdir ) {
                 while( (m_pent=readdir(m_pdir))!=NULL  ) {
-                    if( fnmatch(pattern, m_pent->d_name, 0 )==0 ) {
+					// skip . and .. directory
+					if( (m_pent->d_name[0]=='.' && m_pent->d_name[1]=='\0') || 
+					   (m_pent->d_name[0]=='.' && m_pent->d_name[1]=='.' && m_pent->d_name[2]=='\0') ) 
+					{
+						continue ;
+					}
+
+					if( fnmatch(pattern, m_pent->d_name, 0 )==0 ) {
                         strcpy( &m_pathname[m_dirlen], m_pent->d_name );
                         if( m_pent->d_type == DT_UNKNOWN ) {                   // d_type not available
                             struct stat findstat ;
@@ -257,7 +265,20 @@ int disk_freespace(char *path)
     if (statfs(path, &stfs) == 0) {
         return stfs.f_bavail / ((1024 * 1024) / stfs.f_bsize);
     }
-    return 0;
+	return 0;
+}
+
+// return true for disk space check pass, false for failed 
+int disk_freespace_check(char *path)
+{
+    struct statfs stfs;
+    
+    if (statfs(path, &stfs) == 0) {
+		return 
+			(int)(stfs.f_bavail * 100 / stfs.f_blocks) >= disk_minfreespace_percentage  && 
+			(int)(stfs.f_bavail / ((1024 * 1024) / stfs.f_bsize)) >= disk_minfreespace ;
+    }
+	return 0;
 }
 
 // remove all files and directory
@@ -329,12 +350,12 @@ static int disk_removefile( const char * file264 )
         dvr_log( "Delete file failed : %s", basename(file264) );
         return -1;
     }
-    extension=strstr( f264.getstring(), g_264ext );
+    extension=strstr( f264, g_264ext );
     if( extension ) {
         strcpy( extension, ".k");
-        unlink( f264.getstring() );
+        unlink( f264 );
         strcpy( extension, ".idx" );
-        unlink( f264.getstring() );
+        unlink( f264 );
     }
     disk_rmemptytree(file264);
     return 0 ;
@@ -441,7 +462,7 @@ void disk_repair264(char *dir)
                     else {
                         string cpfname(dfind.pathname());
                         lp[1]='N' ;
-                        dvrfile::rename(cpfname.getstring(), dfind.pathname());
+                        dvrfile::rename(cpfname, dfind.pathname());
                     }
                 }
                 int fl = f264length( filename );
@@ -511,7 +532,7 @@ static void disk_listday_help(char *dir, array <f264name> & flist, int day, int 
 int disk_listday(array <f264name> & flist, struct dvrtime * day, int channel)
 {
     flist.empty();
-    disk_listday_help(disk_play.getstring(), flist, day->year * 10000 + day->month*100 + day->day, channel );
+    disk_listday_help(disk_play, flist, day->year * 10000 + day->month*100 + day->day, channel );
     flist.sort();
     if( flist.size()<2 ) {
         return flist.size();
@@ -522,13 +543,13 @@ int disk_listday(array <f264name> & flist, struct dvrtime * day, int channel)
     struct dvrtime t1, t2 ;
     int l1, l2 ;
     int ch1, ch2 ;
-    f264time(  flist[0].getstring(), &t1 );
-    l1 = f264length(  flist[0].getstring() );
-    ch1 = f264channel( flist[0].getstring() );
+    f264time(  flist[0], &t1 );
+    l1 = f264length(  flist[0]);
+    ch1 = f264channel( flist[0] );
     for( i=1; i<flist.size();  ) {
-        f264time(  flist[i].getstring(), &t2 );
-        l2 = f264length(  flist[i].getstring() );
-        ch2 = f264channel( flist[i].getstring() );
+        f264time(  flist[i], &t2 );
+        l2 = f264length(  flist[i] );
+        ch2 = f264channel( flist[i] );
         if( t1==t2 && l1==l2 && ch1==ch2 ) {
             flist.remove(i);
         }
@@ -591,7 +612,7 @@ static void disk_getdaylist_help( char * dir, array <int> & daylist, int ch )
 void disk_getdaylist(array <int> & daylist, int ch)
 {
     daylist.empty();
-    disk_getdaylist_help( disk_play.getstring(), daylist, ch);
+    disk_getdaylist_help( disk_play, daylist, ch);
     daylist.sort();                  // sort day list
 }
 
@@ -658,8 +679,8 @@ int disk_deloldfile( int lock )
 
     if( lock ) {
         if( oldfilelist.size()>0 ) {
-            if( disk_removefile( oldfilelist[0].getstring() )==0 ) {
-                disk_renew( oldfilelist[0].getstring(), 0 );
+            if( disk_removefile( oldfilelist[0] )==0 ) {
+                disk_renew( oldfilelist[0], 0 );
             }
             oldfilelist.remove(0);
             return 1 ;
@@ -667,17 +688,17 @@ int disk_deloldfile( int lock )
     }
     else {  // only delete _N_ files
         for( i=0; i<oldfilelist.size(); i++ ) {
-            if( strstr( basename(oldfilelist[i].getstring()), "_N_" ) ) {
-                if( disk_removefile( oldfilelist[i].getstring() )==0 ) {
-                    disk_renew( oldfilelist[i].getstring(), 0 );
+            if( strstr( basename(oldfilelist[i]), "_N_" ) ) {
+                if( disk_removefile( oldfilelist[i] )==0 ) {
+                    disk_renew( oldfilelist[i], 0 );
                 }
                 oldfilelist.remove(i);
                 return 1 ;
             }
         }
         if( oldnfilelist.size()>0 ) {
-            if( disk_removefile( oldnfilelist[0].getstring() )==0 ) {
-                disk_renew( oldnfilelist[0].getstring(), 0 );
+            if( disk_removefile( oldnfilelist[0] )==0 ) {
+                disk_renew( oldnfilelist[0], 0 );
             }
             oldnfilelist.remove(0);
             return 1 ;
@@ -688,7 +709,7 @@ int disk_deloldfile( int lock )
     oldnfilelist.empty();
 
     array <int> daylist ;
-    disk_getdaylist_help( disk_base.getstring(), daylist, -1);
+    disk_getdaylist_help( disk_base, daylist, -1);
     daylist.sort();
 
     array <f264name> flist ;
@@ -701,7 +722,7 @@ int disk_deloldfile( int lock )
     for( j=0; j<daylist.size(); j++) {
         day = daylist[j] ;
         flist.empty();
-        disk_listday_help(disk_base.getstring(), flist, daylist[j], -1 );
+        disk_listday_help(disk_base, flist, daylist[j], -1 );
         for( i=0; i<flist.size(); i++ ) {
             oldfilelist.add(flist[i]);
         }
@@ -715,7 +736,7 @@ int disk_deloldfile( int lock )
     for( j=0; j<daylist.size(); j++) {
         day = daylist[j] ;
         flist.empty();
-        disk_listday_help(disk_base.getstring(), flist, daylist[j], -1 );
+        disk_listday_help(disk_base, flist, daylist[j], -1 );
         if( flist.size()<=0 ) 
             continue ;
         if( (thismonth-day/10000*12-day%10000/100)>6 ) {
@@ -725,7 +746,7 @@ int disk_deloldfile( int lock )
         }
         else {
             for( i=0; i<flist.size(); i++ ) {
-                if( strstr( basename(flist[i].getstring()), "_N_" ) ) {
+                if( strstr( basename(flist[i]), "_N_" ) ) {
                     oldnfilelist.add( flist[i] );
                 }
             }
@@ -773,7 +794,7 @@ int disk_renew( char * filename, int add )
     disk_lock();
     
     for( disk=0; disk<disk_disklist.size(); disk++ ) {
-        base = disk_disklist[disk].basedir.getstring() ;
+        base = disk_disklist[disk].basedir ;
         l=disk_disklist[disk].basedir.length() ;
         if( strncmp(base, filename, l )==0 ) {
             if( add ) {
@@ -852,8 +873,8 @@ int disk_findrecdisk()
     for( loop=0; loop<50; loop++ ) {
         // find a disk with available space
         for( i=0; i<disk_disklist.size(); i++ ) {
-            if( disk_freespace( disk_disklist[i].basedir.getstring()) > disk_minfreespace ) {
-                if( disk_testwritable( disk_disklist[i].basedir.getstring() ) ) {
+            if( disk_freespace_check(disk_disklist[i].basedir) ) {
+                if( disk_testwritable( disk_disklist[i].basedir ) ) {
                     return i ;              // writable disk!
                 }
             }
@@ -899,7 +920,7 @@ void disk_renewdisk(char * dir)
 // return 1: success, 0:failed
 int disk_scandisk( int diskindex )
 {
-    char * basedir = disk_disklist[diskindex].basedir.getstring();
+    char * basedir = disk_disklist[diskindex].basedir;
     
     if( !disk_testwritable( basedir ) ) {
         return 0 ;              // no writable disk, return failed
@@ -926,7 +947,7 @@ int disk_scanalldisk()
     char * diskname;
     int i;
     
-    if (stat(disk_base.getstring(), &basestat) != 0) {
+    if (stat(disk_base, &basestat) != 0) {
         dvr_log("Disk base error, not able to record!");
         return 0;
     }
@@ -935,7 +956,7 @@ int disk_scanalldisk()
         disk_disklist[i].mark=0 ;
     }
 
-    dir_find disks(disk_base.getstring());
+    dir_find disks(disk_base);
     while( disks.find() ) {
         if( disks.isdir() ) {
             diskname = disks.pathname();
@@ -969,7 +990,7 @@ int disk_scanalldisk()
 
     for( i=0; i<disk_disklist.size(); ) {
         if( disk_disklist[i].mark==0 ) {
-            dvr_log("Hard drive removed: %s", basename(disk_disklist[i].basedir.getstring()) );
+            dvr_log("Hard drive removed: %s", basename(disk_disklist[i].basedir) );
             disk_disklist.remove(i) ;
         }
         else {
@@ -987,7 +1008,7 @@ int disk_stat(int * recordtime, int * lockfiletime, int * remaintime)
 
     if( rec_basedir.length()>0 ) {
         struct statfs stfs;
-        if (statfs(rec_basedir.getstring(), &stfs) == 0) {
+        if (statfs(rec_basedir, &stfs) == 0) {
             totalsp =  stfs.f_blocks / ((1024 * 1024) / stfs.f_bsize);
             freesp = stfs.f_bavail / ((1024 * 1024) / stfs.f_bsize);
         }
@@ -1049,13 +1070,13 @@ int disk_archive_deloldfile(char * archdir)
     static string s_archdir ;
     static array <f264name> oldfilelist ;
 
-    if( strcmp(archdir, s_archdir.getstring())!=0 ) {
+    if( strcmp(archdir, s_archdir)!=0 ) {
         oldfilelist.empty();
         s_archdir = archdir ;
     }
 
     if( oldfilelist.size()>0 ) {
-        disk_removefile( oldfilelist[0].getstring() );
+        disk_removefile( oldfilelist[0] );
         oldfilelist.remove(0);
         return 1 ;
     }
@@ -1072,7 +1093,7 @@ int disk_archive_deloldfile(char * archdir)
     for( j=0; j<daylist.size(); j++) {
         day = daylist[j] ;
         flist.empty();
-        disk_listday_help(disk_arch.getstring(), flist, day, -1 );
+        disk_listday_help(disk_arch, flist, day, -1 );
         for( i=0; i<flist.size(); i++ ) {
             oldfilelist.add(flist[i]);
         }
@@ -1085,22 +1106,18 @@ int disk_archive_deloldfile(char * archdir)
 }
 
 // return 1 success
-int disk_archive_mkfreespace( char * diskdir, int minfreespace )
+int disk_archive_mkfreespace( char * diskdir )
 {
 
     int retry ;
 
-    if( disk_freespace( diskdir ) > disk_minfreespace ) {
-        return 1 ;
-    }
-    
     for(retry=0; retry<100; retry++) {
-        if( disk_freespace( diskdir ) <= disk_minfreespace ) {
-            disk_archive_deloldfile(diskdir);
-        }
-        else {
-            return 1;
-        }
+		if( disk_freespace_check( diskdir ) ) {
+			return 1 ;
+		}
+		else {
+			disk_archive_deloldfile(diskdir);
+		}
     }
     return 0 ;
 }
@@ -1171,7 +1188,7 @@ int disk_archive_arch( char * filename, char * srcdir, char * destdir )
         return 0;
     }
 
-    if( disk_archive_mkfreespace( destdir, disk_minfreespace )==0 ) {
+    if( disk_archive_mkfreespace( destdir )==0 ) {
         // can't free more disk space
         return 0;
     }
@@ -1257,8 +1274,8 @@ static int disk_archive_cplogfile( char * srcdir, char * destdir)
     extern string logfile ;
 // copy dvrlog file
     if( logfile.length()>0 ) {
-        sprintf(srcfile, "%s/_%s_/%s", srcdir, g_hostname, logfile.getstring());
-        sprintf(destfile, "%s/_%s_/%s", destdir, g_hostname, logfile.getstring());
+        sprintf(srcfile, "%s/_%s_/%s", srcdir, (char *)g_servername, (char *)logfile);
+        sprintf(destfile, "%s/_%s_/%s", destdir, (char *)g_servername, (char *)logfile);
         disk_archive_copyfile(srcfile, destfile ) ;
     }
 
@@ -1324,20 +1341,20 @@ static void disk_archive_round(char * srcdir, char * destdir)
         flist.sort();
         for( i=0; i<flist.size(); i++ ) {
 			int l, lockl; 
-			l = f264length(flist[i].getstring());
-			lockl = f264locklength( flist[i].getstring());
+			l = f264length(flist[i]);
+			lockl = f264locklength( flist[i]);
 			if( lockl>0 && lockl==l ) {
                 int ch, fday, ftime ;
                 struct dvrtime ft ;
-                ch = f264channel( flist[i].getstring() );
+                ch = f264channel( flist[i] );
                 if( ch<0 || ch>= cap_channels ) {
                     continue ;
                 }
-                f264time(flist[i].getstring(), &ft);
+                f264time(flist[i], &ft);
                 fday = ft.year*10000+ft.month*100+ft.day ;
                 ftime = ft.hour*10000+ft.minute*100+ft.second ;
                 if( fday>upd_date || ftime>=upd_time ) {
-                    if( disk_archive_arch( flist[i].getstring(), srcdir, destdir ) ) {
+                    if( disk_archive_arch( flist[i], srcdir, destdir ) ) {
                         // successfully archived. update latest archive file date & time
                         upd_date=fday ;
                         upd_time=ftime ;
@@ -1372,11 +1389,11 @@ int disk_archive_basedisk(string & archbase)
         return 0 ;
     }
     
-    if (stat(disk_arch.getstring(), &basestat) != 0) {      // no archive root dir
+    if (stat(disk_arch, &basestat) != 0) {      // no archive root dir
         return 0;
     }
 
-    dir_find disks(disk_arch.getstring());
+    dir_find disks(disk_arch);
     while( disks.find() ) {
         if( disks.isdir() ) {
             diskname = disks.pathname();
@@ -1385,7 +1402,7 @@ int disk_archive_basedisk(string & archbase)
                     if( disk_testwritable( diskname ) ) {
                         archbase = diskname ;
                         if( disk_archdiskfile.length()>0 ) {
-                            FILE * f = fopen(disk_archdiskfile.getstring(), "w"); 
+                            FILE * f = fopen(disk_archdiskfile, "w"); 
                             if( f ) {
                                 fputs(diskname, f);
                                 fclose(f);
@@ -1404,7 +1421,7 @@ void * disk_archive_thread(void * param)
 {
     string archbase ;
     if( rec_basedir.length()>0 && disk_archive_basedisk( archbase ) ) {
-        disk_archive_round(rec_basedir.getstring(), archbase.getstring() );
+        disk_archive_round(rec_basedir, archbase );
     }
     disk_archive_run = 0 ;
     return NULL ;
@@ -1436,7 +1453,7 @@ int disk_archive_runstate()
 {
     return disk_archive_run!=0 ;   // arch is actively run
 }
-
+	
 // regular disk check, every 3 seconds
 void disk_check()
 {
@@ -1456,8 +1473,8 @@ void disk_check()
 
     disk_sync();
     
-    if (rec_basedir.length()==0 || disk_freespace(rec_basedir.getstring()) <= disk_minfreespace ) {
-
+    if (rec_basedir.length()==0 || 
+        (! disk_freespace_check( rec_basedir )) ) {
         i = disk_findrecdisk();
         if( i<0 ) {
             rec_break();
@@ -1466,24 +1483,41 @@ void disk_check()
             goto disk_check_finish ;
         }
         
-        if( strcmp(rec_basedir.getstring(), disk_disklist[i].basedir.getstring())!=0 ) {	// different disk
+        if( strcmp(rec_basedir, disk_disklist[i].basedir)!=0 ) {	// different disk
             if( rec_basedir.length()>0 ) {
                 rec_break();
             }
-            rec_basedir=disk_disklist[i].basedir.getstring() ;
-            dvr_log("Start recording on disk : %s.", basename(rec_basedir.getstring())) ;
-            // mark current disk
-            FILE * f = fopen(disk_curdiskfile.getstring(), "w"); 
+            rec_basedir=disk_disklist[i].basedir ;
+            dvr_log("Start recording on disk : %s.", basename(rec_basedir)) ;
+
+			// mark current disk
+            FILE * f = fopen(disk_curdiskfile, "w"); 
             if( f ) {
-                fputs(rec_basedir.getstring(), f);
+                fputs(rec_basedir, f);
                 fclose(f);
             }
-        }
+#ifdef PWII_APP
+			// To change hostname specified from media disk
+			char * mediaidfile ;
+			mediaidfile = new char [1024] ;
+			sprintf( mediaidfile, "%s/pwid.conf", (char *)rec_basedir );
+			config mediaidconfig( mediaidfile, 0 );		// don't merge defconf
+			delete mediaidfile ;
+			string mediaid ;
+			mediaid = mediaidconfig.getvalue("system","id1");
+			if( mediaid.length()>0 ) {
+				sprintf(g_id1, "%s", (char *)mediaid );
+				g_servername = mediaid ;
+				sethostname( (char *)g_servername, g_servername.length()+1);
+				dvr_log("Setup server name from media disk: %s", (char *)g_servername);
+			}
+#endif
+		}
     }
 disk_check_finish:
     if( rec_basedir.length()<1 ) {
         // un-mark current disk
-        unlink( disk_curdiskfile.getstring() );
+        unlink( disk_curdiskfile );
     }
 }
 
@@ -1496,12 +1530,12 @@ void disk_logdir(char * logfilename)
     struct stat logstat ;
     for( i=0; i<disk_disklist.size(); i++ ) {
         sprintf( logpath, "%s/_%s_/%s", 
-                disk_disklist[i].basedir.getstring(),
-                g_hostname,
+                (char *)(disk_disklist[i].basedir),
+                (char *)g_servername,
                 logfilename );
         if( stat( logpath, &logstat )==0 ) {
             if( S_ISREG( logstat.st_mode ) ) {      // find existing log file
-                disk_disklist[i].basedir.getstring()
+                disk_disklist[i].basedir
             }
             return i;
         }
@@ -1542,6 +1576,11 @@ void disk_init(config &dvrconfig)
     } else {
         disk_minfreespace = 100;
     }
+
+	disk_minfreespace_percentage=dvrconfig.getvalueint("system", "mindiskspace_percent");
+	if (disk_minfreespace_percentage<1 || disk_minfreespace_percentage>50 ) {
+		disk_minfreespace_percentage=5 ;
+	}
     
     disk_curdiskfile = dvrconfig.getvalue("system", "currentdisk");
     if( disk_curdiskfile.length()<2) {
@@ -1601,10 +1640,10 @@ void disk_uninit()
 
 // make these file persistant    
     // un-mark current recording disk
-//    unlink( disk_curdiskfile.getstring() );
+//    unlink( disk_curdiskfile );
 
     // un-mark archieving disk
-//    unlink( disk_archdiskfile.getstring() );
+//    unlink( disk_archdiskfile );
 
     sync();
 

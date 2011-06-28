@@ -26,22 +26,22 @@ static unsigned char key_init[256] = {
     0xfa, 0xff, 0xbe, 0x90, 0xeb, 0x6c, 0x50, 0xa4, 0xf7, 0xa3, 0xf9, 0xbe, 0xf2, 0x78, 0x71, 0xc6
 } ;
 
-static unsigned long u32_rotate(unsigned long v, int bits)
+static unsigned int u32_rotate(unsigned int v, int bits)
 {
     return (v<<bits)|(v>>(32-bits));
 }
 
 // non endian sensitive assignment
-static unsigned long u32_get(unsigned char *p)
+static unsigned int u32_get(unsigned char *p)
 {
-    return (unsigned long)(*p) + 
-        ((unsigned long)(*(p+1))<<8)+
-        ((unsigned long)(*(p+2))<<16)+
-        ((unsigned long)(*(p+3))<<24) ;
+    return (unsigned int)(*p) + 
+        ((unsigned int)(*(p+1))<<8)+
+        ((unsigned int)(*(p+2))<<16)+
+        ((unsigned int)(*(p+3))<<24) ;
 }
 
 // non endian sensitive assignment
-static void u32_put(unsigned char *p, unsigned long v)
+static void u32_put(unsigned char *p, unsigned int v)
 {
     *p=(unsigned char)v ;
     *(p+1)=(unsigned char)(v>>8) ;
@@ -65,7 +65,7 @@ void key_256( char * password, unsigned char * k256)
 	}
 	for(rounds=0; rounds<26; rounds++) {
 		for(i=0; i<256; i+=4) {
-			unsigned long l, l1, l2, l3, l4, l5 ;
+			unsigned int l, l1, l2, l3, l4, l5 ;
 			int s1, s2, s3, s4, s5 ;
 			s1=(i+7*4)%256 ;
 			s2=(i+29*4)%256 ;
@@ -209,10 +209,10 @@ void RC4_block_crypt( unsigned char * dest, unsigned char * src, int textsize, i
 //    num_rounds: 26 to 64
 //    v : data to encrypt, 64 bits
 //    k : key block, 128 bits   
-void XTEA_encipher(unsigned int num_rounds, unsigned long* v, unsigned long* k) 
+void XTEA_encipher(unsigned int num_rounds, unsigned int* v, unsigned int* k) 
 {
-    unsigned long v0=v[0], v1=v[1], i;
-    unsigned long sum=0, delta=0x9E3779B9;
+    unsigned int v0=v[0], v1=v[1], i;
+    unsigned int sum=0, delta=0x9E3779B9;
     for(i=0; i<num_rounds; i++) {
        v0 += (((v1 << 4) ^ (v1 >> 5)) + v1) ^ (sum + k[sum & 3]);
         sum += delta;
@@ -225,10 +225,10 @@ void XTEA_encipher(unsigned int num_rounds, unsigned long* v, unsigned long* k)
 //    num_rounds: 26 to 64
 //    v : data to decrypt, 64 bits
 //    k : key block, 128 bits   
-void XTEA_decipher(unsigned int num_rounds, unsigned long* v, unsigned long* k) 
+void XTEA_decipher(unsigned int num_rounds, unsigned int* v, unsigned int* k) 
 {
-    unsigned long v0=v[0], v1=v[1], i;
-    unsigned long delta=0x9E3779B9, sum=delta*num_rounds;
+    unsigned int v0=v[0], v1=v[1], i;
+    unsigned int delta=0x9E3779B9, sum=delta*num_rounds;
     for(i=0; i<num_rounds; i++) {
         v1 -= (((v0 << 4) ^ (v0 >> 5)) + v0) ^ (sum + k[(sum>>11) & 3]);
         sum -= delta;
@@ -242,10 +242,10 @@ void XTEA_decipher(unsigned int num_rounds, unsigned long* v, unsigned long* k)
 //      textsize: data size, should be times of 8
 //		k: 128bits key block
 // because block size is 8 bytes, remain bytes (<8bytes) are not encrypted
-void XTEA_encrypt( unsigned char * text, int textsize, unsigned long * k )
+void XTEA_encrypt( unsigned char * text, int textsize, unsigned int * k )
 {
     while(textsize>=8) {
-        XTEA_encipher(39, (unsigned long *)text, k);
+        XTEA_encipher(39, (unsigned int *)text, k);
         textsize-=8 ;
         text+=8 ;
     }
@@ -256,10 +256,10 @@ void XTEA_encrypt( unsigned char * text, int textsize, unsigned long * k )
 //      textsize: data size, should be times of 8
 //		k: 128bits key block
 // because block size is 8 bytes, remain bytes (<8bytes) are not decrypted
-void XTEA_decrypt( unsigned char * text, int textsize, unsigned long * k )
+void XTEA_decrypt( unsigned char * text, int textsize, unsigned int * k )
 {
     while(textsize>=8) {
-        XTEA_decipher(39, (unsigned long *)text, k);
+        XTEA_decipher(39, (unsigned int *)text, k);
         textsize-=8 ;
         text+=8 ;
     }

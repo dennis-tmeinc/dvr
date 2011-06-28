@@ -56,7 +56,7 @@ void mem_uninit();
 #define	DVRVERSION3		(521)
 
 // used types
-typedef unsigned long int DWORD;
+typedef unsigned int DWORD;
 typedef unsigned short int WORD;
 typedef unsigned char BYTE;
 
@@ -75,7 +75,7 @@ extern int g_lowmemory;
 extern int g_memfree;
 extern int g_memdirty;
 extern int g_memused;
-extern char g_hostname[] ;
+extern string g_servername ;
 extern int g_timetick ;            // global time tick ;
 extern int g_keyactive ;
 
@@ -377,9 +377,9 @@ class capture {
 	int m_signal ;				// signal ok.
 	int m_oldsignal ;			// signal ok.
     int m_signal_standard ;     // 1: ntsc, 2: pal 
-    unsigned long m_streambytes; // total stream bytes.
+    unsigned m_streambytes;     // total stream bytes.
 
-    int m_started ;         // 0: stopped, 1: started
+    int m_started ;             // 0: stopped, 1: started
     int m_working ;             // channel is working
     int m_remoteosd ;           // get OSD from network
 
@@ -441,7 +441,7 @@ class capture {
 	int type(){
 		return m_type ;
 	}
-    unsigned long streambytes() {
+    unsigned int streambytes() {
         return m_streambytes ;
     }
     void onframe(cap_frame * pcapframe);	// send frames to network or to recording
@@ -679,6 +679,7 @@ void rec_postrecord(int channel);
 void rec_lockstart(int channel);
 void rec_lockstop(int channel);
 int  rec_state(int channel);
+int  rec_triggered(int channel);
 int  rec_lockstate(int channel);
 void rec_lock(time_t locktime);
 void rec_unlock();
@@ -1305,7 +1306,8 @@ enum e_keycode {
     VK_C5,              // PWII, Camera5
     VK_C6,              // PWII, Camera6
     VK_C7,              // PWII, Camera7
-    VK_C8               // PWII, Camera8
+    VK_C8,              // PWII, Camera8
+    VK_MUTE             // PWII, Faked Mute button
 } ;
 
 #define VK_FRONT (VK_C1)
@@ -1338,11 +1340,12 @@ void dio_setchstat( int channel, int ch_state );
 int dio_getgforce( float * gf, float * gr, float *gd );
 int dio_mode_archive();
 int dio_getiomsg( char * oldmsg );
-void dio_smartserveron();
+void dio_smartserveron(char * interface);
 
 #ifdef PWII_APP
 // return pwii media key event, 0=no key event, 1=key event
 int dio_getpwiikeycode( int * keycode, int * keydown) ;
+void dio_pwii_lpzoomin( int on );
 #endif    // PWII_APP
 
 void dio_init(config &dvrconfig);
@@ -1369,7 +1372,7 @@ class sensor_t {
   public:
 	sensor_t(int n);
 	char * name() {
-		return m_name.getstring();
+		return (char *)m_name;
 	}
 	int check();
 	int value() {
@@ -1395,7 +1398,7 @@ public:
 	~alarm_t();
 		
 	char * name() {
-		return m_name.getstring();
+		return (char *)m_name;
 	}
 	void clear();
 	int setvalue(int v);
@@ -1411,6 +1414,7 @@ int screen_key( int keycode, int keydown ) ;
 int screen_io(int usdelay=0);
 int screen_setliveview( int channel );
 int screen_menu(int level);
+void screen_update();
 
 #ifdef PWII_APP
 extern int pwii_front_ch ;        // pwii front camera channel

@@ -320,6 +320,18 @@ int main()
                 dvrconfig.setvalueint( "system", "noreclive", 0 );
             }
         }
+
+		// disable wifi upload
+		if( getsetvalue( "bool_nowifiupload" )!=NULL ) {
+            v = getsetvalue( "nowifiupload" );
+			dvrconfig.setvalueint( "system", "disable_wifiupload", v?1:0 );
+        }
+
+        // disable archiving feature
+		if( getsetvalue( "bool_noarchive" )!=NULL ) {
+            v = getsetvalue( "noarchive" );
+			dvrconfig.setvalueint( "system", "disable_archive", v?1:0 );
+        }
         
         if( getsetvalue( "bool_en_file_encryption" )!=NULL ) {
             v = getsetvalue ("en_file_encryption");

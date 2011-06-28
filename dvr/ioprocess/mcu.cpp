@@ -457,7 +457,7 @@ static int mcu_waitrsp(char * rsp, int target, int cmd, int delay=MCU_CMD_DELAY)
             break;
         }
     }
-    return 0 ;
+    return -1 ;		// timeout error
 }
 
 
@@ -522,6 +522,9 @@ int mcu_cmd(char * rsp, int cmd, int datalen, ...)
                 mcu_error = 0 ;
                 return rsize ;
             }
+			else if( rsize == 0 ) {
+				return 0 ;					// return error withou retry
+			}
         }
 
 #ifdef MCU_DEBUG
@@ -701,19 +704,24 @@ void mcu_led(int led, int flash)
 //      poweron: 0=poweroff, 1=poweron
 void mcu_devicepower(int device, int poweron )
 {
-    mcu_cmd(NULL, MCU_CMD_DEVICEPOWER, 2, device, poweron );
-
-	if( device>=8 && device<16 ) {
-		// (another set device power, 2011-05-05) bit 8: Wifi, bit 9: POE, bit 10: Radar
-		int cmd_devicepower[8] = { 
+	if( device<8 ) {
+		mcu_cmd(NULL, MCU_CMD_DEVICEPOWER, 2, device, poweron );
+	}
+	else if( device<=10 ) {
+		// (another set device power, 2011-05-05) 8: Wifi, 9: POE, 10: Radar
+		int cmd_devicepower[3] = { 
 			MCU_CMD_WIFIPOWER,
 			MCU_CMD_POEPOWER,
-			MCU_CMD_RADARPOWER,
-			0 } ;
+			MCU_CMD_RADARPOWER } ;
 		mcu_cmd(NULL, cmd_devicepower[device-8], 1, poweron );
 	}
-	else {
-		mcu_cmd(NULL, MCU_CMD_DEVICEPOWER, 2, device, poweron );
+	else if( device==11 ) {			// hard drive power
+		if( poweron ) {
+			mcu_hdpoweron();
+		}
+		else {
+			mcu_hdpoweroff();		// warning , this may turn off system power
+		}
 	}
 }
 
@@ -807,6 +815,13 @@ void mcu_initsensor2(int invert)
         }
     }
 }
+
+// initialize sensor 2/3 power on control (PW34)
+void mcu_sensor23poweron(int sensor2inv, int sensor3inv)
+{
+    mcu_cmd(NULL, MCU_CMD_SENSOR23,1, 0x80 | (sensor2inv?4:0) | (sensor3inv?8:0));
+}
+
 
 // return 1: success
 //        0: failed
@@ -1201,6 +1216,8 @@ int mcu_update_firmware( char * firmwarefile)
 
 #ifdef PWII_APP
 
+int mcu_pwii_cdcfailed ;
+
 // Send cmd to pwii and check responds
 int mcu_pwii_cmd(char * rsp, int cmd, int datalen, ...)
 {
@@ -1208,6 +1225,10 @@ int mcu_pwii_cmd(char * rsp, int cmd, int datalen, ...)
     va_list v ;
     char mcu_buf[datalen+10] ;
 
+	if( mcu_pwii_cdcfailed ) {
+		return 0 ;
+	}
+	
     mcu_buf[0] = (char)(datalen+6) ;
     mcu_buf[1] = (char)5 ;                      // target PWII
     mcu_buf[2] = (char)0 ;
@@ -1226,6 +1247,9 @@ int mcu_pwii_cmd(char * rsp, int cmd, int datalen, ...)
             if( rsize>0 ) {
                 return rsize ;
             }
+			else if( rsize==0 ) {							// unsupported cmd
+				return 0 ;
+			}
         }
 
 #ifdef MCU_DEBUG
@@ -1234,7 +1258,7 @@ int mcu_pwii_cmd(char * rsp, int cmd, int datalen, ...)
 
     }
 
-    return 0 ;
+    return -1 ;		// error!
 }
 
 int mcu_pwii_bootupready()
@@ -1242,6 +1266,7 @@ int mcu_pwii_bootupready()
     if( mcu_pwii_cmd(NULL, PWII_CMD_BOOTUPREADY)>0 ) {
         return 1 ;
     }
+	mcu_pwii_cdcfailed = 1 ;	
     return 0 ;
 }
 
@@ -1281,6 +1306,17 @@ unsigned int mcu_pwii_ouputstatus()
     return outputmap ;
 }
 
+// Check CDC speaker volume
+// return 0: speaker off, 1: speaker on
+int mcu_pwii_speakervolume()
+{
+	char rsp[MCU_MAX_MSGSIZE] ;
+    if( mcu_pwii_cmd(rsp, PWII_CMD_SPEAKERVOLUME, 0 )>0 ) {
+		return rsp[5] ;
+	}
+	return 0 ;
+}
+
 #endif          // PWII_APP
 
 
@@ -1309,7 +1345,7 @@ void mcu_init( config & dvrconfig )
     // initilize serial port
     v = dvrconfig.getvalue( "io", "serialport");
     if( v.length()>0 ) {
-        strcpy( mcu_dev, v.getstring() );
+        strcpy( mcu_dev, v );
     }
     mcu_baud = dvrconfig.getvalueint("io", "serialbaudrate");
     if( mcu_baud<2400 || mcu_baud>115200 ) {
@@ -1339,7 +1375,7 @@ void mcu_init( config & dvrconfig )
 
     v = dvrconfig.getvalue( "io", "mcu_program_delay" ) ;
     if( v.length()>0 ) {
-        sscanf( v.getstring(), "%lf", &dv );
+        sscanf( v, "%lf", &dv );
         mcu_program_delay = (int)(dv*1000000.0) ;
         if( mcu_program_delay>1000000 ) {
             mcu_program_delay = 999999 ;
@@ -1370,11 +1406,17 @@ void mcu_init( config & dvrconfig )
     }
 
 #ifdef TVS_APP
-    // setup GP5 polarity for TVS 
+    // setup GP2 polarity for TVS 
     mcu_initsensor2(dvrconfig.getvalueint( "sensor2", "inverted" ));
 #endif
-        
 
+	
+#ifdef PWII_APP
+	// initialize sensor 2/3 power on control
+	mcu_sensor23poweron( dvrconfig.getvalueint( "sensor2", "inverted" ),
+	                    dvrconfig.getvalueint( "sensor3", "inverted" ) ) ;
+	
+#endif // PWII_APP   
 }
 
 void mcu_finish()

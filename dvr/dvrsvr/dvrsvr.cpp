@@ -312,7 +312,7 @@ int dvrsvr::onframe(cap_frame * pframe)
             ans.anscode = ANSSTREAMDATA ;
             ans.anssize = pframe->framesize ;
             ans.data = pframe->frametype ;
-            Send(&ans, sizeof(struct dvr_ans));
+            Send(&ans, sizeof(struct dvr_ans)); 
             Send(pframe->framedata, pframe->framesize);
             return 1;
         }
@@ -673,10 +673,10 @@ void dvrsvr::HostName()
 {
     struct dvr_ans ans;
     ans.anscode = ANSSERVERNAME;
-    ans.anssize = strlen(g_hostname)+1;
+    ans.anssize = g_servername.length()+1;
     ans.data = 0;
     Send( &ans, sizeof(ans));
-    Send( g_hostname, ans.anssize );
+    Send( (char *)g_servername, ans.anssize );
 }
 
 void dvrsvr::DvrServerName()
@@ -1461,7 +1461,7 @@ void dvrsvr::Req2GetZoneInfo()
             zoneinfo.add(s);
         }
         else {
-            zoneinfobuf=tzi.getstring();
+            zoneinfobuf=(char *)tzi;
             while( *zoneinfobuf != ' ' && 
                 *zoneinfobuf != '\t' &&
                 *zoneinfobuf != 0 ) 
@@ -1469,7 +1469,7 @@ void dvrsvr::Req2GetZoneInfo()
                 zoneinfobuf++ ;
             }
             s.setbufsize( strlen(p)+strlen(zoneinfobuf)+10 ) ;
-            sprintf( s.getstring(), "%s -%s", p, zoneinfobuf );
+            sprintf( (char *)s, "%s -%s", p, zoneinfobuf );
             zoneinfo.add(s);
         }
     }
@@ -1483,7 +1483,7 @@ void dvrsvr::Req2GetZoneInfo()
         ans.anssize+=1 ;	// count in null terminate char
         Send(&ans, sizeof(ans));
         for( i=0; i<zoneinfo.size(); i++ ) {
-            Send(zoneinfo[i].getstring(), zoneinfo[i].length());
+            Send((char *)zoneinfo[i], zoneinfo[i].length());
             Send((void *)"\n", 1);
         }
         Send((void *)"\0", 1);		// send null char
@@ -1912,7 +1912,7 @@ int PoliceIDCheck( char * iddata, int idsize, char * serialid )
                 FILE * fid ;
                 int ididx = 0 ;
                 idlist[ididx++] = g_policeid ;
-                fid=fopen(g_policeidlistfile.getstring(), "r");
+                fid=fopen(g_policeidlistfile, "r");
                 if( fid ) {
                     while( fgets(officerid, 100, fid) ) {
                         str_trimtail(officerid);
@@ -1924,10 +1924,10 @@ int PoliceIDCheck( char * iddata, int idsize, char * serialid )
                 }
 
                 // writing new id list to file
-                fid=fopen(g_policeidlistfile.getstring(), "w");
+                fid=fopen(g_policeidlistfile, "w");
                 if( fid ) {
                     for( ididx=0; ididx<idlist.size(); ididx++) {
-                        fprintf(fid, "%s\n", idlist[ididx].getstring() );
+                        fprintf(fid, "%s\n", (char *)idlist[ididx] );
                     }
                     fclose( fid ) ;
                 }

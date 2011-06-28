@@ -30,20 +30,20 @@ void time_inittimezone()
     FILE * tzfile ;
     tz=dvrconfig.getvalue( "system", "timezone" );
     if( tz.length()>0 ) {
-        tzi=dvrconfig.getvalue( "timezones", tz.getstring() );
+        tzi=dvrconfig.getvalue( "timezones", tz );
         if( tzi.length()>0 ) {
-            p=strchr(tzi.getstring(), ' ' ) ;
+            p=strchr(tzi, ' ' ) ;
             if( p ) {
                 *p=0;
             }
-            p=strchr(tzi.getstring(), '\t' ) ;
+            p=strchr(tzi, '\t' ) ;
             if( p ) {
                 *p=0;
             }
-            setenv("TZ", tzi.getstring(), 1);
+            setenv("TZ", tzi, 1);
         }
         else {
-            setenv("TZ", tz.getstring(), 1);
+            setenv("TZ", tz, 1);
         }
         p = getenv("TZ") ;
         if( p ) {
@@ -52,7 +52,7 @@ void time_inittimezone()
                 fprintf(tzfile, "%s", p );
                 fclose( tzfile );
             }
-            dvr_log("Set timezone : %s", tz.getstring() );
+            dvr_log("Set timezone : %s", (char *)tz );
         }
     }
 }
@@ -96,7 +96,7 @@ int time_gettimezone(char * tz)
     config dvrconfig(CFG_FILE);
     tzstr = dvrconfig.getvalue("system", "timezone");
     if( tzstr.length()>0 ) {
-        strncpy( tz, tzstr.getstring(), 250 );
+        strncpy( tz, tzstr, 250 );
         return 1 ;
     }
     else {

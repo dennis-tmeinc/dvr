@@ -69,28 +69,28 @@ int main( int argc, char * argv[] )
         }
     }
 
-	config dvrconfig(filename.getstring());
+	config dvrconfig(filename);
 
-    if( strcasecmp(cmd.getstring(), "get")==0 ) {
-        str=dvrconfig.getvalue( section.getstring(), key.getstring());
+    if( strcasecmp(cmd, "get")==0 ) {
+        str=dvrconfig.getvalue( section, key);
         if( str.length()>0 ) {
-            printf("%s", str.getstring());
+            printf("%s", (char *)str);
             return 0;
         }
         else {
             return 2;
         }
     }
-    else if(  strcasecmp(cmd.getstring(), "set")==0 ) {
-        dvrconfig.setvalue( section.getstring(), key.getstring(), value.getstring());
-        str=dvrconfig.getvalue( section.getstring(), key.getstring());
+    else if(  strcasecmp(cmd, "set")==0 ) {
+        dvrconfig.setvalue( section, key, value);
+        str=dvrconfig.getvalue( section, key);
         if( str.length()>0 ) {
-            printf("%s\n", str.getstring());
+            printf("%s\n", (char *)str);
         }
         dvrconfig.save();
         return 0 ;
     }
-    else if(  strcasecmp(cmd.getstring(), "list")==0 ) {
+    else if(  strcasecmp(cmd, "list")==0 ) {
         struct config_enum en_section ;
         char * section ;
         en_section.line=0;

@@ -21,6 +21,7 @@ class config {
 	array <string> m_strlist ;
 	string  m_configfile;
 	string  m_tempstr;
+	int     m_merged;
 	int 	m_dirty;
     void mergedefconf( const char * defconffile );
     int nextsection(int idx);
@@ -29,9 +30,9 @@ class config {
     int findkey(const char *section, const char *key);
   public:
 	config();
-	config(const char *configfilename);
+	config(const char *configfilename, int mergedef=1 );
     ~config();
-	void open(const char *configfilename);
+	void open(const char *configfilename, int mergedef=1 );
     void close();
     char * getvalue(const char *section, const char *key);
     char * getvalue(const char *section, const char *key, string & value);

@@ -35,6 +35,17 @@ gentest : gentest.cpp
 #	$(CPP) $(CFLAGS) -o $@ gentest.cpp $(EXTSOURCES) $(LDFLAGS)
 #	cp $@  $(debug_folder)
 
+disktest : disktest.cpp
+#	gcc $(CFLAGS) -o disktest disktest.cpp $(LDFLAGS)
+	$(CC) $(CFLAGS) -o disktest disktest.cpp $(LDFLAGS)
+	cp disktest  $(debug_folder)
+
+hostname : hostname.c
+#	gcc $(CFLAGS) -o disktest disktest.cpp $(LDFLAGS)
+	$(CC) $(CFLAGS) -o hostname hostname.c
+	cp hostname  $(debug_folder)
+
+
 %.o : %.c $(HEADERS) $(EXTHEADERS)
 	$(CC) -g -Wall -c $< -o $@
 

@@ -17,7 +17,7 @@
 #define INT16   signed short int
 #endif
 #ifndef INT32
-#define INT32   signed long int
+#define INT32   signed int
 #endif
 #ifndef UINT8
 #define UINT8   unsigned char
@@ -26,7 +26,7 @@
 #define UINT16  unsigned short int
 #endif
 #ifndef UINT32
-#define UINT32  unsigned long int
+#define UINT32  unsigned int
 #endif
 
 struct BITMAP {

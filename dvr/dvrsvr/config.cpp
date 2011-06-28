@@ -6,6 +6,7 @@
 
 config::config()
 {
+	m_merged = 0 ;
 	m_dirty = 0;
 }
 
@@ -16,28 +17,34 @@ config::~config()
 
 #include <time.h>
 
-void config::open(const char *configfilename)
+void config::open(const char *configfilename, int mergedef )
 {
     close();
     m_configfile=configfilename;
 	readtxtfile ( configfilename, m_strlist );
-    // merge default config
-    if( m_strlist.size()<=0 ||
-        strncmp( m_strlist[0].getstring(), "#DEFCONF", 8 )!=0 ) 
+
+	// don't merge DEFCONF itself
+	if( m_strlist.size()>0 && strncmp( m_strlist[0], "#DEFCONF", 8 )==0 ) {
+		return ;
+	}
+
+	// merge default config
+    if( mergedef )
     {
         mergedefconf( CFG_DEFFILE );
     }
-	m_dirty = 0;
 }
 
-config::config(const char *configfilename)
+config::config(const char *configfilename, int mergedef )
 {
-    open( configfilename );
+    open( configfilename, mergedef );
 }
 
 void config::close()
 {
     m_strlist.empty();
+	m_dirty = 0;
+	m_merged = 0 ;
 }
 
 // merge default configure
@@ -77,13 +84,14 @@ void config::mergedefconf( const char * defconffile )
             if( (mgvalue= strchr( line, '=' ))!=NULL ) {
                 *mgvalue='\0' ;
                 str_trimtail(line);
-                if( findkey(section.getstring(), line)<0 ) {
-                    setvalue(section.getstring(), line, str_trim(mgvalue+1) );
+                if( findkey(section, line)<0 ) {
+                    setvalue(section, line, str_trim(mgvalue+1) );
                 }
             }
         }
     }
     fclose( rfile );
+	m_merged = 1 ;
 }
             
 // search for section
@@ -91,7 +99,7 @@ int config::nextsection(int idx)
 {
     if( idx>=0 ) {
         for (; idx < m_strlist.size(); idx++) {
-            if (*str_skipspace(m_strlist[idx].getstring()) == '[') {
+            if (*str_skipspace(m_strlist[idx]) == '[') {
 				return idx ;
             }
         }
@@ -112,7 +120,7 @@ int config::findsection(const char *section)
 	}
 
 	for (index = 0; index < m_strlist.size(); index++) {
-		line = str_skipspace(m_strlist[index].getstring());
+		line = str_skipspace(m_strlist[index]);
 		if (*line == '[') {
 			line = str_skipspace(line + 1);
 			if( strncmp(section, line, l)==0 ) {
@@ -137,7 +145,7 @@ int config::findkey(int sectionline, const char *key)
     }
 
 	for (; sectionline < m_strlist.size(); sectionline++) {
-		line = str_skipspace( m_strlist[sectionline].getstring() );
+		line = str_skipspace( m_strlist[sectionline] );
 		if (*line == '[') {		// another section, quit
 			break;
 		}
@@ -169,23 +177,23 @@ char * config::getvalue(const char *section, const char *key, string & value)
     value="" ;
 	keyindex = findkey(section, key);
 	if (keyindex < 0) {
-		return value.getstring();
+		return (char *)value;
 	}
 
-    p = strchr( m_strlist[keyindex].getstring(), '=' ) ;
+    p = strchr( m_strlist[keyindex], '=' ) ;
 	if ( p != NULL ) {
         value = str_skipspace( p+1 ); 
-        p = strchr(value.getstring(), '#');	// comments
+        p = strchr(value, '#');	// comments
         if (p){
             *p = '\0';
         }
-        p = strchr(value.getstring(), ';');	// comments
+        p = strchr(value, ';');	// comments
         if (p) {
             *p = '\0';
         }
-        str_trimtail(value.getstring());
+        str_trimtail(value);
     }
-	return value.getstring();
+	return (char *)value;
 }
 
 char * config::getvalue(const char *section, const char *key)
@@ -203,18 +211,18 @@ char * config::enumsection(struct config_enum * enumkey)
 		i=0 ;
 	}
 	for ( ; i < m_strlist.size(); i++) {
-		line = m_strlist[i].getstring();
+		line = m_strlist[i];
 		line = str_skipspace(line);
 		if (*line == '[') {
 			line = str_skipspace(line + 1);
 			enumkey->key = line ;
-			line = strchr( enumkey->key.getstring(), ']' );
+			line = strchr( enumkey->key, ']' );
 			if (line) {
 				*line = '\0';
 			}
-			str_trimtail(enumkey->key.getstring());
+			str_trimtail(enumkey->key);
 			enumkey->line = i+1;
-			return enumkey->key.getstring();
+			return (char *)(enumkey->key);
 		}
 	}
 	return NULL;					// not found ;
@@ -233,25 +241,25 @@ char * config::enumkey(const char *section, struct config_enum * enumkey )
 	}
 	// section found
 	for (; i < m_strlist.size(); i++) {
-		line = m_strlist[i].getstring();
+		line = m_strlist[i];
 		line = str_skipspace(line);
 		if (*line == '[') {		// another section, quit
 			break;
 		}
         enumkey->key = line ;
-		line = strchr(enumkey->key.getstring(), '#');	// comments
+		line = strchr(enumkey->key, '#');	// comments
 		if (line) {
 			*line = '\0';
 		}
-		line = strchr(enumkey->key.getstring(), ';');	// comments
+		line = strchr(enumkey->key, ';');	// comments
 		if (line) {
 			*line = '\0';
 		}
-        line = strchr(enumkey->key.getstring(), '=');	// key=value
+        line = strchr(enumkey->key, '=');	// key=value
 		if (line){
 			*line = '\0';
             enumkey->line = i+1 ;
-            return str_trim(enumkey->key.getstring()) ;
+            return str_trim(enumkey->key) ;
         }
 	}
 	return NULL;
@@ -266,13 +274,13 @@ int config::getvalueint(const char *section, const char *key)
 	if( pv.length()==0 ) {
 		return 0 ;
 	}
-	if (sscanf(pv.getstring(), "%d", &v)) {
+	if (sscanf(pv, "%d", &v)) {
 		return v;
 	} else {
-		if( strcmp(pv.getstring(), "yes")==0 ||
-			strcmp(pv.getstring(), "YES")==0 ||
-			strcmp(pv.getstring(), "on")==0 ||
-			strcmp(pv.getstring(), "ON")==0 ) {
+		if( strcmp(pv, "yes")==0 ||
+			strcmp(pv, "YES")==0 ||
+			strcmp(pv, "on")==0 ||
+			strcmp(pv, "ON")==0 ) {
 			return 1 ;
 		}
 		else {
@@ -289,7 +297,7 @@ void config::setvalue(const char *section, const char *key, const char *value)
 	string keystr;
 
     keystr.setbufsize(strlen(key) + strlen(value) + 4) ;
-    sprintf(keystr.getstring(), "%s=%s", key, value);
+    sprintf(keystr, "%s=%s", key, value);
 
     sectionindex = findsection( section );
     if( sectionindex >= 0 ) {
@@ -314,7 +322,7 @@ void config::setvalue(const char *section, const char *key, const char *value)
         // section not exist
         // add a new section
         sectstr.setbufsize(strlen(section) + 4);
-        sprintf(sectstr.getstring(), "[%s]", section);
+        sprintf(sectstr, "[%s]", section);
         m_strlist.add(sectstr);							// add new section
         m_strlist.add(keystr);							// add new key
     }
@@ -342,16 +350,10 @@ void config::removekey(const char *section, const char *key)
 void config::save()
 {
 	if (m_dirty) {
-        if( m_strlist.size()>0 &&
-            strncmp( m_strlist[0].getstring(), "#DEFCONF", 8 )==0 ) 
-        {
-            // the default configure file
-            savetxtfile(m_configfile.getstring(),m_strlist);
-        }
-        else {
+		if( m_merged ) {
             FILE *sfile ;
             config def(CFG_DEFFILE);
-            sfile = fopen(m_configfile.getstring(), "w");
+            sfile = fopen(m_configfile, "w");
             if( sfile ) {
                 int i ;
                 string section ;
@@ -361,8 +363,8 @@ void config::save()
                 char * value ;
                 char * p ;
                 for( i=0; i<m_strlist.size(); i++) {
-                    line = str_skipspace( m_strlist[i].getstring() ) ;
-                    key = line.getstring();
+                    line = str_skipspace( m_strlist[i] ) ;
+                    key = line;
                     p=strchr( key, '#' );
                     if( p ) {
                         *p=0 ;
@@ -387,22 +389,26 @@ void config::save()
                         *value='\0' ;
                         key=str_trim(key);
                         value=str_trim(value+1);
-                        if( strcmp( def.getvalue( section.getstring(), key ), value )==0 ) {
+                        if( strcmp( def.getvalue( section, key ), value )==0 ) {
                             // skip the value as same on default setttings
                             continue ;
                         }
                     }
                     if( sectionline>=0 ) {
-                        fputs(m_strlist[sectionline].getstring(), sfile);
+                        fputs(m_strlist[sectionline], sfile);
                         fputs("\n", sfile);
                         sectionline=-1;
                     }
-                    fputs(m_strlist[i].getstring(), sfile);
+                    fputs(m_strlist[i], sfile);
                     fputs("\n", sfile);
                 }
                 fclose(sfile);
             }
         }
+		else {
+            // the default configure file
+            savetxtfile(m_configfile,m_strlist);
+		}
         m_dirty = 0;
     }
 }

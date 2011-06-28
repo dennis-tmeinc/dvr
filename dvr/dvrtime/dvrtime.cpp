@@ -1,25 +1,35 @@
 #include <stdio.h>
+#include <errno.h>
+#include <math.h>
+#include <time.h>
+#include <string.h>
+#include <netdb.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
-#include <linux/rtc.h>
 #include <sys/socket.h>
+#include <linux/rtc.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
-#include <errno.h>
-#include <math.h>
-#include <sys/time.h>
-#include <time.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
+
+#ifdef  DVR_APP
+
+#define  MCU_SUPPORT
 
 #include "../cfg.h"
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
 #include "../ioprocess/diomap.h"
 
-#define MCU_SUPPORT
+char dvriomap[256] = "/var/dvr/dvriomap" ;
+
+#endif
 
 // check http://tf.nist.gov/tf-cgi/servers.cgi for servr ip
 char nistserver[]="64.90.182.55" ;
@@ -27,14 +37,9 @@ char nistserver[]="64.90.182.55" ;
 // check http://support.ntp.org/bin/view/Servers/WebHome
 char ntpserver[]="64.90.182.55" ;
 
-#ifdef MCU_SUPPORT
-
-char dvriomap[256] = "/var/dvr/dvriomap" ;
-
-#endif		// MCU_SUPPORT
-
 void inittz()
 {
+#ifdef DVR_APP	
     char * p ;
     config dvrconfig(CFG_FILE);
     string tz ;
@@ -42,22 +47,23 @@ void inittz()
     
     tz=dvrconfig.getvalue( "system", "timezone" );
     if( tz.length()>0 ) {
-        tzi=dvrconfig.getvalue( "timezones", tz.getstring() );
+        tzi=dvrconfig.getvalue( "timezones", tz );
         if( tzi.length()>0 ) {
-            p=strchr(tzi.getstring(), ' ' ) ;
+            p=strchr(tzi, ' ' ) ;
             if( p ) {
                 *p=0;
             }
-            p=strchr(tzi.getstring(), '\t' ) ;
+            p=strchr(tzi, '\t' ) ;
             if( p ) {
                 *p=0;
             }
-            setenv("TZ", tzi.getstring(), 1);
+            setenv("TZ", tzi, 1);
         }
         else {
-            setenv("TZ", tz.getstring(), 1);
+            setenv("TZ", tz, 1);
         }
     }
+#endif	
 }
 
 int readrtc(struct tm * ptm)
@@ -240,7 +246,7 @@ int readmcu(struct tm * t)
     string iomapfile ;
     iomapfile = dvrconfig.getvalue( "system", "iomapfile");
     if( iomapfile.length()>0 ) {
-        strncpy( dvriomap, iomapfile.getstring(), sizeof(dvriomap));
+        strncpy( dvriomap, iomapfile, sizeof(dvriomap));
     }
     if( dio_mmap( dvriomap )==NULL ) {
         return 0 ;
@@ -292,7 +298,7 @@ int writemcu(struct tm * t)
     config dvrconfig(CFG_FILE);
     string iomapfile( dvrconfig.getvalue( "system", "iomapfile") ) ;
     if( iomapfile.length()>0 ) {
-        strncpy( dvriomap, iomapfile.getstring(), sizeof(dvriomap));
+        strncpy( dvriomap, iomapfile, sizeof(dvriomap));
     }
     if( dio_mmap( dvriomap )==NULL ) {
         return 0 ;
@@ -409,7 +415,7 @@ int readgps(struct tm * t)
     config dvrconfig(CFG_FILE);
     string iomapfile( dvrconfig.getvalue( "system", "iomapfile")) ;
     if( iomapfile.length()>0 ) {
-        strncpy( dvriomap, iomapfile.getstring(), sizeof(dvriomap));
+        strncpy( dvriomap, iomapfile, sizeof(dvriomap));
     }
     if( dio_mmap( dvriomap )==NULL ) {
         return 0 ;
@@ -565,7 +571,7 @@ int  nist_daytime(char * server)
         if( net_recvok( fd, 3 ) ) {
             n=recv(fd, buf, 512,0);
             buf[n]=0 ;
-            printf(buf);
+            printf("%s", buf);
             res=1 ;
         }
         else {
@@ -984,12 +990,14 @@ int main(int argc, char * argv[])
     else if( strcmp(argv[1], "htptoutc" )==0 ) {
         res=htptoutc(argv[2]);
     }
+#ifdef MCU_SUPPORT	
     else if( strcmp(argv[1], "gps" )==0 ) {
         res=gps();
     }
     else if( strcmp(argv[1], "gpstoutc" )==0 ) {
         res=gpstoutc();
     }
+#endif	
     else if( strcmp(argv[1], "cool" )==0 ) {
         res=cool(argv[2]);
     }

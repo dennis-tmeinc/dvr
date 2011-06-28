@@ -67,7 +67,7 @@ int playback::seek( struct dvrtime * seekto )
     for(m_curfile=0; m_curfile<m_filelist.size(); m_curfile++) {
         int    fl ;			// file length
         dvrtime ft ;		// file time
-        char * filename = m_filelist[m_curfile].getstring() ;
+        char * filename = m_filelist[m_curfile] ;
         f264time( filename, &ft );
         fl = f264length( filename );
         ft = ft + fl ;		// ft become file end time
@@ -127,7 +127,7 @@ int playback::opennextfile()
             }
         }
         if( m_filelist.size()>0 ) {
-            m_file.open( m_filelist[m_curfile].getstring(), "rb") ;
+            m_file.open( m_filelist[m_curfile], "rb") ;
         }
     }
     if( m_file.isopen() && m_autodecrypt ) {
@@ -322,7 +322,7 @@ void playback::getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * 
 
     dayinfo.setsize(0);
     for( i=0; i<filelist.size(); i++) {
-        char * fname = filelist[i].getstring();
+        char * fname = filelist[i];
         len=f264length(fname) ;
         if( len<=0 || len>5000 ) {
             continue ;
@@ -386,7 +386,7 @@ void playback::getlockinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime *
 
     dayinfo.setsize(0);
     for( i=0; i<filelist.size(); i++) {
-        char * fname = filelist[i].getstring();
+        char * fname = filelist[i];
         if( strstr(fname, "_L_") ) {
             len=f264length(fname) ;
             locklen = f264locklength( fname );

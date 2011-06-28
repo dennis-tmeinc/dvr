@@ -3,7 +3,7 @@
 #include "dvr.h"
 
 struct dvr_msg {
-    unsigned long code;
+    unsigned int code;
     int session;	// answering package will use same session number
     int seqno;		// sequence number of the session start from 0
 };

@@ -33,7 +33,12 @@ static void rec_wait()
 {
     rec_lock();
     if( --rec_sig<0 ) {
-        pthread_cond_wait(&rec_cond, &rec_mutex);
+		struct timespec ts ;
+		struct timeval  tv ;
+		gettimeofday( &tv, NULL );
+		ts.tv_sec = tv.tv_sec + 3 ;			// wait about 3 seconds
+		ts.tv_nsec = 0 ;
+        pthread_cond_timedwait(&rec_cond, &rec_mutex, &ts );
     }
     rec_sig=0 ;
     rec_unlock();
@@ -144,7 +149,7 @@ class rec_channel {
         int m_reqbreak;				// reqested for file break
 
         int m_recording ;
-        
+        int m_trigger ;				// sensor trigger valid
         int m_activetime ;
 
         //	rec_index m_index ;			// on/off index
@@ -214,6 +219,9 @@ class rec_channel {
 
         void prelock_thread() ;
 
+		int  triggered() {
+			return m_trigger;
+		}
 };
 
 static rec_channel * recchannel[64];
@@ -323,11 +331,11 @@ rec_channel::rec_channel(int channel, config &dvrconfig)
     b=3.0 ;
     v = dvrconfig.getvalue("io", "gsensor_forward_crash") ;
     if( v.length()>0 ) {
-        sscanf( v.getstring(), "%f", &a );
+        sscanf( v, "%f", &a );
     }
     v = dvrconfig.getvalue("io", "gsensor_backward_crash") ;
     if( v.length()>0 ) {
-        sscanf( v.getstring(), "%f", &b );
+        sscanf( v, "%f", &b );
     }
     if( a<0.0 ) a=-a ;
     if( b<0.0 ) b=-b ;
@@ -337,11 +345,11 @@ rec_channel::rec_channel(int channel, config &dvrconfig)
     b=3.0 ;
     v = dvrconfig.getvalue("io", "gsensor_right_crash") ;
     if( v.length()>0 ) {
-        sscanf( v.getstring(), "%f", &a );
+        sscanf( v, "%f", &a );
     }
     v = dvrconfig.getvalue("io", "gsensor_left_crash") ;
     if( v.length()>0 ) {
-        sscanf( v.getstring(), "%f", &b );
+        sscanf( v, "%f", &b );
     }
     if( a<0.0 ) a=-a ;
     if( b<0.0 ) b=-b ;
@@ -351,11 +359,11 @@ rec_channel::rec_channel(int channel, config &dvrconfig)
     b=3.0 ;
     v = dvrconfig.getvalue("io", "gsensor_down_crash") ;
     if( v.length()>0 ) {
-        sscanf( v.getstring(), "%f", &a );
+        sscanf( (char *)v, "%f", &a );
     }
     v = dvrconfig.getvalue("io", "gsensor_up_crash") ;
     if( v.length()>0 ) {
-        sscanf( v.getstring(), "%f", &b );
+        sscanf( (char *)v, "%f", &b );
     }
     if( a<0.0 ) a=-a ;
     if( b<0.0 ) b=-b ;
@@ -407,6 +415,7 @@ void rec_channel::onframe(cap_frame * pframe)
 {
     struct rec_fifo *nfifo;
 
+	rec_lock();
     if( m_recstate == REC_STOP ||
         pframe == NULL ||
         rec_pause>0 ||
@@ -431,6 +440,7 @@ void rec_channel::onframe(cap_frame * pframe)
             putfifo( nfifo );
         }
     }
+	rec_unlock();
     rec_signal();
 }
 
@@ -467,7 +477,6 @@ void  rec_channel::deletefifo( rec_fifo * rf )
 void rec_channel::putfifo(rec_fifo * fifo)
 {
     if( fifo!=NULL ){
-        rec_lock();
         fifo->next = NULL ;
         if (m_fifohead == NULL ) {              // fifo is empty
             m_fifotail = m_fifohead = fifo;
@@ -477,7 +486,6 @@ void rec_channel::putfifo(rec_fifo * fifo)
             m_fifotail = fifo;
             m_fifosize+=fifo->bufsize ;
         }
-        rec_unlock();
     }
 }
 
@@ -485,12 +493,10 @@ void rec_channel::putfifo(rec_fifo * fifo)
 struct rec_fifo *rec_channel::getfifo()
 {
     struct rec_fifo *head;
-    rec_lock();
     if ( (head = m_fifohead) != NULL) {
         m_fifohead = head->next;
         m_fifosize-= head->bufsize ;
     }
-    rec_unlock();
     return head;
 }
 
@@ -560,27 +566,27 @@ void rec_channel::closefile(enum REC_STATE newrecst)
         m_file.close();
         filelength=(int)(m_fileendtime - m_filebegintime) ;
         if( filelength<1 || filelength>=86400 ) {
-            m_file.remove(m_filename.getstring());
+            m_file.remove(m_filename);
             m_filename="";
             return ;
         }
 
         // need to rename to contain file lengh
-        strcpy(newfilename, m_filename.getstring());
+        strcpy(newfilename, m_filename);
         if ((rn = strstr(newfilename, "_0_")) != NULL) {
             sprintf( rn, "_%d_%c_%s%s", 
                     filelength, 
                     rec_stname( m_filerecstate ),
-                    g_hostname, g_264ext );
-            m_file.rename( m_filename.getstring(), newfilename ) ;
+                    (char *)g_servername, g_264ext );
+            m_file.rename( m_filename, newfilename ) ;
 			m_filename = newfilename ;
 
 			if( newrecst == REC_PRERECORD ) {
 				if( m_prevfilerecstate == REC_PRERECORD && m_prevfilename.length()>0 ) {
-					m_file.remove( m_prevfilename.getstring() );
+					m_file.remove( m_prevfilename );
 				}
 				if( m_filerecstate == REC_RECORD || m_filerecstate == REC_LOCK ) {
-					disk_renew( m_filename.getstring(), 1 );
+					disk_renew( m_filename, 1 );
 				}
 				m_prevfilename = newfilename ;
 				m_prevfilerecstate = m_filerecstate ;
@@ -588,14 +594,14 @@ void rec_channel::closefile(enum REC_STATE newrecst)
 			else if( newrecst == REC_RECORD ) {
 				if( m_prevfilerecstate == REC_PRERECORD && m_prevfilename.length()>0 ) {
 					m_file.chrecmod( m_prevfilename, rec_stname(m_prevfilerecstate), rec_stname(newrecst) );
-					disk_renew( m_prevfilename.getstring(), 1 );
+					disk_renew( m_prevfilename, 1 );
 				}
 				if( m_filerecstate == REC_PRERECORD ) {
 					m_file.chrecmod( m_filename, rec_stname(m_filerecstate), rec_stname(newrecst) );
 					m_filerecstate = newrecst ;
 				}
 				if( m_filerecstate == REC_RECORD || m_filerecstate == REC_LOCK ) {
-					disk_renew( m_filename.getstring(), 1 );
+					disk_renew( m_filename, 1 );
 				}
 				m_prevfilename = m_filename ;
 				m_prevfilerecstate = m_filerecstate ;
@@ -605,7 +611,7 @@ void rec_channel::closefile(enum REC_STATE newrecst)
 				if( m_prevfilerecstate == REC_PRERECORD && m_prevfilename.length()>0 ) {
 					m_file.chrecmod( m_prevfilename, rec_stname(m_prevfilerecstate), rec_stname(REC_RECORD) );
 					m_prevfilerecstate = REC_RECORD ;
-					disk_renew( m_prevfilename.getstring(), 1 );
+					disk_renew( m_prevfilename, 1 );
 				}
 				if( m_filerecstate == REC_PRERECORD ) {
 					m_file.chrecmod( m_filename, rec_stname(m_filerecstate), rec_stname(REC_RECORD) );
@@ -614,40 +620,40 @@ void rec_channel::closefile(enum REC_STATE newrecst)
                 // do pre-locking
 				if( m_filerecstate == REC_RECORD ) {
 					if( rec_stname(REC_LOCK) == rec_stname(REC_RECORD) ) {      // all files are locked.
-						disk_renew( m_filename.getstring(), 1 );
+						disk_renew( m_filename, 1 );
 					}
 					else {
 						struct dvrtime prelocktime ;
 						if( (m_prelock_time-filelength)>5 ) {
 							m_file.chrecmod( m_filename, rec_stname(m_filerecstate), rec_stname(REC_LOCK) );
-							disk_renew( m_filename.getstring(), 1 );
+							disk_renew( m_filename, 1 );
 							if( m_prevfilerecstate == REC_RECORD ) {
-								disk_renew( m_prevfilename.getstring(), 0 );
+								disk_renew( m_prevfilename, 0 );
 								prelocktime = m_fileendtime ;
 								time_dvrtime_del(&prelocktime, m_prelock_time);
 								prelock( m_prevfilename, &prelocktime );
-								disk_renew( m_prevfilename.getstring(), 1 );
+								disk_renew( m_prevfilename, 1 );
 							}
 						}
 						else if( (filelength-m_prelock_time)>5 ) {
 							prelocktime = m_fileendtime ;
 							time_dvrtime_del(&prelocktime, m_prelock_time);
 							prelock( m_filename, &prelocktime );
-							disk_renew( m_filename.getstring(), 1 );
+							disk_renew( m_filename, 1 );
 						}
 						else {
 							m_file.chrecmod( m_filename, rec_stname(m_filerecstate), rec_stname(REC_LOCK) );
-							disk_renew( m_filename.getstring(), 1 );
+							disk_renew( m_filename, 1 );
 							if( m_prevfilerecstate == REC_RECORD ) {
-								disk_renew( m_prevfilename.getstring(), 0 );
+								disk_renew( m_prevfilename, 0 );
 								m_file.chrecmod( m_prevfilename, rec_stname(m_prevfilerecstate), rec_stname(REC_LOCK) );
-								disk_renew( m_prevfilename.getstring(), 1 );
+								disk_renew( m_prevfilename, 1 );
 							}
 						}
 					}
 				}
 				else if( m_filerecstate == REC_LOCK ) {
-					disk_renew( m_filename.getstring(), 1 );
+					disk_renew( m_filename, 1 );
 				}
 
 				m_prevfilename = "";
@@ -655,13 +661,13 @@ void rec_channel::closefile(enum REC_STATE newrecst)
 			}
 			else {				// REC_STOP
 				if( m_prevfilerecstate == REC_PRERECORD && m_prevfilename.length()>0 ) {
-					m_file.remove( m_prevfilename.getstring() );
+					m_file.remove( m_prevfilename );
 				}
 				if( m_filerecstate == REC_PRERECORD ) {
-					m_file.remove( m_filename.getstring() );
+					m_file.remove( m_filename );
 				}
 				if( m_filerecstate == REC_RECORD || m_filerecstate == REC_LOCK ) {
-					disk_renew( m_filename.getstring(), 1 );
+					disk_renew( (char *)m_filename, 1 );
 				}
 				m_prevfilename = "";
 				m_prevfilerecstate = REC_STOP ;
@@ -728,7 +734,7 @@ int rec_channel::recorddata(rec_fifo * data)
 
             // make host directory
             sprintf(newfilename, "%s/_%s_", 
-                rec_basedir.getstring(), g_hostname );
+                (char *)rec_basedir, (char *)g_servername );
             if( stat(newfilename, &dstat)!=0 ) {
                 mkdir( newfilename, S_IFDIR | 0777 );
             }
@@ -762,7 +768,7 @@ int rec_channel::recorddata(rec_fifo * data)
                 data->time.minute,
                 data->time.second,
                 rec_stname( data->rectype ),
-                g_hostname, g_264ext);
+                (char *)g_servername, g_264ext);
             m_fileday = data->time.day ;
             if (m_file.open(newfilename, "wb")) {
                 m_filename = newfilename;
@@ -779,8 +785,8 @@ int rec_channel::recorddata(rec_fifo * data)
         if( m_recordjpeg ) {
             dvr_log("Jpeg frame captured." );
             sprintf(newfilename, "%s/_%s_/%04d%02d%02d/CH%02d/CH%02d_%04d%02d%02d%02d%02d%02d%03d.JPG", 
-                    rec_basedir.getstring(), 
-                    g_hostname,
+                    (char *)rec_basedir, 
+                    (char *)g_servername,
                     data->time.year,
                     data->time.month,
                     data->time.day,
@@ -848,8 +854,8 @@ void rec_channel::prelock(string & lockfilename, struct dvrtime * locktime)
     int    filelength ;
 	int    locklen ;
 
-    filelength = f264length ( lockfilename.getstring() );
-    f264time ( lockfilename.getstring(), & filetime );
+    filelength = f264length ( lockfilename );
+    f264time ( lockfilename, & filetime );
 	locklen = filelength - (int)(*locktime-filetime) ;
 	
 	if( locklen<5 ) {
@@ -861,15 +867,15 @@ void rec_channel::prelock(string & lockfilename, struct dvrtime * locktime)
 	}
 		
 	// rename to partial locked file name
-	lockmark = strstr( lockfilename.getstring(), "_N_" ) ;
+	lockmark = strstr( lockfilename, "_N_" ) ;
 	if( lockmark ) {
         char * thlockfilename = new char [lockfilename.length()+40] ;
-		strcpy( thlockfilename, lockfilename.getstring() );
-		char * ptail = &thlockfilename[ lockmark-lockfilename.getstring() ] ;
+		strcpy( thlockfilename, lockfilename );
+		char * ptail = &thlockfilename[ lockmark-(char *)lockfilename ] ;
         sprintf( ptail, "_L_%d_%s",
 					locklen,
                     lockmark+3 );
-        dvrfile::rename( lockfilename.getstring(), thlockfilename );
+        dvrfile::rename( lockfilename, thlockfilename );
 		lockfilename = thlockfilename ;
             
 		// create a thread to break this partial locked file
@@ -887,8 +893,10 @@ void rec_channel::prelock(string & lockfilename, struct dvrtime * locktime)
 int rec_channel::dorecord()
 {
     rec_fifo *fifo;
+	rec_lock();
     fifo = getfifo();
-    if (fifo == NULL)	{	
+	rec_unlock();
+	if (fifo == NULL)	{	
         // no fifos pending
 		if( m_recording && (g_timetick-m_activetime)>5000 ) {  // inactive for 5 seconds
 			closefile();
@@ -969,45 +977,50 @@ void rec_channel::update()
     }
     else if( m_recordmode==2 || m_recordmode==3 ) {	// motion trigger mode
         if( cap_channel[m_channel]->getmotion() ) { // check motion
-            trigger=1 ;
+            trigger=1 ;								// motion trigger
         }
     }    
 
-    if( event_tm ) {
+	m_trigger = 0 ;					// clear trigger flag
+	if( event_tm ) {
         trigger = 2 ;
+		m_trigger = 2 ;				// set trigger flag
     }
-    
-    if( m_recordmode==0 || m_recordmode==1 || m_recordmode==3 ) {	// check sensor for trigggering and event marker
+    else if( m_recordmode==0 || m_recordmode==1 || m_recordmode==3 ) {	// check sensor for trigggering and event marker
         // check sensors
-        for(i=0; i<num_sensors && trigger<2 ; i++) {
+        for(i=0; i<num_sensors && m_trigger<2 ; i++) {
             int tr = sensors[i]->eventmarker()? 2 : 1 ;
+			if( m_trigger>=tr ) continue ; 
             if( ( m_triggersensor[i] & 1 ) )              // sensor on 
             {
-                if(sensors[i]->value() ) 
+                if(sensors[i]->value()) 
                 {
-                    trigger=tr ;
+                    m_trigger=tr ;
                 }
             }
             else if( ( m_triggersensor[i] & 2 ) )          // sensor off
             {
                 if( sensors[i]->value()==0 ) 
                 {
-                    trigger=tr ;
+                    m_trigger=tr ;
                 }
             }
             else if( sensors[i]->toggle() ) {
                 if( ( m_triggersensor[i] & 4 ) &&          // sensor turn on
                     sensors[i]->value() ) 
                 {
-                    trigger = tr ;
+                    m_trigger = tr ;
                 }
                 if( (m_triggersensor[i] & 8 ) &&           // sensor turn off
                     sensors[i]->value()==0 ) 
                 {
-                    trigger = tr ;
+                    m_trigger = tr ;
                 }
-            }
+			}
         }
+		if( trigger<m_trigger ) {
+			trigger = m_trigger ;
+		}
     }
 
     if( m_gforce_trigger && 
@@ -1099,9 +1112,9 @@ void rec_init(config &dvrconfig)
     pthread_cond_init(&rec_cond, NULL);
 
     v = dvrconfig.getvalue("system", "maxfilesize");
-    if (sscanf(v.getstring(), "%d", &rec_maxfilesize)>0) {
+    if (sscanf((char *)v, "%d", &rec_maxfilesize)>0) {
         i = v.length();
-        p=v.getstring();
+        p=(char *)v;
         if (p[i - 1] == 'M' || p[i - 1] == 'm')
             rec_maxfilesize *= 1000000;
         else if (p[i - 1] == 'K' || p[i - 1] == 'k')
@@ -1294,6 +1307,25 @@ int  rec_lockstate(int channel)
     }    
     return 0 ;
 }
+
+// return sensor trigger state
+//    0: not recording
+//	  1: recording
+int  rec_triggered(int channel)
+{
+    if (channel>=0 && channel < rec_channels)
+        return recchannel[channel]->triggered();
+    else {
+        int i;
+        for( i=0; i<rec_channels; i++ ) {
+            if( recchannel[i]->triggered() ) {
+                return 1;
+            }
+        }
+    }    
+    return 0 ;
+}
+
 
 void rec_break()
 {

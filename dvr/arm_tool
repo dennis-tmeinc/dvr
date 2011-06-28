@@ -8,7 +8,7 @@ CROSS_COMPILE_PREFIX=/home/dennis/proj/eagle32/hik_toolchain/bin/arm-linux-
 else ifeq ($(EAGLE),mv)
 CROSS_COMPILE_PREFIX=/home/dennis/bin/cross-arm-mv5sft/bin/arm-mv5sft-linux-gnueabi-
 else
-CROSS_COMPILE_PREFIX=
+CROSS_COMPILE_PREFIX=	
 endif
 
 export CROSS_COMPILE=$(CROSS_COMPILE_PREFIX)

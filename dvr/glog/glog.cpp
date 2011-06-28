@@ -734,7 +734,7 @@ FILE * gps_logopen(struct tm *t)
             
             if( gpslogfilename[0]==0 ) {
                 
-                FILE * diskfile = fopen( dvrcurdisk.getstring(), "r");
+                FILE * diskfile = fopen( dvrcurdisk, "r");
                 if( diskfile ) {
                     r=fread( curdisk, 1, 255, diskfile );
                     fclose( diskfile );
@@ -768,7 +768,7 @@ FILE * gps_logopen(struct tm *t)
                         (int)t->tm_mday );
                 
                 for( i=0; i<MAXSENSORNUM && i<p_dio_mmap->inputnum; i++ ) {
-                    fprintf(gps_logfile, ",%s", sensorname[i].getstring() );
+                    fprintf(gps_logfile, ",%s", (char *)sensorname[i] );
                 }
                 fprintf(gps_logfile, "\n");
             }
@@ -1360,7 +1360,7 @@ int tab102b_logdata( unsigned char * tab102b_data, int datalength )
     time_t tt ;
     unsigned char dbuf[256] ;
     FILE * tab102b_datafile = NULL ;
-    FILE * diskfile = fopen( dvrcurdisk.getstring(), "r");
+    FILE * diskfile = fopen( dvrcurdisk, "r");
     if( diskfile ) {
         len=fscanf(diskfile, "%s", dbuf);
         fclose( diskfile );
@@ -1635,12 +1635,12 @@ int appinit()
     if( dvrconfig.getvalueint("debug", "glog") ) {
         v = dvrconfig.getvalue("debug","host");
         i = dvrconfig.getvalueint("debug", "port");
-        netdbg_init( v.getstring(), i );
+        netdbg_init( v, i );
     }
 
 
     iomapfile = dvrconfig.getvalue( "system", "iomapfile");
-    if( dio_mmap( iomapfile.getstring() )==NULL ) {
+    if( dio_mmap( iomapfile )==NULL ) {
 		netdbg_print("GLOG: IO module not started!");
 		return 0;						// no DIO.
 	}
@@ -1670,7 +1670,7 @@ int appinit()
     gps_port_disable = dvrconfig.getvalueint( "glog", "gpsdisable");
 	serialport = dvrconfig.getvalue( "glog", "serialport");
 	if( serialport.length()>0 ) {
-		strcpy( gps_port_dev, serialport.getstring() );
+		strcpy( gps_port_dev, serialport );
 	}
 	i = dvrconfig.getvalueint("glog", "serialbaudrate");
 	if( i>=1200 && i<=115200 ) {
@@ -1681,7 +1681,7 @@ int appinit()
     // get tab102b serial port setting
 	serialport = dvrconfig.getvalue( "glog", "tab102b_port");
 	if( serialport.length()>0 ) {
-		strcpy( tab102b_port_dev, serialport.getstring() );
+		strcpy( tab102b_port_dev, serialport );
 	}
     
 	i = dvrconfig.getvalueint("glog", "tab102b_baudrate");
@@ -1700,32 +1700,32 @@ int appinit()
 
 	tz=dvrconfig.getvalue( "system", "timezone" );
 	if( tz.length()>0 ) {
-		tzi=dvrconfig.getvalue( "timezones", tz.getstring() );
+		tzi=dvrconfig.getvalue( "timezones", tz );
 		if( tzi.length()>0 ) {
-			p=strchr(tzi.getstring(), ' ' ) ;
+			p=strchr(tzi, ' ' ) ;
 			if( p ) {
 				*p=0;
 			}
-			p=strchr(tzi.getstring(), '\t' ) ;
+			p=strchr(tzi, '\t' ) ;
 			if( p ) {
 				*p=0;
 			}
-			setenv("TZ", tzi.getstring(), 1);
+			setenv("TZ", tzi, 1);
 		}
 		else {
-			setenv("TZ", tz.getstring(), 1);
+			setenv("TZ", tz, 1);
 		}
 	}
 
     // initialize gps log speed table
     tstr = dvrconfig.getvalue( "glog", "degree1km");
     if( tstr.length()>0 ) {
-        sscanf(tstr.getstring(), "%f", &degree1km );
+        sscanf(tstr, "%f", &degree1km );
     }
     
     tstr = dvrconfig.getvalue( "glog", "dist_max");
     if( tstr.length()>0 ) {
-        sscanf( tstr.getstring(), "%f", &max_distance );
+        sscanf( tstr, "%f", &max_distance );
     }
     else {
         max_distance=500 ;
@@ -1738,11 +1738,11 @@ int appinit()
         sprintf( iname, "speed%d", i);
         tstr = dvrconfig.getvalue( "glog", iname );
         if( tstr.length()>0 ) {
-            sscanf( tstr.getstring(), "%f", &(speed_table[i].speed) );
+            sscanf( tstr, "%f", &(speed_table[i].speed) );
             sprintf( iname, "dist%d", i );
             tstr = dvrconfig.getvalue( "glog", iname );
             if( tstr.length()>0 ) {
-                sscanf( tstr.getstring(), "%f", &(speed_table[i].distance) );
+                sscanf( tstr, "%f", &(speed_table[i].distance) );
             }
             else {
                 speed_table[i].distance=100 ;
@@ -1757,7 +1757,7 @@ int appinit()
     
     tstr = dvrconfig.getvalue( "glog", "inputdebounce");
     if( tstr.length()>0 ) {
-        sscanf( tstr.getstring(), "%d", &inputdebounce );
+        sscanf( tstr, "%d", &inputdebounce );
     }
 
     // gforce logging enabled ?

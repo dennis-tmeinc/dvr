@@ -32,6 +32,7 @@
 #define MCU_CMD_GSENSORINIT	    (0x34)
 #define MCU_CMD_GSENSORUPLOAD   (0x35)
 #define MCU_CMD_GSENSORUPLOADACK (0x36)
+#define MCU_CMD_GSENSORUPLOADACK (0x36)
 #define MCU_CMD_GSENSORCALIBRATION (0x3F)
 #define MCU_CMD_GSENSORPEAK     (0x40)
 
@@ -41,6 +42,8 @@
 #define MCU_CMD_POEPOWER	    (0x3a)
 #define MCU_CMD_RADARPOWER	    (0x3b)
 
+// setup sensor 2/3 power on 
+#define MCU_CMD_SENSOR23		(0x37)		
 
 // mcu input
 #define MCU_INPUT_DIO           (0x1C)
@@ -75,6 +78,7 @@
 #define PWII_CMD_POWER_RF900    (0x0c)
 #define PWII_CMD_POWER_WIFI     (0x19)
 #define PWII_CMD_OUTPUTSTATUS   (0x17)
+#define PWII_CMD_SPEAKERVOLUME  (0x1a)
 
 // CDC inputs 
 #define PWII_INPUT_REC ('\x05')
@@ -85,6 +89,7 @@
 #define PWII_INPUT_BO ('\x0b')
 #define PWII_INPUT_MEDIA ('\x09')
 #define PWII_INPUT_BOOTUP ('\x18')
+#define PWII_INPUT_SPEAKERSTATUS ('\x1a')
 
 #endif      // PWII_APP
 
@@ -156,14 +161,17 @@ void mcu_dinput_help(char * ibuf);
 int mcu_dinput();
 int mcu_update_firmware( char * firmwarefile) ;
 void mcu_camera_zoom( int zoomin );
+void mcu_sensor23poweron(int sensor2inv, int sensor3inv);
 
 #ifdef PWII_APP
 
 extern unsigned int pwii_keyreltime ;
+extern int mcu_pwii_cdcfailed ;
 
 int mcu_pwii_cmd(char * rsp, int cmd, int datalen=0, ...);
 int mcu_pwii_bootupready();
 int mcu_pwii_version(char * version);
+int mcu_pwii_speakervolume();	// return 0: speaker off, 1: speaker on
 unsigned int mcu_pwii_ouputstatus();
 void pwii_keyautorelease();
 void mcu_pwii_init();

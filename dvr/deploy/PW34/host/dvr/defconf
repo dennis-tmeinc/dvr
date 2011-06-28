@@ -10,7 +10,7 @@ mfid=MF0001
 
 keylogfile=tvslog.txt
 
-totalcamera=4
+totalcamera=2
 
 # IO shared memory mapping file
 iomapfile=/var/dvr/dvriomap
@@ -456,7 +456,7 @@ zoomcam_enable=0
 # sensor number start from 1
 [sensor1]
 name=MIC
-inverted=0
+inverted=1
 eventmarker=1
 [sensor2]
 inverted=1

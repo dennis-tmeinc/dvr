@@ -189,7 +189,7 @@ class video_status : public window {
 
     void setstatus( char * status )
     {
-        if( strcmp( status, m_status.getstring())!=0 ) {
+        if( strcmp( status, m_status)!=0 ) {
             m_status = status ;
             redraw();
         }
@@ -203,7 +203,7 @@ class video_status : public window {
         fillrect ( 0, 0, m_pos.w, m_pos.h );	
         resource font("mono32b.font");
         setcolor(COLOR(240,240,80,200));
-        drawtext( 0, 0, m_status.getstring(), font );
+        drawtext( 0, 0, m_status, font );
 #ifdef EAGLE34
         int l = m_status.length();
         if( l>0 ) {
@@ -309,7 +309,7 @@ class pwii_menu : public window {
                 }
 
                 FILE * fid ;
-                fid=fopen(g_policeidlistfile.getstring(), "r");
+                fid=fopen(g_policeidlistfile, "r");
                 if( fid ) {
                     char idline[100] ;
                     while( fgets(idline, 100, fid) ) {
@@ -338,21 +338,21 @@ class pwii_menu : public window {
                     dvr_log( "Police ID bypassed!");
                 }
                 else {
-                    strcpy(g_policeid, m_officerIDlist[m_select].getstring());
+                    strcpy(g_policeid, m_officerIDlist[m_select]);
                     dvr_log( "Police ID selected : %s", g_policeid );
                 }
                 m_officerIDlist[0]="";
                 m_officerIDlist.sort();
                 // write police id list file
                 FILE * fid ;
-                fid=fopen(g_policeidlistfile.getstring(), "w");
+                fid=fopen(g_policeidlistfile, "w");
                 if( fid ) {
                     fprintf(fid, "%s\n", g_policeid );      // write current ID or empty line
                     int i ;
                     for( i=0; i<m_officerIDlist.size(); i++ ) {
                         if( m_officerIDlist[i].length()<=0 ) continue ;
-                        if( strcmp(m_officerIDlist[i].getstring(), g_policeid)==0 ) continue ;
-                        fprintf( fid, "%s\n", m_officerIDlist[i].getstring());
+                        if( strcmp(m_officerIDlist[i], g_policeid)==0 ) continue ;
+                        fprintf( fid, "%s\n", (char *)m_officerIDlist[i]);
                     }
                     fclose(fid);
                 }
@@ -472,7 +472,7 @@ class pwii_menu : public window {
 
                 for( i=0; i<MAXPOLICIDLISTLINE; i++ ) {
                     if( i+m_dispbegin > m_maxselect ) break;
-                    drawtext( x, y, m_officerIDlist[i+m_dispbegin].getstring(), font ) ;
+                    drawtext( x, y, m_officerIDlist[i+m_dispbegin], font ) ;
                     if( (i+m_dispbegin)==m_select ) {
                         drawbitmap( ball, (x-20), (y+15) ) ;
                     }
@@ -1414,52 +1414,38 @@ class iomsg : public window {
     iomsg( window * parent, int id, int x, int y, int w, int h ) :
         window( parent, id, x, y, w, h ) 
     {
-        hide();
+        show();
         settimer( 2000, 1 );
     }
 
-    void setmsg( char * msg )
-    {
-        if( strcmp( msg, m_iomsg)!=0 ) {
-            strcpy( m_iomsg, msg );
-            redraw();
-        }
-        if( m_iomsg[0] ) {
-            hide();
-            show();
-        }
-        else {
-            hide();
-        }
-    }
-
-        // event handler
+    // event handler
     protected:
         virtual void paint() {
-            setpixelmode (DRAW_PIXELMODE_COPY);
-            resource font("mono32b.font");
-            int h = font.fontheight();
-            int w = font.fontwidth();
-            int l = strlen(m_iomsg);
-            setcolor (COLOR(0,50,240,128)) ;
-            fillrect ( 0, 0, w*l, h );	
-            setcolor(COLOR(240,240,80,200));
-            drawtext( 0, 0, m_iomsg, font );
+			dio_getiomsg( m_iomsg ) ;
+			int l=strlen(m_iomsg);
+			if( l>0 ) {
+				setpixelmode (DRAW_PIXELMODE_COPY);
+				resource font("mono32b.font");
+				int h = font.fontheight();
+				int w = font.fontwidth();
+				setcolor (COLOR(0,50,240,128)) ;
+				fillrect ( 0, 0, w*l, h );	
+				setcolor(COLOR(240,240,80,200));
+				drawtext( 0, 0, m_iomsg, font );
 #ifdef EAGLE34
-            if( l>0 ) {
-                draw_show(0, 0, w*l, h);
-            }
-            else {
-                draw_hide();
-            }
+				draw_show(0, 0, w*l, h);
 #endif       
-        }
+			}
+#ifdef EAGLE34
+			else {
+				draw_hide();
+			}
+#endif       
+		}
+
         virtual void ontimer( int id ) {
             if( dio_getiomsg( m_iomsg ) ) {
-                hide();
-                if( m_iomsg[0] ) {
-                    show();
-                }
+				redraw();
             }
             settimer( 2000, 1 );
             return ;
@@ -1518,7 +1504,7 @@ class mainwin : public window {
         ctrl_y=0 ;
         ctrl_w=0 ;
         ctrl_h=0 ;
-        sscanf(control.getstring(), "%d,%d,%d,%d", &ctrl_x, &ctrl_y, &ctrl_w, &ctrl_h );
+        sscanf(control, "%d,%d,%d,%d", &ctrl_x, &ctrl_y, &ctrl_w, &ctrl_h );
         if( ctrl_x>0 && ctrl_y>0 && ctrl_w>0 && ctrl_h>0 ) {
             panel = new controlpanel( this, ctrl_x, ctrl_y, ctrl_w, ctrl_h );
         }
@@ -1625,11 +1611,22 @@ int screen_key( int keycode, int keydown )
     else if( keycode==(int)VK_LP ) {                             // LP key
         if( keydown ) {
             screen_setliveview(pwii_front_ch);                   // start front camera
+			dio_pwii_lpzoomin( 1 );
             dvr_log("LP pressed!");
         }
         else {
+			dio_pwii_lpzoomin( 0 );
             dvr_log("LP released!");
         }
+    }
+    else if( keycode==(int)VK_MUTE ) {                           // Mute key
+        if( keydown ) {
+            dvr_log("MUTE pressed!");
+        }
+        else {
+            dvr_log("MUTE released!");
+        }
+		screen_update();				// just do the screen update for now. (Hardware do mute already)
     }
 #endif    
     else if( topwindow ) {
@@ -1654,6 +1651,14 @@ int screen_draw()
         }
     }
     return 0;
+}
+
+void screen_update()
+{
+	if( topwindow ) {
+		topwindow->redraw();
+		screen_draw();
+	}
 }
 
 struct mouse_event {
@@ -1823,7 +1828,7 @@ void screen_init(config &dvrconfig)
 
     v = dvrconfig.getvalue("VideoOut", "resource" );
     if( v.length()>0 ) {
-        strncpy( resource::resource_dir, v.getstring(), 128 );
+        strncpy( resource::resource_dir, v, 128 );
     }
 
 #ifdef PWII_APP    

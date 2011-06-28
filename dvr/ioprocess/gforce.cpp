@@ -657,7 +657,7 @@ void gforce_init( config & dvrconfig )
     fv = 0.5 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_forward_trigger");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     x = (int)(fv*14) ;
     if( x<0 ) x=-x ;
@@ -666,7 +666,7 @@ void gforce_init( config & dvrconfig )
     fv = 0.5 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_right_trigger");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     y = (int)(fv*14) ;
     if( y<0 ) y=-y ;
@@ -675,7 +675,7 @@ void gforce_init( config & dvrconfig )
     fv = 1.0+2.5 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_down_trigger");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     z = (int)(fv*14) ;
     if( z<0 ) z=-z ;
@@ -692,7 +692,7 @@ void gforce_init( config & dvrconfig )
     fv = -0.5 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_backward_trigger");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     x = (int)(fv*14) ;
     if( x>0 ) x=-x ;
@@ -701,7 +701,7 @@ void gforce_init( config & dvrconfig )
     fv = -0.5 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_left_trigger");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     y = (int)(fv*14) ;
     if( y>0 ) y=-y ;
@@ -710,7 +710,7 @@ void gforce_init( config & dvrconfig )
     fv = 1.0-2.5 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_up_trigger");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     z = (int)(fv*14) ;
     if( z>0 ) z=-z ;
@@ -729,7 +729,7 @@ void gforce_init( config & dvrconfig )
     fv = 0.2 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_forward_base");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     x = (int)(fv*14) ;
     if( x<0 ) x=-x ;
@@ -738,7 +738,7 @@ void gforce_init( config & dvrconfig )
     fv = 0.2 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_right_base");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     y = (int)(fv*14) ;
     if( y<0 ) y=-y ;
@@ -747,7 +747,7 @@ void gforce_init( config & dvrconfig )
     fv = 1.0+2 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_down_base");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     z = (int)(fv*14) ;
     if( z<0 ) z=-z ;
@@ -764,7 +764,7 @@ void gforce_init( config & dvrconfig )
     fv = -0.2 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_backward_base");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     x = (int)(fv*14) ;
     if( x>0 ) x=-x ;
@@ -773,7 +773,7 @@ void gforce_init( config & dvrconfig )
     fv = -0.2 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_left_base");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     y = (int)(fv*14) ;
     if( y>0 ) y=-y ;
@@ -782,7 +782,7 @@ void gforce_init( config & dvrconfig )
     fv = 1.0-2 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_up_base");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     z = (int)(fv*14) ;
     if( z>0 ) z=-z ;
@@ -801,7 +801,7 @@ void gforce_init( config & dvrconfig )
     fv = 3.0 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_forward_crash");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     x = (int)(fv*14) ;
     if( x<0 ) x=-x ;
@@ -810,7 +810,7 @@ void gforce_init( config & dvrconfig )
     fv = 3.0 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_right_crash");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     y = (int)(fv*14) ;
     if( y<0 ) y=-y ;
@@ -819,7 +819,7 @@ void gforce_init( config & dvrconfig )
     fv = 1.0+5.0 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_down_crash");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     z = (int)(fv*14) ;
     if( z<0 ) z=-z ;
@@ -836,7 +836,7 @@ void gforce_init( config & dvrconfig )
     fv = -3.0 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_backward_crash");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     x = (int)(fv*14) ;
     if( x>0 ) x=-x ;
@@ -845,7 +845,7 @@ void gforce_init( config & dvrconfig )
     fv = -3.0 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_left_crash");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     y = (int)(fv*14) ;
     if( y>0 ) y=-y ;
@@ -854,7 +854,7 @@ void gforce_init( config & dvrconfig )
     fv = 1.0-3.0 ;               // default value
     v = dvrconfig.getvalue( "io", "gsensor_up_crash");
     if( v.length()>0 ) {
-        sscanf(v.getstring(),"%f", &fv);
+        sscanf(v,"%f", &fv);
     }
     z = (int)(fv*14) ;
     if( z>0 ) z=-z ;

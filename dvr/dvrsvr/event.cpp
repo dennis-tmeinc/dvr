@@ -44,7 +44,7 @@ int sensor_t::check()
     if( v!=m_value ) {
         m_value = v ;
         m_toggle = 1 ;
-        dvr_log("Sensor (%s) triggered to (%d).", m_name.getstring(), m_value);
+        dvr_log("Sensor (%s) triggered to (%d).", (char *)m_name, m_value);
         return 1 ;
     }
     else {
@@ -235,6 +235,13 @@ int event_check()
         }
         else {
             dio_clearstate (DVR_LOCK);
+        }
+
+        if( rec_triggered(-1) ) {
+            dio_setstate (DVR_SENSOR);
+        }
+        else {
+            dio_clearstate (DVR_SENSOR);
         }
 
         if( disk_archive_runstate() ) {

@@ -23,7 +23,6 @@ all : cfg cfgpc
 cfg : $(SOURCES) $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ $(SOURCES) $(EXTSOURCES) $(LDFLAGS)
 	cp cfg $(debug_folder)
-	$(STRIP) cfg
 
 cfgpc : $(SOURCES) $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 	gcc $(CFLAGS) -o $@ $(SOURCES) $(EXTSOURCES) $(LDFLAGS)

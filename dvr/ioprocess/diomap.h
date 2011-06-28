@@ -22,7 +22,7 @@ struct dio_mmap {
     unsigned int outputmap ;	// 32 output pin max
     
     int		dvrcmd ;		// -1: status error, 0: status OK, 1: restart(resume), 2: suspend, 3: stop record, 4: start record
-    int     dvrstatus ;		// bit0: running, bit1: recording, bit2: video lost, bit3: no motion, bit4: network active, bit5: disk ready, bit6: no camera data, bit15: error condition
+    int     dvrstatus ;		// (see DVR STATUS bit definition) bit0: running, bit1: recording, bit2: video lost, bit3: no motion, bit4: network active, bit5: disk ready, bit6: no camera data, bit15: error condition
     char    iomsg[128] ;    // IO message to display on screen
 
     int     poweroff ;
@@ -80,7 +80,8 @@ struct dio_mmap {
                                         //  BIT 10:  tm, 1: pressed, 0: released
                                         //  BIT 11:  lp, 1: pressed, 0: released
                                         //  BIT 12:  blackout, 1: pressed, 0: released
-    
+                                        //  BIT 13:  Mute Botton (virtual) 1: pressed, auto release
+	
     unsigned int pwii_output ;          // LEDs and device power (outputs)
                                         // BIT 0: C1 LED
                                         // BIT 1: C2 LED
@@ -89,6 +90,7 @@ struct dio_mmap {
                                         // BIT 4: POWER LED
                                         // BIT 5: BO_LED
                                         // BIT 6: Backlight LED
+										// BIT 7: LP zoom in
     
                                         // BIT 8: GPS antenna power
                                         // BIT 9: GPS POWER
@@ -101,19 +103,25 @@ struct dio_mmap {
 
     // Wifi status
     int     smartserver ;        // smartserver detected
+	char    smartserver_interface[32] ;
 
 } ;
 
+// bit7: archiving disk ready, bit8: sensor active, bit15: error condition
+
 // dvr status bits
-#define DVR_RUN         (0x1)
-#define DVR_RECORD      (0x2)
-#define DVR_VIDEOLOST   (0x4)
-#define DVR_NOMOTION    (0x8)
-#define DVR_NETWORK     (0x10)
-#define DVR_DISKREADY   (0x20)
-#define DVR_NODATA      (0x40)
-#define DVR_LOCK        (0x80)
-#define DVR_ARCH        (0x100)         // ARCH
+#define DVR_RUN         (0x1)			// dvr running
+#define DVR_RECORD      (0x2)			// recording
+#define DVR_VIDEOLOST   (0x4)			// Video signal lost (any channel)
+#define DVR_NOMOTION    (0x8)			// No motion detected (any channel)
+#define DVR_NETWORK     (0x10)			// Network active
+#define DVR_DISKREADY   (0x20)			// disk ready ( recording disk )
+#define DVR_NODATA      (0x40)			// no video data (any channel)
+#define DVR_LOCK        (0x80)			// recording locked file (any channel) (PWII only)
+#define DVR_ARCH        (0x100)         // archive thread running
+#define DVR_ARCHDISK    (0x200)			// archive disk ready
+#define DVR_SENSOR      (0x400)			// sensor active
+
 #define DVR_FAILED      (0x4000)        // should ioprocess reboot system?
 #define DVR_ERROR       (0x8000)
 
@@ -129,12 +137,27 @@ struct dio_mmap {
 #define IOMODE_REBOOT          (8)
 #define IOMODE_REINITAPP       (9)
 #define IOMODE_SUSPEND         (10)
+#define IOMODE_POWEROFF        (11)
+
+// device power bit
+#define DEVICE_POWER_GPS		(1)
+#define DEVICE_POWER_SLAVE		(1<<1)
+#define DEVICE_POWER_NETWORKSWITCH	(1<<2)
+#define DEVICE_POWER_POE		(1<<3)
+#define DEVICE_POWER_CAMERA		(1<<4)
+
+// new adds on power bit
+#define DEVICE_POWER_WIFI		(1<<8)		// wifi power on PW unit 
+#define DEVICE_POWER_POEPOWER	(1<<9)		// wow , another POE power? 
+#define DEVICE_POWER_RADAR		(1<<10)		// Radar power, what is this?
+#define DEVICE_POWER_HD			(1<<11)		// Power for Hard drive 
 
 // PWII CDC buttons
 #define  PWII_BT_REW            (1)
 #define  PWII_BT_PP             (1<<1)
 #define  PWII_BT_FF             (1<<2)
 #define  PWII_BT_ST             (1<<3)
+#define  PWII_BT_POWER          (PWII_BT_ST)
 #define  PWII_BT_PR             (1<<4)
 #define  PWII_BT_NX             (1<<5)
 #define  PWII_BT_C1             (1<<8)
@@ -142,9 +165,11 @@ struct dio_mmap {
 #define  PWII_BT_TM             (1<<10)
 #define  PWII_BT_LP             (1<<11)
 #define  PWII_BT_BO             (1<<12)
+#define  PWII_BT_MUTE           (1<<13)
+
 
 // auto release buttons
-#define  PWII_BT_AUTORELEASE    (PWII_BT_C1|PWII_BT_C2|PWII_BT_TM)
+#define  PWII_BT_AUTORELEASE    (PWII_BT_C1|PWII_BT_C2|PWII_BT_TM|PWII_BT_MUTE)
 
 // PWII CDC led
 #define PWII_LED_C1             (1)
@@ -154,6 +179,16 @@ struct dio_mmap {
 #define PWII_LED_POWER          (1<<4)
 #define PWII_LED_BO             (1<<5)
 #define PWII_LED_BACKLIGHT      (1<<6)
+
+#define PWII_LP_ZOOMIN			(1<<7)
+
+#define PWII_POWER_ANTENNA		(1<<8)
+#define PWII_POWER_GPS			(1<<9)
+#define PWII_POWER_RF900		(1<<10)
+#define PWII_POWER_LCD			(1<<11)
+#define PWII_POWER_STANDBY		(1<<12)
+#define PWII_POWER_WIFI			(1<<13)
+                                       
 
 extern struct dio_mmap * p_dio_mmap;
 void dio_lock();

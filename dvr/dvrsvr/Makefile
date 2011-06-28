@@ -117,6 +117,9 @@ dvrsvr : $(OBJS) $(EXTRASOURCES)
 ../fb/libfbdraw.so : 
 	cd ../fb ; make
 
+test.s : test.cpp
+	$(CC)  -S -o $@  $^ 
+
 eaglesvr : $(EAGLESRS)
 	$(CC)  $(CCFLAGS) -o $@ $(EAGLESRS) ../fb/libfbdraw.so $(LDFLAGS)
 	cp eaglesvr  $(debug_folder)

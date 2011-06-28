@@ -40,7 +40,7 @@ int savetxtfile(const char *filename, array <string> & strlist )
 		return 0;
 	}
 	for (i = 0; i < strlist.size(); i++) {
-		fputs(strlist[i].getstring(), sfile);
+		fputs(strlist[i], sfile);
 		fputs("\n", sfile);
 	}
 	fclose(sfile);

@@ -3,6 +3,8 @@
 #include <sys/ioctl.h>
 #include <linux/rtc.h>
 
+// #define DEBUGGING
+
 #include "../ioprocess/diomap.h"
 
 static unsigned int dio_inputmap ;
@@ -81,7 +83,11 @@ int dio_enablewatchdog()
 {
     dio_lock();
     if( p_dio_mmap ){
-        p_dio_mmap->dvrwatchdog = 0 ;
+#ifdef  DEBUGGING
+		p_dio_mmap->dvrwatchdog = -1 ;
+#else
+		p_dio_mmap->dvrwatchdog = 0 ;
+#endif		
     }
     dio_unlock();
     return (0);
@@ -124,13 +130,14 @@ int dio_setstate( int status )
                 // start recording
                 struct dvrtime cliptime ;
                 time_now(&cliptime) ;
-                sprintf( g_vri, "%s-%02d%02d%02d%02d%02d", g_hostname,
-                    cliptime.year%100,
-                    cliptime.month,
-                    cliptime.day,
-                    cliptime.hour,
-                    cliptime.minute
-                    );
+                sprintf( g_vri, "%s-%02d%02d%02d%02d%02d", 
+                        (char *)g_servername,
+                        cliptime.year%100,
+                        cliptime.month,
+                        cliptime.day,
+                        cliptime.hour,
+                        cliptime.minute
+                        );
                 memcpy( p_dio_mmap->pwii_VRI, g_vri, sizeof(p_dio_mmap->pwii_VRI) );
                 rstart = 1 ;
         }
@@ -222,6 +229,7 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
         { PWII_BT_TM,  (int) VK_TM },
         { PWII_BT_LP,  (int) VK_LP},
         { PWII_BT_BO,  (int) VK_POWER },
+        { PWII_BT_MUTE,(int) VK_MUTE },
         {0,0}
     } ;
     static unsigned int dio_pwii_bt_s ;
@@ -257,10 +265,10 @@ void dio_pwii_lcd( int lcdon )
     if( p_dio_mmap ) {
         dio_lock();
         if( lcdon ) {
-            p_dio_mmap->pwii_output |= (1<<11) ;
+            p_dio_mmap->pwii_output |= PWII_POWER_LCD ;
         }
         else {
-            p_dio_mmap->pwii_output &= ~(1<<11) ;
+            p_dio_mmap->pwii_output &= ~PWII_POWER_LCD ;
         }
         dio_unlock();
     }
@@ -271,10 +279,24 @@ void dio_pwii_standby( int standby )
     if( p_dio_mmap ) {
         dio_lock();
         if( standby ) {
-            p_dio_mmap->pwii_output |= (1<<12) ;
+            p_dio_mmap->pwii_output |= PWII_POWER_STANDBY ;
         }
         else {
-            p_dio_mmap->pwii_output &= ~(1<<12) ;
+            p_dio_mmap->pwii_output &= ~PWII_POWER_STANDBY ;
+        }
+        dio_unlock();
+    }
+}
+
+void dio_pwii_lpzoomin( int on )
+{
+    if( p_dio_mmap ) {
+        dio_lock();
+        if( on ) {
+            p_dio_mmap->pwii_output |= PWII_LP_ZOOMIN ;
+        }
+        else {
+            p_dio_mmap->pwii_output &= ~PWII_LP_ZOOMIN ;
         }
         dio_unlock();
     }
@@ -282,13 +304,14 @@ void dio_pwii_standby( int standby )
 
 #endif    // PWII_APP
 
-void dio_smartserveron()
+void dio_smartserveron(char * interface)
 {
     int log=0 ;
     if( p_dio_mmap ){
         dio_lock();
         if( p_dio_mmap->smartserver==0 ) {
-            p_dio_mmap->smartserver=1;
+			p_dio_mmap->smartserver=1;
+			strncpy( p_dio_mmap->smartserver_interface, interface, sizeof(p_dio_mmap->smartserver_interface) );
             log=1 ;
         }
         dio_unlock();
@@ -343,6 +366,9 @@ int dio_check()
 					break;
 				case 6:
 					disk_archive_stop();
+					break;
+				case 7:							// update on screen message
+					screen_update();
 					break;
 				default:
 					res=0 ;
@@ -552,14 +578,14 @@ void dio_init(config &dvrconfig)
     if( iomapfile.length()==0 ) {
         return ;						// no DIO.
     }
-    if( dio_mmap( iomapfile.getstring() )==NULL ) {
+    if( dio_mmap( iomapfile )==NULL ) {
         dvr_log( "IO module not started!");
         return ;
     }
     dio_lock();
     p_dio_mmap->lockpower = 0 ;
     p_dio_mmap->dvrpid = getpid () ;
-    p_dio_mmap->dvrwatchdog = 0 ;
+    p_dio_mmap->dvrwatchdog = -1 ;
     p_dio_mmap->usage++ ;
     // initialize dvrsvr communications 
     p_dio_mmap->dvrcmd = 0 ;

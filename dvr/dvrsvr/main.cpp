@@ -7,8 +7,7 @@ static char deflogfile[] = "dvrlog.txt";
 static string tmplogfile ;
 static int    logfilesize ;	// maximum logfile size
 string logfile ;
-
-char g_hostname[128] ;
+string g_servername ;
 
 // pthread_mutex_t mutex_init=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP ;
 
@@ -93,7 +92,7 @@ int dvr_log(const char *fmt, ...)
 
     if( logfilename[0]==0 ) {
         if (rec_basedir.length() > 0) {
-            sprintf(logfilename, "%s/_%s_/%s", rec_basedir.getstring(), g_hostname, logfile.getstring());
+            sprintf(logfilename, "%s/_%s_/%s", (char *)rec_basedir, (char *)g_servername, (char *)logfile);
             symlink(logfilename, VAR_DIR"/dvrlogfile");
             dvr_cleanlogfile(logfilename);
         }
@@ -101,7 +100,7 @@ int dvr_log(const char *fmt, ...)
 
     flog = fopen(logfilename, "a");
     if (flog) {
-        ftmplog = fopen(tmplogfile.getstring(), "r");	// copy temperary log to logfile        
+        ftmplog = fopen(tmplogfile, "r");	// copy temperary log to logfile        
         if (ftmplog) {
             fputs("\n", flog);
             while (fgets(lbuf, 512, ftmplog)) {
@@ -109,12 +108,12 @@ int dvr_log(const char *fmt, ...)
             }
             fputs("\n", flog);
             fclose(ftmplog);
-            unlink(tmplogfile.getstring());
+            unlink(tmplogfile);
         }
         res=1 ;
     } else {
         logfilename[0]=0 ;
-        flog = fopen(tmplogfile.getstring(), "a");        
+        flog = fopen(tmplogfile, "a");        
         rectemp=1 ;
     }
 
@@ -152,7 +151,7 @@ static FILE * dvr_logkey_file()
     FILE * lfile=NULL ;
     if( logfilename[0]==0 ) {
         if (rec_basedir.length() > 0) {
-            sprintf(logfilename, "%s/_%s_/%s", rec_basedir.getstring(), g_hostname, keylogfile.getstring());
+            sprintf(logfilename, "%s/_%s_/%s", (char *)rec_basedir, (char *)g_servername, (char *)keylogfile);
             symlink(logfilename, VAR_DIR"/tvslogfile" );
             dvr_cleanlogfile(logfilename);
             lfile=fopen(logfilename,"a");
@@ -322,7 +321,7 @@ int dvr_getsystemsetup(struct system_stru * psys)
     strncpy( psys->ID1, g_id1, sizeof(psys->ID1) );
     strncpy( psys->ID2, g_id2, sizeof(psys->ID2) );
     
-    strncpy(psys->ServerName, g_hostname, sizeof(psys->ServerName));
+    strncpy(psys->ServerName, (char *)g_servername, sizeof(psys->ServerName));
 
     psys->cameranum = cap_channels;
     psys->alarmnum = num_alarms ;
@@ -394,7 +393,7 @@ int dvr_getsystemsetup(struct system_stru * psys)
             strcpy( psys->sensorname[i], buf );
         }
         else {
-            strcpy( psys->sensorname[i], tmpstr.getstring() );
+            strcpy( psys->sensorname[i], tmpstr );
         }
         psys->sensorinverted[i] = dvrconfig.getvalueint(buf, "inverted");
     }
@@ -416,7 +415,7 @@ int dvr_getsystemsetup(struct system_stru * psys)
     tmpstr=dvrconfig.getvalue("ptz", "device");
     if( tmpstr.length()>9 ) {
         i=0 ;
-        sscanf(tmpstr.getstring()+9, "%d", &i );
+        sscanf((char *)tmpstr+9, "%d", &i );
         psys->ptz_port=(char)i ;
     }
     else {
@@ -424,7 +423,7 @@ int dvr_getsystemsetup(struct system_stru * psys)
     }
     psys->ptz_baudrate=dvrconfig.getvalueint("ptz", "baudrate" );
     tmpstr=dvrconfig.getvalue("ptz", "protocol");
-    if( *tmpstr.getstring()=='P' )
+    if( *(char *)tmpstr=='P' )
         psys->ptz_protocol=1 ;
     else 
         psys->ptz_protocol=0 ;
@@ -445,13 +444,8 @@ int dvr_setsystemsetup(struct system_stru * psys)
     char system[]="system" ;
     config dvrconfig(CFG_FILE);
     
-    if( strcmp( g_hostname, psys->ServerName )!=0 ) {	// set hostname
-        FILE * phostname = NULL;
-        phostname=fopen("/etc/dvr/hostname", "w");
-        if( phostname!=NULL ) {
-            fprintf(phostname, "%s", psys->ServerName);
-            fclose(phostname);
-        }
+    if( strcmp( (char *)g_servername, psys->ServerName )!=0 ) {	// set hostname
+		g_servername = psys->ServerName ;
         sethostname(psys->ServerName, strlen(psys->ServerName)+1);
         dvrconfig.setvalue(system, "hostname", psys->ServerName);
     }
@@ -606,7 +600,7 @@ void app_init( config & dvrconfig )
         pidfile=VAR_DIR"/dvrsvr.pid" ;
     }
     
-    fid=fopen(pidfile.getstring(), "w");
+    fid=fopen(pidfile, "w");
     if( fid ) {
         fprintf(fid, "%d", (int)mypid);
         fclose(fid);
@@ -627,30 +621,27 @@ void app_init( config & dvrconfig )
     // set timezone the first time
     tz=dvrconfig.getvalue( "system", "timezone" );
     if( tz.length()>0 ) {
-        tzi=dvrconfig.getvalue( "timezones", tz.getstring() );
+        tzi=dvrconfig.getvalue( "timezones", tz );
         if( tzi.length()>0 ) {
-            p=strchr(tzi.getstring(), ' ' ) ;
+            p=strchr(tzi, ' ' ) ;
             if( p ) {
                 *p=0;
             }
-            p=strchr(tzi.getstring(), '\t' ) ;
+            p=strchr(tzi, '\t' ) ;
             if( p ) {
                 *p=0;
             }
-            setenv("TZ", tzi.getstring(), 1);
+            setenv("TZ", tzi, 1);
         }
         else {
-            setenv("TZ", tz.getstring(), 1);
+            setenv("TZ", tz, 1);
         }
     }
 
 #ifdef MDVR_APP   
     t=dvrconfig.getvalue("system", "hostname" );
     if( t.length()>0 ){
-        // setup hostname
-        strncpy( g_hostname, t.getstring(), 127 );
-        sethostname( g_hostname, strlen(g_hostname)+1);
-        dvr_log("Setup hostname: %s", g_hostname);
+		g_servername=t ;
     }
 #endif
     
@@ -658,7 +649,7 @@ void app_init( config & dvrconfig )
     // TVS related
     t = dvrconfig.getvalue("system", "tvsmfid" );
     if( t.length()>0 ) {
-        strncpy( g_mfid, t.getstring(), sizeof(g_mfid) );
+        strncpy( g_mfid, t, sizeof(g_mfid) );
         fid=fopen(VAR_DIR"/tvsmfid", "w");
         if( fid ) {
             fprintf(fid, "%s", g_mfid );
@@ -669,17 +660,13 @@ void app_init( config & dvrconfig )
     
     t = dvrconfig.getvalue("system","tvs_licenseplate");
     if( t.length()>0 ) {
-         sprintf(g_id2, "%s", t.getstring() );
+         sprintf(g_id2, "%s", t );
     }
 
     t = dvrconfig.getvalue("system","tvs_medallion");
     if( t.length()>0 ) {
         sprintf(g_id1, "%s", t.getstring() );
-
-        // setup hostname, make hostname same as medallion number
-        strncpy( g_hostname, t.getstring(), 127 );
-        sethostname( g_hostname, strlen(g_hostname)+1);
-        dvr_log("Setup hostname: %s", g_hostname);
+		g_servername = t ;
     }
     
     t = dvrconfig.getvalue("system","tvs_ivcs_serial");
@@ -695,7 +682,7 @@ void app_init( config & dvrconfig )
         // PWII related
     t = dvrconfig.getvalue("system", "mfid" );
     if( t.length()>0 ) {
-        strncpy( g_mfid, t.getstring(), sizeof(g_mfid) );
+        strncpy( g_mfid, t, sizeof(g_mfid) );
         fid=fopen(VAR_DIR"/mfid", "w");
         if( fid ) {
             fprintf(fid, "%s", g_mfid );
@@ -706,22 +693,18 @@ void app_init( config & dvrconfig )
 
     t = dvrconfig.getvalue("system","serial");
     if( t.length()>0 ) {
-         sprintf(g_serial, "%s%s", &g_mfid[2], t.getstring() );
+         sprintf(g_serial, "%s%s", &g_mfid[2], (char *)t );
     }
 
     t = dvrconfig.getvalue("system","id1");
     if( t.length()>0 ) {
-        sprintf(g_id1, "%s", t.getstring() );
-
-        // setup hostname, make hostname same as id1 (medallion # for tvs)
-        strncpy( g_hostname, t.getstring(), 127 );
-        sethostname( g_hostname, strlen(g_hostname)+1);
-        dvr_log("Setup hostname: %s", g_hostname);
+        sprintf(g_id1, "%s", (char *)t );
+		g_servername = t ;
     }
 
     t = dvrconfig.getvalue("system","id2");
     if( t.length()>0 ) {
-         sprintf(g_id2, "%s", t.getstring() );
+         sprintf(g_id2, "%s", (char *)t );
     }
 
     keylogfile = dvrconfig.getvalue("system","keylogfile");
@@ -732,7 +715,7 @@ void app_init( config & dvrconfig )
     //          following lines: list of availabe police IDs, one ID perline, ID must start from first colume
     g_policeidlistfile = dvrconfig.getvalue("system", "pwii_policeidlistfile");
     g_policeid[0]=0;
-    fid=fopen(g_policeidlistfile.getstring(), "r");
+    fid=fopen(g_policeidlistfile, "r");
     if( fid ) {
         fgets(g_policeid,sizeof(g_policeid),fid);
         fclose(fid);
@@ -740,7 +723,11 @@ void app_init( config & dvrconfig )
     }
 
 #endif
-    
+
+	// setup hostname
+	sethostname( (char *)g_servername, g_servername.length()+1);
+	dvr_log("Setup hostname: %s", (char *)g_servername);
+	
     g_lowmemory=dvrconfig.getvalueint("system", "lowmemory" );
     if( g_lowmemory<10000 ) {
         g_lowmemory=10000 ;
@@ -764,7 +751,7 @@ void app_init( config & dvrconfig )
 
 void app_exit()
 {
-    unlink( pidfile.getstring() );
+    unlink( pidfile );
     dvr_log("Quit DVR.\n");
 }
 

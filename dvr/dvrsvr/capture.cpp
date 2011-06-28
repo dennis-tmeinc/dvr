@@ -116,7 +116,7 @@ void capture::loadconfig()
     if( tmpstr.length()==0 )
         strcpy(m_attr.CameraName, section );
     else
-        strncpy(m_attr.CameraName, tmpstr.getstring(), sizeof(m_attr.CameraName) );
+        strncpy(m_attr.CameraName, tmpstr, sizeof(m_attr.CameraName) );
     
     m_attr.Resolution=dvrconfig.getvalueint( section, "resolution");
     m_attr.RecMode=dvrconfig.getvalueint( section, "recordmode");
@@ -491,7 +491,7 @@ void capture::updateOSD()
         osd.osdline[line][i++]=y_max - bottom_margin + linepos[line]*line_dist; // y position
     }
 
-    k=g_hostname ;
+    k=(char *)g_servername ;
     while( *k ) {
         osd.osdline[line][i++] = * k++ ;
     }

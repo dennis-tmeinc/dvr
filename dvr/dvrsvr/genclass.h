@@ -246,10 +246,8 @@ class array {
         array(int initialsize){
             m_array=NULL ;
             m_size=0;
-            m_arraysize = initialsize ;
-            if( m_arraysize>0 ) {
-	            m_array=new T *  [m_arraysize] ;
-            }
+			m_arraysize = 0 ;
+			expand( initialsize ) ;
         }
         ~array(){
             empty();
@@ -347,67 +345,58 @@ class array {
         }
 };
 
+#define EMPTY_STRING ("")
+
 // string and string list
 // string functions
 class string {
     protected:
         char *m_str;
-
-		void set(const char *str){
+		void setstring(const char *str){
 			if( m_str ) {
 				delete [] m_str ;
+				m_str = NULL ;
 			}
             if( str ) {
                 m_str=new char [strlen(str)+1];
                 strcpy(m_str, str);
             }
-            else {
-				m_str=new char [1] ;
-				m_str[0]='\0' ;
-			}
         }
-
-
+        char *getstring(){
+			if( m_str==NULL ) {
+				setstring(EMPTY_STRING);
+			}
+            return m_str;
+        }
     public:
 		string(){
 			m_str=NULL;
 		}
 		string(const char *str) {
 			m_str=NULL;
-			set(str);
+			setstring(str);
 		}
 		string(string & str) {
 			m_str=NULL;
-			set(str.getstring());
+			setstring(str.getstring());
 		}
 		~string() {
 			if( m_str ) {
             	delete [] m_str ;
 			}
         }
+
 		operator char * (){
-			if( m_str==NULL ) {
-				set(NULL);
-			}
-			return m_str ;
+			return getstring() ;
 		}
-		
-        char *getstring(){
-			if( m_str==NULL ) {
-				set(NULL);
-			}
-            return m_str;
-        }
-        void setstring(const char *str){
-			set(str);
-        }
 
         string & operator =(const char *str) {
-			set(str);
+			setstring(str);
             return *this;
         }
-        string & operator =(string & str) {
-			set(str.getstring());
+
+        string & operator =( string & str ) {
+			setstring((char *)str);
             return *this;
         }
 
@@ -421,29 +410,28 @@ class string {
         }
 		// make buffer not less then given size
         char * setbufsize(int nsize){
-			if( m_str==NULL ) {
-				set(NULL);
-			}
 			if( length()<nsize ) {
 				char * nbuf = new char [nsize+1] ;
-				strcpy( nbuf, m_str );
-				delete [] m_str ;
+				strcpy( nbuf, getstring() );
+				if( m_str ) {
+					delete [] m_str ;
+				}
 				m_str = nbuf ;
 			}
-			return m_str ;
+			return getstring() ;
 		}
         int isempty() {
 			if( m_str ) {
 				return (m_str[0] == 0);
 			}
 			else {
-				return 0;
+				return 1;
 			}
         }
 };
 
 inline int operator < ( string & s1, string & s2 ) {
-	return ( strcmp(s1.getstring(), s2.getstring())<0 );
+	return ( strcmp(s1, s2)<0 );
 }
 
 char * str_trimtail(char *line);

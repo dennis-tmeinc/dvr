@@ -13,6 +13,7 @@
 /*
     result=*m ;
     *m = v ;
+ 	return result ;
 */
 int atomic_swap( int *m, int v)
 {

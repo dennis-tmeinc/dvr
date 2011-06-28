@@ -53,21 +53,29 @@ fi
 
 mkdir ${OUTPUTDIR}
 
-slvfirmwareid=PW34.1.0.${RELEASE}
-
-if [ ${special} = "cycle" ]; then
-  firmwareid=${appid}.1.cycle.${RELEASE}
-  echo "Firmware ID: " $firmwareid
-else
-  firmwareid=${appid}.1.0.${RELEASE}
-  echo "Firmware ID: " $firmwareid
-fi
-
 #copy utilities
 cd ${DEPROOT}
 cp -v ${APPROOT}/cfg/cfgpc .
 cp -v ${APPROOT}/sfx/mksfx .
 cp -v ${APPROOT}/sfx/sfx .
+
+slvfirmwareid=${appid}.1.0.${RELEASE}
+
+if [ ${special} = "cycle" ]; then
+  firmwareid=${appid}.1.cycle.${RELEASE}
+  echo "Firmware ID: " $firmwareid
+
+elif [ ${special} = "Lite" ]; then
+  firmwareid=${appid}Lite.1.0.${RELEASE}
+  echo "Firmware ID: " $firmwareid
+  ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/defconf set system totalcamera 2
+  
+else
+  firmwareid=${appid}.1.0.${RELEASE}
+  echo "Firmware ID: " $firmwareid
+  ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/defconf set system totalcamera 4
+
+fi
 
 # modify default settings
 

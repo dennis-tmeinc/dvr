@@ -121,10 +121,17 @@ for( i=1; i<=camera_num; i++ ) {
 </td>
 </tr>
 
-<tr>
+<tr id="id_tr_sys_temperature">
 <td class="col1">System Temperature:</td>
 <td>
 <span id="id_sys_temperature"> </span>
+</td>
+</tr>
+
+<tr id="id_tr_hd_temperature">
+<td class="col1">Hard Drive Temperature:</td>
+<td>
+<span id="id_hd_temperature"> </span>
 </td>
 </tr>
 
@@ -160,7 +167,28 @@ function statusvalue( statusvalue )
  document.getElementById("id_free_memory").innerHTML=sval.memory_free + " Mbytes" ;
  document.getElementById("id_total_disk").innerHTML=sval.disk_total + " Mbytes" ;
  document.getElementById("id_free_disk").innerHTML=sval.disk_free + " Mbytes" ;
- document.getElementById("id_sys_temperature").innerHTML=sval.temperature_system_f + " \u00B0F / "+ sval.temperature_system_c + " \u00B0C" ; ;
+
+ var temp = parseInt( sval.temperature_system_c ) ;
+ if( isNaN(temp) ) {
+     document.getElementById('id_tr_sys_temperature').style.display="none" ;
+	 document.getElementById("id_sys_temperature").innerHTML="";
+ }
+ else {
+     document.getElementById('id_tr_sys_temperature').style.display="" ;
+	 document.getElementById("id_sys_temperature").innerHTML=
+ 		(temp*9/5+32) + " \u00B0" + "F / "+ temp + " \u00B0"+"C" ; 
+ }
+
+ temp = parseInt( sval.temperature_disc_c ) ;
+ if( isNaN(temp) ) {
+     document.getElementById('id_tr_hd_temperature').style.display="none" ;
+	 document.getElementById("id_hd_temperature").innerHTML="" ;
+ }
+ else {
+     document.getElementById('id_tr_hd_temperature').style.display="" ;
+	 document.getElementById("id_hd_temperature").innerHTML=
+ 		(temp*9/5+32) + " \u00B0" + "F / "+ temp + " \u00B0"+"C" ; 
+ }
 
  var i ;
  for( i=1; i<=camera_num; i++ ) {
@@ -199,3 +227,4 @@ JSONinitfield();
 </script>
 </script>
 </body></html>
+

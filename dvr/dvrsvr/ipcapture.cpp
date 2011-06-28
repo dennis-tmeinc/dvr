@@ -151,7 +151,7 @@ void ipeagle32_capture::streamthread()
 
         if( m_streamfd<=0 ) {
             usleep(20000);
-            m_streamfd = net_connect (m_ip.getstring(), m_port) ;
+            m_streamfd = net_connect (m_ip, m_port) ;
             if( m_streamfd > 0 ) {
                 if( dvr_openlive (m_streamfd, m_ipchannel)<=0 ) {
                     closesocket( m_streamfd ) ;
@@ -220,7 +220,7 @@ int ipeagle32_capture::connect()
     struct dvrtime dvrt ;
     char * tzenv ;
     
-    m_sockfd = net_connect (m_ip.getstring(), m_port) ;
+    m_sockfd = net_connect (m_ip, m_port) ;
     if( m_sockfd<0 ) {
         return 0;
     }
