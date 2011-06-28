@@ -189,14 +189,9 @@ int main()
         }
         
         // minimun_disk_space
-        value = dvrconfig.getvalue("system", "mindiskspace");
+        value = dvrconfig.getvalue("system", "mindiskspace_percent");
         if( value.length()>0 ) {
-            l=value.length();
-            p=value;
-            if( p[l-1]=='M' ) {         // use Mega bytes only
-                p[l-1]=0;
-            }
-            fprintf(fvalue, "\"minimun_disk_space\":\"%s\",", p );
+            fprintf(fvalue, "\"minimun_disk_space\":\"%s\",", (char *)value );
         }
 
         // Max file length

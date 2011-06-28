@@ -275,10 +275,7 @@ int main()
 
         v = getsetvalue ("minimun_disk_space");
         if( v ) {
-            i=strlen(v);
-            v[i]='M' ;
-            v[i+1]=0 ;
-            dvrconfig.setvalue( "system", "mindiskspace", v );
+            dvrconfig.setvalue( "system", "mindiskspace_percent", v );
         }
 
         v = getsetvalue ("file_time");
