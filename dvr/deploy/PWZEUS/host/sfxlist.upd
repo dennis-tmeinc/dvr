@@ -71,6 +71,8 @@ sfxrun.upd sfxrun
 ./dvr/resource/pause.pic
 ./dvr/resource/rwd.pic
 ./dvr/resource/stop.pic
+./dvr/resource/spkon.pic
+./dvr/resource/mute.pic
 ./dvr/resource/freemono18.font
 ./dvr/www
 ./dvr/www/eaglehttpd

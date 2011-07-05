@@ -7,7 +7,7 @@ include $(PROJDIR)/arm_tool
 
 SOURCES=glog.cpp netdbg.cpp
 
-EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h ../ioprocess/diomap.h
+EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h ../ioprocess/diomap.h ../dvrsvr/dir.h
 EXTSOURCES=../ioprocess/diomap.cpp ../dvrsvr/config.cpp ../dvrsvr/string.cpp
 
 HEADERS=netdbg.h
@@ -23,15 +23,20 @@ endif
 
 CFLAGS=-I../dvrsvr -g -Wall
 
-glog : $(OBJS) $(EXTSOURCES)
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+all : glog gpsdetect
+
+glog : $(OBJS) $(EXTSOURCES) $(EXTHEADERS)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(EXTSOURCES) $(LDFLAGS)
 	cp glog  $(debug_folder)
 
+gpsdetect : gpsdetect.cpp $(EXTHEADERS)
+	$(CC) $(CFLAGS) -o $@ gpsdetect.cpp $(LDFLAGS)
+	cp gpsdetect  $(debug_folder)
 
 %.o : %.cpp $(HEADERS) $(EXTHEADERS)
 	$(CC) -g -Wall -c $< -o $@
 
 clean :
 	rm -f *.o
-	rm -f glog
+	rm -f glog gpsdetect
 

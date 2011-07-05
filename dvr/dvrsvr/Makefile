@@ -94,6 +94,7 @@ HEADERS=dvr.h \
 		fbwindow.h \
 		draw.h \
 		crypt.h \
+		dir.h \
         ../ioprocess/diomap.h \
         ../cfg.h
         

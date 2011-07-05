@@ -53,6 +53,8 @@
 ./dvr/resource/light.pic
 ./dvr/resource/tm.pic
 ./dvr/resource/ball.pic
+./dvr/resource/spkon.pic
+./dvr/resource/mute.pic
 ./initrun.sh
 ./iwconfig
 ./iwlist

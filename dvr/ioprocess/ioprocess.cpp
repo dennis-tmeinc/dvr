@@ -632,10 +632,18 @@ int mcu_checkinputbuf(char * ibuf)
 
        case PWII_INPUT_SPEAKERSTATUS :                  // CDC ask for boot up ready
 		   dio_lock();
-           p_dio_mmap->pwii_buttons &= ~PWII_BT_AUTORELEASE ;     // Release other bits
-           p_dio_mmap->pwii_buttons |= PWII_BT_MUTE ;             // bit 13: mute
-           pwii_keyreltime = runtime+1000 ;         	// auto release in 1 sec
-		   strcpy( p_dio_mmap->iomsg, "MUTE" );			// show mute status
+		   if( ibuf[5] ) { 
+			   p_dio_mmap->pwii_buttons &= ~PWII_BT_AUTORELEASE ;     // Release other bits
+			   p_dio_mmap->pwii_buttons |= PWII_BT_SPKMUTE ;          // bit 13: mute
+			   pwii_keyreltime = runtime+3000 ;         	// auto release in 3 sec
+//			   strcpy( p_dio_mmap->iomsg, "MUTE" );			// show mute status
+		   }
+		   else {
+			   p_dio_mmap->pwii_buttons &= ~PWII_BT_AUTORELEASE ;     // Release other bits
+			   p_dio_mmap->pwii_buttons |= PWII_BT_SPKON ;            // bit 13: mute
+			   pwii_keyreltime = runtime+3000 ;         	// auto release in 3 sec
+//			   strcpy( p_dio_mmap->iomsg, "SPON" );			// show speaker on status
+		   }
            dio_unlock();
            mcu_response( ibuf );                 		// possitive response
 

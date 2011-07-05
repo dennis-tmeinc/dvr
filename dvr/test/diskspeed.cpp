@@ -12,37 +12,60 @@
 #include <stdlib.h>
 
 
+#define MAXFILE	(50)
+
 int filenumber = 1 ;
-char prefix[256]="ftt" ;
+char prefix[256]="sp_" ;
 char filename[256] ;
 int buffersize = 0 ;
 int byterate = 0 ;
 int freespace = 5 ;
 int filesize = 100*1024*1024 ;
-char * buf ;
 
 int app_quit=0 ;
-
-struct filet_struct {
-	FILE * filehandle ;
-	int del_file ;
-	int cur_file ;
-} * pfilet ;
 
 void sig_handler(int sig)
 {
     app_quit=1 ;
 }
 
-int randfile = 0 ;
-int rand( int max )
+int nfile_old = 0 ;
+int nfile_new = 0 ;
+
+void file_done( int channel ) 
 {
-    unsigned long x ;
+	char nfname[256] ;
+	char cfname[256] ;
+	nfile_new++ ;
+	if( nfile_new>=1000000 ) nfile_new = 1 ;
+	sprintf( nfname, "%s%06d", prefix, nfile_new );
+	sprintf( cfname, "%sc%d", prefix, channel );
+	rename( cfname, nfname );
+}	
+
+int file_clean() 
+{
+	char ofname[256] ;
+	if( nfile_new != nfile_old ) {
+		nfile_old++ ;
+		if( nfile_old>=1000000 ) nfile_old = 1 ;
+		sprintf( ofname, "%s%06d", prefix, nfile_old );
+		remove( ofname );
+		return 1 ;
+	}
+	return 0 ;
+}
+
+// generate random number less then 64k
+int random_number(  )
+{
+    unsigned x ;
+	static int randfile = 0 ;
     if( randfile == 0 ) {
         randfile  = open( "/dev/urandom", O_RDONLY ) ;
     }
     read( randfile, &x, sizeof(x));
-    return (int)(x%max) ;
+	return (int)( (x&0x0ffff)|4 ) ;
 }
 
 int sync_dirty = 1000 ;
@@ -86,23 +109,23 @@ int byterategen()
     int i, gen ;
     
     if( byterate<=0 ) {
-        return (rand( 20000 )+5)&0xfffffc ;
+        return random_number() ;
     }
     else {
-        for( i= 0 ; i<20 ; i++ ) {
+        for( i= 0 ; i<50 ; i++ ) {
             t2 = gettime();
-            if( (t2-t1) > 20.0 ) {
+            if( (t2-t1) > 30.0 ) {
                 t1 = t2 ;
                 bytesgen=0 ;
             }
             b =  (t2-t1) * (double)byterate ;
             if( (int)b >= bytesgen ) {
-                gen = (rand( 20000 )+5)&0xfffffc ;
+                gen = random_number();
                 bytesgen += gen ;
                 return gen ;
             }
             else {
-                usleep(50000);
+                usleep(10000);
             }
         }
         bytesgen++ ;
@@ -110,49 +133,86 @@ int byterategen()
     }
 }
 
+#define AVGTIMES	(30)
 double starttime ;
-double prevtime ;
 
 int total_m = 0 ;
 int total_b = 0 ;
 
-void count_speed( int w, double tt )
-{
-    total_b += w ;
-    total_m += total_b/1000000 ;
-    total_b %= 1000000 ;
+double t2s_t[AVGTIMES] ;
+int t2s_m[AVGTIMES] ;
+int t2s_b[AVGTIMES] ;
+int t2s_idx ;
 
-    double speed = (double)w/(tt-prevtime)/1000000.0;
-    double ttsize = (double)total_m  + (double) total_b/1000000.0 ;
-    double avg = ttsize / (tt - starttime );
-    printf("Speed: %.3f MB/s  Time: %ds  Total: %d MB Average: %.3f MB/s   \r",
-           speed, (int)(tt-starttime), total_m, avg );
-    fflush( stdout );
-    prevtime=tt ;
+int count_init()
+{
+	int i ;
+	starttime=gettime();
+	t2s_idx=0 ;
+	for( i=0; i<AVGTIMES; i++ ) {
+		t2s_t[i] = starttime ;
+		t2s_b[i]=t2s_m[i]=0 ;
+	}
+}
+
+void count_speed( int w )
+{
+	int i;
+	double tt;
+	tt = gettime();
+	
+    total_b += w ;
+	if( total_b>=1000000 ) {
+		total_m++ ;
+		total_b-=1000000 ;
+	}
+
+	t2s_b[t2s_idx] += w ;
+	if( t2s_b[t2s_idx]>=1000000 ) {
+		t2s_m[t2s_idx]++ ;
+		t2s_b[t2s_idx]-=1000000 ;
+	}
+
+	if( (tt-t2s_t[t2s_idx]) > 2.0 ) {
+		double t2sm = (double)t2s_m[t2s_idx]  + (double) t2s_b[t2s_idx]/1000000.0 ;
+		double t2sspeed = t2sm/(tt-t2s_t[t2s_idx]);
+
+		if( ++t2s_idx>=AVGTIMES ) t2s_idx=0 ;
+
+		int    t10sm=0, t10sb=0 ;
+		for( i=0; i<AVGTIMES; i++) {
+			t10sm += t2s_m[i] ;
+			t10sb += t2s_b[i] ;
+		}
+		double t10sspeed = ((double)t10sm  + (double) t10sb/1000000.0)/(tt - t2s_t[t2s_idx]) ;
+		
+		t2s_t[t2s_idx] = tt ;
+		t2s_b[t2s_idx] = 0 ;
+		t2s_m[t2s_idx] = 0 ;
+
+		printf("Speed: %.3f MB/s  Time: %ds  Total: %d MB Average: %.3f MB/s   \r",
+		       t2sspeed, (int)(tt-starttime), total_m, t10sspeed );
+		fflush( stdout );
+
+	}
 }
 
 void count_total()
 {
-    double ttsize = (double)total_m  + (double) total_b/1000000.0 ;
-    double avg = ttsize / (prevtime - starttime );
+	double tt;
+	tt = gettime();
+
+	double totalm = (double)total_m  + (double) total_b/1000000.0 ;
+    double speed = totalm / (tt - starttime );
 	printf("\nTime: %ds Total: %d MB Average: %.3f MB/s\n",
-		(int)(prevtime-starttime), total_m, avg );
+		(int)(tt-starttime), total_m, speed );
 
 }
 
 void spdtest_file()
 {
 	int  wsize ;
-    int  sum ;
 	FILE * handle = NULL ;
-	double thistime ;
-
-	sum = 0 ;
-
-    sync();
-    
-	// initial time
-    starttime=prevtime = gettime() ;
     
 	handle = fopen( filename, "wb" );
 	if( buffersize>1024 ) {
@@ -165,7 +225,7 @@ void spdtest_file()
 	while( app_quit==0 ) {
         wsize = byterategen() ;
         if( wsize>0 ) {
-            buf = (char *)malloc( wsize );
+            char * buf = (char *)malloc( wsize );
             wsize = fwrite( buf, 1, wsize, handle ) ;
             free( buf );
         }
@@ -174,24 +234,13 @@ void spdtest_file()
 			fseek( handle, 0, SEEK_SET );
             wsize=0 ;
 		}
-        sum+=wsize ;
-
         // counting
-		thistime = gettime(); 
-		if( (thistime-prevtime)>2.0) {
-            count_speed( sum, thistime );
-            sum = 0 ;
-            check_sync();
-        }
+        count_speed( wsize ) ;
+        check_sync();
 	}
 
 	fclose( handle );
-
 	sync();
-	sync();
-
-	thistime = gettime();
-    count_speed( sum, thistime );
     count_total();
 
 	return ;
@@ -212,146 +261,81 @@ void spdtest()
 {
 	int i;
 	char filename[256] ;
+	char lfilename[256] ;
 	int  wsize ;
-	int  sum ;
-	double thistime ;
+	FILE * filehandle[MAXFILE] ;
 
-	pfilet = new struct filet_struct [filenumber] ;
+	sprintf(lfilename, "%s0000", prefix ) ;
+	filehandle[0] = fopen( lfilename, "wb" );
+	fprintf(filehandle[0], "%d", 1 );
+	fclose( filehandle[0] );
 
-	for( i=0; i<filenumber; i++ ) {
-		pfilet[i].filehandle=NULL ;
-		pfilet[i].cur_file=0 ;
-		pfilet[i].del_file=0 ;
+	for( i=0; i<filenumber; i++) {
+		filehandle[i]=NULL ;
 	}
-
-	sum = 0 ;
-
-	sync();		// clear dirty buffers
-
-	// initial time
-	starttime = prevtime = gettime() ;
-
-	sprintf(filename, "%s_lock", prefix ) ;
-	pfilet[0].filehandle = fopen( filename, "wb" );
-	fprintf(pfilet[0].filehandle, "%d", 1 );
-	fclose( pfilet[0].filehandle );
-	pfilet[0].filehandle = NULL ;
 
 	while( app_quit==0 ) {
 		for( i=0; i<filenumber; i++ ) {
-			if( pfilet[i].filehandle==NULL ) {
-				pfilet[i].cur_file++ ;
-				sprintf(filename, "%s_%d_%d", prefix, pfilet[i].cur_file, i) ;
-				pfilet[i].filehandle = fopen( filename, "wb" );
-				if( pfilet[i].filehandle && buffersize>1024 ) {
-					setvbuf( pfilet[i].filehandle, NULL, _IOFBF, buffersize );
+			if( filehandle[i]==NULL ) {
+				sprintf(filename, "%sc%d", prefix, i) ;
+				filehandle[i] = fopen( filename, "wb" );
+				if( filehandle[i] && buffersize>1024 ) {
+					setvbuf( filehandle[i], NULL, _IOFBF, buffersize );
 				}
 			}
 			wsize = 0 ;
-            if( pfilet[i].filehandle ) {
+            if( filehandle[i] ) {
                 wsize = byterategen() ;
                 if( wsize > 0 ) {
-                    buf = (char *)malloc( wsize ) ;
-                    wsize = fwrite( buf, 1, wsize, pfilet[i].filehandle ) ;
+                    char * buf = (char *)malloc( wsize ) ;
+                    wsize = fwrite( buf, 1, wsize, filehandle[i] ) ;
 //                    wsize = write( fileno(pfilet[i].filehandle), buf, wsize );
                     free( buf );
                 }
 
-				sprintf(filename, "%s_lock", prefix ) ;
+				if( ftell( filehandle[i] )>=filesize ) {
+					fclose( filehandle[i] ) ;
+					filehandle[i]=NULL ;
+					file_done(i);
+				}
+            }
+            count_speed( wsize );
+		}
 
-				if( disk_freespace_percent(filename)<freespace || wsize<=0 ) {
-                    if( pfilet[i].filehandle ) {
-                        fclose( pfilet[i].filehandle ) ;
-                        pfilet[i].filehandle=NULL ;
-                    }
-                    // delete one file 
-                    if( pfilet[i].del_file<pfilet[i].cur_file ) {
-                        pfilet[i].del_file++ ;
-                        sprintf(filename, "%s_%d_%d", prefix, pfilet[i].del_file, i) ;
-                        remove(filename);
-                    }
-                    wsize=0;
-                }
-            }
-            if( pfilet[i].filehandle && ftell( pfilet[i].filehandle )>filesize ) {
-				fclose( pfilet[i].filehandle ) ;
-				pfilet[i].filehandle=NULL ;
-			}
-            sum+=wsize ;
-            // counting
-            thistime = gettime(); 
-            if( (thistime-prevtime)>2) {
-                count_speed( sum, thistime );
-                sum = 0 ;
-                check_sync();
-            }
-            if( app_quit ) {
-                break ;
-            }
-        }
-//		if( getch()!=ERR ) {
-//			app_quit=1 ;
-//		}
+		check_sync();
+
+		// check disk space
+		if( disk_freespace_percent(lfilename)<freespace ) {
+			file_clean();
+		}
     }
 
 	// close files
 	for( i=0; i<filenumber; i++ ) {
-		if( pfilet[i].filehandle ) {
-			fclose( pfilet[i].filehandle ) ;
+		if( filehandle[i] ) {
+			fclose( filehandle[i] ) ;
+			file_done(i);
 		}
 	}
 
 	// clean files
-	for( i=0; i<filenumber; i++ ) {
-		while( pfilet[i].del_file<pfilet[i].cur_file ) {
-			pfilet[i].del_file++ ;
-			sprintf(filename, "ftt_%d_%d", pfilet[i].del_file, i );
-			remove(filename);
-		}
-	}
-	delete [] pfilet ;
-
-	sprintf(filename, "%s_lock", prefix ) ;
-	remove( filename );
+	while( file_clean() );
+	remove( lfilename );
 	
 	sync();
-	sync();
 
-	thistime = gettime();
-    count_speed( sum, thistime );
     count_total();
 	return ;
 }
 
 void ratetest()
 {
-    int  wsize ;
-    int  sum ;
-	double thistime ;
-
-	sum = 0 ;
-
-	// initial time
-    starttime=prevtime = gettime() ;
-    
 	while( app_quit==0 ) {
-        wsize = byterategen() ;
-        sum+=wsize ;
-
         // counting
-		thistime = gettime(); 
-		if( (thistime-prevtime)>2.0) {
-            count_speed( sum, thistime );
-            sum = 0 ;
-        }
+        count_speed( byterategen() );
 	}
-
-    thistime = gettime();
-    count_speed( sum, thistime );
     count_total();
-
 	return ;
-
 }
 
 void usage(char * appname)
@@ -419,9 +403,12 @@ int main(int argc, char * argv[])
 
                 case 'n' :
                     sscanf(&(argv[i][2]), "%d", &filenumber );
-                    if( filenumber<=0 || filenumber>50 ) {
+                    if( filenumber<1 ) {
                         filenumber=1 ;
                     }
+					else if( filenumber>MAXFILE ) {
+						filenumber = MAXFILE ;
+					}
                     break;
 
                 case 'd' :
@@ -471,6 +458,10 @@ int main(int argc, char * argv[])
     
 	signal( SIGINT, sig_handler );
 
+	sync();		// clear dirty buffers
+	// initial time
+	count_init() ;
+	
     if( testrate ) {
         ratetest();
     }

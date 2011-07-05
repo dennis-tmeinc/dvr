@@ -80,7 +80,8 @@ struct dio_mmap {
                                         //  BIT 10:  tm, 1: pressed, 0: released
                                         //  BIT 11:  lp, 1: pressed, 0: released
                                         //  BIT 12:  blackout, 1: pressed, 0: released
-                                        //  BIT 13:  Mute Botton (virtual) 1: pressed, auto release
+                                        //  BIT 13:  Speaker Mute Botton (virtual) 1: pressed, auto release
+                                        //  BIT 14:  Sperker On Botton (virtual) 1: pressed, auto release
 	
     unsigned int pwii_output ;          // LEDs and device power (outputs)
                                         // BIT 0: C1 LED
@@ -165,11 +166,11 @@ struct dio_mmap {
 #define  PWII_BT_TM             (1<<10)
 #define  PWII_BT_LP             (1<<11)
 #define  PWII_BT_BO             (1<<12)
-#define  PWII_BT_MUTE           (1<<13)
-
+#define  PWII_BT_SPKMUTE        (1<<13)
+#define  PWII_BT_SPKON          (1<<14)
 
 // auto release buttons
-#define  PWII_BT_AUTORELEASE    (PWII_BT_C1|PWII_BT_C2|PWII_BT_TM|PWII_BT_MUTE)
+#define  PWII_BT_AUTORELEASE    (PWII_BT_C1|PWII_BT_C2|PWII_BT_TM|PWII_BT_SPKMUTE|PWII_BT_SPKON)
 
 // PWII CDC led
 #define PWII_LED_C1             (1)

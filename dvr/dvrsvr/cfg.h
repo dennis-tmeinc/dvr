@@ -10,6 +10,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include "genclass.h"
+
 // struct used to enumerate config file
 struct config_enum {
     string key ;

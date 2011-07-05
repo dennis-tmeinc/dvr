@@ -1280,6 +1280,13 @@ class video_screen : public window {
 //						SetDecodeAudio(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 1);
 //					}
 				}
+				// speaker mute status 
+				else if( keycode == VK_MUTE ) {     // Mute key
+					m_icon->seticon( "mute.pic" );
+				}
+				else if( keycode == VK_SPKON ) {     // Speaker on key
+					m_icon->seticon( "spkon.pic" );
+				}
             }
             else {                  // key up
 /*

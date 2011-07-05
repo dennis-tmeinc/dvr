@@ -51,7 +51,7 @@ archivedir=/var/dvr/arch
 mindiskspace=100M
 
 #minimum free disk space percentage
-mindiskspace_percent=5
+mindiskspace_percent=10
 
 #maximum file size
 maxfilesize=200M

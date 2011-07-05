@@ -660,18 +660,18 @@ void app_init( config & dvrconfig )
     
     t = dvrconfig.getvalue("system","tvs_licenseplate");
     if( t.length()>0 ) {
-         sprintf(g_id2, "%s", t );
+         sprintf(g_id2, "%s", (char *)t );
     }
 
     t = dvrconfig.getvalue("system","tvs_medallion");
     if( t.length()>0 ) {
-        sprintf(g_id1, "%s", t.getstring() );
+        sprintf(g_id1, "%s", (char *)t );
 		g_servername = t ;
     }
     
     t = dvrconfig.getvalue("system","tvs_ivcs_serial");
     if( t.length()>0 ) {
-         sprintf(g_serial, "%s%s", &g_mfid[2], t.getstring() );
+         sprintf(g_serial, "%s%s", &g_mfid[2], (char *)t );
     }
 
     keylogfile = dvrconfig.getvalue("system","keylogfile");

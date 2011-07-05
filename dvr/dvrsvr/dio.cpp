@@ -229,7 +229,8 @@ int dio_getpwiikeycode( int * keycode, int * keydown)
         { PWII_BT_TM,  (int) VK_TM },
         { PWII_BT_LP,  (int) VK_LP},
         { PWII_BT_BO,  (int) VK_POWER },
-        { PWII_BT_MUTE,(int) VK_MUTE },
+        { PWII_BT_SPKMUTE,(int) VK_MUTE },
+        { PWII_BT_SPKON,  (int) VK_SPKON },
         {0,0}
     } ;
     static unsigned int dio_pwii_bt_s ;

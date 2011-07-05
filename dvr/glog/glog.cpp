@@ -34,7 +34,9 @@
 #include "../dvrsvr/eagle32/davinci_sdk.h"
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
+#include "../dvrsvr/dir.h"
 #include "../ioprocess/diomap.h"
+
 
 #include "netdbg.h"
 
@@ -105,130 +107,6 @@ int app_state ;     // 0: quit, 1: running: 2: restart
 unsigned int sigcap = 0 ;
 
 char disksroot[260] ;
-
-class dir_find {
-    protected:
-        DIR * m_pdir ;
-        struct dirent * m_pent ;
-        struct dirent m_entry ;
-        char m_dirname[PATH_MAX] ;
-        char m_pathname[PATH_MAX] ;
-        struct stat m_statbuf ;
-    public:
-        dir_find() {
-            m_pdir=NULL ;
-        }
-
-        // close dir handle
-        void close() {
-            if( m_pdir ) {
-                closedir( m_pdir );
-                m_pdir=NULL ;
-            }
-        }
-        // open an dir for reading
-        void open( const char * path ) {
-            int l ;
-            close();
-            m_pent=NULL ;
-            strncpy( m_dirname, path, sizeof(m_dirname) );
-            l=strlen( m_dirname ) ;
-            if( l>0 ) {
-                if( m_dirname[l-1]!='/' ) {
-                    m_dirname[l]='/' ;
-                    m_dirname[l+1]='\0';
-                }
-            }
-            m_pdir = opendir(m_dirname);
-        }
-        ~dir_find() {
-            close();
-        }
-        dir_find( const char * path ) {
-            m_pdir=NULL;
-            open( path );
-        }
-        int isopen(){
-            return m_pdir!=NULL ;
-        }
-        // find directory.
-        // return 1: success
-        //        0: end of file. (or error)
-        int find() {
-            struct stat findstat ;
-            if( m_pdir ) {
-                while( readdir_r( m_pdir, &m_entry, &m_pent)==0  ) {
-                    if( m_pent==NULL ) {
-                        break;
-                    }
-                    if( (m_pent->d_name[0]=='.' && m_pent->d_name[1]=='\0') || 
-                       (m_pent->d_name[0]=='.' && m_pent->d_name[1]=='.' && m_pent->d_name[2]=='\0') ) {
-                           continue ;
-                       }
-                    if( m_pent->d_type == DT_UNKNOWN ) {                   // d_type not available
-                        strcpy( m_pathname, m_dirname );
-                        strcat( m_pathname, m_pent->d_name );
-                        if( stat( m_pathname, &findstat )==0 ) {
-                            if( S_ISDIR(findstat.st_mode) ) {
-                                m_pent->d_type = DT_DIR ;
-                            }
-                            else if( S_ISREG(findstat.st_mode) ) {
-                                m_pent->d_type = DT_REG ;
-                            }
-                        }
-                    }
-                    return 1 ;
-                }
-            }
-            m_pent=NULL ;
-            return 0 ;
-        }
-        char * pathname()  {
-            if(m_pent) {
-                strcpy( m_pathname, m_dirname );
-                strcat( m_pathname, m_pent->d_name );
-                return (m_pathname) ;
-            }
-            return NULL ;
-        }
-        char * filename() {
-            if(m_pent) {
-                return (m_pent->d_name) ;
-            }
-            return NULL ;
-        }
-        
-        // check if found a dir
-        int    isdir() {
-            if( m_pent ) {
-                return (m_pent->d_type == DT_DIR) ;
-            }
-            else {
-                return 0;
-            }
-        }
-        
-        // check if found a regular file
-        int    isfile(){
-            if( m_pent ) {
-                return (m_pent->d_type == DT_REG) ;
-            }
-            else {
-                return 0;
-            }
-        }
-        
-        // return file stat
-        struct stat * filestat(){
-            char * path = pathname();
-            if( path ) {
-                if( stat( path, &m_statbuf )==0 ) {
-                    return &m_statbuf ;
-                }
-            }
-            return NULL ;
-        }
-};
 
 void sig_handler(int signum)
 {

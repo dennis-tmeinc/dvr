@@ -43,7 +43,7 @@ mountdir=/var/dvr/disks
 # last letter: M=megabytes, K=kilobytes, B=bytes
 mindiskspace=100M
 #minimum free disk space percentage
-mindiskspace_percent=8
+mindiskspace_percent=10
 
 #maximum file size
 maxfilesize=200M

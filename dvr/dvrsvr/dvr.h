@@ -1307,7 +1307,8 @@ enum e_keycode {
     VK_C6,              // PWII, Camera6
     VK_C7,              // PWII, Camera7
     VK_C8,              // PWII, Camera8
-    VK_MUTE             // PWII, Faked Mute button
+    VK_MUTE,            // PWII, Faked Mute button
+    VK_SPKON            // PWII, Faked Speaker On button
 } ;
 
 #define VK_FRONT (VK_C1)

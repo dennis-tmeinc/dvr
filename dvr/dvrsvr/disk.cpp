@@ -2,6 +2,8 @@
 
 #include <sys/mount.h>
 
+#include "dir.h"
+
 #define MINDATE     (19800000)
 #define MAXDATE     (21000000)
 
@@ -29,142 +31,6 @@ static string disk_play;                // playback disk base dir. ("/var/dvr")
 static string disk_arch;                // archiving disk base dir, ("/var/dvr/arch")
 static string disk_curdiskfile;         // record current disk
 static string disk_archdiskfile ;       // current archieving disk
-
-class dir_find {
-    protected:
-        DIR * m_pdir ;
-        struct dirent * m_pent ;
-        int  m_dirlen ;
-        char m_pathname[PATH_MAX] ;
-
-    public:
-        dir_find() {
-            m_pdir=NULL ;
-        }
-        // close dir handle
-        void close() {
-            if( m_pdir ) {
-                closedir( m_pdir );
-                m_pdir=NULL ;
-            }
-        }
-        // open an dir for reading
-        void open( const char * path ) {
-            close();
-            strncpy( m_pathname, path, sizeof(m_pathname) );
-            m_dirlen=strlen( m_pathname ) ;
-            if( m_dirlen>0 ) {
-                if( m_pathname[m_dirlen-1]!='/' ) {
-                    m_pathname[m_dirlen]='/' ;
-                    m_dirlen++;
-                    m_pathname[m_dirlen]='\0';
-                }
-            }
-            m_pdir = opendir(m_pathname);
-        }
-        ~dir_find() {
-            close();
-        }
-        dir_find( const char * path ) {
-            m_pdir=NULL;
-            open( path );
-        }
-        int isopen(){
-            return m_pdir!=NULL ;
-        }
-        // find directory.
-        // return 1: success
-        //        0: end of file. (or error)
-        int find() {
-            int r=0 ;
-            if( m_pdir ) {
-                while( (m_pent=readdir(m_pdir))!=NULL  ) {
-                    // skip . and .. directory
-                    if( (m_pent->d_name[0]=='.' && m_pent->d_name[1]=='\0') || 
-                       (m_pent->d_name[0]=='.' && m_pent->d_name[1]=='.' && m_pent->d_name[2]=='\0') ) 
-                    {
-                        continue ;
-                    }
-                    strcpy( &m_pathname[m_dirlen], m_pent->d_name );
-                    if( m_pent->d_type == DT_UNKNOWN ) {                   // d_type not available
-                        struct stat findstat ;
-                        if( stat( m_pathname, &findstat )==0 ) {
-                            if( S_ISDIR(findstat.st_mode) ) {
-                                m_pent->d_type = DT_DIR ;
-                            }
-                            else if( S_ISREG(findstat.st_mode) ) {
-                                m_pent->d_type = DT_REG ;
-                            }
-                        }
-                    }
-                    r=1 ;
-                    break ;
-                }
-            }
-            return r ;
-        }
-
-        int find(char * pattern) {
-            int r=0 ;
-            if( m_pdir ) {
-                while( (m_pent=readdir(m_pdir))!=NULL  ) {
-					// skip . and .. directory
-					if( (m_pent->d_name[0]=='.' && m_pent->d_name[1]=='\0') || 
-					   (m_pent->d_name[0]=='.' && m_pent->d_name[1]=='.' && m_pent->d_name[2]=='\0') ) 
-					{
-						continue ;
-					}
-
-					if( fnmatch(pattern, m_pent->d_name, 0 )==0 ) {
-                        strcpy( &m_pathname[m_dirlen], m_pent->d_name );
-                        if( m_pent->d_type == DT_UNKNOWN ) {                   // d_type not available
-                            struct stat findstat ;
-                            if( stat( m_pathname, &findstat )==0 ) {
-                                if( S_ISDIR(findstat.st_mode) ) {
-                                    m_pent->d_type = DT_DIR ;
-                                }
-                                else if( S_ISREG(findstat.st_mode) ) {
-                                    m_pent->d_type = DT_REG ;
-                                }
-                            }
-                        }
-                        r=1 ;
-                        break ;
-                    }
-                }
-            }
-            return r ;
-        }
-        
-        char * pathname()  {
-            return m_pathname ;
-        }
-        
-        char * filename() {
-            return &m_pathname[m_dirlen] ;
-        }
-        
-        // check if found a dir
-        int    isdir() {
-            if(m_pdir && m_pent) {
-                return (m_pent->d_type == DT_DIR) ;
-            }
-            else {
-                return 0;
-            }
-        }
-        
-        // check if found a regular file
-        int    isfile(){
-            if(m_pdir && m_pent) {
-                return (m_pent->d_type == DT_REG) ;
-            }
-            else {
-                return 0;
-            }
-        }
-};
-
 
 char *basefilename(const char *fullpath)
 {

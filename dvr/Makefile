@@ -118,10 +118,7 @@ all:
 	$(MAKE) app_pw34
 	$(MAKE) firmware
 	$(MAKE) clean
-	$(MAKE) app_pwlite
-	$(MAKE) firmware
-	$(MAKE) clean
-	$(MAKE) app_pwzeus
+	$(MAKE) app_zeus
 	$(MAKE) firmware
 	$(MAKE) clean
 
