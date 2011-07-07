@@ -527,6 +527,7 @@ startchannel=0
 keepcapture=1
 resource=/dav/dvr/resource
 
+nostartmenu=1
 [pwii]
 front=0
 rear=1

@@ -1626,7 +1626,8 @@ int screen_key( int keycode, int keydown )
             dvr_log("LP released!");
         }
     }
-    else if( keycode==(int)VK_MUTE ) {                           // Mute key
+/*
+	else if( keycode==(int)VK_MUTE ) {                           // Mute key
         if( keydown ) {
             dvr_log("MUTE pressed!");
         }
@@ -1635,8 +1636,10 @@ int screen_key( int keycode, int keydown )
         }
 		screen_update();				// just do the screen update for now. (Hardware do mute already)
     }
+*/
 #endif    
     else if( topwindow ) {
+        dvr_log("Key code 0x%02x %s.", keycode, keydown?"pressed":"released" );
         topwindow->key( keycode, keydown );
     }
     return 0;

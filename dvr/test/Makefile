@@ -51,6 +51,6 @@ hostname : hostname.c
 
 clean :
 	rm -f *.o
-	rm -f serialtest gentest
+	rm -f serialtest gentest diskspeed
 
 

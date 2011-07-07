@@ -31,7 +31,7 @@ void dio_lock()
     if( p_dio_mmap ) {
         int c=0;
         while( atomic_swap( &(p_dio_mmap->lock), 1 ) ) {
-            if( c++<20 ) {
+            if( c++<1000 ) {
                 sched_yield();
             }
             else {

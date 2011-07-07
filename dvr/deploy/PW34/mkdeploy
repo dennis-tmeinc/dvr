@@ -69,12 +69,13 @@ elif [ ${special} = "Lite" ]; then
   firmwareid=${appid}Lite.1.0.${RELEASE}
   echo "Firmware ID: " $firmwareid
   ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/defconf set system totalcamera 2
+  ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/defconf set VideoOut nostartmenu 1
   
 else
   firmwareid=${appid}.1.0.${RELEASE}
   echo "Firmware ID: " $firmwareid
   ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/defconf set system totalcamera 4
-
+  ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/defconf set VideoOut nostartmenu 0
 fi
 
 # modify default settings

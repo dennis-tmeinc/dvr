@@ -220,14 +220,17 @@ int mcu_read(char * sbuf, size_t bufsize, int wait, int interval)
 {
     size_t nread=0 ;
     if( mcu_dataready(wait) ) {
-        while( nread<bufsize && mcu_dataready(interval) ) {
+		while( nread<bufsize && mcu_dataready(interval) ) {
 #ifdef  MCU_DEBUG
             printf( "%02x ", (int) mcu_buffer[mcu_buffer_pointer] );
 #endif
             *sbuf++ = mcu_buffer[mcu_buffer_pointer++] ;
             nread++;
         }
-    }
+#ifdef  MCU_DEBUG
+		fflush(stdout);
+#endif
+	}
     return nread ;
 }
 
@@ -239,6 +242,7 @@ int mcu_write(void * buf, int bufsize)
         for(i=0;i<bufsize;i++) {
             printf( "%02x ", (int)(((char *)buf)[i]) );
         }
+		fflush(stdout);
 #endif
         return write( mcu_handle, buf, bufsize);
     }
@@ -585,7 +589,6 @@ int mcu_reboot()
 	return mcu_cmd( NULL, MCU_CMD_REBOOT)>0 ;
 }
 
-
 // return bcd value
 static int getbcd(unsigned char c)
 {
@@ -816,12 +819,11 @@ void mcu_initsensor2(int invert)
     }
 }
 
-// initialize sensor 2/3 power on control (PW34)
-void mcu_sensor23poweron(int sensor2inv, int sensor3inv)
+// initialize sensor power on control (PW34)
+void mcu_sensorinvmap(int sensorinvmap)
 {
-    mcu_cmd(NULL, MCU_CMD_SENSOR23,1, 0x80 | (sensor2inv?4:0) | (sensor3inv?8:0));
+	mcu_cmd(NULL, MCU_CMD_SENSOR23,1, 0x80 | sensorinvmap );
 }
-
 
 // return 1: success
 //        0: failed
@@ -911,12 +913,10 @@ int mcu_iotemperature()
 // get hd temperature
 int mcu_hdtemperature()
 {
-#ifdef  MDVR_APP
 	char rsp[MCU_MAX_MSGSIZE] ;
     if( mcu_cmd(rsp, MCU_CMD_HDTEMPERATURE)>0 ) {
         return (int)(signed char)rsp[5] ;
     }
-#endif    
     return -128 ;
 }
 
@@ -1027,16 +1027,14 @@ int mcu_update_firmware( char * firmwarefile)
         fflush( fwmsgfile );
     }
 
-	if( !mcu_reboot() ) {
-		if( mcu_reset()==0 ) {              // reset failed.
-			netdbg_print("Failed\n");
-			if( fwmsgfile ) {
-				fprintf(fwmsgfile, "Failed!\r\n");
-				fflush( fwmsgfile );
-				fclose( fwmsgfile );
-			}        
-			return 0;
-		}
+	if( mcu_reset()==0 ) {              // reset failed.
+		netdbg_print("Failed\n");
+		if( fwmsgfile ) {
+			fprintf(fwmsgfile, "Failed!\r\n");
+			fflush( fwmsgfile );
+			fclose( fwmsgfile );
+		}        
+		return 0;
 	}
 	
     netdbg_print("Done.\n");
@@ -1049,7 +1047,7 @@ int mcu_update_firmware( char * firmwarefile)
     memset( responds, 0, sizeof(responds)) ;
     mcu_write( responds, sizeof(responds)) ;
     mcu_clear(1000000);
-    
+	
     netdbg_print("Erasing.\n");
     if( fwmsgfile ) {
         fprintf(fwmsgfile, "Erasing MCU......");
@@ -1412,10 +1410,16 @@ void mcu_init( config & dvrconfig )
 
 	
 #ifdef PWII_APP
-	// initialize sensor 2/3 power on control
-	mcu_sensor23poweron( dvrconfig.getvalueint( "sensor2", "inverted" ),
-	                    dvrconfig.getvalueint( "sensor3", "inverted" ) ) ;
-	
+	// initialize sensor power on control ( just to set inverted bits )
+	int invmap=0 ;
+	for( i=0; i<7; i++ ) {		// maximum 7 bits
+		char sensorname[10] ;
+		sprintf( sensorname, "sensor%d", i+1 );
+		if( dvrconfig.getvalueint( sensorname, "inverted" ) ) {
+			invmap |= 1<<i ;
+		}
+	}
+	mcu_sensorinvmap( invmap );
 #endif // PWII_APP   
 }
 

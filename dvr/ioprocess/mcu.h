@@ -4,7 +4,7 @@
 
 
 #define MCU_CMD_RESET	        (0)
-#define MCU_CMD_REBOOT	        (0x01) 			// this command would send back response compare to MCU_CMD_RESET
+#define MCU_CMD_REBOOT	        (0x01) 			// this command would send back response compare to MCU_CMD_RESET (USED on ZEUS project)
 #define MCU_CMD_READRTC         (0x6)
 #define MCU_CMD_WRITERTC        (0x7)
 #define MCU_CMD_POWEROFFDELAY	(0x8)

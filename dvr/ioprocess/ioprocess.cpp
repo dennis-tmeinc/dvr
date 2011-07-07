@@ -318,7 +318,7 @@ void mcu_pwii_setc1c2()
 {
    // C1 LED (front)
     dio_lock();
-    if( p_dio_mmap->camera_status[pwii_front_ch] & 2 ) {         // front ca
+    if( p_dio_mmap->camera_status[pwii_front_ch] & 2 ) {         // front camera recording?
         if( (p_dio_mmap->pwii_output & PWII_LED_C1 ) == 0 ) {
             p_dio_mmap->pwii_output |= PWII_LED_C1 ;
             // turn on zoomcamera led
@@ -342,7 +342,7 @@ void mcu_pwii_setc1c2()
     }
     
    // C2 LED
-   if( p_dio_mmap->camera_status[pwii_rear_ch] & PWII_LED_C2 ) {         // rear camera recording?
+   if( p_dio_mmap->camera_status[pwii_rear_ch] & 2 ) {         // rear camera recording?
        p_dio_mmap->pwii_output |= PWII_LED_C2 ;
    }
     else {
@@ -401,6 +401,18 @@ void mcu_pwii_output()
             // BIT 11: LCD power
             mcu_pwii_cmd(NULL, PWII_CMD_LCD, 1, ((pwii_outs&0x800)!=0) );
         }
+		else {
+            // BIT 4: POWER LED
+            mcu_pwii_cmd(NULL, PWII_CMD_LEDPOWER, 1, 0 );
+            // C1 LED 
+            mcu_pwii_cmd(NULL, PWII_CMD_C1, 1, 0 );
+            // C2 LED
+            mcu_pwii_cmd(NULL, PWII_CMD_C2, 1, 0 );
+            // bit 2: MIC LED
+            mcu_pwii_cmd(NULL, PWII_CMD_LEDMIC, 1, 0 );
+            // BIT 11: LCD power
+            mcu_pwii_cmd(NULL, PWII_CMD_LCD, 1, 0 );
+		}
 
 		if( xouts & PWII_LP_ZOOMIN ) {
 			mcu_camera_zoom( pwii_outs & PWII_LP_ZOOMIN ) ;
@@ -538,31 +550,40 @@ int mcu_checkinputbuf(char * ibuf)
 
 #ifdef PWII_APP
 
-    else if( ibuf[4]=='\x02' && ibuf[2]=='\x05' )          // input from MCU5 (MR. Henry?)
-    {
-       netdbg_print("Messages from Mr. Henry!\n" );
+	else if( ibuf[4]=='\x02' && ibuf[2]=='\x05' )          // input from MCU5 (MR. Henry?)
+	{
+		netdbg_print("Messages from Mr. Henry!\n" );
 		mcu_pwii_cdcfailed = 0 ;					// clear pwii cdc error!
-       switch( ibuf[3] ) {
-       case PWII_INPUT_REC :                        // Front Camera (REC) button
-           dio_lock();
-           p_dio_mmap->pwii_buttons &= ~PWII_BT_AUTORELEASE ;     // Release other bits
-           p_dio_mmap->pwii_buttons |= PWII_BT_C1 ;               // bit 8: front camera
-           pwii_keyreltime = runtime+1000 ;         // auto release in 1 sec
-           dio_unlock();
-           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&PWII_LED_C1)!=0) );  // bit 0: c1 led
-//           mcu_response( ibuf, 1, 0 );                                  // bit 0: c1 led
-           break;
+		switch( ibuf[3] ) {
+		case PWII_INPUT_REC :                        // Front Camera (REC) button
+			dio_lock();
+			p_dio_mmap->pwii_buttons &= ~PWII_BT_AUTORELEASE ;     // Release other bits
+			p_dio_mmap->pwii_buttons |= PWII_BT_C1 ;               // bit 8: front camera
+			pwii_keyreltime = runtime+1000 ;         // auto release in 1 sec
+			dio_unlock();
 
+	        if( (p_dio_mmap->pwii_output&PWII_POWER_STANDBY)==0 ) {       // not in standby mode
+				mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&PWII_LED_C1)!=0) );  // bit 0: c1 led
+			}
+			else {
+				mcu_response( ibuf, 1, 0 );  // bit 0: c1 led
+			}
+			break;
+			
        case PWII_INPUT_C2 :                         // Back Seat Camera (C2) Starts/Stops Recording
-           dio_lock();
-           p_dio_mmap->pwii_buttons &= ~PWII_BT_AUTORELEASE ;     // Release other bits
-           p_dio_mmap->pwii_buttons |= PWII_BT_C2 ;      // bit 9: back camera
-           pwii_keyreltime = runtime+1000 ;         // auto release in 1 sec
-           dio_unlock();
-           mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&PWII_LED_C2)!=0) );  // bit 1: c2 led
-//           mcu_response( ibuf, 1, 0 );                                  // bit 1: c2 led
-           break;
-
+			dio_lock();
+			p_dio_mmap->pwii_buttons &= ~PWII_BT_AUTORELEASE ;     // Release other bits
+			p_dio_mmap->pwii_buttons |= PWII_BT_C2 ;      // bit 9: back camera
+			pwii_keyreltime = runtime+1000 ;         // auto release in 1 sec
+			dio_unlock();
+	        if( (p_dio_mmap->pwii_output&PWII_POWER_STANDBY)==0 ) {       // not in standby mode
+				mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&PWII_LED_C2)!=0) );  // bit 1: c2 led
+			}
+			else {
+				mcu_response( ibuf, 1, 0 );  // bit 0: c1 led
+			}
+			break;
+			
        case PWII_INPUT_TM :                                 // TM Button
            mcu_response( ibuf );
            dio_lock();
@@ -632,20 +653,16 @@ int mcu_checkinputbuf(char * ibuf)
 
        case PWII_INPUT_SPEAKERSTATUS :                  // CDC ask for boot up ready
 		   dio_lock();
+		   p_dio_mmap->pwii_buttons &= ~PWII_BT_AUTORELEASE ;     // Release other bits
 		   if( ibuf[5] ) { 
-			   p_dio_mmap->pwii_buttons &= ~PWII_BT_AUTORELEASE ;     // Release other bits
-			   p_dio_mmap->pwii_buttons |= PWII_BT_SPKMUTE ;          // bit 13: mute
-			   pwii_keyreltime = runtime+3000 ;         	// auto release in 3 sec
-//			   strcpy( p_dio_mmap->iomsg, "MUTE" );			// show mute status
+			   p_dio_mmap->pwii_buttons |= PWII_BT_SPKON ;           
 		   }
 		   else {
-			   p_dio_mmap->pwii_buttons &= ~PWII_BT_AUTORELEASE ;     // Release other bits
-			   p_dio_mmap->pwii_buttons |= PWII_BT_SPKON ;            // bit 13: mute
-			   pwii_keyreltime = runtime+3000 ;         	// auto release in 3 sec
-//			   strcpy( p_dio_mmap->iomsg, "SPON" );			// show speaker on status
+			   p_dio_mmap->pwii_buttons |= PWII_BT_SPKMUTE ;         
 		   }
            dio_unlock();
-           mcu_response( ibuf );                 		// possitive response
+		   pwii_keyreltime = runtime+3000 ;         	// auto release in 3 sec
+		   mcu_response( ibuf );                 		// possitive response
 
 		   break;
 
@@ -657,7 +674,6 @@ int mcu_checkinputbuf(char * ibuf)
     }
 
 #endif    // PWII_APP
-
     return 0 ;
 }
 
@@ -705,7 +721,7 @@ void time_syncrtc()
     }
 }
 
-void time_rtctosys()
+int time_rtctosys()
 {
     struct timeval tv ;
     time_t rtc ;
@@ -716,7 +732,9 @@ void time_rtctosys()
         settimeofday(&tv, NULL);
         // also set onboard rtc
         rtc_set((time_t)tv.tv_sec);
+		return 1 ;
     }
+	return 0 ;
 }
 
 void time_syncgps ()
@@ -1264,7 +1282,10 @@ int appinit()
 #endif // PWII_APP   
 
     if( g_syncrtc ) {
-        time_rtctosys();
+        if( time_rtctosys()== 0 ) {	// failed ?
+			// try syn system time back to RTC
+			time_syncrtc();
+		}
     }
 
     gforce_init( dvrconfig );
@@ -1395,7 +1416,7 @@ void mode_archive()
 		modeendtime = runtime+archivetime*1000 ;   
 		dvr_log("Enter archiving mode. (mode %d).", p_dio_mmap->iomode);
 #ifdef PWII_APP    
-		zoomcam_close();        // close ttyUSB to restore USB performance.
+		zoomcam_close(); 
 #endif              
 	}
 }
@@ -1517,8 +1538,8 @@ int main(int argc, char * argv[])
                 mcu_reset();
                 return 1;
             }
-            else if( strcasecmp( argv[i], "-fwreset" )==0 ) {
-				mcu_sendcmd( MCU_CMD_REBOOT ) ;
+            else if( strcasecmp( argv[i], "-fwreset" )==0 ) {	
+				mcu_sendcmd( MCU_CMD_REBOOT ) ;			// only works on PWZEUS
 //				if( !mcu_reboot() ) {
 //	                mcu_reset();
 //				}
@@ -2029,7 +2050,7 @@ int main(int argc, char * argv[])
         if( (runtime - hd_timer)> 500 ) {    // 0.5 seconds to check hard drive and power button
             hd_timer=runtime ;
 
-			if( power_button && runtime > power_endtime ) {		// power button pushed for 3 seconds
+			if( p_dio_mmap->poweroff && power_button && runtime > power_endtime ) {		// power button pushed for 3 seconds
              	dvr_log( "Power button pushed, shutdown system.");
 				sync();
 			    dio_lock();
