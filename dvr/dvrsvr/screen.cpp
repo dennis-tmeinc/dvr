@@ -256,7 +256,8 @@ void dio_pwii_standby( int standby );
 
 #ifdef PWII_APP
 
-static int screen_nostartmenu ;  //  do not show police id input menu on startup
+static int screen_nomenu ;  		//  do not display police id menu
+static int screen_nostartmenu ;  	//  do not show police id input menu on startup
 static int screen_menustartup=0 ;
 
 // status window on video screen
@@ -674,6 +675,11 @@ class video_screen : public window {
 #ifdef PWII_APP        
         void startmenu() {
 //            stop();
+
+			if( screen_nomenu ) {		// don't start menu if disabled
+				return ;
+			}
+			
             new pwii_menu(this, ID_MENU_SCREEN, 0, 0, m_pos.w, m_pos.h);
             m_videomode= VIDEO_MODE_MENU ;
             updatestatus();
@@ -1037,7 +1043,7 @@ class video_screen : public window {
                 return ;
             }
             else 
-#endif                
+#endif
             if( id == VK_MEDIA_STOP ) {
                 stopdecode();
                 stopliveview();
@@ -1048,9 +1054,11 @@ class video_screen : public window {
                 return ;
             }
             else if( id == VK_POWER ) {
-                m_videomode=VIDEO_MODE_STANDBY ;
 #ifdef	PWII_APP
-                dio_pwii_standby(1);
+				if( m_videomode == VIDEO_MODE_LCDOFF ) {
+					m_videomode=VIDEO_MODE_STANDBY ;
+					dio_pwii_standby(1);
+				}
 #endif
                 return ;
             }
@@ -1171,15 +1179,15 @@ class video_screen : public window {
                         startliveview(m_playchannel);
 //                        settimer( 5000, keycode );
                     }
-                    else if( m_videomode == VIDEO_MODE_LCDOFF ) {   // lcd off
+					else if( m_videomode == VIDEO_MODE_LCDOFF ) {   // lcd off
 #ifdef	PWII_APP
                         dio_pwii_lcd( 1 ) ;           // turn lcd on
 #endif
                         startliveview(m_playchannel);
                     }
-                    else if( m_videomode == VIDEO_MODE_STANDBY ) {   // playback
+                    else if( m_videomode == VIDEO_MODE_STANDBY ) {   // blackout mode
 #ifdef	PWII_APP
-                        dio_pwii_standby( 0 );          // jump out of standby
+                        dio_pwii_standby( 0 );        // jump out of standby
                         dio_pwii_lcd( 1 ) ;           // turn lcd on
 #endif
                         startliveview(m_playchannel);
@@ -1263,7 +1271,7 @@ class video_screen : public window {
 #endif
                         startliveview(m_playchannel);
                     }
-                    else if( m_videomode == VIDEO_MODE_STANDBY ) {   // playback
+                    else if( m_videomode == VIDEO_MODE_STANDBY ) {   // blackout mode
 #ifdef	PWII_APP
                         dio_pwii_standby( 0 );        // jump out of standby
                         dio_pwii_lcd( 1 ) ;           // turn lcd on
@@ -1556,6 +1564,12 @@ int screen_setliveview( int channel )
 int screen_menu( int level ) 
 {
     video_screen * vs ;
+
+#ifdef PWII_APP
+	if( screen_nomenu ) {  //  do not show police id input menu on startup
+		return 0 ;
+	}
+#endif	
     if( topwindow!=NULL ) {
         vs = (video_screen *) topwindow->findwindow( ID_VIDEO_SCREEN ) ;
         if( vs ) {
@@ -1845,6 +1859,7 @@ void screen_init(config &dvrconfig)
     screen_rearaudio = dvrconfig.getvalueint("VideoOut", "rearaudio" );
     screen_keepcapture = dvrconfig.getvalueint("VideoOut", "keepcapture" );
     screen_nostartmenu = dvrconfig.getvalueint("VideoOut", "nostartmenu" );
+	screen_nomenu = dvrconfig.getvalueint("VideoOut", "nomenu" );
 #endif
     
     // select Video output format to NTSC

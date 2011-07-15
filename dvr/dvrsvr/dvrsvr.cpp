@@ -1631,16 +1631,14 @@ void dvrsvr::Req2GetSetupPage()
 {
     struct dvr_ans ans ;
     char serno[60] ;
-    char pageuri[60] ;
+    char pageuri[100] ;
     
-    // prepare setup pages
-//    system("preparesetup");
-
     if( m_keycheck || g_keycheck==0 )
     {
-        // setup configure web pages
+        // prepare setup web pages
         www_genserialno( serno, sizeof(serno) );
         www_setup();
+			
         sprintf( pageuri, "/system.html?ser=%s", serno );
         
         ans.anscode = ANS2SETUPPAGE ;

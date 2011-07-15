@@ -98,7 +98,7 @@ public:
 class window {
 protected:
 	int m_id ;					// window ID
-	int m_alive ;		    	// window ID
+	int m_alive ;		    	// window alive or dead
     
     struct rect m_pos ;         // windows position relate to parent window
 	int m_screen_x, m_screen_y ; // window's position relate to screen. only vaild during draw period.

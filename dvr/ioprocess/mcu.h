@@ -44,6 +44,8 @@
 
 // setup sensor 2/3 power on 
 #define MCU_CMD_SENSOR23		(0x37)		
+#define MCU_CMD_SENSORINVMAP	(MCU_CMD_SENSOR23)		
+
 
 // mcu input
 #define MCU_INPUT_DIO           (0x1C)

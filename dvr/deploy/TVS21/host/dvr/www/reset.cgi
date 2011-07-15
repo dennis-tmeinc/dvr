@@ -2,7 +2,7 @@
 echo 
 echo 
 echo 
-echo Resetting System!
+echo Rebooting System!
 if [ -f /var/dvr/dvrsvr.pid ] ; then
    kill -USR1 `cat /var/dvr/dvrsvr.pid`
 fi

@@ -97,7 +97,7 @@ struct dio_mmap {
                                         // BIT 9: GPS POWER
                                         // BIT 10: RF900 POWER
                                         // BIT 11: LCD power
-                                        // BIT 12: standby mode, 1: standby, 0: running
+                                        // BIT 12: standby mode, 1: standby, 0: running		// black out
                                         // BIT 13: WIFI power
     int     pwii_error_LED_flash_timer ; // LED flash timer (output),  0: stayon, others in 0.25 second step
     char    pwii_VRI[128] ;             // current VRI(video recording Id)
@@ -140,6 +140,9 @@ struct dio_mmap {
 #define IOMODE_SUSPEND         (10)
 #define IOMODE_POWEROFF        (11)
 
+// HARD DRIVE LED and STATUS 
+#define HDLED	(0x10)
+
 // device power bit
 #define DEVICE_POWER_GPS		(1)
 #define DEVICE_POWER_SLAVE		(1<<1)
@@ -151,7 +154,12 @@ struct dio_mmap {
 #define DEVICE_POWER_WIFI		(1<<8)		// wifi power on PW unit 
 #define DEVICE_POWER_POEPOWER	(1<<9)		// wow , another POE power? 
 #define DEVICE_POWER_RADAR		(1<<10)		// Radar power, what is this?
-#define DEVICE_POWER_HD			(1<<11)		// Power for Hard drive 
+#define DEVICE_POWER_HD			(1<<11)		// Power for Hard drive, CAUTION: turn off this actually turn off system (why?)
+
+// power bits on runing mode
+#define DEVICE_POWER_RUN ( DEVICE_POWER_GPS | DEVICE_POWER_SLAVE | DEVICE_POWER_NETWORKSWITCH | DEVICE_POWER_POE | DEVICE_POWER_CAMERA | DEVICE_POWER_HD )
+// power bits on standby mode ( ********** keep HD power, or system will turn off *************** )
+#define DEVICE_POWER_STANDBY ( DEVICE_POWER_HD )
 
 // PWII CDC buttons
 #define  PWII_BT_REW            (1)
@@ -169,9 +177,6 @@ struct dio_mmap {
 #define  PWII_BT_SPKMUTE        (1<<13)
 #define  PWII_BT_SPKON          (1<<14)
 
-// auto release buttons
-#define  PWII_BT_AUTORELEASE    (PWII_BT_C1|PWII_BT_C2|PWII_BT_TM|PWII_BT_SPKMUTE|PWII_BT_SPKON)
-
 // PWII CDC led
 #define PWII_LED_C1             (1)
 #define PWII_LED_C2             (1<<1)
@@ -187,7 +192,8 @@ struct dio_mmap {
 #define PWII_POWER_GPS			(1<<9)
 #define PWII_POWER_RF900		(1<<10)
 #define PWII_POWER_LCD			(1<<11)
-#define PWII_POWER_STANDBY		(1<<12)
+#define PWII_POWER_BLACKOUT		(1<<12)
+#define PWII_POWER_STANDBY		(PWII_POWER_BLACKOUT)
 #define PWII_POWER_WIFI			(1<<13)
                                        
 

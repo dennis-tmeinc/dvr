@@ -305,7 +305,7 @@ int dvr_getsystemsetup(struct system_stru * psys)
     config dvrconfig(CFG_FILE);
 
 #ifdef MDVR_APP    
-    strcpy(  psys->productid, "DIOTME");
+    strcpy(  psys->productid, "MDVR");
 #endif    
 
 #ifdef TVS_APP    
@@ -438,6 +438,8 @@ int dvr_getsystemsetup(struct system_stru * psys)
 
 int dvr_setsystemsetup(struct system_stru * psys)
 {
+#ifdef MDVR_APP    
+	
     int i ;
     string tmpstr;
     char buf[40] ;
@@ -512,7 +514,10 @@ int dvr_setsystemsetup(struct system_stru * psys)
     strcpy( psys->videopassword, "********" );
     
     dvrconfig.save();
-    app_state = APPRESTART ;			// restart application
+    app_state = APPRESTART ;			// restart application	
+
+#endif    		// MDVR
+	
     return 1 ;
 }
 

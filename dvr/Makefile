@@ -88,6 +88,12 @@ app_pw34:
 	echo "EAGLE=eagle34" >> config
 	cp cfg.h.PW34 cfg.h
 
+app_pwlite:
+	echo PROJDIR=`pwd` > config
+	echo "proj=PWLITE" >> config
+	echo "EAGLE=eagle34" >> config
+	cp cfg.h.PW34 cfg.h
+
 app_zeus:
 	echo PROJDIR=`pwd` > config
 	echo "proj=PWZEUS" >> config
@@ -116,6 +122,9 @@ all:
 	$(MAKE) firmware
 	$(MAKE) clean
 	$(MAKE) app_pw34
+	$(MAKE) firmware
+	$(MAKE) clean
+	$(MAKE) app_pwlite
 	$(MAKE) firmware
 	$(MAKE) clean
 	$(MAKE) app_zeus

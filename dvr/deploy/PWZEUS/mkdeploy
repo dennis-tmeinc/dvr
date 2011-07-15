@@ -70,8 +70,7 @@ cp -v ${APPROOT}/sfx/mksfx .
 cp -v ${APPROOT}/sfx/sfx .
 
 # modify default settings
-
-${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/defconf set glog tab102b_enable 0
+#${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/defconf set glog tab102b_enable 0
 
 ${STRIP} sfx
 

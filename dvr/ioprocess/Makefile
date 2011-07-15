@@ -8,8 +8,8 @@ include $(PROJDIR)/arm_tool
 EXTHEADERS=../cfg.h ../dvrsvr/cfg.h ../dvrsvr/genclass.h
 EXTSOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp
 
-SOURCES=ioprocess.cpp diomap.cpp mcu.cpp netdbg.cpp gforce.cpp
-HEADERS=diomap.h netdbg.h mcu.h gforce.h
+SOURCES=ioprocess.cpp diomap.cpp mcu.cpp netdbg.cpp gforce.cpp iomisc.cpp
+HEADERS=diomap.h netdbg.h mcu.h gforce.h iomisc.h
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 

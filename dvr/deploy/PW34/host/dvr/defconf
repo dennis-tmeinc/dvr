@@ -10,7 +10,7 @@ mfid=MF0001
 
 keylogfile=tvslog.txt
 
-totalcamera=2
+totalcamera=4
 
 # IO shared memory mapping file
 iomapfile=/var/dvr/dvriomap
@@ -527,7 +527,6 @@ startchannel=0
 keepcapture=1
 resource=/dav/dvr/resource
 
-nostartmenu=1
 [pwii]
 front=0
 rear=1

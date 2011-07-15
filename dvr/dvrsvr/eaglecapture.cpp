@@ -435,7 +435,7 @@ void eagle_capture::setosd( struct hik_osd_type * posd )
                           posd->lines,
                           osdformat );
         EnableOSD(m_hikhandle, 1);		// enable OSD
-        if( m_dspdatecounter > g_timetick || (g_timetick-m_dspdatecounter)>60000 ) {
+        if( m_dspdatecounter > g_timetick || (g_timetick-m_dspdatecounter)>30000 ) {
             struct dvrtime dvrt ;
             struct SYSTEMTIME nowt ;
             m_dspdatecounter = g_timetick ;

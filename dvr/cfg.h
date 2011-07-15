@@ -9,12 +9,11 @@
 //#define MDVR_APP
 #define PWII_APP
 //#define TVS_APP
-#define PWZEUS_APP
 
 //#define EAGLESVR
 
 // option to enable ioprocess display mcu debugging message
-#define MCU_DEBUG  (1)
+// #define MCU_DEBUG  (1)
 
 // to enable dvrsvr network message
 // #define NETDBG
@@ -24,7 +23,7 @@
 
 #endif
 
-#define	APPNAME	"PWZ"
+#define	APPNAME	"PW34"
 
 // default config file
 #define	CFG_DEFFILE	"/davinci/dvr/defconf" 

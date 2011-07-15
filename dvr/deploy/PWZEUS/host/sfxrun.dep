@@ -75,7 +75,7 @@ if [ -n "${FWUPDMSG}" ] ; then
     echo "Firmware update success." >> ${FWUPDMSG}
     echo "New firmware version:" >> ${FWUPDMSG}
     cat /davinci/dvr/firmwareid >> ${FWUPDMSG} 
-    echo "Resetting system......" >> ${FWUPDMSG}
+    echo "Rebooting system......" >> ${FWUPDMSG}
     /davinci/dvr/ioprocess -reboot 5
 else 
     echo "Firmware update success."

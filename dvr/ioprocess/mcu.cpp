@@ -38,7 +38,6 @@ static int  mcu_buffer_pointer ;
 int mcu_handle = 0 ;
 int mcu_baud = 115200 ;
 char mcu_dev[100] = "/dev/ttyS1" ;
-int mcupowerdelaytime = 0 ;
 unsigned int mcu_doutputmap ;
 int mcu_inputmissed ;
 int output_inverted=0 ;
@@ -822,7 +821,7 @@ void mcu_initsensor2(int invert)
 // initialize sensor power on control (PW34)
 void mcu_sensorinvmap(int sensorinvmap)
 {
-	mcu_cmd(NULL, MCU_CMD_SENSOR23,1, 0x80 | sensorinvmap );
+	mcu_cmd(NULL, MCU_CMD_SENSORINVMAP,1, 0x80 | sensorinvmap );
 }
 
 // return 1: success
@@ -849,18 +848,17 @@ int mcu_w_rtc(time_t tt)
 void mcu_poweroffdelay(int delay)
 {
 	int rsize ;
-    int inc ;
+    int inc=1 ;
     char rsp[MCU_MAX_MSGSIZE] ;
-    if( mcupowerdelaytime < delay ) {
-        inc = delay-mcupowerdelaytime ;
-        rsize = mcu_cmd(rsp, MCU_CMD_POWEROFFDELAY, 2, inc/256, inc%256 );
-    }
-    else {
-        rsize = mcu_cmd(rsp, MCU_CMD_POWEROFFDELAY, 2, 0, 0 );
-    }
+	rsize = mcu_cmd(rsp, MCU_CMD_POWEROFFDELAY, 2, 0, 0 );
     if( rsize>0 ) {
-        mcupowerdelaytime = ((unsigned)(rsp[5]))*256+((unsigned)rsp[6]) ;
-        netdbg_print("extend mcu power for %ds remain %ds\n", delay, mcupowerdelaytime );
+		int remaintime = (int)(((unsigned)(rsp[5]))*256+((unsigned)rsp[6])) ;
+        netdbg_print("Mcu power remain %d seconds\n", remaintime );
+		if( remaintime < delay ) {
+			inc = delay-remaintime ;
+	        mcu_cmd(rsp, MCU_CMD_POWEROFFDELAY, 2, inc/256, inc%256 );
+	        netdbg_print("Mcu power increase %d seconds\n", inc );
+		}
     }
 }
 
@@ -1289,17 +1287,17 @@ unsigned int mcu_pwii_ouputstatus()
     unsigned int outputmap = 0 ;
 	char rsp[MCU_MAX_MSGSIZE] ;
     if( mcu_pwii_cmd(rsp, PWII_CMD_OUTPUTSTATUS, 2, 0, 0 )>0 ) {
-        if( rsp[6] & 1 ) outputmap|=1 ;        // C1 LED
-        if( rsp[6] & 2 ) outputmap|=2 ;        // C2 LED
-        if( rsp[6] & 4 ) outputmap|=4 ;        // MIC
-        if( rsp[6] & 0x10 ) outputmap|=8 ;     // Error
-        if( rsp[6] & 0x20 ) outputmap|=0x10 ;  // POWER LED
-        if( rsp[6] & 0x40 ) outputmap|=0x20 ;  // BO_LED
-        if( rsp[6] & 0x80 ) outputmap|=0x40 ;  // Backlight LED
+        if( rsp[6] & 1 ) outputmap|=PWII_LED_C1 ;        // C1 LED
+        if( rsp[6] & 2 ) outputmap|=PWII_LED_C2 ;        // C2 LED
+        if( rsp[6] & 4 ) outputmap|=PWII_LED_MIC ;           // MIC
+        if( rsp[6] & 0x10 ) outputmap|=PWII_LED_ERROR ;      // Error
+        if( rsp[6] & 0x20 ) outputmap|=PWII_LED_POWER ;      // POWER LED
+        if( rsp[6] & 0x40 ) outputmap|=PWII_LED_BO ;  	 	 // BO_LED
+        if( rsp[6] & 0x80 ) outputmap|=PWII_LED_BACKLIGHT ;  // Backlight LED
         
-        if( rsp[5] & 1 ) outputmap|=0x800 ;    // LCD POWER
-        if( rsp[5] & 2 ) outputmap|=0x200 ;    // GPS POWER
-        if( rsp[5] & 4 ) outputmap|=0x400 ;    // RF900 POWER
+        if( rsp[5] & 1 ) outputmap|=PWII_POWER_LCD ;      // LCD POWER
+        if( rsp[5] & 2 ) outputmap|=PWII_POWER_GPS ;      // GPS POWER
+        if( rsp[5] & 4 ) outputmap|=PWII_POWER_RF900 ;    // RF900 POWER
     }
     return outputmap ;
 }
