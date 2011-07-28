@@ -403,7 +403,7 @@ int disk_listday(array <f264name> & flist, struct dvrtime * day, int channel)
     if( flist.size()<2 ) {
         return flist.size();
     }
-    
+
     // remove duplicated files
     int i ;
     struct dvrtime t1, t2 ;
@@ -417,7 +417,12 @@ int disk_listday(array <f264name> & flist, struct dvrtime * day, int channel)
         l2 = f264length(  flist[i] );
         ch2 = f264channel( flist[i] );
         if( t1==t2 && l1==l2 && ch1==ch2 ) {
-            flist.remove(i);
+			if( strstr( flist[i], disk_base )!=NULL ) {			// prefer to use (keep) recording disk
+            	flist.remove(i-1);
+			}
+			else {
+            	flist.remove(i);
+			}
         }
         else {
             t1 = t2 ;

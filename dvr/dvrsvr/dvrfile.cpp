@@ -404,7 +404,7 @@ int dvrfile::readframe(void * framebuf, size_t bufsize)
                     }
                 }
                 else if( (sync&0xffffff00)!=0x00000100 ) {      // other pack could be 0x000001bc, a key frame tag
-                    dvr_log( "Un-recogized frame detected!" );
+                    dvr_log( "Readframe : Un-recogized frame detected!" );
                     return 0 ;
                 }
                 if( esize ) {

@@ -1648,7 +1648,7 @@ int main(int argc, char * argv[])
                     
                     if( ( p_dio_mmap->iomode==IOMODE_RUN ||
                         p_dio_mmap->iomode==IOMODE_SHUTDOWNDELAY ) &&
-                        ++hdpower>hd_timeout*2 )                // 120 seconds, sometimes it take 100s to mount HD(CF)
+                        ++hdpower>hd_timeout*2 )                		// 120 seconds, sometimes it take 100s to mount HD(CF)
                     {
                         dvr_log("Hard drive failed, system reset!");
                         buzzer( 10, 250, 250 );
