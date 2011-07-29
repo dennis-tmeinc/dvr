@@ -1245,11 +1245,12 @@ void cap_uninit()
 	eagle32_uninit ();
 #endif	
     if( cap_channels > 0 ) {
+		i=cap_channels-1 ;
         cap_channels=0 ;
-    }
-    for( i=0; i<cap_channels; i++ ) {
-        if( cap_channel[i] ) {
-            delete cap_channel[i] ;
+	    for( ; i>=0; i-- ) {
+	        if( cap_channel[i] ) {
+	            delete cap_channel[i] ;
+			}
         }
     }
 	delete [] cap_channel ;
