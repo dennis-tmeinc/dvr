@@ -41,7 +41,7 @@ pidfile=/var/dvr/dvrsvr.pid
 mountdir=/var/dvr/disks
 
 # where to search playback video files
-playbackdir=/var/dvr
+playbackdir=/var/dvr/disks
 
 # where are archive files
 archivedir=/var/dvr/arch
