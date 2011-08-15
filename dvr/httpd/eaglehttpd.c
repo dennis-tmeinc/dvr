@@ -470,6 +470,7 @@ int cgi_run()
         int hcgifile = open(cgibuf, O_RDWR|O_CREAT, S_IRWXU );
         if( hcgifile ) {
             dup2( hcgifile, 1 ) ;
+            dup2( hcgifile, 2 ) ;
             close( hcgifile );
         }
         // cgi file name
@@ -936,7 +937,8 @@ void smallssi_run()
     fflush(stdout);
 
     // save old stdout
-    int orgstdout = dup(1);
+    int oldstdout = dup(1);
+    int oldstderr = dup(2);
 
     // set ssi output file
     sprintf( ssioutfile, "%s/ssiout%d", document_root, getpid() );
@@ -944,14 +946,19 @@ void smallssi_run()
     
     int hssifile = open(ssioutfile, O_RDWR|O_CREAT, S_IRWXU );
     dup2( hssifile, 1 ) ;
+    dup2( hssifile, 2 ) ;
     close( hssifile );
 
     smallssi_include_file( ssiname );
     
     // restore stdout
     fflush( stdout );
-    dup2( orgstdout, 1 );
-    close( orgstdout );
+	
+    dup2( oldstdout, 1 );
+	close( oldstdout );
+
+    dup2( oldstderr, 2 );
+    close( oldstderr );
 
     // add IE document mode support
     http_setheader("X-UA-Compatible", "IE=EmulateIE8" );
