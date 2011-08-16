@@ -53,6 +53,7 @@ sfxrun.upd sfxrun
 ./dvr/dvrsvr
 ./dvr/inetd.conf
 ./dvr/glog
+./dvr/defconf
 ./dvr/tdevhotplug
 ./dvr/resource
 ./dvr/resource/play.pic

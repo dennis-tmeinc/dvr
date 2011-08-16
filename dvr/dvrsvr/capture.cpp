@@ -1254,6 +1254,7 @@ void cap_uninit()
         }
     }
 	delete [] cap_channel ;
+	cap_channel=NULL ;
     // un initialize local capture card
     dvr_log("Capture card uninitialized.");
 }

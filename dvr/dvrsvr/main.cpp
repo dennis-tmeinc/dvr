@@ -93,6 +93,7 @@ int dvr_log(const char *fmt, ...)
     if( logfilename[0]==0 ) {
         if (rec_basedir.length() > 0) {
             sprintf(logfilename, "%s/_%s_/%s", (char *)rec_basedir, (char *)g_servername, (char *)logfile);
+            unlink(VAR_DIR"/dvrlogfile");
             symlink(logfilename, VAR_DIR"/dvrlogfile");
             dvr_cleanlogfile(logfilename);
         }
@@ -152,6 +153,7 @@ static FILE * dvr_logkey_file()
     if( logfilename[0]==0 ) {
         if (rec_basedir.length() > 0) {
             sprintf(logfilename, "%s/_%s_/%s", (char *)rec_basedir, (char *)g_servername, (char *)keylogfile);
+            unlink(VAR_DIR"/tvslogfile" );
             symlink(logfilename, VAR_DIR"/tvslogfile" );
             dvr_cleanlogfile(logfilename);
             lfile=fopen(logfilename,"a");

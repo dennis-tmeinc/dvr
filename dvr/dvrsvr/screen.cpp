@@ -1653,7 +1653,7 @@ int screen_key( int keycode, int keydown )
 */
 #endif    
     else if( topwindow ) {
-        dvr_log("Key code 0x%02x %s.", keycode, keydown?"pressed":"released" );
+//        dvr_log("Key code 0x%02x %s.", keycode, keydown?"pressed":"released" );
         topwindow->key( keycode, keydown );
     }
     return 0;

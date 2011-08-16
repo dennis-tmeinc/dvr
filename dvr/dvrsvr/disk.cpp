@@ -1381,9 +1381,7 @@ void disk_check()
 				dvr_log("Setup server name from media disk: %s", (char *)g_servername);
 			}
 #endif
-
 			dvr_log("Start recording on disk : %s.", basename(rec_basedir)) ;
-
 		}
     }
 disk_check_finish:

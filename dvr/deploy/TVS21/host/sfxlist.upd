@@ -28,6 +28,7 @@
 ./dvr/dropbear dvr/sshd
 ./dvr/rsa_host_key
 ./dvr/librt-0.9.28.so
+./dvr/defconf
 ./dvr/resource
 ./dvr/resource/arrow.cursor
 ./dvr/resource/mono18.font
