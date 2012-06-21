@@ -350,84 +350,84 @@ class array {
 // string and string list
 // string functions
 class string {
-    protected:
-        char *m_str;
-		void setstring(const char *str){
-			if( m_str ) {
-				delete [] m_str ;
-				m_str = NULL ;
-			}
-            if( str ) {
-                m_str=new char [strlen(str)+1];
-                strcpy(m_str, str);
+protected:
+    char *m_str;
+    void setstring(const char *str){
+        if( m_str ) {
+            delete [] m_str ;
+            m_str = NULL ;
+        }
+        if( str ) {
+            m_str=new char [strlen(str)+1];
+            strcpy(m_str, str);
+        }
+    }
+    char *getstring(){
+        if( m_str==NULL ) {
+            setstring(EMPTY_STRING);
+        }
+        return m_str;
+    }
+public:
+    string(){
+        m_str=NULL;
+    }
+    string(const char *str) {
+        m_str=NULL;
+        setstring(str);
+    }
+    string(string & str) {
+        m_str=NULL;
+        setstring(str.getstring());
+    }
+    ~string() {
+        if( m_str ) {
+            delete [] m_str ;
+        }
+    }
+
+    operator char * (){
+        return getstring() ;
+    }
+
+    string & operator =(const char *str) {
+        setstring(str);
+        return *this;
+    }
+
+    string & operator =( string & str ) {
+        setstring((char *)str);
+        return *this;
+    }
+
+    int length(){
+        if( m_str ) {
+            return strlen(m_str);
+        }
+        else {
+            return 0 ;
+        }
+    }
+    // make buffer not less then given size
+    char * setbufsize(int nsize){
+        if( length()<nsize ) {
+            char * nbuf = new char [nsize+1] ;
+            strcpy( nbuf, getstring() );
+            if( m_str ) {
+                delete [] m_str ;
             }
+            m_str = nbuf ;
         }
-        char *getstring(){
-			if( m_str==NULL ) {
-				setstring(EMPTY_STRING);
-			}
-            return m_str;
+        return getstring() ;
+    }
+    int isempty() {
+        if( m_str ) {
+            return (m_str[0] == 0);
         }
-    public:
-		string(){
-			m_str=NULL;
-		}
-		string(const char *str) {
-			m_str=NULL;
-			setstring(str);
-		}
-		string(string & str) {
-			m_str=NULL;
-			setstring(str.getstring());
-		}
-		~string() {
-			if( m_str ) {
-            	delete [] m_str ;
-			}
+        else {
+            return 1;
         }
-
-		operator char * (){
-			return getstring() ;
-		}
-
-        string & operator =(const char *str) {
-			setstring(str);
-            return *this;
-        }
-
-        string & operator =( string & str ) {
-			setstring((char *)str);
-            return *this;
-        }
-
-        int length(){
-			if( m_str ) {
-				return strlen(m_str);
-			}
-			else {
-				return 0 ;
-			}
-        }
-		// make buffer not less then given size
-        char * setbufsize(int nsize){
-			if( length()<nsize ) {
-				char * nbuf = new char [nsize+1] ;
-				strcpy( nbuf, getstring() );
-				if( m_str ) {
-					delete [] m_str ;
-				}
-				m_str = nbuf ;
-			}
-			return getstring() ;
-		}
-        int isempty() {
-			if( m_str ) {
-				return (m_str[0] == 0);
-			}
-			else {
-				return 1;
-			}
-        }
+    }
 };
 
 inline int operator < ( string & s1, string & s2 ) {

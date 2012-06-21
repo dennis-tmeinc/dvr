@@ -111,7 +111,7 @@ void setdio(int onoff)
     }
 }
 
-float g_cpu_usage = 0.0 ;
+volatile float g_cpu_usage = 0.0 ;
 
 static void cpu_usage()
 {
@@ -140,27 +140,22 @@ int event_check()
     static int timer_1s ;
     int ev = dio_check() || screen_io() ;
 
-#ifndef NO_ONBOARD_EAGLE
-    // check jpeg capturing
-    eagle_captureJPEG();
-#endif
-	
     if( ev ||
         g_timetick-timer_1s > 1000 ||
-        g_timetick<timer_1s ) 
+        g_timetick<timer_1s )
     {
         // check sensors
         for(i=0; i<num_sensors; i++ ) {
             sensors[i]->check();
         }
-       
+
         // update decoder screen (OSD)
         for(i=0; i<cap_channels; i++ ) {
             cap_channel[i]->update(1);
         }
         
         // update recording status
-        rec_update();		
+        rec_update();
 
         // clear alarm value.
         for(i=0; i<num_alarms; i++) {
@@ -173,14 +168,14 @@ int event_check()
         }
 
         // update recording alarm
-        rec_alarm();		
+        rec_alarm();
         
         videolost=0;
         videodata=1 ;
-		for(i=0; i<cap_channels; i++ ) {
+        for(i=0; i<cap_channels; i++ ) {
             int ch_state = 0 ;
 
-			if( cap_channel[i]->enabled() ) {
+            if( cap_channel[i]->enabled() ) {
                 if( cap_channel[i]->getsignal() ) {
                     ch_state |= 1 ;             // bit 0: signal avaiable
                 }
@@ -199,10 +194,10 @@ int event_check()
                 if( cap_channel[i]->getmotion() ) {
                     ch_state |= 4 ;
                 }
-			}
+            }
             dio_setchstat( i, ch_state );
-	    }
-		// set video lost led
+        }
+        // set video lost led
         if( videolost ) {
             dio_setstate(DVR_VIDEOLOST) ;
         }
@@ -269,7 +264,7 @@ int event_check()
 
             if( cycle==0 ) {
                 time_now(&cycletime) ;
-            }            
+            }
             if( cycle==0 || diskready!=disk || videodata!=video ) {
                 cycle=1 ;
                 disk=diskready ;
@@ -277,10 +272,10 @@ int event_check()
                 sprintf(sysbuf, "/home/%s",  cyclefile.getstring() );
                 xfile=fopen(sysbuf, "w");
                 if( xfile ) {
-                    fprintf( xfile, "%02d:%02d:%02d \t%d \t%d\r\n", 
-                            cycletime.hour, cycletime.minute, cycletime.second,
-                            disk,
-                            video );
+                    fprintf( xfile, "%02d:%02d:%02d \t%d \t%d\r\n",
+                             cycletime.hour, cycletime.minute, cycletime.second,
+                             disk,
+                             video );
                     fclose( xfile );
                     sprintf(sysbuf, "cd /home ; "APP_DIR"/tmefile p %s %s ", cyclefile.getstring(), cycleserver.getstring() );
                     system(sysbuf);

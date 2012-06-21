@@ -6,7 +6,6 @@ serial=900001
 hostname=ZEUS
 id1=ZEUS
 id2=ZEUS
-mfid=MF0001
 
 keylogfile=tvslog.txt
 
@@ -19,17 +18,19 @@ timezone=US/Eastern
 
 # encrypt file?
 fileencrypt=1
-filepassword=tYd8uOHXJfNmb2wi--Eg-iFRdFIA1V-giKkJ-OINT0aYSxSOB0Sf-e3TvbNftrvVT7S+4jkWF2BRrMe5Hd3Y6lYDaADUT+7M+M9Vq0SV4SzMoKTuhCSQGU5jcfBJfvoM7r6aIT8gyS9jT1-Ht2xvHEs3ht9Q4oshKucI19AifwL8kyn6ubHxVxnAbFrmRERA8xZInPLUA1rKUtBIMKYsB8GW9b2opQbC1kpWHdjZ0Yem9DOrHr-ZgH0PnKgykDHKalI7p4HiuW6+gKqeckRRoZIG27X6d3OnlvQQpsnO5EOdvNFN2tGSdgc3KWPkMUZUWgMpVqNbOHPgd8u4yFFbO0
+filepassword=yANQSGgfUJLYf7How6uj8fPDGxHTLVYxzcU+rY6hRszieeaYf8xitytGr4NpK6j3dWhLp77PPfqSyW59HvJWF+ufYIhHMic-wZsChLqv1JgNNDT4Om6kEWTdrL0hACiqZglBviUfmz7LB8TRTpDUgnjZ+mt7H5gm4Q5AxYL9vjROuoHqr+MV5rgQvoMsi1WwdH7-jF36J+IgQrip3J2gVslKNUY0NrRjdXhfU4jWZr1pbZ2mfPeogfwswMpv8BYg60ulJN6Lh8FAvUFid9bh3UT3rNxpVt4XWaxJOMVWtrpKga0kDt9sR6+Vvl81S6HjIN3w7BOnS2boCeK1wIXy+3
+mfid=MF5000
 
 #do not decrypt file automatically
 file_nodecrypt=1
 
 #temperary log file when usb disk is not accessable
-temp_logfile=/davinci/dvrlog
+temp_logfile=/var/dvr/tmpdvrlog
+temp_logsize=100000
 
 #logfile name on usb disk
 logfile=dvrlog.txt
-logfilesize=1000000
+logfilesize=2000000
 
 # current recording disk
 currentdisk=/var/dvr/dvrcurdisk
@@ -49,7 +50,6 @@ archivedir=/var/dvr/arch
 #minimum free disk space
 # last letter: M=megabytes, K=kilobytes, B=bytes
 mindiskspace=100M
-
 #minimum free disk space percentage
 mindiskspace_percent=10
 
@@ -61,7 +61,7 @@ maxfilesize=200M
 maxfilelength=3600
 
 # file buffer size
-filebuffersize=512k
+filebuffersize=1024k
 
 # low memory. (minimum free memory required. ) (kb)
 lowmemory=15000
@@ -71,8 +71,8 @@ lockfile_percentage = 99
 
 #shutdown delay time in seconds
 shutdowndelay=20
-uploadingtime=1800
-archivetime=1800
+uploadingtime=9000
+archivetime=9000
 standbytime=1800
 
 norecplayback=0
@@ -81,8 +81,8 @@ noreclive=0
 lock_all=0
 
 # lock file setting
-prelock=150
-postlock=150
+prelock=30
+postlock=10
 
 wifi_on=0
 
@@ -108,14 +108,17 @@ wifi_key=wifi
 enable=0
 #serial port connected to PTZ camera
 device=/dev/ttyS0
-baudrate=255
+baudrate=2400
 # protocol, "D" for pelco-D, "P" for pelco-P
 protocol=D
 
 
 # camera number start from 1
 [camera1]
-channel=4
+# camera name
+name=Front
+channel=3
+type=1
 show_gforce=1
 # force recording on
 forcerecordontime = 7200
@@ -151,9 +154,9 @@ showgps=1
 gpsunit=0
 
 # pre-recording time in seconds
-prerecordtime=10
+prerecordtime=30
 # post-recording time in seconds
-postrecordtime=30
+postrecordtime=10
 
 # show sensor on OSD
 sensorosd1=1
@@ -207,9 +210,6 @@ recordmode=1
 # disable audio
 disableaudio=0
 
-# camera name
-name=Front
-
 # enable this camera
 enable=1
 # enable GPS message on OSD
@@ -223,7 +223,8 @@ ptzaddr=2
 
 [camera2]
 name=Rear
-channel=3
+channel=2
+type=1
 enable=1
 show_gforce=1
 forcerecordontime = 7200
@@ -245,8 +246,8 @@ gpsunit=0
 showgps=1
 show_vri=1
 show_policeid=1
-postrecordtime=30
-prerecordtime=10
+prerecordtime=30
+postrecordtime=10
 sensorosd1=1
 trigger1=1
 sensorosd2=1
@@ -278,7 +279,8 @@ gpsen=1
 
 [camera3]
 name=Camera3
-channel=2
+channel=1
+type=1
 enable=0
 show_gforce=1
 forcerecordontime = 7200
@@ -300,8 +302,8 @@ gpsunit=0
 showgps=1
 show_vri=1
 show_policeid=1
-postrecordtime=30
-prerecordtime=10
+prerecordtime=30
+postrecordtime=10
 sensorosd1=1
 trigger1=1
 sensorosd2=1
@@ -332,7 +334,8 @@ gpsen=1
 
 [camera4]
 name=Camera4
-channel=1
+channel=0
+type=1
 enable=0
 show_gforce=1
 forcerecordontime = 7200
@@ -354,8 +357,8 @@ gpsunit=0
 showgps=1
 show_vri=1
 show_policeid=1
-postrecordtime=30
-prerecordtime=10
+prerecordtime=30
+postrecordtime=10
 sensorosd1=1
 trigger1=1
 sensorosd2=1
@@ -385,16 +388,15 @@ ptzaddr=2
 gpsen=1
 
 [timezones]
-# www.timeanddate.com
+Custom=EST+5EDT+4,M3.2.0,M11.1.0
 UTC=UTC Coordinated Universal Time
-GMT=GMT Greenwich Mean Time
-Canada/Newfoundland=NST+3:30NDT+2:30,M3.2.0/2,M11.1.0/2 (GMT-3:30) St. John's, Newfoundland and Labrador
-Canada/Atlantic=AST+4:00ADT+3:00,M3.2.0/2,M11.1.0/2 (GMT-4:00) Halifax, Nova Scotia
-Canada/Eastern=EST+5EDT+4,M3.2.0/2,M11.1.0/2 (GMT-5:00)
+Canada/Newfoundland=NST+3:30NDT+2:30,M3.2.0,M11.1.0 (GMT-3:30) St. John's
+Canada/Atlantic=AST+4:00ADT+3:00,M3.2.0/2,M11.1.0/2 (GMT-4:00) Halifax
+Canada/Eastern=EST+5EDT+4,M3.2.0/2,M11.1.0/2 (GMT-5:00) Toronto, Ottawa
 Canada/Central=CST+6CDT+5,M3.2.0/2,M11.1.0/2 (GMT-6:00)
 Canada/East-Saskatchewan=CST+6CDT+5,M3.2.0/2,M11.1.0/2 (GMT-6:00)
-Canada/Saskatchewan=CST+6:00 (GMT-6:00) Regina, Saskatchewan
-Canada/Mountain=MST+7MDT+6,M3.2.0/2,M11.1.0/2 (GMT-7:00) Edmonton, Alberta
+Canada/Saskatchewan=CST+6:00 (GMT-6:00) Regina
+Canada/Mountain=MST+7MDT+6,M3.2.0/2,M11.1.0/2 (GMT-7:00) Edmonton
 Canada/Pacific=PST+8PDT+7,M3.2.0/2,M11.1.0/2 (GMT-8:00)
 Canada/Yukon=PST+8PDT+7,M3.2.0/2,M11.1.0/2 (GMT-8:00)
 US/Eastern=EST+5EDT+4,M3.2.0/2,M11.1.0/2 (GMT-5:00) New York
@@ -408,9 +410,17 @@ US/Pacific=PST+8PDT+7,M3.2.0/2,M11.1.0/2 (GMT-8:00) Los Angeles, California
 US/Alaska=AKST+9AKDT+8,M3.2.0/2,M11.1.0/2 (GMT-9:00) Anchorage, Alaska
 US/Aleutian=HAST+10HADT+9,M3.2.0/2,M11.1.0/2 (GMT-10:00) Adak, Alaska
 US/Hawaii=HST+10 (GMT-10:00) Honolulu, Hawaii
-Mexico/General=CST+6CDT+5,M4.1.0/2,M10.4.0/2 (GMT-6:00) Mexico City, Federal District
-Mexico/BajaSur=MST+7MDT+6,M4.1.0/2,M10.4.0/2 (GMT-7:00) Chihuahua, Chihuahua
-Mexico/BajaNorte=PST+8PDT+7,M4.1.0/2,M10.4.0/2 (GMT-8:00) Tijuana, Baja California
+Mexico/General=CST+6CDT+5,M4.1.0/2,M10.4.0/2 (GMT-6:00) Mexico City
+Mexico/BajaSur=MST+7MDT+6,M4.1.0/2,M10.4.0/2 (GMT-7:00) Chihuahua
+Mexico/BajaNorte=PST+8PDT+7,M4.1.0/2,M10.4.0/2 (GMT-8:00) Tijuana
+Australia/ChristmasIsland=CXT-7 (GMT+7:00) Christmas Island
+Australia/West=WST-8 (GMT+8:00) Perth
+Australia/North=CST-9:30 (GMT+9:30) Darwin
+Australia/South=CST-9:30CDT-10:30,M10.1.0,M4.1.0 (GMT+9:30) Adelaide
+Australia/Queensland=EST-10 (GMT+10:00) Brisbane
+Australia/East=EST-10EDT-11,M10.1.0,M4.1.0 (GMT+10:00) Canberra, Melbourne, Sydney
+Australia/LordHowe=LHST-10:30LHDT-11,M10.1.0,M4.1.0 (GMT+10:30) Lord Howe Island
+Australia/Norfolk=NFT-11:30 (GMT+11:30) Norfolk Island
 
 # parameters for io module
 [io]
@@ -488,7 +498,7 @@ gpsdisable=0
 serialport=/dev/ttyUSB1
 serialbaudrate=4800
 
-gforce_log_enable=1
+gforce_log_enable=0
 tab102b_enable=0
 
 #convert parameter 1km ~= 0.012 degree
@@ -527,6 +537,8 @@ cliptime=86400
 startchannel=0
 keepcapture=1
 resource=/dav/dvr/resource
+nostartmenu=1
+nomenu=1
 
 [pwii]
 front=0

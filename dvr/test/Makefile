@@ -15,7 +15,7 @@ HEADERS=
 OBJS = $(patsubst %.c, %.o, $(SOURCES))
 
 #LDFLAGS= -lpthread -lstdc++ -L../dvrsvr/eagle32 -lsdk -ldadsp ../dvrsvr/eagle32/dsplink.lib 
-LDFLAGS= -static -lstdc++
+LDFLAGS= -lstdc++
 
 #CFLAGS=-I../dvrsvr -g -Wall
 CFLAGS=-g -Wall 
@@ -45,6 +45,17 @@ hostname : hostname.c
 	$(CC) $(CFLAGS) -o hostname hostname.c
 	cp hostname  $(debug_folder)
 
+test : test.cpp
+	$(CC) $(CFLAGS) $(LDFLAGS) -o test test.cpp
+	cp test  $(debug_folder)/tttest
+
+
+fcptest : fcptest.cpp
+	$(CC) $(CFLAGS) $(LDFLAGS) -o fcptest fcptest.cpp
+	cp fcptest  $(debug_folder)/fcptest
+
+chroot : chroot.c
+	$(CC) -static -Wall -g -o chroot chroot.c
 
 %.o : %.c $(HEADERS) $(EXTHEADERS)
 	$(CC) -g -Wall -c $< -o $@

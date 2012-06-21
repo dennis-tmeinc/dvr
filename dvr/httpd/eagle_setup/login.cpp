@@ -15,7 +15,7 @@
 int decode(const char * in, char * out, int osize );
 char * getquery( const char * qname );
 
-char serfile[]="/tmp/wwwserialnofile" ;
+char serfile[]=WWWSERIALFILE;
 char * makeserialno( char * buf, int bufsize ) 
 {
     time_t t ;

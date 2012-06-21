@@ -164,19 +164,13 @@ void dvr_getjpeg()
     struct dvr_ans ans ;
     int sockfd ;
     int s, r ;
-    FILE * portfile ;
     int port ;
     char * qv ;
     int ch, jpeg_quality, jpeg_pic ;
     char buf[2000] ;
     
-    port=15112 ;
-    portfile = fopen("dvrsvr_port", "r");
-    if( portfile ) {
-        fscanf(portfile, "%d", &port);
-        fclose(portfile);
-    }
-	
+    port=15159 ;
+
     sockfd = net_connect("127.0.0.1", port);
     if( sockfd>0 ) {
 

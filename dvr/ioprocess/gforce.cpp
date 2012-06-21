@@ -62,7 +62,6 @@ Vihecle direction :
 
 #include "../cfg.h"
 
-#include "../dvrsvr/eagle32/davinci_sdk.h"
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
 #include "netdbg.h"
@@ -299,32 +298,32 @@ static void direction_convertor( int &x, int &y, int &z, int direction, int reve
 {
     int cx, cy, cz ;
     if( revert==0 ) {
-        cx = 
-            g_convert[direction][0][0] * x + 
-            g_convert[direction][0][1] * y + 
-            g_convert[direction][0][2] * z ;
-        cy = 
-            g_convert[direction][1][0] * x + 
-            g_convert[direction][1][1] * y + 
-            g_convert[direction][1][2] * z ;
-        cz = 
-            g_convert[direction][2][0] * x + 
-            g_convert[direction][2][1] * y + 
-            g_convert[direction][2][2] * z ;
+        cx =
+                g_convert[direction][0][0] * x +
+                g_convert[direction][0][1] * y +
+                g_convert[direction][0][2] * z ;
+        cy =
+                g_convert[direction][1][0] * x +
+                g_convert[direction][1][1] * y +
+                g_convert[direction][1][2] * z ;
+        cz =
+                g_convert[direction][2][0] * x +
+                g_convert[direction][2][1] * y +
+                g_convert[direction][2][2] * z ;
     }
     else {
-        cx = 
-            g_convert[direction][0][0] * x + 
-            g_convert[direction][1][0] * y + 
-            g_convert[direction][2][0] * z ;
-        cy = 
-            g_convert[direction][0][1] * x + 
-            g_convert[direction][1][1] * y + 
-            g_convert[direction][2][1] * z ;
-        cz = 
-            g_convert[direction][0][2] * x + 
-            g_convert[direction][1][2] * y + 
-            g_convert[direction][2][2] * z ;
+        cx =
+                g_convert[direction][0][0] * x +
+                g_convert[direction][1][0] * y +
+                g_convert[direction][2][0] * z ;
+        cy =
+                g_convert[direction][0][1] * x +
+                g_convert[direction][1][1] * y +
+                g_convert[direction][2][1] * z ;
+        cz =
+                g_convert[direction][0][2] * x +
+                g_convert[direction][1][2] * y +
+                g_convert[direction][2][2] * z ;
     }
     x=cx ;
     y=cy ;

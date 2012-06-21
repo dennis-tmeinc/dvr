@@ -5,26 +5,29 @@
 include ../config
 include $(PROJDIR)/arm_tool
 
+DROPBEARTARFILE=dropbear-0.53.1.tar.bz2
+DROPBEARDIR=dropbear-0.53.1
+
 default: dropbear
 
 src:
-	tar xvjf dropbear-0.52.tar.bz2
+	tar xvjf $(DROPBEARTARFILE)
 	echo 1 > src
 
 cfg: src
-	cd dropbear-0.52 ; ./configure --host=arm --disable-zlib --disable-openpty
-	cp options.h dropbear-0.52/
+	cd $(DROPBEARDIR) ; ./configure --host=arm --disable-zlib --disable-openpty
+	cp options.h $(DROPBEARDIR)/
 	echo 1 > cfg
    
 dropbear: cfg
-	cd dropbear-0.52 ; make PROGRAMS="dropbear"
-	cp dropbear-0.52/dropbear .
+	cd $(DROPBEARDIR) ; make PROGRAMS="dropbear"
+	cp $(DROPBEARDIR)/dropbear .
 	$(STRIP) dropbear
 
 dropbearkey: dropbear
-	cd dropbear-0.52 ; make dropbearkey
-	cp dropbear-0.52/dropbearkey .
+	cd $(DROPBEARDIR) ; make dropbearkey
+	cp $(DROPBEARDIR)/dropbearkey .
 
 clean:
-	rm -f -r dropbear-0.52
+	rm -f -r $(DROPBEARDIR)
 	rm -f dropbear dropbearkey cfg src

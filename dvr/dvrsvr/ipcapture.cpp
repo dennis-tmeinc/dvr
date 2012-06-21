@@ -1,8 +1,6 @@
 
 #include "dvr.h"
 
-#define IPCAMERAPORT 15115
-
 ipeagle32_capture::ipeagle32_capture( int channel )
 : capture(channel)
 {
@@ -15,20 +13,22 @@ ipeagle32_capture::ipeagle32_capture( int channel )
     m_streamthreadid = 0 ;
     m_type=CAP_TYPE_HIKIP;
     m_ipchannel = 0;
-    m_updcounter = 0;
     m_enable=0;
     
+    m_timesynctimer = g_timetick + 1000000 ;    // to make sure camera time be update right away
+    m_updtimer = 0 ;
+
     sprintf(cameraid, "camera%d", m_channel+1 );
     
     m_ip = dvrconfig.getvalue( cameraid, "ip" );
     if( m_ip.length()==0 ) {
-        return ;							// don't enable this channel without valid ip address
+		m_ip="127.0.0.1" ;				// default point to localhost
     }
     m_port = dvrconfig.getvalueint( cameraid, "port");
     if( m_port==0 ) {
-        m_port = IPCAMERAPORT ;
+        m_port = EAGLESVRPORT ;
     }
-    m_ipchannel = dvrconfig.getvalueint( cameraid, "ipchannel");
+    m_ipchannel = dvrconfig.getvalueint( cameraid, "channel");
     m_enable = m_attr.Enable ;
 }
 
@@ -278,53 +278,54 @@ void ipeagle32_capture::setosd( struct hik_osd_type * posd )
     }
 }
 
-// periodic called (0.125s)
+// periodic called
 void ipeagle32_capture::update(int updosd)
 {
-    struct dvrtime dvrt ;
-    int chstate ;
-    int mot ;
-    
     if( !m_enable ) {
         return ;
     }
-    
-    m_updcounter++ ;
     
     if( m_state==0 ) {
         start();
     }
     
     if( m_sockfd<=0 ) {
-        if( m_updcounter%80 == 0 && m_streamfd>0 ) {
+        if( m_streamfd>0 ) {
             // re-connect
             connect();
         }
-        m_signal = 0;
         return ;
     }
-    
-    if( m_updcounter%2400 == m_ipchannel*1200 ) {
-        // sync ip camera time
-        time_utctime( &dvrt );
-        if( dvr_adjtime(m_sockfd, &dvrt) == 0 ) {	// faile?
-            closesocket( m_sockfd );
-            m_sockfd = -1 ;
+    else {
+        if( g_timetick - m_timesynctimer>600000 || g_timetick - m_timesynctimer < 0 ) {
+            // sync ip camera time
+            struct dvrtime dvrt ;
+            time_utctime( &dvrt );
+            if( dvr_adjtime(m_sockfd, &dvrt) == 0 ) {	// faile?
+                closesocket( m_sockfd );
+                m_sockfd = -1 ;
+                return ;
+            }
+            m_timesynctimer = g_timetick ;
         }
-    }
-    else if( m_updcounter%9 == 0 ) {
-        chstate=dvr_getchstate (m_sockfd, m_ipchannel) ;
-        if( chstate == -1 ) {				// failed?
-            closesocket( m_sockfd );
-            m_sockfd = -1 ;
-            m_signal = 0 ;
-        }
-        else {
-            m_signal = chstate & 1 ;
-            mot = (chstate&2)!=0 ;
-            if( mot!=m_motion ) {
-                m_motion= mot ;
-                updosd=1 ;
+
+        if( g_timetick - m_updtimer>500 || g_timetick - m_updtimer < 0 ) {
+            // sync camera state
+            int chstate ;
+            chstate=dvr_getchstate (m_sockfd, m_ipchannel) ;
+            if( chstate == -1 ) {				// failed?
+                closesocket( m_sockfd );
+                m_sockfd = -1 ;
+                return ;
+            }
+            else {
+                int motion = (chstate&2)!=0 ;
+                if( motion!=m_motion ) {
+                    m_motion = motion ;
+                    updosd=1 ;
+                }
+                m_signal = chstate & 1 ;
+                m_updtimer = g_timetick ;
             }
         }
     }

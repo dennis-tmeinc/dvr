@@ -99,11 +99,6 @@ int net_onframe(cap_frame * pframe)
     return sends;
 }
 
-// process multicast message
-void net_mcmsg(void * msgbuf, int msgsize)
-{
-}
-
 // received UDP message
 void net_message()
 {
@@ -136,12 +131,6 @@ void net_message()
                 dts.tz[0]=0 ;
             }
             sendto(msgfd, &dts, sizeof(dts), 0, &(from.addr), from.addrlen);
-        }
-        else if (req == REQMSG ) {
-            msg_onmsg(msgbuf, msgsize, &from);
-        }
-        else if (req == REQMCMSG ) {
-            net_mcmsg(msgbuf, msgsize);
         }
         else if (strncmp(msgbuf, "iamserver", 9)==0) {
             // received response from a smartserver
@@ -384,9 +373,9 @@ int net_send(int sockfd, void * data, int datasize)
 // clean recv buffer
 void net_clean(int sockfd)
 {
-    char buf[2048] ;
+    char buf[256] ;
     while( net_recvok(sockfd, 0) ) {
-        if( recv(sockfd, buf, 2048, 0)<=0 ) {
+        if( recv(sockfd, buf, sizeof(buf), 0)<=0 ) {
             break;				// error
         }
     }
@@ -522,8 +511,6 @@ void *net_thread(void *param)
 
     net_lock();
     while (net_run == 1) {		// running?
-
-        msg_clean();			// clearn dvr_msg
         
         // setup select()
         FD_ZERO(&readfds);
@@ -698,8 +685,6 @@ void net_init(config &dvrconfig)
         net_smartserverport=49954 ;
     }
     
-    msg_init();
-    
     net_active = 0 ;
     net_run = 1;
     pthread_create(&net_threadid, NULL, net_thread, NULL);
@@ -726,6 +711,5 @@ void net_uninit()
     closesocket(msgfd);
     msgfd=0;
     dvr_log("Network uninitialized.");
-    msg_uninit();
     pthread_mutex_destroy(&net_mutex);
 }

@@ -10,12 +10,17 @@ var singlescreen=-1 ;
 var relo=0 ;
 var ser=1 ;
 
-var camera_number = <!--#include file="camera_number"--> ; 
+var camera_number = <!--#include file="camera_number"--> ;
 var camera_name = new Array();
-camera_name[0] = "<!--#exec cmd="/davinci/dvr/cfg get camera1 name" -->" ; 
-camera_name[1] = "<!--#exec cmd="/davinci/dvr/cfg get camera2 name" -->" ; 
-camera_name[2] = "<!--#exec cmd="/davinci/dvr/cfg get camera3 name" -->" ; 
-camera_name[3] = "<!--#exec cmd="/davinci/dvr/cfg get camera4 name" -->" ; 
+var camera_channel = new Array();
+camera_name[0] = "<!--#exec cmd="/davinci/dvr/cfg get camera1 name" -->" ;
+camera_name[1] = "<!--#exec cmd="/davinci/dvr/cfg get camera2 name" -->" ;
+camera_name[2] = "<!--#exec cmd="/davinci/dvr/cfg get camera3 name" -->" ;
+camera_name[3] = "<!--#exec cmd="/davinci/dvr/cfg get camera4 name" -->" ;
+camera_channel[0] = "<!--#exec cmd="/davinci/dvr/cfg get camera1 channel" -->" ;
+camera_channel[1] = "<!--#exec cmd="/davinci/dvr/cfg get camera2 channel" -->" ;
+camera_channel[2] = "<!--#exec cmd="/davinci/dvr/cfg get camera3 channel" -->" ;
+camera_channel[3] = "<!--#exec cmd="/davinci/dvr/cfg get camera4 channel" -->" ;
 
 function imgstart()
 {
@@ -26,8 +31,8 @@ function imgstart()
   }
   else {
       relo=1 ;
-      for( i=0; i<camera_number ; i++ ) { 
-        imgload(i);
+      for( i=0; i<camera_number ; i++ ) {
+	imgload(i);
       }
       button.value="Stop" ;
   }
@@ -40,15 +45,15 @@ function reloadimg(channel)
   var quality = document.getElementById("id_quality"+channel) ;
   var picture = document.getElementById("id_res"+channel) ;
   if( img && ch && quality && picture ) {
-          var stime = new Date();
-          img.src =
-          "cgi/getjpeg.cgi?channel="
-          + ch.value
-          +"&quality="
-          + quality.value 
-          +"&picture="
-          + picture.value 
-          + "&tmark="+stime.getTime();
+	  var stime = new Date();
+	  img.src =
+	  "cgi/getjpeg.cgi?channel="
+	  + camera_channel[ch.value]
+	  +"&quality="
+	  + quality.value
+	  +"&picture="
+	  + picture.value
+	  + "&tmark="+stime.getTime();
    }
 }
 

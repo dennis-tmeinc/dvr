@@ -4,6 +4,7 @@
 #include <sys/wait.h>
 
 #include "dvr.h"
+#include "draw.h"
 
 dvrsvr *dvrsvr::m_head = NULL;
 
@@ -24,8 +25,6 @@ dvrsvr::dvrsvr(int fd)
     m_req.reqsize = 0;
 
     m_playback = NULL ;     // playback 
-    m_live = NULL ;
-    m_nfilehandle = NULL ;		// new clip file handle. (to support new file copying)
     
     m_conntype = CONN_NORMAL;
    
@@ -59,17 +58,13 @@ dvrsvr::~dvrsvr()
 
     m_shutdown=0 ;
 
-    ::closesocket(m_sockfd);
+	if( m_sockfd>0) {
+	    ::closesocket(m_sockfd);
+	}
     
     cleanfifo();
     if( m_playback!=NULL ) {
         delete m_playback ;
-    }
-    if( m_live!=NULL ) {
-        delete m_live ;
-    }
-    if( m_nfilehandle!=NULL ) {
-        fclose( m_nfilehandle );
     }
     if( m_recvbuf ) {
         mem_free( m_recvbuf ) ;
@@ -170,7 +165,7 @@ void dvrsvr::cleanfifo()
         delete m_fifo ;
         m_fifo = nfifo;
     }
-    m_fifosize=0;        
+    m_fifosize=0;
 }
 
 // send out data from fifo
@@ -232,7 +227,7 @@ void dvrsvr::send_fifo(char *buf, int bufsize, int loc)
     net_fifo *nfifo;
     
     nfifo = new net_fifo ;
-    nfifo->buf = (char *)mem_ref( buf, bufsize );
+    nfifo->buf = (char *)mem_addref( buf, bufsize );
     nfifo->bufsize = bufsize;
     nfifo->loc = loc;
     nfifo->next = NULL;
@@ -335,7 +330,7 @@ void dvrsvr::onrequest()
 {
     switch (m_req.reqcode) {
         case REQOK:
-            ReqOK();
+            AnsOk();
             break ;
         case REQREALTIME:
             ReqRealTime();
@@ -358,81 +353,11 @@ void dvrsvr::onrequest()
         case REQSETCHANNELSETUP:
             SetChannelSetup();
             break;
-        case REQKILL:
-            ReqKill();
-            break;
-        case REQSETUPLOAD:
-            SetUpload();
-            break;
         case REQHOSTNAME:
             HostName();
             break;
-        case REQFILERENAME:
-        case REQRENAME:
-            FileRename();
-            break;
-        case REQFILE:
-        case REQFILECREATE:
-            FileCreate();
-            break;
-        case REQFILEREAD:
-            FileRead();
-            break;
-        case REQFILEWRITE:
-            FileWrite();
-            break;
-        case REQFILECLOSE:
-            FileClose();
-            break;
-        case REQFILESETPOINTER:
-            FileSetPointer();
-            break;
-        case REQFILEGETPOINTER:
-            FileGetPointer();
-            break;
-        case REQFILEGETSIZE:
-            FileGetSize();
-            break;
-        case REQFILESETEOF:
-            FileSetEof();
-            break;
-        case REQFILEDELETE:
-            FileDelete();
-            break;
-        case REQDIRFINDFIRST:
-            DirFindFirst();
-            break;
-        case REQDIRFINDNEXT:
-            DirFindNext();
-            break;
-        case REQDIRFINDCLOSE:
-            DirFindClose();
-            break;
         case REQGETCHANNELSTATE:
             GetChannelState();
-            break;
-        case REQSETSYSTEMTIME:
-        case REQSETTIME:
-            SetDVRSystemTime();
-            break;
-        case REQGETSYSTEMTIME:
-        case REQGETTIME:
-            GetDVRSystemTime();
-            break;
-        case REQSETLOCALTIME:
-            SetDVRLocalTime();
-            break;
-        case REQGETLOCALTIME:
-            GetDVRLocalTime();
-            break;
-        case REQSETTIMEZONE:
-            SetDVRTimeZone();
-            break;
-        case REQGETTIMEZONE:
-            GetDVRTimeZone();
-            break;
-        case REQGETTZIENTRY:
-            GetDVRTZIEntry();
             break;
         case REQGETVERSION:
             GetVersion();
@@ -440,42 +365,8 @@ void dvrsvr::onrequest()
         case REQPTZ:
             ReqPTZ();
             break;
-        case REQAUTH:
-            ReqAuth();
-            break;
-        case REQKEY:
-            ReqKey();
-            break;
-        case REQDISCONNECT:
-            ReqDisconnect();
-            break;
-        case REQCHECKID:
-            ReqCheckId();
-            break;
-        case REQLISTID:
-            ReqListId();
-            break;
-        case REQDELETEID:
-            ReqDeleteId();
-            break;
-        case REQADDID:
-            ReqAddId();
-            break;
-        case REQSHAREPASSWD:
-            ReqSharePasswd();
-            break;
-        case REQRUN:
-        case REQGETFILE:
-        case REQPUTFILE:
-        case REQSHAREINFO:
-        case REQPLAYBACK:
-            DefaultReq();
-            break;
         case REQSTREAMOPEN:
             ReqStreamOpen();
-            break;
-        case REQSTREAMOPENLIVE:
-            ReqStreamOpenLive();
             break;
         case REQOPENLIVE:
             ReqOpenLive();
@@ -564,15 +455,6 @@ void dvrsvr::onrequest()
         case REQUSBKEYPLUGIN:
             ReqUsbkeyPlugin();
             break;
-        case REQNFILEOPEN:
-            ReqNfileOpen();
-            break;
-        case REQNFILECLOSE:
-            ReqNfileClose();
-            break;
-        case REQNFILEREAD:
-            ReqNfileRead();
-            break;
         case REQ2GETSETUPPAGE:
             Req2GetSetupPage();
             break;
@@ -592,17 +474,26 @@ void dvrsvr::onrequest()
             ReqEcho();
             break;
         default:
-            DefaultReq();
+            AnsError();
             break;
     }
 }
 
-void dvrsvr::ReqOK()
+void dvrsvr::AnsOk()
 {
     struct dvr_ans ans ;
     ans.anscode=ANSOK ;
     ans.data=0;
     ans.anssize=0;
+    Send(&ans, sizeof(ans));
+}
+
+void dvrsvr::AnsError()
+{
+    struct dvr_ans ans ;
+    ans.anscode = ANSERROR;
+    ans.anssize = 0;
+    ans.data = 0;
     Send(&ans, sizeof(ans));
 }
 
@@ -621,22 +512,19 @@ void dvrsvr::ReqEcho()
 void dvrsvr::ReqRealTime()
 {
     struct dvr_ans ans ;
-    if( g_keycheck && m_keycheck==0 ) {
-        DefaultReq();
-        return ;
-    }
-    if (m_req.data >= 0 && m_req.data < cap_channels) {
-        ans.anscode = ANSREALTIMEHEADER;
-        ans.data = m_req.data;
-        ans.anssize = sizeof(struct hd_file);
-        Send(&ans, sizeof(ans));
-        Send(cap_fileheader(m_req.data), sizeof(struct hd_file));
-        m_conntype = CONN_REALTIME;
-        m_connchannel = m_req.data;
-    }
-    else {
-        DefaultReq();
-    }
+    if( !g_keycheck || m_keycheck!=0 ) {
+		if (m_req.data >= 0 && m_req.data < cap_channels) {
+			ans.anscode = ANSREALTIMEHEADER;
+			ans.data = m_req.data;
+			ans.anssize = sizeof(struct hd_file);
+			Send(&ans, sizeof(ans));
+			Send(cap_fileheader(m_req.data), sizeof(struct hd_file));
+			m_conntype = CONN_REALTIME;
+			m_connchannel = m_req.data;
+			return ;
+		}
+	}
+	AnsError();
 }
 
 struct channel_info {
@@ -647,26 +535,25 @@ struct channel_info {
 
 void dvrsvr::ChannelInfo()
 {
-    int i;
-    struct dvr_ans ans ;
-    struct channel_info chinfo ;
-    
-    if( g_keycheck && m_keycheck==0 ) {
-        DefaultReq();
-        return ;
-    }
-    
-    ans.anscode = ANSCHANNELDATA ;
-    ans.data = cap_channels ;
-    ans.anssize = cap_channels * sizeof(struct channel_info);
-    Send( &ans, sizeof(ans));
-    for( i=0; i<cap_channels; i++ ) {
-        memset( &chinfo, 0, sizeof(chinfo));
-        chinfo.Enable=cap_channel[i]->enabled() ;
-        chinfo.Resolution=0 ;
-        strncpy( chinfo.CameraName, cap_channel[i]->getname(), 64);
-        Send(&chinfo, sizeof(chinfo));
-    }
+	int i;
+	struct dvr_ans ans ;
+	struct channel_info chinfo ;
+
+	if( !g_keycheck || m_keycheck!=0 ) {
+		ans.anscode = ANSCHANNELDATA ;
+		ans.data = cap_channels ;
+		ans.anssize = cap_channels * sizeof(struct channel_info);
+		Send( &ans, sizeof(ans));
+		for( i=0; i<cap_channels; i++ ) {
+			memset( &chinfo, 0, sizeof(chinfo));
+			chinfo.Enable=cap_channel[i]->enabled() ;
+			chinfo.Resolution=0 ;
+			strncpy( chinfo.CameraName, cap_channel[i]->getname(), 64);
+			Send(&chinfo, sizeof(chinfo));
+		}
+		return ;
+	}
+	AnsError();
 }
 
 void dvrsvr::HostName()
@@ -697,30 +584,21 @@ void dvrsvr::GetSystemSetup()
         Send( &sys, sizeof(sys) );
     }
     else {
-        DefaultReq ();
+        AnsError ();
     }
 }
 
 void dvrsvr::SetSystemSetup()
 {
-    /*
-    int sendsize = sizeof(struct dvr_ans);
-    char * sendbuf = (char *)mem_alloc( sendsize);
-    struct dvr_ans * pans = (struct dvr_ans *)sendbuf ;
-    struct system_stru * psys = (struct system_stru *) m_recvbuf ;
-    if( dvr_setsystemsetup(psys) ) {
-        pans->anscode = ANSOK;
-        pans->anssize = 0;
-        pans->data = 0;
-        Send( sendbuf, sendsize );
-        mem_free( sendbuf );
-        return ;
-    }
-    else {
-        mem_free( sendbuf ) ;
-    }
-    */
-    DefaultReq();
+    struct system_stru * psys ;
+	if( m_recvlen>=(int)sizeof(struct system_stru) ) {
+		psys=(struct system_stru *)m_recvbuf ;
+		if( dvr_setsystemsetup( (struct system_stru *)m_recvbuf ) ) {
+			AnsOk();
+			return ;
+		}
+	}
+	AnsError();
 }
 
 void dvrsvr::GetChannelSetup()
@@ -735,7 +613,7 @@ void dvrsvr::GetChannelSetup()
         Send( &dattr, sizeof(dattr));
     }
     else {
-        DefaultReq();
+        AnsError();
     }
 }
 
@@ -750,82 +628,7 @@ void dvrsvr::SetChannelSetup()
         Send( &ans, sizeof(ans) );
         return ;
     }
-    DefaultReq();	
-}
-
-void dvrsvr::ReqKill()
-{
-    DefaultReq();
-}
-
-void dvrsvr::SetUpload()
-{
-    DefaultReq();
-}
-
-void dvrsvr::FileRename()
-{
-    DefaultReq();
-}
-
-void dvrsvr::FileCreate()
-{
-    DefaultReq();
-}
-
-void dvrsvr::FileRead()
-{
-    DefaultReq();
-}
-
-void dvrsvr::FileWrite()
-{
-    DefaultReq();
-}
-
-void dvrsvr::FileClose()
-{
-    DefaultReq();
-}
-
-void dvrsvr::FileSetPointer()
-{
-    DefaultReq();
-}
-
-void dvrsvr::FileGetPointer()
-{
-    DefaultReq();
-}
-
-void dvrsvr::FileGetSize()
-{
-    DefaultReq();
-}
-
-void dvrsvr::FileSetEof()
-{
-    DefaultReq();
-}
-
-void dvrsvr::FileDelete()
-{
-    DefaultReq();
-}
-
-void dvrsvr::DirFindFirst()
-{
-    DefaultReq();
-}
-
-void dvrsvr::DirFindNext()
-{
-    DefaultReq();
-}
-
-void dvrsvr::DirFindClose()
-{
-    DefaultReq();
+    AnsError();	
 }
 
 void dvrsvr::GetChannelState()
@@ -855,41 +658,6 @@ void dvrsvr::GetChannelState()
         }
         Send(&cs, sizeof(cs));
     }
-}
-
-void dvrsvr::SetDVRSystemTime()
-{
-    DefaultReq();
-}
-
-void dvrsvr::GetDVRSystemTime()
-{
-    DefaultReq();
-}
-
-void dvrsvr::SetDVRLocalTime()
-{
-    DefaultReq();
-}
-
-void dvrsvr::GetDVRLocalTime()
-{
-    DefaultReq();
-}
-
-void dvrsvr::SetDVRTimeZone()
-{
-    DefaultReq();
-}
-
-void dvrsvr::GetDVRTimeZone()
-{
-    DefaultReq();
-}
-
-void dvrsvr::GetDVRTZIEntry()
-{
-    DefaultReq();
 }
 
 void dvrsvr::GetVersion()
@@ -929,48 +697,9 @@ void dvrsvr::ReqPTZ()
             return ;
         }
     }
-    DefaultReq();
+    AnsError();
 }
 
-void dvrsvr::ReqAuth()
-{
-    DefaultReq();
-}
-
-void dvrsvr::ReqKey()
-{
-    DefaultReq();
-}
-
-void dvrsvr::ReqDisconnect()
-{
-    DefaultReq();
-}
-
-void dvrsvr::ReqCheckId()
-{
-    DefaultReq();
-}
-
-void dvrsvr::ReqListId()
-{
-    DefaultReq();
-}
-
-void dvrsvr::ReqDeleteId()
-{
-    DefaultReq();
-}
-
-void dvrsvr::ReqAddId()
-{
-    DefaultReq();
-}
-
-void dvrsvr::ReqSharePasswd()
-{
-    DefaultReq();
-}
 
 #define DVRSTREAMHANDLE(p)  (((int)(void *)(p))&0x3fffffff)
 
@@ -981,7 +710,7 @@ void dvrsvr::ReqStreamOpen()
     net_dprint( "ReqStreamOpen, channel %d\n", m_req.data );
     struct dvr_ans ans ;
     if( g_keycheck && m_keycheck==0 ) {
-        DefaultReq();
+        AnsError();
         return ;
     }
     if( m_req.data>=0 && m_req.data<cap_channels ) {
@@ -997,15 +726,7 @@ void dvrsvr::ReqStreamOpen()
             return ;
         }
     }
-    DefaultReq();
-}
-
-
-//
-//  m_req.data is stream channel
-void dvrsvr::ReqStreamOpenLive()
-{
-    DefaultReq();
+    AnsError();
 }
 
 // Open live stream (2nd vesion)
@@ -1016,7 +737,7 @@ void dvrsvr::ReqOpenLive()
     int hlen ;
 
     if( g_keycheck && m_keycheck==0 ) {
-        DefaultReq();
+        AnsError();
         return ;
     }
 
@@ -1037,7 +758,7 @@ void dvrsvr::ReqOpenLive()
         m_connchannel = m_req.data;
         return ;
     }
-    DefaultReq();
+    AnsError();
 }
 
 void dvrsvr::ReqStreamClose()
@@ -1055,19 +776,7 @@ void dvrsvr::ReqStreamClose()
         }
         return ;
     }
-    else if( m_conntype == CONN_LIVESTREAM ) {
-        ans.anscode = ANSOK;
-        ans.anssize = 0;
-        ans.data = 0;
-        Send( &ans, sizeof(ans) );
-        m_conntype = CONN_NORMAL ;
-        if( m_live ) {
-            delete m_live ;
-            m_live=NULL ;
-        }
-        return ;
-    }
-    DefaultReq();
+    AnsError();
 }
 
 void dvrsvr::ReqStreamSeek()
@@ -1081,20 +790,9 @@ void dvrsvr::ReqStreamSeek()
         ans.anssize = 0;
         ans.data = m_playback->seek((struct dvrtime *) m_recvbuf) ;
         Send( &ans, sizeof(ans));
-        
-#ifdef NETDBG
-        net_dprint("Stream seek, %04d-%02d-%02d %02d:%02d:%02d\n", 
-               ((struct dvrtime *) m_recvbuf)->year,
-               ((struct dvrtime *) m_recvbuf)->month,
-               ((struct dvrtime *) m_recvbuf)->day,
-               ((struct dvrtime *) m_recvbuf)->hour,
-               ((struct dvrtime *) m_recvbuf)->minute,
-               ((struct dvrtime *) m_recvbuf)->second ) ;
-#endif    
-        
-    }
+	}
     else {
-        DefaultReq();
+        AnsError();
     }
 }
 
@@ -1131,8 +829,7 @@ void dvrsvr::ReqStreamGetData()
     int  getsize=0 ;
     int  frametype ;
 
-    if( m_req.data == DVRSTREAMHANDLE(m_playback) && 
-       m_playback )
+    if( m_playback && m_req.data == DVRSTREAMHANDLE(m_playback) )
     {
         m_playback->getstreamdata( &pbuf, &getsize, &frametype);
         if( getsize>0  && pbuf ) {
@@ -1148,23 +845,7 @@ void dvrsvr::ReqStreamGetData()
             return ;
         }
     }
-    else if( m_req.data == DVRSTREAMHANDLE(m_live) && 
-       m_live )
-    {
-        m_live->getstreamdata( &pbuf, &getsize, &frametype);
-        if( getsize>=0 && pbuf ) {
-            struct dvr_ans ans ;
-            ans.anscode = ANSSTREAMDATA ;
-            ans.anssize = getsize ;
-            ans.data = frametype ;
-            Send( &ans, sizeof(ans));
-            if( getsize>0 ) {
-                Send( pbuf, getsize );
-            }
-            return ;
-        }
-    }
-    DefaultReq();
+    AnsError();
 }
 
 // Requested by Harrison. (2010-09-30)
@@ -1194,25 +875,7 @@ void dvrsvr::Req2StreamGetDataEx()
             return ;
         }
     }
-    else if( m_req.data == DVRSTREAMHANDLE(m_live) && 
-       m_live )
-    {
-        m_live->getstreamdata( &pbuf, &getsize, &frametype);
-        if( getsize>=0 && pbuf ) {
-            struct dvr_ans ans ;
-            ans.anscode = ANS2STREAMDATAEX ;
-            ans.anssize = getsize+sizeof(streamtime);
-            ans.data = frametype ;
-            Send( &ans, sizeof(ans));
-            time_now(&streamtime);
-            Send( &streamtime, sizeof(streamtime) );
-            if( getsize>0 ) {
-                Send( pbuf, getsize );
-            }
-            return ;
-        }
-    }
-    DefaultReq();
+    AnsError();
 }
 
 
@@ -1230,20 +893,10 @@ void dvrsvr::ReqStreamTime()
             ans.data = 0;
             Send( &ans, sizeof(ans));
             Send( &streamtime, ans.anssize);
-#ifdef NETDBG
-        net_dprint("Stream time, %04d-%02d-%02d %02d:%02d:%02d.%03d\n", 
-               streamtime.year,
-               streamtime.month,
-               streamtime.day,
-               streamtime.hour,
-               streamtime.minute,
-               streamtime.second,
-               streamtime.milliseconds ) ;
-#endif            
             return ;
         }
     }
-    DefaultReq();
+    AnsError();
 }
 
 void dvrsvr::ReqStreamDayInfo()
@@ -1271,7 +924,7 @@ void dvrsvr::ReqStreamDayInfo()
         }
     }
     else {
-        DefaultReq();
+        AnsError();
     }
 }
 
@@ -1293,7 +946,7 @@ void dvrsvr::ReqStreamMonthInfo()
         Send(&ans, sizeof(ans));
         return ;
     }
-    DefaultReq();
+    AnsError();
 }
 
 void dvrsvr::ReqStreamDayList()
@@ -1318,7 +971,7 @@ void dvrsvr::ReqStreamDayList()
         }
         return ;
     }
-    DefaultReq();
+    AnsError();
 }
 
 void dvrsvr::ReqLockInfo()
@@ -1348,7 +1001,7 @@ void dvrsvr::ReqLockInfo()
         }
         return ;
     }
-    DefaultReq();
+    AnsError();
 }
 
 void dvrsvr::ReqUnlockFile()
@@ -1368,7 +1021,7 @@ void dvrsvr::ReqUnlockFile()
             return ;
         }
     }
-    DefaultReq();
+    AnsError();
 }
 
 void dvrsvr::Req2AdjTime()
@@ -1382,7 +1035,7 @@ void dvrsvr::Req2AdjTime()
         Send( &ans, sizeof(ans));
     }
     else {
-        DefaultReq();
+        AnsError();
     }
     return ;
 }
@@ -1398,7 +1051,7 @@ void dvrsvr::Req2SetLocalTime()
         Send( &ans, sizeof(ans));
     }
     else {
-        DefaultReq();
+        AnsError();
     }
 }
 
@@ -1489,14 +1142,14 @@ void dvrsvr::Req2GetZoneInfo()
         Send((void *)"\0", 1);		// send null char
         return ;
     }
-    DefaultReq();	
+    AnsError();	
 }
 
 void dvrsvr::Req2SetTimeZone()
 {
     struct dvr_ans ans ;
     if( m_recvbuf==NULL || m_recvlen<3 ) {
-        DefaultReq();
+        AnsError();
         return ;
     }		
     m_recvbuf[m_recvlen-1]=0 ;
@@ -1557,7 +1210,7 @@ void dvrsvr::ReqSetHikOSD()
         Send( &ans, sizeof(ans));
         return ;
     }
-    DefaultReq();
+    AnsError();
 }
 
 void dvrsvr::Req2GetChState()
@@ -1577,7 +1230,7 @@ void dvrsvr::Req2GetChState()
         Send( &ans, sizeof(ans) );
     }
     else {
-        DefaultReq();
+        AnsError();
     }
 }
 
@@ -1649,7 +1302,7 @@ void dvrsvr::Req2GetSetupPage()
         Send(pageuri, ans.anssize);
         return ;
     }
-    DefaultReq();
+    AnsError();
  
     return ;
 }
@@ -1665,7 +1318,7 @@ void dvrsvr::Req2GetStreamBytes()
         Send( &ans, sizeof(ans));
         return ;
     }
-    DefaultReq();
+    AnsError();
 }
 
 void dvrsvr::Req2Keypad()
@@ -1678,8 +1331,8 @@ void dvrsvr::Req2Keypad()
     Send( &ans, sizeof(ans));
     screen_key( (int)(m_req.data&0xff), (int)(m_req.data>>8)&1 );
     return ;
-#else    
-    DefaultReq();
+#else
+    AnsError();
 #endif
 }
 
@@ -1694,8 +1347,8 @@ void dvrsvr::Req2PanelLights()
         Send( &ans, sizeof(ans));
         return ;
     }
-#endif    
-    DefaultReq();   
+#endif
+    AnsError();
 }
 
 void dvrsvr::Req2GetJPEG()
@@ -1707,24 +1360,24 @@ void dvrsvr::Req2GetJPEG()
     if( ch >=0 && ch < cap_channels ) {
         // problem is JPEG capture doesn't work if called from here, JPEG capturing only works in main thread
         // so this call is just a signal to trigger jpeg capture
-        if( cap_channel[ch]->captureJPEG(jpeg_quality, jpeg_pic) ) {
+		m_conntype = CONN_JPEG ;
+		m_connchannel = ch ;
+		if( cap_channel[ch]->captureJPEG(jpeg_quality, jpeg_pic) ) {
             // set connection type to JPEG
-            m_conntype = CONN_JPEG ;
-            m_connchannel = ch ;
             return ;
         }
     }
-    DefaultReq();
+    AnsError();
 }
 
 void dvrsvr::ReqSendData()
 {
-    DefaultReq();
+    AnsError();
 }
 
 void dvrsvr::ReqGetData()
 {
-    DefaultReq();
+    AnsError();
 }
 
 void dvrsvr::ReqCheckKey()
@@ -1752,7 +1405,7 @@ void dvrsvr::ReqCheckKey()
         }
     }
 #endif
-    DefaultReq();
+    AnsError();
 }
 
 #ifdef PWII_APP
@@ -1988,83 +1641,9 @@ void dvrsvr::ReqUsbkeyPlugin()
 #endif        
     }
     if( res == 0 ) {
-        DefaultReq();
+        AnsError();
     }
 }
-
-// on enter
-//     req.data : channel number
-void dvrsvr::ReqNfileOpen()
-{
-    /*
-    struct dvr_ans ans ;
-    struct nfileinfo nfi ;
-    FILE * fnfile = rec_opennfile(m_req.data, &nfi);
-    if( fnfile ) {
-        ans.anscode = ANSNFILEOPEN ;
-        ans.anssize = 0 ;
-        ans.data = (int) this ;
-        Send( &ans, sizeof(ans));
-        return ;
-    }
-*/
-    DefaultReq();
-}
-
-void dvrsvr::ReqNfileClose()
-{
-    /*
-    struct dvr_ans ans ;
-    if( m_req.data == (int) this && m_nfilehandle!=NULL ) {
-        fclose( m_nfilehandle );
-        m_nfilehandle=NULL;
-        ans.anscode = ANSOK ;
-        ans.anssize = 0 ;
-        ans.data = 0 ;
-        Send( &ans, sizeof(ans));
-        return ;
-    }
-*/
-    DefaultReq();
-}
-
-void dvrsvr::ReqNfileRead()
-{
-    struct dvr_ans ans ;
-    int readsize ;
-    if( m_req.data == (int) this && m_nfilehandle!=NULL && m_req.reqsize>=(int)sizeof(int) ) {
-        readsize = *(int *)m_recvbuf ;
-        if( readsize>0 && readsize<=4*1024*1024 ) {
-            char * buf = (char *)mem_alloc(readsize) ;
-            if( buf ) {
-                readsize=fread( buf, 1, readsize, m_nfilehandle );
-                if( readsize<=0 ) {
-                    readsize=0 ;
-                }
-                ans.anscode = ANSNFILEREAD ;
-                ans.anssize = readsize ;
-                ans.data = 0 ;
-                Send( &ans, sizeof(ans));
-                if( ans.anssize>0 ) {
-                    Send(buf, readsize) ;
-                }
-                mem_free( buf );
-                return ;
-            }
-        }
-    }
-    DefaultReq();
-}
-
-void dvrsvr::DefaultReq()
-{
-    struct dvr_ans ans ;
-    ans.anscode = ANSERROR;
-    ans.anssize = 0;
-    ans.data = 0;
-    Send(&ans, sizeof(ans));
-}
-
 
 // client side support
 
@@ -2093,27 +1672,6 @@ int dvr_openlive(int sockfd, int channel)
     return 0 ;
 }
 
-/*
-int dvr_openlive(int sockfd, int channel, struct hd_file * hd264)
-{
-    struct dvr_req req ;
-    struct dvr_ans ans ;
-    
-    req.reqcode=REQREALTIME ;
-    req.data=channel ;
-    req.reqsize=0;
-    net_clean(sockfd);
-    net_send(sockfd, &req, sizeof(req));
-    if( net_recv(sockfd, &ans, sizeof(ans))) {
-        if( ans.anscode==ANSREALTIMEHEADER && ans.anssize==(int)sizeof(struct hd_file)) {
-            if( net_recv(sockfd, hd264, sizeof(struct hd_file)) ) {
-                return 1 ;
-            }
-        }
-    }
-    return 0 ;
-}
-*/
 
 // get remote dvr system setup
 // return 1:success
@@ -2376,79 +1934,668 @@ int dvr_getchstate(int sockfd, int ch)
     return -1 ;
 }
 
-// open new clip file on remote dvr
-int dvr_nfileopen(int sockfd, int channel, struct nfileinfo * nfi)
+
+// SCREEN service
+
+int dvr_screen_setmode(int sockfd, int videostd, int screennum)
 {
-/*
     struct dvr_req req ;
     struct dvr_ans ans ;
-    
-    req.reqcode=REQNFILEOPEN ;
+    req.reqcode=REQSCREEENSETMODE ;
+    req.data=screennum ;
+    req.reqsize=sizeof(videostd) ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, &videostd, sizeof(videostd));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+// stop play this channel
+int dvr_screen_stop(int sockfd, int channel)
+{
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQSCREENSTOP ;
     req.data=channel ;
     req.reqsize=0;
     net_clean(sockfd);
     net_send(sockfd, &req, sizeof(req));
     if( net_recv(sockfd, &ans, sizeof(ans))) {
-        if( ans.anscode==ANSNFILEOPEN && ans.anssize>=(int)sizeof(struct nfileinfo)) {
-            if( net_recv(sockfd, nfi, sizeof(struct nfileinfo)) ) {
-                return ans.data ;
-            }
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
         }
     }
-*/
-    return 0 ;
+    return FALSE ;
 }
 
-
-// close nfile on remote dvr
-// return
-//       1: success
-//       0: failed
-int dvr_nfileclose(int sockfd, int nfile)
+int dvr_screen_live(int sockfd, int channel)
 {
-    /*
     struct dvr_req req ;
     struct dvr_ans ans ;
-    
-    req.reqcode=REQNFILECLOSE ;
-    req.data=nfile ;
-    req.reqsize=0;
+    req.reqcode=REQSCREEENLIVE ;
+    req.data=channel ;
+    req.reqsize=0 ;
     net_clean(sockfd);
     net_send(sockfd, &req, sizeof(req));
     if( net_recv(sockfd, &ans, sizeof(ans))) {
         if( ans.anscode==ANSOK ) {
-            return 1 ;
+            return TRUE ;
         }
     }
+    return FALSE ;
+}
+
+// speed=4: normal speed
+int dvr_screen_play(int sockfd, int channel, int speed)
+{
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQSCREENPLAY ;
+    req.data=channel ;
+    req.reqsize=sizeof(speed) ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, &speed, sizeof(speed));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+// input play back data
+int dvr_screen_playinput(int sockfd, int channel, void * inputbuf, int inputsize)
+{
+    struct dvr_req req ;
+    //	struct dvr_ans ans ;
+    req.reqcode=REQSRCEENINPUT ;
+    req.data=channel ;
+    req.reqsize=inputsize;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, inputbuf, inputsize );
+    // mask off for transmit performance
+/*
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+      if( ans.anscode==ANSOK ) {
+        return TRUE ;
+      }
+    }
+    return FALSE ;
 */
-    return 0 ;
+    return TRUE;
+}
+
+// turn on/off audio channel
+int dvr_screen_audio(int sockfd, int channel, int onoff)
+{
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQSCREENAUDIO ;
+    req.data=channel ;
+    req.reqsize=sizeof(onoff) ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, &onoff, sizeof(onoff));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+// get screen width
+int dvr_screen_width(int sockfd)
+{
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQGETSCREENWIDTH ;
+    req.data=0 ;
+    req.reqsize=0 ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSGETSCREENWIDTH ) {
+            return ans.data ;
+        }
+    }
+    return FALSE ;
+}
+
+// get screen height
+int dvr_screen_height(int sockfd)
+{
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQGETSCREENHEIGHT ;
+    req.data=0 ;
+    req.reqsize=0 ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSGETSCREENHEIGHT ) {
+            return ans.data ;
+        }
+    }
+    return FALSE ;
+}
+
+// set draw clip area
+int dvr_draw_setarea(int sockfd, int x, int y, int w, int h)
+{
+    int param[4] ;
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQDRAWSETAREA ;
+    req.data=0 ;
+    req.reqsize=sizeof(param) ;
+    param[0]=x ;
+    param[1]=y ;
+    param[2]=w ;
+    param[3]=h ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, &param, req.reqsize );
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}	
+
+int dvr_draw_refresh(int sockfd)
+{
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQDRAWREFRESH ;
+    req.data=0 ;
+    req.reqsize=0 ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+int dvr_draw_setcolor(int sockfd, UINT32 color)
+{
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQDRAWSETCOLOR ;
+    req.data=color ;
+    req.reqsize=0 ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+UINT32 dvr_draw_getcolor(int sockfd)
+{
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQDRAWGETCOLOR ;
+    req.data=0 ;
+    req.reqsize=0 ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSDRAWGETCOLOR ) {
+            return ans.data ;
+        }
+    }
+    return FALSE ;
 }
 
 
-// read nfile from remote dvr
-// return actual readed bytes
-int dvr_nfileread(int sockfd, int nfile, void * buf, int size)
+int dvr_draw_setpixelmode(int sockfd, int pixelmode)
 {
-    /*
     struct dvr_req req ;
     struct dvr_ans ans ;
-    
-    req.reqcode=REQNFILEREAD ;
-    req.data=nfile ;
-    req.reqsize=sizeof(int);
+    req.reqcode=REQDRAWSETPIXELMODE ;
+    req.data=pixelmode ;
+    req.reqsize=0 ;
     net_clean(sockfd);
     net_send(sockfd, &req, sizeof(req));
-    net_send(sockfd, &size, sizeof(size));
     if( net_recv(sockfd, &ans, sizeof(ans))) {
-        if( ans.anscode==ANSNFILEREAD && ans.anssize>0) {
-            if( ans.anssize>size ) {
-                ans.anssize=size ;
-            }
-            if( net_recv(sockfd, buf, ans.anssize) ) {
-                return ans.anssize ;
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+
+int dvr_draw_getpixelmode(int sockfd)
+{
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQDRAWGETPIXELMODE ;
+    req.data=0 ;
+    req.reqsize=0 ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSDRAWGETPIXELMODE ) {
+            return ans.data ;
+        }
+    }
+    return FALSE ;
+}
+
+int dvr_draw_putpixel(int sockfd, int x, int y, UINT32 color)
+{
+    int param[2] ;
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    param[0]=x ;
+    param[1]=y ;
+    req.reqcode=REQDRAWPUTPIXEL ;
+    req.data=color ;
+    req.reqsize=sizeof(param) ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, param, req.reqsize);
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+UINT32 dvr_draw_getpixel(int sockfd, int x, int y)
+{
+    int param[2] ;
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    param[0]=x ;
+    param[1]=y ;
+    req.reqcode=REQDRAWGETPIXEL ;
+    req.data=0 ;
+    req.reqsize=sizeof(param) ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, param, req.reqsize);
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSDRAWGETPIXEL ) {
+            return ans.data ;
+        }
+    }
+    return FALSE ;
+}
+
+UINT32 dvr_draw_line(int sockfd, int x1, int y1, int x2, int y2 )
+{
+    int param[4] ;
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    param[0]=x1 ;
+    param[1]=y1 ;
+    param[2]=x2 ;
+    param[3]=y2 ;
+    req.reqcode=REQDRAWLINE ;
+    req.data=0 ;
+    req.reqsize=sizeof(param) ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, param, req.reqsize);
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+int dvr_draw_rect(int sockfd, int x, int y, int w, int h )
+{
+    int param[4] ;
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    param[0]=x ;
+    param[1]=y ;
+    param[2]=w ;
+    param[3]=h ;
+    req.reqcode=REQDRAWRECT ;
+    req.data=0 ;
+    req.reqsize=sizeof(param) ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, param, req.reqsize);
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+int dvr_draw_fillrect(int sockfd, int x, int y, int w, int h) 
+{
+    int param[4] ;
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    param[0]=x ;
+    param[1]=y ;
+    param[2]=w ;
+    param[3]=h ;
+    req.reqcode=REQDRAWFILL ;
+    req.data=0 ;
+    req.reqsize=sizeof(param) ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, param, req.reqsize);
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+int dvr_draw_circle(int sockfd, int cx, int cy, int r) 
+{
+    int param[3] ;
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    param[0]=cx ;
+    param[1]=cy ;
+    param[2]=r ;
+    req.reqcode=REQDRAWCIRCLE ;
+    req.data=0 ;
+    req.reqsize=sizeof(param) ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, param, req.reqsize);
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+int dvr_draw_fillcircle(int sockfd, int cx, int cy, int r) 
+{
+    int param[3] ;
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    param[0]=cx ;
+    param[1]=cy ;
+    param[2]=r ;
+    req.reqcode=REQDRAWFILLCIRCLE ;
+    req.data=0 ;
+    req.reqsize=sizeof(param) ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, param, req.reqsize);
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+int dvr_draw_bitmap(int sockfd, struct BITMAP * bmp, int dx, int dy, int sx, int sy, int w, int h )
+{
+    int param[6] ;
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    param[0]=dx ;
+    param[1]=dy ;
+    param[2]=sx ;
+    param[3]=sy ;
+    param[4]=w ;
+    param[5]=h ;
+    req.reqcode=REQDRAWBITMAP ;
+    req.data=0 ;
+    req.reqsize=sizeof(param)+sizeof(struct BITMAP)+(bmp->height * bmp->bytes_per_line) ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, param, sizeof(param));
+    net_send(sockfd, bmp, sizeof(struct BITMAP));
+    net_send(sockfd, bmp->bits, bmp->height * bmp->bytes_per_line );
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+int dvr_draw_stretchbitmap(int sockfd, struct BITMAP * bmp, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh ) 
+{
+    int param[8] ;
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    param[0]=dx ;
+    param[1]=dy ;
+    param[2]=dw ;
+    param[3]=dh ;
+    param[4]=sx ;
+    param[5]=sy ;
+    param[6]=sw ;
+    param[7]=sh ;
+    req.reqcode=REQDRAWSTRETCHBITMAP ;
+    req.data=0 ;
+    req.reqsize=sizeof(param)+sizeof(struct BITMAP)+(bmp->height * bmp->bytes_per_line) ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, param, sizeof(param));
+    net_send(sockfd, bmp, sizeof(struct BITMAP));
+    net_send(sockfd, bmp->bits, bmp->height * bmp->bytes_per_line );
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+int dvr_draw_readbitmap(int sockfd, struct BITMAP * bmp, int x, int y, int w, int h )
+{
+    int param[4] ;
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    param[0]=x ;
+    param[1]=y ;
+    param[2]=w ;
+    param[3]=h ;
+    req.reqcode=REQDRAWREADBITMAP ;
+    req.data=0 ;
+    req.reqsize=sizeof(param) ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, param, sizeof(param));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSDRAWREADBITMAP ) {
+            int bitsize ;
+            net_recv(sockfd, bmp, sizeof(struct BITMAP));
+            bmp->bits = NULL ;
+            bitsize = ans.anssize - sizeof(struct BITMAP) ;
+            if( bitsize>0 ) {
+                bmp->bits = (UINT8 *)malloc(bitsize) ;
+                net_recv(sockfd, bmp->bits, bitsize );
+                return TRUE ;
             }
         }
     }
+    return FALSE ;
+}
+
+int dvr_draw_setfont(int sockfd, struct BITMAP * font)
+{
+    dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQDRAWSETFONT ;
+    req.data=(int)(long)font ;
+    net_clean(sockfd);
+    if( font==NULL ) {
+        req.reqsize=0 ;
+        net_send(sockfd, &req, sizeof(req));
+    }
+    else {
+        req.reqsize=sizeof(struct BITMAP)+(font->height * font->bytes_per_line) ;
+        net_send(sockfd, &req, sizeof(req));
+        net_send(sockfd, font, sizeof(struct BITMAP));
+        net_send(sockfd, font->bits, font->height * font->bytes_per_line );
+    }
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+int dvr_draw_text( int sockfd, int dx, int dy, char * text)
+{
+    int param[2] ;
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQDRAWTEXT ;
+    req.data=strlen(text) ;
+    req.reqsize=sizeof(param)+req.data+1 ;
+    param[0]=dx ;
+    param[1]=dy ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, &param, sizeof(param));
+    net_send(sockfd, text, req.data+1 );
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+int dvr_draw_textex( int sockfd, int dx, int dy, int fontw, int fonth, char * text)
+{
+    int param[4] ;
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQDRAWTEXTEX ;
+    req.data=strlen(text) ;
+    req.reqsize=sizeof(param)+req.data+1 ;
+    param[0]=dx ;
+    param[1]=dy ;
+    param[2]=fontw ;
+    param[3]=fonth ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd, &param, sizeof(param));
+    net_send(sockfd, text, req.data+1 );
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSOK ) {
+            return TRUE ;
+        }
+    }
+    return FALSE ;
+}
+
+/*
+int dvr_draw_refresh(int sockfd)
+{
+ struct dvr_req req ;
+ struct dvr_ans ans ;
+ req.reqcode=REQDRAWREFRESH ;
+    req.data=0 ;
+    req.reqsize=0;
+    net_clean(sockfd);
+ net_send(sockfd, &req, sizeof(req));
+ if( net_recv(sockfd, &ans, sizeof(ans))) {
+  if( ans.anscode==ANSOK ) {
+   return TRUE ;
+  }
+ }
+ return FALSE ;
+}
+
+// show area (for eagle34, may remove in the fucture)
+int dvr_draw_show(int sockfd, int id, int x, int y, int w, int h )
+{
+ int param[4] ;
+ struct dvr_req req ;
+ struct dvr_ans ans ;
+ param[0]=x ;
+ param[1]=y ;
+ param[2]=w ;
+ param[3]=h ;
+ req.reqcode=REQDRAWSHOW ;
+    req.data=id ;
+    req.reqsize=sizeof(param) ;
+    net_clean(sockfd);
+ net_send(sockfd, &req, sizeof(req));
+ net_send(sockfd, param, sizeof(param));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+  if( ans.anscode==ANSOK ) {
+   return TRUE ;
+  }
+ }
+ return FALSE ;
+}
+
+// hide area (for eagle34, may remove in the fucture)
+int dvr_draw_hide(int sockfd, int id )
+{
+ struct dvr_req req ;
+ struct dvr_ans ans ;
+ req.reqcode=REQDRAWHIDE ;
+    req.data=id ;
+    req.reqsize=0 ;
+    net_clean(sockfd);
+ net_send(sockfd, &req, sizeof(req));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+  if( ans.anscode==ANSOK ) {
+   return TRUE ;
+  }
+ }
+ return FALSE ;
+}
 */
-    return 0 ;
+
+// Jpeg Capture
+//  channel: capture card channel (0-3)
+//  quality: 0=best, 1=better, 2=average
+//  pic:     0=cif, 1=qcif, 2=4cif
+int dvr_jpeg_capture(int sockfd, struct cap_frame *capframe, int channel, int quality, int pic)
+{
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQ2GETJPEG ;
+    req.data = (channel&0xff)|((quality&0xff)<<8)|((pic&0xff)<<16) ;
+    req.reqsize=0 ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANS2JPEG ) {
+            capframe->channel = channel ;
+            capframe->framesize = ans.anssize ;
+            capframe->frametype = ans.data ;
+            capframe->framedata = (char *)mem_alloc( capframe->framesize );
+            if( capframe->framedata ) {
+                net_recv(sockfd, capframe->framedata, capframe->framesize);
+                return TRUE ;
+            }
+        }
+    }
+    return FALSE ;
 }

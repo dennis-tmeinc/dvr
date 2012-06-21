@@ -53,6 +53,13 @@ fi
 boardid=`cat /davinci/ID/BOARDID`
 ifconfig eth0 192.168.247.${boardid}
 
+# setup initial TZ environment
+cd /davinci
+tzn=`./cfg get system timezone`
+tzl=`./cfg get timezones ${tzn}`
+TZ=${tzl%% *}
+export TZ
+
 # setup network ethernet ip address (as a alias)
 setnetwork
 
@@ -78,6 +85,9 @@ sleep 1
 #ln -sf /davinci/dvr/librt-0.9.28.so /lib/librt.so.0
 ln -sf /davinci/dvr/libcurl.so.4 /lib/libcurl.so.4
 ln -sf /lib/librt.so /lib/librt.so.0
+
+#start eaglesvr
+/davinci/dvr/eaglesvr < /dev/null > /dev/null 2> /dev/null &
 
 # start io module
 /davinci/dvr/ioprocess < /dev/null > /dev/null 2> /dev/null &

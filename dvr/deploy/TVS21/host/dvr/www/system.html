@@ -47,17 +47,20 @@
 </tr>
 
 <tr>
-<td class="col1">Time Zone:</td>
-<td>
-</td>
+<td>&nbsp;</td>
+<td></td>
 </tr>
 
 <tr>
-<td colspan="2">
-&nbsp; &nbsp;&nbsp; &nbsp;
-<select size="1" name="dvr_time_zone" id="id_dvr_time_zone"><!--#include file="tz_option" --></select>
+<td class="col1">Time Zone:</td>
+<td>
+<select size="1" name="dvr_time_zone" id="id_dvr_time_zone" onchange="ontimezonechange()" ><!--#include file="tz_option" --></select>
 </td>
-<td></td>
+</tr>
+
+<tr id="id_customtz">
+<td class="col1">Custom TZ:</td>
+<td><input name="custom_tz" /></td>
 </tr>
 
 <tr>
@@ -74,10 +77,28 @@
 </table>
 </form>
 <script type="text/javascript">
-var formdata = 
-<!--#include file="system_value" --> 
-;
-JSONinitfield( formdata );
+
+// custom time zone function
+function ontimezonechange()
+{
+    var tzselect = document.getElementById('id_dvr_time_zone') ;
+    if( tzselect.options[tzselect.selectedIndex].text == "Custom" ) {
+	document.getElementById('id_customtz').style.display="" ;
+    }
+    else {
+	document.getElementById('id_customtz').style.display="none" ;
+    }
+}
+
+function initform( formvalue )
+{
+    var formdata = eval("(" + formvalue + ")") ;
+    JSONinitfield( formdata );
+    ontimezonechange();
+}
+
+ajaxload( "POST", "system_value", initform );
+
 
 </script>
 </body>

@@ -36,7 +36,7 @@ void dvrsvr_up()
     }
 }
 
-char buf[4000] ;
+char buf[8196] ;
 
 char * getsetvalue( char * name )
 {
@@ -55,22 +55,22 @@ char * getsetvalue( char * name )
                 needle++;
             }
             
-            if( *needle==':' ) {
-                needle++;
+            if( *needle==':' && *(needle+1)=='\"' ) {
+                needle+=2;
                 
-                for( l=0; l<499; l++ ) {
-                    if( needle[l]==',' || needle[l]=='}' || needle[l]==0 ) {
-                        v[l]=0 ;
+                for( l=0; l<500; l++ ) {
+                    char c = needle[l];
+                    if( c=='\"' || c=='}' || c==0 ) {
                         break;
                     }
                     else {
-                        v[l]=needle[l] ;
+                        v[l]=c ;
                     }
                 }
                 
                 // clean string
                 while( l>0 ) {
-                    if( v[l-1]<=' ' || v[l-1]=='\"' )  {
+                    if( v[l-1]<=' ' )  {
                         l--;
                     }
                     else {
@@ -79,7 +79,7 @@ char * getsetvalue( char * name )
                 }
                 v[l]=0;
                 for( i=0; i<l; i++ ) {
-                    if( v[i]>' ' && v[i]!='\"' ) 
+                    if( v[i]>' ' )
                         break;
                 }
                 return &v[i] ;
@@ -241,6 +241,11 @@ int main()
             dvrconfig.setvalue( "system", "timezone", v );
         }
         
+        v = getsetvalue ("custom_tz");
+        if( v ) {
+            dvrconfig.setvalue( "timezones", "Custom", v );
+        }
+
         v = getsetvalue ("shutdown_delay");
         if( v ) {
             sscanf( v, "%d", &i);
@@ -263,6 +268,14 @@ int main()
             if( i<0 ) i=0 ;
             if( i>36000 ) i=36000 ;
             dvrconfig.setvalueint( "system", "uploadingtime", i );
+        }
+        
+        v = getsetvalue ("archivingtime");
+        if( v ) {
+            sscanf( v, "%d", &i);
+            if( i<0 ) i=0 ;
+            if( i>36000 ) i=36000 ;
+            dvrconfig.setvalueint( "system", "archivetime", i );
         }
         
         v = getsetvalue ("file_size");

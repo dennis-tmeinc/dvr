@@ -1180,13 +1180,6 @@ void cap_init(config &dvrconfig)
     enabled_channels = 0 ;
     
 	cap_channels = dvrconfig.getvalueint("system", "totalcamera");
-#ifndef NO_ONBOARD_EAGLE
-    int ilocal=0 ;		// local camera idx
-	eagle32_init(dvrconfig);
-	if( cap_channels==0 ) {
-		cap_channels = eagle32_channels ;			// use local channel only
-	}
-#endif	// NO_ONBOARD_EAGLE
 	if( cap_channels<=0 || cap_channels>64 ) {
 		cap_channels = 4 ;
 	}
@@ -1201,23 +1194,7 @@ void cap_init(config &dvrconfig)
         int cameratype ;
         sprintf(cameraid, "camera%d", i+1 );
         cameratype = dvrconfig.getvalueint(cameraid, "type");	
-        if( cameratype == 0 ) {			// local capture card
-#ifdef	NO_ONBOARD_EAGLE
-                cap_channel[i]=new capture(i);				// dummy channel
-#else			
-			int lch = dvrconfig.getvalueint(cameraid, "channel");	
-            if( lch==0 ) {
-                lch = ++ilocal ;
-            }
-            if( lch>0 && lch<=eagle32_channels ) {
-                cap_channel[i]=new eagle_capture(i, lch-1);
-            }
-            else {
-                cap_channel[i]=new capture(i);				// dummy channel
-            }
-#endif
-		}
-        else if( cameratype == 1 ) {	// ip camera
+        if( cameratype == 1 ) {	// ip camera
             cap_channel[i] = new ipeagle32_capture(i);
         }
         else {
@@ -1241,21 +1218,18 @@ void cap_uninit()
 {
     int i;
     cap_stop();
-#ifndef	NO_ONBOARD_EAGLE
-	eagle32_uninit ();
-#endif	
-    if( cap_channels > 0 ) {
-		i=cap_channels-1 ;
-        cap_channels=0 ;
-	    for( ; i>=0; i-- ) {
-	        if( cap_channel[i] ) {
-	            delete cap_channel[i] ;
+	i=cap_channels;
+    cap_channels=0 ;
+	if( cap_channel != NULL ) {
+		while(--i>=0) {
+			if( cap_channel[i] ) {
+				delete cap_channel[i] ;
 			}
-        }
-    }
-	delete [] cap_channel ;
-	cap_channel=NULL ;
+		}
+		delete [] cap_channel ;
+		cap_channel=NULL ;
+	}
     // un initialize local capture card
-    dvr_log("Capture card uninitialized.");
+    dvr_log("Camera uninitialized.");
 }
 

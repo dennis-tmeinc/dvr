@@ -3,10 +3,13 @@
 ifeq ($(EAGLE),eagle34)
 #CROSS_COMPILE_PREFIX=/home/dennis/proj/eagle34/hiktoolchain/bin/arm_v5t_le-
 CROSS_COMPILE_PREFIX=/home/dennis/proj/eagle34/eagle34SDK/v5t_le-mv401_uc/bin/arm_v5t_le-
+# this is rebuilt toolchain
+# CROSS_COMPILE_PREFIX=/home/dennis/toolchain/bin/arm-linux-
 else ifeq ($(EAGLE),eagle32)
 CROSS_COMPILE_PREFIX=/home/dennis/proj/eagle32/hik_toolchain/bin/arm-linux-
 else ifeq ($(EAGLE),mv)
 CROSS_COMPILE_PREFIX=/home/dennis/bin/cross-arm-mv5sft/bin/arm-mv5sft-linux-gnueabi-
+#CROSS_COMPILE_PREFIX=/home/dennis/proj/eagle34/eagle34SDK/v5t_le-mv401_uc/bin/arm_v5t_le-
 else
 CROSS_COMPILE_PREFIX=	
 endif

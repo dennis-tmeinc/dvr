@@ -14,11 +14,10 @@ HEADERS=netdbg.h
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
-#no eagle boards
-ifeq ($(EAGLE),mv)
-LDFLAGS= -lpthread -lstdc++ -lrt -Wl,-rpath,.
+ifeq ($(EAGLE),eagle32)
+LDFLAGS= -lpthread -lstdc++ -L../eaglesvr/$(EAGLE) -lsdk -ldadsp ../eaglesvr/$(EAGLE)/dsplink.lib
 else
-LDFLAGS= -lpthread -lstdc++ -L../dvrsvr/$(EAGLE) -lsdk -ldadsp ../dvrsvr/$(EAGLE)/dsplink.lib
+LDFLAGS= -lpthread -lstdc++ -lrt -Wl,-rpath,.
 endif
 
 CFLAGS=-I../dvrsvr -g -Wall

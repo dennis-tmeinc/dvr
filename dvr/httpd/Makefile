@@ -11,28 +11,32 @@ HEADERS=
 
 LDFLAGS= 
 
-all: eaglehttpd eagle_setup- getsetup- cfgdown-
+all: eaglehttpd eagle_setup- getsetup- cfgdown- livecam-
 
 eaglehttpd: eaglehttpd.c
 	$(CC) $(CFLAGS) -o $@ eaglehttpd.c $(LDFLAGS)
 	cp eaglehttpd  $(debug_folder)/www
     
 eagle_setup- :
-	cd eagle_setup; make
+	make -C eagle_setup
+
+livecam- :
+	make -C livecam
 
 getsetup- :
 # applysetup:
-	cd getsetup; make
+	make -C getsetup
 
 cfgdown- :
-	cd cfgdown; make   
+	make -C cfgdown
 
 clean :
 	rm -f eaglehttpd
 	rm -f *.o
-	cd eagle_setup; make clean
-	cd getsetup; make clean
-	cd cfgdown; make clean
+	make -C eagle_setup clean
+	make -C getsetup clean
+	make -C livecam clean
+	make -C cfgdown clean
 
 
 

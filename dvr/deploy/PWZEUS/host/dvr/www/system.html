@@ -59,18 +59,24 @@
 <td>&nbsp;</td>
 <td></td>
 </tr>
+
 <tr>
 <td class="col1">Time Zone:</td>
 <td>
+<select size="1" name="dvr_time_zone" id="id_dvr_time_zone" onchange="ontimezonechange()" ><!--#include file="tz_option" --></select>
 </td>
 </tr>
+
+<tr id="id_customtz">
+<td class="col1">Custom TZ:</td>
+<td><input name="custom_tz" /></td>
+</tr>
+
 <tr>
-<td colspan="2">
-&nbsp; &nbsp;&nbsp; &nbsp;
-<select size="1" name="dvr_time_zone" id="id_dvr_time_zone"><!--#include file="tz_option" --></select>
-</td>
+<td>&nbsp;</td>
 <td></td>
 </tr>
+
 <tr>
 <td class="col1">Shutdown Delay (seconds):</td>
 <td><input name="shutdown_delay" /></td>
@@ -84,6 +90,11 @@
 <tr>
 <td class="col1">Maximum WiFi Uploading Time (seconds):</td>
 <td><input name="uploadingtime" /></td>
+</tr>
+
+<tr>
+<td class="col1">Maximum Archiving Time (seconds):</td>
+<td><input name="archivingtime" /></td>
 </tr>
 
 <tr>
@@ -139,6 +150,27 @@
 </td>
 </tr>
 <tr>
+
+
+<tr>
+<td class="col1"><label for="id_nowifiupload">Disable Wifi Upload Feature:</label></td>
+<td>
+<input name="nowifiupload" id="id_nowifiupload" value="on" type="checkbox" />
+<input name="bool_nowifiupload" value="on" type="hidden" />
+</td>
+</tr>
+<tr>
+
+
+<tr>
+<td class="col1"><label for="id_noarchive">Disable Archive Feature::</label></td>
+<td>
+<input name="noarchive" id="id_noarchive" value="on" type="checkbox" />
+<input name="bool_noarchive" value="on" type="hidden" />
+</td>
+</tr>
+<tr>
+
 
 <tr>
 <td>&nbsp;</td>
@@ -354,34 +386,6 @@ Crash&nbsp;<input name="gforce_upward_crash" size=5 />
 </table>
 </form>
 <script type="text/javascript">
-var formdata = 
-<!--#include file="system_value" --> 
-;
-JSONinitfield( formdata );
-
-if( formdata.gforce_available != "1" ) {
-    document.getElementById('idtr_gforce_available').style.display="none" ;
-    document.getElementById('idtr_gforce_enable').style.display="none" ;
-    document.getElementById('idtr_gforce_dirforward').style.display="none" ;
-    document.getElementById('idtr_gforce_dirupward').style.display="none" ;
-    document.getElementById('idtr_gforce_mountangle').style.display="none" ;
-    document.getElementById('idtr_gforce_crashdata').style.display="none" ;
-    document.getElementById('idtr_gforce_upward').style.display="none" ;
-    document.getElementById('idtr_gforce_downward').style.display="none" ;
-    document.getElementById('idtr_gforce_left').style.display="none" ;
-    document.getElementById('idtr_gforce_right').style.display="none" ;
-    document.getElementById('idtr_gforce_backward').style.display="none" ;
-    document.getElementById('idtr_gforce_forward').style.display="none" ;
-}
-
-if( !document.getElementsByName('show_mountangle')[0].value ) {
-    document.getElementById('idtr_gforce_mountangle').style.display="none" ;
-    document.getElementsByName('gforce_calibration')[0].style.display="" ;
-}
-else {
-    document.getElementById('idtr_gforce_mountangle').style.display="" ;
-    document.getElementsByName('gforce_calibration')[0].style.display="none" ;
-}
 
 var calibration_on=0 ;
 
@@ -462,6 +466,52 @@ function ongforceMountdlg()
     gsensor_mount_cal = 1 ;
     ajaxload("get", "cgi/gangle.cgi?op=start", gforceMount_val);
 }
+
+
+// custom time zone function
+function ontimezonechange()
+{
+    var tzselect = document.getElementById('id_dvr_time_zone') ;
+    if( tzselect.options[tzselect.selectedIndex].text == "Custom" ) {
+	document.getElementById('id_customtz').style.display="" ;
+    }
+    else {
+	document.getElementById('id_customtz').style.display="none" ;
+    }
+}
+
+function initform( formvalue )
+{
+    var formdata = eval("(" + formvalue + ")") ;
+    JSONinitfield( formdata );
+
+    if( formdata.gforce_available != "1" ) {
+	document.getElementById('idtr_gforce_available').style.display="none" ;
+	document.getElementById('idtr_gforce_enable').style.display="none" ;
+	document.getElementById('idtr_gforce_dirforward').style.display="none" ;
+	document.getElementById('idtr_gforce_dirupward').style.display="none" ;
+	document.getElementById('idtr_gforce_mountangle').style.display="none" ;
+	document.getElementById('idtr_gforce_crashdata').style.display="none" ;
+	document.getElementById('idtr_gforce_upward').style.display="none" ;
+	document.getElementById('idtr_gforce_downward').style.display="none" ;
+	document.getElementById('idtr_gforce_left').style.display="none" ;
+	document.getElementById('idtr_gforce_right').style.display="none" ;
+	document.getElementById('idtr_gforce_backward').style.display="none" ;
+	document.getElementById('idtr_gforce_forward').style.display="none" ;
+    }
+
+    if( !document.getElementsByName('show_mountangle')[0].value ) {
+	document.getElementById('idtr_gforce_mountangle').style.display="none" ;
+	document.getElementsByName('gforce_calibration')[0].style.display="" ;
+    }
+    else {
+	document.getElementById('idtr_gforce_mountangle').style.display="" ;
+	document.getElementsByName('gforce_calibration')[0].style.display="none" ;
+    }
+    ontimezonechange();
+}
+
+ajaxload( "POST", "system_value", initform );
 
 </script>
 </body>

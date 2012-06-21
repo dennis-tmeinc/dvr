@@ -20,12 +20,15 @@
 
 #include "../cfg.h"
 
-#include "../dvrsvr/eagle32/davinci_sdk.h"
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
 #include "netdbg.h"
 #include "mcu.h"
 #include "diomap.h"
+
+#ifdef EAGLE32
+#include "../eaglesvr/eagle34/davinci_sdk.h"
+#endif
 
 // functions from ioprocess.cpp
 int dvr_log(char *fmt, ...);
@@ -1253,6 +1256,9 @@ int mcu_pwii_cmd(char * rsp, int cmd, int datalen, ...)
 #endif
 
     }
+
+	dvr_log( "CDC communication lost!" ) ;
+	mcu_pwii_cdcfailed = 1 ;
 
     return -1 ;		// error!
 }

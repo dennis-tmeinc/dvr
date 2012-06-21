@@ -258,16 +258,15 @@ ptzaddr=2
 gpsen=1
 
 [timezones]
-# www.timeanddate.com
+Custom=EST+5EDT+4,M3.2.0,M11.1.0
 UTC=UTC Coordinated Universal Time
-GMT=GMT Greenwich Mean Time
-Canada/Newfoundland=NST+3:30NDT+2:30,M3.2.0/2,M11.1.0/2 (GMT-3:30) St. John's, Newfoundland and Labrador
-Canada/Atlantic=AST+4:00ADT+3:00,M3.2.0/2,M11.1.0/2 (GMT-4:00) Halifax, Nova Scotia
-Canada/Eastern=EST+5EDT+4,M3.2.0/2,M11.1.0/2 (GMT-5:00)
+Canada/Newfoundland=NST+3:30NDT+2:30,M3.2.0,M11.1.0 (GMT-3:30) St. John's
+Canada/Atlantic=AST+4:00ADT+3:00,M3.2.0/2,M11.1.0/2 (GMT-4:00) Halifax
+Canada/Eastern=EST+5EDT+4,M3.2.0/2,M11.1.0/2 (GMT-5:00) Toronto, Ottawa
 Canada/Central=CST+6CDT+5,M3.2.0/2,M11.1.0/2 (GMT-6:00)
 Canada/East-Saskatchewan=CST+6CDT+5,M3.2.0/2,M11.1.0/2 (GMT-6:00)
-Canada/Saskatchewan=CST+6:00 (GMT-6:00) Regina, Saskatchewan
-Canada/Mountain=MST+7MDT+6,M3.2.0/2,M11.1.0/2 (GMT-7:00) Edmonton, Alberta
+Canada/Saskatchewan=CST+6:00 (GMT-6:00) Regina
+Canada/Mountain=MST+7MDT+6,M3.2.0/2,M11.1.0/2 (GMT-7:00) Edmonton
 Canada/Pacific=PST+8PDT+7,M3.2.0/2,M11.1.0/2 (GMT-8:00)
 Canada/Yukon=PST+8PDT+7,M3.2.0/2,M11.1.0/2 (GMT-8:00)
 US/Eastern=EST+5EDT+4,M3.2.0/2,M11.1.0/2 (GMT-5:00) New York
@@ -281,9 +280,17 @@ US/Pacific=PST+8PDT+7,M3.2.0/2,M11.1.0/2 (GMT-8:00) Los Angeles, California
 US/Alaska=AKST+9AKDT+8,M3.2.0/2,M11.1.0/2 (GMT-9:00) Anchorage, Alaska
 US/Aleutian=HAST+10HADT+9,M3.2.0/2,M11.1.0/2 (GMT-10:00) Adak, Alaska
 US/Hawaii=HST+10 (GMT-10:00) Honolulu, Hawaii
-Mexico/General=CST+6CDT+5,M4.1.0/2,M10.4.0/2 (GMT-6:00) Mexico City, Federal District
-Mexico/BajaSur=MST+7MDT+6,M4.1.0/2,M10.4.0/2 (GMT-7:00) Chihuahua, Chihuahua
-Mexico/BajaNorte=PST+8PDT+7,M4.1.0/2,M10.4.0/2 (GMT-8:00) Tijuana, Baja California
+Mexico/General=CST+6CDT+5,M4.1.0/2,M10.4.0/2 (GMT-6:00) Mexico City
+Mexico/BajaSur=MST+7MDT+6,M4.1.0/2,M10.4.0/2 (GMT-7:00) Chihuahua
+Mexico/BajaNorte=PST+8PDT+7,M4.1.0/2,M10.4.0/2 (GMT-8:00) Tijuana
+Australia/ChristmasIsland=CXT-7 (GMT+7:00) Christmas Island
+Australia/West=WST-8 (GMT+8:00) Perth
+Australia/North=CST-9:30 (GMT+9:30) Darwin
+Australia/South=CST-9:30CDT-10:30,M10.1.0,M4.1.0 (GMT+9:30) Adelaide
+Australia/Queensland=EST-10 (GMT+10:00) Brisbane
+Australia/East=EST-10EDT-11,M10.1.0,M4.1.0 (GMT+10:00) Canberra, Melbourne, Sydney
+Australia/LordHowe=LHST-10:30LHDT-11,M10.1.0,M4.1.0 (GMT+10:30) Lord Howe Island
+Australia/Norfolk=NFT-11:30 (GMT+11:30) Norfolk Island
 
 # parameters for io module
 [io]

@@ -14,6 +14,15 @@
 
 #include "dvr.h"
 
+#ifndef STANDARD_NTSC
+#define STANDARD_NTSC (1)
+#endif
+#ifndef STANDARD_PAL
+#define STANDARD_PAL (2)
+#endif
+
+int screen_sockfd ;
+
 #ifdef NO_ONBOARD_EAGLE
 // define all dummy screen functions
 int screen_setliveview( int channel )
@@ -60,16 +69,6 @@ void screen_uninit()
 
 #include "fbwindow.h"
 
-#ifdef EAGLE32
-#include "eagle32/davinci_sdk.h"
-#endif
-
-#ifdef EAGLE34
-#include "eagle34/davinci_sdk.h"
-#endif
-
-#define MAIN_OUTPUT  (0)
-
 static char mousedevname[] = "/dev/input/mice" ;
 static int  mousedev = 0 ;
 static int mousemaxx, mousemaxy ;
@@ -103,37 +102,6 @@ static int screen_play_maxjumptime ;
 static int screen_play_doublejumptimer ;
 static int screen_keepcapture ;
 
-static void screen_setmode()
-{
-    // setup preview display screen	
-    //	SetOutputFormat(STANDARD_NTSC);
-    int res = 0 ;
-    int i;
-    unsigned char displayorder[16] ;
-
-    for(i=0; i<16; i++) {
-        displayorder[i]=i ;
-    }
-    
-    SetOutputFormat( ScreenStandard ) ;
-
-    // clear display
-    ClrDisplayParams(MAIN_OUTPUT,0);
-
-    res=SetDisplayParams(MAIN_OUTPUT, ScreenNum);       //  set screen format, support 1 , 2, 4 (2x2), 6 (3x3), 8 (?), 9 (3x3 ), 16 (4x4)
-
-    for( i=0; i<eagle32_channels ; i++ ) {
-        displayorder[i]=eagle32_hikhandle(i)-1 ;
-    }
-    
-    res=SetDisplayOrder(MAIN_OUTPUT, displayorder );    // select screen channel order, also turn on all preview channels
-
-    // turn off all preview channel opened by "SetDisplayOrder"
-    for( i=0; i<eagle32_channels ; i++ ) {
-        res=SetPreviewScreen(MAIN_OUTPUT,i+1,0);          // third  parameter turn on/off specified channel
-        res=SetPreviewAudio(MAIN_OUTPUT,i+1,0);           // turn on/off audio ?
-    }
-}
 
 // status window on video screen
 class video_icon : public window {
@@ -166,15 +134,7 @@ class video_icon : public window {
             fillrect ( 0, 0, m_pos.w, m_pos.h );	
             if( m_icon.valid() ) {
                 drawbitmap( m_icon, 0, 0, 0, 0, m_pos.w, m_pos.h );
-#ifdef EAGLE34                
-                draw_show();	
-#endif                
             }
-#ifdef EAGLE34                
-            else {
-                draw_hide();	
-            }
-#endif                
         }
 };
 
@@ -204,15 +164,6 @@ class video_status : public window {
         resource font("mono32b.font");
         setcolor(COLOR(240,240,80,200));
         drawtext( 0, 0, m_status, font );
-#ifdef EAGLE34
-        int l = m_status.length();
-        if( l>0 ) {
-            draw_show(0,0, l*font.fontwidth(), font.fontheight());
-        }
-        else {
-            draw_hide();
-        }
-#endif       
     }
 };
 
@@ -262,347 +213,372 @@ static int screen_menustartup=0 ;
 
 // status window on video screen
 class pwii_menu : public window {
-        int m_level ;           // 0: top level, 1: Enter Officer ID, 2: Enter classification number
-        int m_select ;          // selection on current level
-        int m_maxselect ;       // selection from 0 to maxselect
-        int m_dispbegin ;
-        array <string> m_officerIDlist ;
+    int m_level ;           // 0: top level, 1: Enter Officer ID, 2: Enter classification number
+    int m_select ;          // selection on current level
+    int m_maxselect ;       // selection from 0 to maxselect
+    int m_dispbegin ;
+    array <string> m_officerIDlist ;
     
-    public:
-        pwii_menu( window * parent, int id, int x, int y, int w, int h )
+public:
+    pwii_menu( window * parent, int id, int x, int y, int w, int h )
         :window( parent, id, x, y, w, h ) {
+        level(1);
+    }
+
+    virtual ~pwii_menu() {
+        m_id = 0 ;                  // so parent can't find me.
+        m_parent->command( CMD_MENUOFF );
+    }
+
+    void refresh() {
+        settimer( 60000, 1 );           // turn off timer
+        redraw();
+    }
+
+    void level(int l) {
+        m_level = l ;
+        if( m_level == 1 ) {
+            m_maxselect = 0 ;
+            m_select = 0 ;
+            m_officerIDlist.empty();
+        }
+        else if( m_level == 2 ) {
+            m_officerIDlist.empty();
+            // whats in the ID list?
+            //    first item : "NO ID (bypass)",
+            //    second item : current (previously entered) police ID if present (not bypassed)
+            //    other item : avaiable ID except current ID
+
+            int il ;
+            m_officerIDlist[0]="NO ID (bypass)" ;
+            il = 1 ;
+            if( strlen(g_policeid)>0 ) {
+                m_officerIDlist[il++]=g_policeid ;
+                m_select = 1 ;
+            }
+            else {
+                m_select = 0 ;
+            }
+
+            FILE * fid ;
+            fid=fopen(g_policeidlistfile, "r");
+            if( fid ) {
+                char idline[100] ;
+                while( fgets(idline, 100, fid) ) {
+                    str_trimtail(idline);
+                    if( strlen(idline)<=0 ) continue ;
+                    if( strcmp(idline, g_policeid)==0 ) continue ;
+                    m_officerIDlist[il++]=idline ;
+                }
+                fclose(fid);
+            }
+            m_maxselect = il-1 ;
+            m_dispbegin = 0 ;
+        }
+        refresh();
+    }
+
+    void enter() {
+        if( m_level == 1 && m_select == 0 ) {
+            level(2);
+        }
+        else if( m_level == 2 ) {
+            // update current police ID
+            if( m_select == 0 ) {
+                // select no ID (bypass)
+                g_policeid[0]=0 ;
+                dvr_log( "Police ID bypassed!");
+            }
+            else {
+                strcpy(g_policeid, m_officerIDlist[m_select]);
+                dvr_log( "Police ID selected : %s", g_policeid );
+            }
+            m_officerIDlist[0]="";
+            m_officerIDlist.sort();
+            // write police id list file
+            FILE * fid ;
+            fid=fopen(g_policeidlistfile, "w");
+            if( fid ) {
+                fprintf(fid, "%s\n", g_policeid );      // write current ID or empty line
+                int i ;
+                for( i=0; i<m_officerIDlist.size(); i++ ) {
+                    if( m_officerIDlist[i].length()<=0 ) continue ;
+                    if( strcmp(m_officerIDlist[i], g_policeid)==0 ) continue ;
+                    fprintf( fid, "%s\n", (char *)m_officerIDlist[i]);
+                }
+                fclose(fid);
+            }
+
+            m_officerIDlist.empty();
             level(1);
         }
+        refresh();
+    }
 
-        virtual ~pwii_menu() {
-            m_id = 0 ;                  // so parent can't find me.
-            m_parent->command( CMD_MENUOFF );
+    void cancel() {
+        if( m_level == 1 ) {
+            destroy();
         }
-
-        void refresh() {
-            settimer( 60000, 1 );           // turn off timer
-            redraw();
+        else if( m_level == 2 ) {
+            // back to level 1 menu with no change
+            level(1);
         }
-        
-        void level(int l) {
-            m_level = l ;
-            if( m_level == 1 ) {
-                m_maxselect = 0 ;
-                m_select = 0 ;
-                m_officerIDlist.empty();
-            }
-            else if( m_level == 2 ) {
-                m_officerIDlist.empty();
-                // whats in the ID list?
-                //    first item : "NO ID (bypass)",
-                //    second item : current (previously entered) police ID if present (not bypassed)
-                //    other item : avaiable ID except current ID
+        refresh();
+    }
 
-                int il ;
-                m_officerIDlist[0]="NO ID (bypass)" ;
-                il = 1 ;
-                if( strlen(g_policeid)>0 ) {
-                    m_officerIDlist[il++]=g_policeid ;
-                    m_select = 1 ;
-                }
-                else {
-                    m_select = 0 ;
-                }
-
-                FILE * fid ;
-                fid=fopen(g_policeidlistfile, "r");
-                if( fid ) {
-                    char idline[100] ;
-                    while( fgets(idline, 100, fid) ) {
-                        str_trimtail(idline);
-                        if( strlen(idline)<=0 ) continue ;
-                        if( strcmp(idline, g_policeid)==0 ) continue ;
-                        m_officerIDlist[il++]=idline ;
-                    }
-                    fclose(fid);
-                }
-                m_maxselect = il-1 ;
-                m_dispbegin = 0 ;
-            }
-            refresh();
+    void nextpage() {
+        if( m_level == 1 ) {
         }
-
-        void enter() {
-            if( m_level == 1 && m_select == 0 ) {
-                level(2);
+        else if( m_level == 2 ) {
+            if( m_select < m_maxselect ) {
+                m_select++ ;
             }
-            else if( m_level == 2 ) {
-                // update current police ID
-                if( m_select == 0 ) {
-                    // select no ID (bypass) 
-                    g_policeid[0]=0 ;
-                    dvr_log( "Police ID bypassed!");
-                }
-                else {
-                    strcpy(g_policeid, m_officerIDlist[m_select]);
-                    dvr_log( "Police ID selected : %s", g_policeid );
-                }
-                m_officerIDlist[0]="";
-                m_officerIDlist.sort();
-                // write police id list file
-                FILE * fid ;
-                fid=fopen(g_policeidlistfile, "w");
-                if( fid ) {
-                    fprintf(fid, "%s\n", g_policeid );      // write current ID or empty line
-                    int i ;
-                    for( i=0; i<m_officerIDlist.size(); i++ ) {
-                        if( m_officerIDlist[i].length()<=0 ) continue ;
-                        if( strcmp(m_officerIDlist[i], g_policeid)==0 ) continue ;
-                        fprintf( fid, "%s\n", (char *)m_officerIDlist[i]);
-                    }
-                    fclose(fid);
-                }
-
-                m_officerIDlist.empty();
-                level(1);
-            }
-            refresh();
+            m_dispbegin = m_select-MAXPOLICIDLISTLINE+1 ;
+            if( m_dispbegin<0 ) m_dispbegin=0 ;
         }
+        refresh();
+    }
 
-        void cancel() {
-            if( m_level == 1 ) {
-                destroy();
-            }
-            else if( m_level == 2 ) {
-                // back to level 1 menu with no change
-                level(1);
-            }
-            refresh();
+    void prevpage() {
+        if( m_level == 1 ) {
         }
-
-        void next() {
-            if( m_level == 1 ) {
+        else if( m_level == 2 ) {
+            if( m_select > 0 ){
+                m_select-- ;
             }
-            else if( m_level == 2 ) {
-                if( m_select < m_maxselect ) {
-                    m_select++ ;
-                }
-                m_dispbegin = m_select-MAXPOLICIDLISTLINE+1 ;
-                if( m_dispbegin<0 ) m_dispbegin=0 ;
+            if( m_select<m_dispbegin ) {
+                m_dispbegin=m_select ;
             }
-            refresh();
         }
+        refresh();
+    }
 
-        void prev() {
-            if( m_level == 1 ) {
-            }
-            else if( m_level == 2 ) {
-                if( m_select > 0 ){
-                    m_select-- ;
-                }
-                if( m_select<m_dispbegin ) {
-                    m_dispbegin=m_select ;
-                }
-            }
-            refresh();
+    void next() {
+        if( m_level == 1 ) {
         }
+        else if( m_level == 2 ) {
+            if( m_select < m_maxselect ) {
+                m_select++ ;
+            }
+            m_dispbegin = m_select-MAXPOLICIDLISTLINE+1 ;
+            if( m_dispbegin<0 ) m_dispbegin=0 ;
+        }
+        refresh();
+    }
 
-        // event handler
-    protected:
-        virtual void paint() {						// paint window
-            char sbuf[256] ;
-            int y ;
-            resource font("mono32b.font");
-            setpixelmode (DRAW_PIXELMODE_COPY);
-            resource ball ("ball.pic") ;
-            
-            if( m_level==1 ) {
-                setcolor (COLOR(30, 71, 145, 190 )) ;
-                fillrect ( 50, 80, m_pos.w-100, m_pos.h-160 );
-                y = 120 ;
+    void prev() {
+        if( m_level == 1 ) {
+        }
+        else if( m_level == 2 ) {
+            if( m_select > 0 ){
+                m_select-- ;
+            }
+            if( m_select<m_dispbegin ) {
+                m_dispbegin=m_select ;
+            }
+        }
+        refresh();
+    }
 
+    // event handler
+protected:
+    virtual void paint() {						// paint window
+
+        char sbuf[256] ;
+        int y ;
+        resource font("mono32b.font");
+        setpixelmode (DRAW_PIXELMODE_COPY);
+        resource ball ("ball.pic") ;
+
+        if( m_level==1 ) {
+
+            setcolor (COLOR(30, 71, 145, 190 )) ;
+            fillrect ( 50, 80, m_pos.w-100, m_pos.h-160 );
+            y = 120 ;
+            setcolor(COLOR(240,240,80,255));
+            sprintf( sbuf, "VRI: %s", g_vri[0]?g_vri:"(NA)" );
+            drawtext( 55, y, sbuf, font );
+            y+=40 ;
+            // show disk avaialbe space
+            int rectime, locktime, remtime ;
+            if( disk_stat( &rectime, &locktime, &remtime ) ) {
+                remtime = (rectime-locktime+remtime)/60 ;
+                remtime /= cap_channels ;
+                locktime /= 60 ;
+                locktime /= cap_channels ;
                 setcolor(COLOR(240,240,80,255));
-                sprintf( sbuf, "VRI: %s", g_vri[0]?g_vri:"(NA)" );
+                sprintf( sbuf, "Video length %d:%02d  Remain %d:%02d",
+                         locktime/60,
+                         locktime%60,
+                         remtime/60,
+                         remtime%60 );
                 drawtext( 55, y, sbuf, font );
-
                 y+=40 ;
-                // show disk avaialbe space
-                int rectime, locktime, remtime ;
-                if( disk_stat( &rectime, &locktime, &remtime ) ) {
-                    remtime = (rectime-locktime+remtime)/60 ;
-                    remtime /= cap_channels ;
-                    locktime /= 60 ;
-                    locktime /= cap_channels ;
-                    setcolor(COLOR(240,240,80,255));
-                    sprintf( sbuf, "Video length %d:%02d  Remain %d:%02d", 
-                        locktime/60,
-                        locktime%60,
-                        remtime/60,
-                        remtime%60 );
-                    drawtext( 55, y, sbuf, font );
-                    y+=40 ;
-                }
-                
-                if( strlen(g_policeid)>0 ) {
-                    setcolor(COLOR(240,240,80,255));
-                    sprintf( sbuf, "Officer ID: %s", g_policeid );
-                    drawtext( 55, y, sbuf, font );
-
-                    sprintf( sbuf, "Change Officer ID" );
-                    drawtext( 80, 280, sbuf, font );
-                    drawbitmap(ball, (80-20), (280+15));
-                }
-                else {
-                    setcolor(COLOR(240,240,80,255));
-                    sprintf( sbuf, "Officer ID: (NA)" );
-                    drawtext( 55, y, sbuf, font );
-
-                    sprintf( sbuf, "Enter Officer ID" );
-                    drawtext( 80, 280, sbuf, font );
-                    drawbitmap(ball, (80-20), (280+15));
-                }
-#ifdef EAGLE34
-                draw_show(50, 80, m_pos.w-100, m_pos.h-160);
-#endif       
             }
-            else if( m_level==2 ) {
-                int i ;
-                setcolor (COLOR(30, 71, 145, 190 )) ;
-                fillrect ( 50, 80, m_pos.w-100, m_pos.h-160 );
-
+            if( strlen(g_policeid)>0 ) {
                 setcolor(COLOR(240,240,80,255));
-                drawtextex( 80, 100, "SELECT OFFICER ID", font, 30, 50 );
+                sprintf( sbuf, "Officer ID: %s", g_policeid );
+                drawtext( 55, y, sbuf, font );
+                sprintf( sbuf, "Change Officer ID" );
+                drawtext( 80, 280, sbuf, font );
+                drawbitmap(ball, (80-20), (280+15));
+            }
+            else {
+                setcolor(COLOR(240,240,80,255));
+                sprintf( sbuf, "Officer ID: (NA)" );
+                drawtext( 55, y, sbuf, font );
+                sprintf( sbuf, "Enter Officer ID" );
+                drawtext( 80, 280, sbuf, font );
+                drawbitmap(ball, (80-20), (280+15));
+            }
+        }
+        else if( m_level==2 ) {
+            int i ;
+            setcolor (COLOR(30, 71, 145, 190 )) ;
+            fillrect ( 50, 80, m_pos.w-100, m_pos.h-160 );
 
-                int x = 80 ;
-                int y = 160 ;
+            setcolor(COLOR(240,240,80,255));
+            drawtextex( 80, 100, "SELECT OFFICER ID", font, 30, 50 );
 
-                for( i=0; i<MAXPOLICIDLISTLINE; i++ ) {
-                    if( i+m_dispbegin > m_maxselect ) break;
-                    drawtext( x, y, m_officerIDlist[i+m_dispbegin], font ) ;
-                    if( (i+m_dispbegin)==m_select ) {
-                        drawbitmap( ball, (x-20), (y+15) ) ;
-                    }
-                    y+=40 ;
+            int x = 80 ;
+            int y = 160 ;
+
+            for( i=0; i<MAXPOLICIDLISTLINE; i++ ) {
+                if( i+m_dispbegin > m_maxselect ) break;
+                drawtext( x, y, m_officerIDlist[i+m_dispbegin], font ) ;
+                if( (i+m_dispbegin)==m_select ) {
+                    drawbitmap( ball, (x-20), (y+15) ) ;
                 }
-#ifdef EAGLE34
-                draw_show(50, 80, m_pos.w-100, m_pos.h-160);
-#endif       
+                y+=40 ;
             }
         }
-        
-        virtual void ontimer( int id ) {
-            if( id==1 ) {
-                destroy();
-            }
-            return ;
+    }
+
+    virtual void ontimer( int id ) {
+        if( id==1 ) {
+            destroy();
         }
+        return ;
+    }
 };
 
 #endif
 
 class video_screen : public window {
 
-    protected:
+protected:
 
-        int m_select ;       // 1: currently selected, 0: unselected. (only one selected video screen)
-        int m_decode_handle ;           // decoder handle
+    int m_select ;       // 1: currently selected, 0: unselected. (only one selected video screen)
 
-        int m_decode_speed ;            // decoder speed
-        int m_decode_runmode ;          // decoder thread running, 
+    int m_decode_speed ;            // decoder speed
+    int m_decode_runmode ;          // decoder thread running,
+    int m_decode_modesafe ;         // safe to change decoding mode
 
-        pthread_t  m_decodethreadid ;
-        dvrtime  m_streamtime ;         // remember streaming playback time
-        dvrtime  m_playbacktime ;       // remember previous playback time
+    pthread_t  m_decodethreadid ;
+    dvrtime  m_streamtime ;         // remember streaming playback time
+    dvrtime  m_playbacktime ;       // remember previous playback time
 
-        int m_videomode ;           // 0: live, 1: playback, 2: lcdoff, 3: standby
-        int m_playchannel ;     // playing channel, 0: first channel, 1: second channel
+    int m_videomode ;           // 0: live, 1: playback, 2: lcdoff, 3: standby
+    int m_playchannel ;     	// playing channel, 0: first channel, 1: second channel
+    int m_eaglechannel ;		// related eagle channel
 
-        video_status * m_statuswin ;        // status txt on top-left corner
-        video_icon   * m_icon ;             // display a icon when button pressed
+    video_status * m_statuswin ;        // status txt on top-left corner
+    video_icon   * m_icon ;             // display a icon when button pressed
 
-        int m_jumptime ;
-        int m_keytime ;
+    int m_jumptime ;
+    int m_keytime ;
+    int m_timerstate ;
+    int m_keypad_up ;
 
-
-    public:
+public:
     video_screen( window * parent, int id, int x, int y, int w, int h ) :
         window( parent, id, x, y, w, h ) {
-            // initial channel number, 
-            m_playchannel = 0 ;
-            m_select = 0 ;
-            // create recording light
+        // initial channel number,
+        m_playchannel = 0 ;
+        m_eaglechannel = 0 ;
 
-            m_videomode=VIDEO_MODE_NONE ;
-            m_decode_handle = 0 ;
-            time_dvrtime_init(&m_streamtime, 2000);
-            time_dvrtime_init(&m_playbacktime, 2000);
-            m_statuswin = new video_status(this, 1, 30, 60, 200, 50 );
-            m_icon = new video_icon(this, 2, (m_pos.w-75)/2, (m_pos.h-75)/2, 75, 75 );
+        m_select = 0 ;
+        // create recording light
+
+        m_videomode=VIDEO_MODE_NONE ;
+        //            m_decode_handle = 0 ;
+        time_dvrtime_init(&m_streamtime, 2000);
+        time_dvrtime_init(&m_playbacktime, 2000);
+        m_statuswin = new video_status(this, 1, 30, 60, 200, 50 );
+        m_icon = new video_icon(this, 2, (m_pos.w-75)/2, (m_pos.h-75)/2, 75, 75 );
 #ifdef PWII_APP
-            if( screen_menustartup==0 && screen_nostartmenu==0 && id == ID_VIDEO_SCREEN ) {
-                // this timer would open POLICE ID menu
-                settimer( 2000, ID_VIDEO_SCREEN ) ;
-                screen_menustartup=1 ;
-            }
+        if( screen_menustartup==0 && screen_nostartmenu==0 && id == ID_VIDEO_SCREEN ) {
+            // this timer would open POLICE ID menu
+            settimer( 2000, ID_VIDEO_SCREEN ) ;
+            screen_menustartup=1 ;
+        }
+        m_decode_modesafe = 0 ;
 #endif                
-        }
-        
-        ~video_screen() {
-            if( m_videomode== VIDEO_MODE_PLAYBACK ) {
-                stopdecode();
-            }
-            stop();
-            delete m_statuswin ;
-            delete m_icon ;
-        }
+        m_keypad_up = 0 ;
+    }
 
-        void liveview( int channel ) {
-            if( m_videomode <= VIDEO_MODE_PLAYBACK ) {
-                startliveview(channel);
-            }
+    ~video_screen() {
+        if( m_videomode== VIDEO_MODE_PLAYBACK ) {
+            stopdecode();
         }
+        stop();
+        delete m_statuswin ;
+        delete m_icon ;
+    }
 
-        void openmenu( int level ) {
-            if( m_videomode <= VIDEO_MODE_PLAYBACK ) {
+    void liveview( int channel ) {
+        if( m_videomode <= VIDEO_MODE_PLAYBACK ) {
+            startliveview(channel);
+        }
+    }
+
+    void openmenu( int level ) {
+        if( m_videomode <= VIDEO_MODE_PLAYBACK ) {
+            startliveview(m_playchannel);
+        }
+#ifdef PWII_APP        
+        startmenu() ;
+        pwii_menu * pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN ) ;
+        if( pmenu ) {
+            pmenu->level(level);
+        }
+#endif      // PWII_APP        
+
+        updatestatus();
+    }
+
+    // select audio
+    void select(int s) {
+        if( m_select != s ) {
+            m_select = s ;
+            if( m_videomode == VIDEO_MODE_LIVE ) {     // live view
                 startliveview(m_playchannel);
             }
-#ifdef PWII_APP        
-            startmenu() ;
-            pwii_menu * pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN ) ;
-            if( pmenu ) {
-                pmenu->level(level);
+            else {
+                ;   // support only one channel playback now.
             }
-#endif      // PWII_APP        
-            
-            updatestatus();
+            redraw();       // redraw box
         }
-        
-        // select audio 
-        void select(int s) {
-            if( m_select != s ) {
-                m_select = s ;
-                if( m_videomode == VIDEO_MODE_LIVE ) {     // live view
-                    startliveview(m_playchannel);
-                }
-                else {
-                    ;   // support only one channel playback now.
-                }
-                redraw();       // redraw box
-            }
-        }
+    }
 
-        // stop every thing?
-        void stop() {
-            stopdecode();
+    // stop every thing?
+    void stop() {
+        stopdecode();
 #ifdef PWII_APP        
-            stopmenu();
+        stopmenu();
 #endif            
-            stopliveview();
-        }
-        
-        // event handler
-    protected:
+        stopliveview();
+    }
 
-        virtual void paint() {
-            setcolor (COLOR(0,0,0,0)) ;	// full transparent
-            setpixelmode (DRAW_PIXELMODE_COPY);
-            fillrect ( 0, 0, m_pos.w, m_pos.h );	
-            if( m_select ) {
+    // event handler
+protected:
+
+    virtual void paint() {
+        setcolor (COLOR(0,0,0,0)) ;	// full transparent
+        setpixelmode (DRAW_PIXELMODE_COPY);
+        fillrect ( 0, 0, m_pos.w, m_pos.h );
+        /*
+   if( m_select ) {
                 setcolor ( COLOR( 0xe0, 0x10, 0x10, 0xff) ) ;	// selected border
             }
             else {
@@ -610,335 +586,309 @@ class video_screen : public window {
             }
             drawrect(0, 0, m_pos.w, m_pos.h);		// draw border
             drawrect(1, 1, m_pos.w-2, m_pos.h-2 );
-        }
+*/
+    }
 
-        virtual void onmouse( int x, int y, int buttons ) {
-            if( (buttons & 0x11)==0x11 ){       // click
-                select(1);
-            }
+    virtual void onmouse( int x, int y, int buttons ) {
+        if( (buttons & 0x11)==0x11 ){       // click
+            select(1);
         }
+    }
 
-        virtual void oncommand( int id, void * param ) {	// children send command to parent
-            if( id == CMD_MENUOFF ) {
+    virtual void oncommand( int id, void * param ) {	// children send command to parent
+        if( id == CMD_MENUOFF ) {
 #ifdef PWII_APP        
-                stopmenu();
+            stopmenu();
 #endif  // PWII_APP                
-            }
-    	}
+        }
+    }
 
-        void startliveview(int channel)    {
-            if( channel<0 || channel>=eagle32_channels ) {
-                channel = m_playchannel ;
-            }
-            screen_liveaudio=1 ;
+    void startliveview(int channel)    {
+        if( channel<0 || channel>=cap_channels ) {
+            channel = m_playchannel ;
+        }
+
+        screen_liveaudio=1 ;
 #ifdef PWII_APP
-            if( channel==pwii_rear_ch ) {
-                screen_liveaudio=screen_rearaudio ;
-            }
+        if( channel==pwii_rear_ch ) {
+            screen_liveaudio=screen_rearaudio ;
+        }
 #endif            
-            if( m_videomode == VIDEO_MODE_LIVE &&
-                m_playchannel == channel ) 
-            {
-                if( m_select ) {
-                    SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),screen_liveaudio);
-                }
-                else {
-                    SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),0);
-                }
-                return ;
+        if( m_videomode == VIDEO_MODE_LIVE &&
+            m_playchannel == channel )
+        {
+            if( m_select ) {
+                // turn on/off audio channel
+                dvr_screen_audio(screen_sockfd, m_eaglechannel, screen_liveaudio) ;
             }
-            stop();
-
-            if( channel < eagle32_channels ) {
-                m_playchannel = channel ;
-                SetPreviewScreen(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),1);
-                if( m_select ) {
-                    SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),screen_liveaudio);
-                }
-                else {
-                    SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),0);
-                }
-                m_videomode = VIDEO_MODE_LIVE ;
+            else {
+                dvr_screen_audio(screen_sockfd, m_eaglechannel, 0) ;
             }
-            updatestatus();
+            return ;
         }
+        stop();
 
-        void stopliveview() {
-            if( m_videomode == VIDEO_MODE_LIVE ) 
-            {
-                SetPreviewScreen(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),0);
-                SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),0);
-                m_videomode = VIDEO_MODE_NONE ; 
+        // start new live view channel
+        if( channel < cap_channels ) {
+            m_playchannel = channel ;
+            m_eaglechannel = cap_channel[m_playchannel]->geteaglechannel();
+            dvr_screen_live(screen_sockfd, m_eaglechannel) ;
+            if( m_select ) {
+                dvr_screen_audio(screen_sockfd, m_eaglechannel, screen_liveaudio) ;
             }
+            else {
+                dvr_screen_audio(screen_sockfd, m_eaglechannel, 0) ;
+            }
+            m_videomode = VIDEO_MODE_LIVE ;
         }
+        updatestatus();
+    }
+
+    void stopliveview() {
+        if( m_videomode == VIDEO_MODE_LIVE )
+        {
+            dvr_screen_stop(screen_sockfd, m_eaglechannel) ;
+            m_videomode = VIDEO_MODE_NONE ;
+        }
+    }
 
 #ifdef PWII_APP        
-        void startmenu() {
-//            stop();
+    void startmenu() {
+        //            stop();
 
-			if( screen_nomenu ) {		// don't start menu if disabled
-				return ;
-			}
-			
-            new pwii_menu(this, ID_MENU_SCREEN, 0, 0, m_pos.w, m_pos.h);
-            m_videomode= VIDEO_MODE_MENU ;
+        if( screen_nomenu ) {		// don't start menu if disabled
+            return ;
+        }
+        new pwii_menu(this, ID_MENU_SCREEN, 0, 0, m_pos.w, m_pos.h);
+        m_videomode= VIDEO_MODE_MENU ;
+        updatestatus();
+    }
+
+    void stopmenu() {
+        if( m_videomode == VIDEO_MODE_MENU )
+        {
+            pwii_menu * pmenu ;                // menu
+            pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
+            if( pmenu ) {
+                delete pmenu ;
+            }
+            m_videomode = VIDEO_MODE_LIVE ;
             updatestatus();
         }
-
-        void stopmenu() {
-            if( m_videomode == VIDEO_MODE_MENU ) 
-            {
-                pwii_menu * pmenu ;                // menu
-                pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
-                if( pmenu ) {
-                    delete pmenu ;
-                }
-                m_videomode = VIDEO_MODE_LIVE ;
-                updatestatus();
-            }
-        }
+    }
 #endif  // PWII_APP        
-        
-        void restartdecoder(void * fileheader) {
-            StopDecode( m_decode_handle );
-#ifdef EAGLE32            
-            m_decode_handle = StartDecode(MAIN_OUTPUT, 1, 1,  fileheader);
-#endif            
-#ifdef EAGLE34
-            m_decode_handle = StartDecode(MAIN_OUTPUT, 1, 1,  NULL);
-#endif            
-            if( m_decode_runmode == DECODE_MODE_PLAY ) {
-                m_decode_speed = DECODE_SPEED_NORMAL ; 
-                SetDecodeSpeed(m_decode_handle, m_decode_speed);
-            }
-            else {
-                m_decode_speed = DECODE_SPEED_FASTEST ;  // make decoder run super faster, so I can take care the player speed
-                SetDecodeSpeed(m_decode_handle, m_decode_speed);
-            }
-            updatestatus();
-        }
 
-        void updatestatus()  {
-            if( m_videomode == VIDEO_MODE_LIVE ) {      // live mode
-               m_statuswin->setstatus( "LIVE" );
-            }
-            else if( m_videomode == VIDEO_MODE_PLAYBACK ) { // playback mode,
-                if( m_decode_runmode == DECODE_MODE_PAUSE ) {
-                    m_statuswin->setstatus( "PAUSED" );
-                }
-                else if( m_decode_runmode == DECODE_MODE_PLAY_FASTFORWARD ) {
-                    m_statuswin->setstatus( "FORWARD" );
-                }
-                else if( m_decode_runmode == DECODE_MODE_PLAY_FASTBACKWARD ) {
-                    m_statuswin->setstatus( "BACKWARD" );
-                }
-                else {                      // DECODE_MODE_PLAY
-                    m_statuswin->setstatus( "PLAY" );
-                }                    
-            }
-            else if( m_videomode == VIDEO_MODE_MENU ) {     // menu mode
-                m_statuswin->setstatus( "" );
-            }
-            else if( m_videomode == VIDEO_MODE_LCDOFF ) {      // live mode
-               m_statuswin->setstatus( "LCDOFF" );
-            }
-            else if( m_videomode == VIDEO_MODE_STANDBY ) {      // live mode
-               m_statuswin->setstatus( "OFF" );
-            }
-        }
-
-        void playback_thread()  {
-            int res ;
-            void * buf ;
-            int    bufsize ;
-            int    frametype ;  
-            int    play=0;
-            dvrtime streamstart ;
-            dvrtime streamtime ;
-            dvrtime ref_start ;
-            dvrtime ref_time ;
-            int diff_stream, diff_ref ;
-            struct hd_file hdfile ;
-
-            playback * ply = new playback( m_playchannel, 1 ) ;
-#ifdef EAGLE32            
-            ply->readfileheader( (char *)&hdfile, sizeof(hdfile));
-            m_decode_handle = StartDecode(MAIN_OUTPUT, 1, 1,  &hdfile );
-#endif            
-#ifdef EAGLE34
-            m_decode_handle = StartDecode(MAIN_OUTPUT, 1, 1,  NULL);
-#endif            
+    void restartdecoder(void * fileheader) {
+        dvr_screen_stop(screen_sockfd, m_eaglechannel);
+        if( m_decode_runmode == DECODE_MODE_PLAY ) {
             m_decode_speed = DECODE_SPEED_NORMAL ;
-            res = SetDecodeSpeed(m_decode_handle, m_decode_speed);
+        }
+        else {
+            m_decode_speed = DECODE_SPEED_FASTEST ;  // make decoder run super faster, so I can take care the player speed
+        }
+        dvr_screen_play(screen_sockfd, m_eaglechannel, m_decode_speed) ;
+        updatestatus();
+    }
 
-            time_now( &streamtime );
-            if( time_dvrtime_diff( &streamtime, &m_playbacktime )> (60*30) ) {
-                ply->seek( &streamtime );
-                m_decode_runmode = DECODE_MODE_PRIOR ;
+    void updatestatus()  {
+        if( m_videomode == VIDEO_MODE_LIVE ) {      // live mode
+            m_statuswin->setstatus( "LIVE" );
+        }
+        else if( m_videomode == VIDEO_MODE_PLAYBACK ) { // playback mode,
+            if( m_decode_runmode == DECODE_MODE_PAUSE ) {
+                m_statuswin->setstatus( "PAUSED" );
             }
-            else {
-                ply->seek(&m_streamtime);
-                m_decode_runmode = DECODE_MODE_PLAY ;
+            else if( m_decode_runmode == DECODE_MODE_PLAY_FASTFORWARD ) {
+                m_statuswin->setstatus( "FORWARD" );
             }
+            else if( m_decode_runmode == DECODE_MODE_PLAY_FASTBACKWARD ) {
+                m_statuswin->setstatus( "BACKWARD" );
+            }
+            else {                      // DECODE_MODE_PLAY
+                m_statuswin->setstatus( "PLAY" );
+            }
+        }
+        else if( m_videomode == VIDEO_MODE_MENU ) {     // menu mode
+            m_statuswin->setstatus( "" );
+        }
+        else if( m_videomode == VIDEO_MODE_LCDOFF ) {      // live mode
+            m_statuswin->setstatus( "LCDOFF" );
+        }
+        else if( m_videomode == VIDEO_MODE_STANDBY ) {      // live mode
+            m_statuswin->setstatus( "OFF" );
+        }
+    }
 
-            while( m_decode_runmode>0 ) {
+    void playback_thread()  {
+        void * buf ;
+        int    bufsize ;
+        int    frametype ;
+        int    play=0;
+        dvrtime streamstart ;
+        dvrtime streamtime ;
+        dvrtime ref_start ;
+        dvrtime ref_time ;
+        int diff_stream, diff_ref ;
+        struct hd_file hdfile ;
 
-                bufsize = 0 ;
-                buf = NULL ;
+        playback * ply = new playback( m_playchannel, 1 ) ;
 
-                if( m_decode_runmode == DECODE_MODE_PLAY ) {
-                    ply->getstreamdata(&buf, &bufsize, &frametype );
-                    if( bufsize<=0 ) {
-                        usleep(20000);
-                        continue;
-                    }
-                    ply->getstreamtime(&streamtime);
-                    diff_stream = time_dvrtime_diffms( &streamtime, &streamstart );
-                    int loop = 0 ;
-                    if( bufsize>0 && buf){
+        m_decode_speed = DECODE_SPEED_NORMAL ;
+        dvr_screen_play(screen_sockfd, m_eaglechannel, m_decode_speed) ;
 
-                        while( m_decode_runmode==DECODE_MODE_PLAY ) {
-                            time_now( &ref_time );
-                            if( play==0 ) {
-                                ply->readfileheader( (char *)&hdfile, sizeof(hdfile));
-                                restartdecoder(&hdfile);            // restart decoder to flush decoder buffer
-                                play=1 ;
-                                streamstart = streamtime ;
-                                ref_start = ref_time ;
-                                break ;
-                            }
-                            diff_ref = time_dvrtime_diffms( &ref_time, &ref_start );
-                            if( diff_ref < diff_stream ) {
-                                if( (diff_stream-diff_ref)>2000 ) {
-                                    play=0 ;
-                                }
-                                else {
-                                    usleep(10000 );        
-                                    if( ++loop>200 ) {        // wait too long?
-                                        play=0 ;
-                                    }
-                                }
-                            }
-                            else if( (diff_ref-diff_stream)>1000 ) {
-//                                streamstart = streamtime ;
-//                                ref_start = ref_time ;
-                                play=0;
-                                continue ;
+        time_now( &streamtime );
+        if( time_dvrtime_diff( &streamtime, &m_playbacktime )> (60*30) ) {
+            ply->seek( &streamtime );
+            m_decode_runmode = DECODE_MODE_PRIOR ;
+        }
+        else {
+            ply->seek(&m_streamtime);
+            m_decode_runmode = DECODE_MODE_PLAY ;
+        }
+
+        while( m_decode_runmode>0 ) {
+
+            bufsize = 0 ;
+            buf = NULL ;
+
+            if( m_decode_runmode == DECODE_MODE_PLAY ) {
+
+                ply->getstreamdata(&buf, &bufsize, &frametype );
+                if( bufsize<=0 ) {
+                    usleep(10000);
+                    continue;
+                }
+                ply->getstreamtime(&streamtime);
+
+                diff_stream = time_dvrtime_diffms( &streamtime, &streamstart );
+                int loop = 0 ;
+                if( bufsize>0 && buf){
+                    while( m_decode_runmode==DECODE_MODE_PLAY ) {
+                        time_now( &ref_time );
+                        if( play==0 ) {
+                            //  ply->readfileheader( (char *)&hdfile, sizeof(hdfile));
+                            //  restartdecoder(&hdfile);            // restart decoder to flush decoder buffer
+                            play=1 ;
+                            streamstart = streamtime ;
+                            ref_start = ref_time ;
+
+                            break ;
+                        }
+                        diff_ref = time_dvrtime_diffms( &ref_time, &ref_start );
+                        if( diff_ref < diff_stream ) {
+                            if( (diff_stream-diff_ref)>2000 ) {
+                                play=0 ;
                             }
                             else {
-                                break ;
+                                usleep(10000 );
+                                if( ++loop>200 ) {        // wait too long?
+                                    play=0 ;
+                                }
                             }
                         }
-                        
-                        res =InputAvData(m_decode_handle, buf, bufsize );
-                    }
-                }
-                else if( m_decode_runmode == DECODE_MODE_PAUSE ) {
-                    res = DecodeNextFrame(m_decode_handle);
-                    int getdata=0 ;
-                    int dec=0 ;
-                    struct dec_statistics stat ;
-                    while( m_decode_runmode == DECODE_MODE_PAUSE ) {
-                        usleep(10000);
-                        if( getdata ) {
-                            ply->getstreamdata(&buf, &bufsize, &frametype );
-                            if( bufsize>0 && buf){
-                                res =InputAvData(m_decode_handle, buf, bufsize );
-                            }              
-                        }
-                        res = GetDecodeStatistics( m_decode_handle, &stat );
-                        if( dec ) {
-                            DecodeNextFrame(m_decode_handle) ;
-                        }
-                        res = GetDecodeStatistics( m_decode_handle, &stat );
-                    }
-                }
-                else if( m_decode_runmode == DECODE_MODE_PLAY_FASTFORWARD ) {
-                    if( m_decode_speed != 0 ) {
-                        ply->readfileheader( (char *)&hdfile, sizeof(hdfile));
-                        restartdecoder(&hdfile);
-                    }
-                    ply->getstreamdata(&buf, &bufsize, &frametype );
-                    ply->getstreamtime(&streamtime);
-
-                    int diff_stream;
-                    diff_stream = time_dvrtime_diffms( &streamtime, &streamstart );
-                    if( diff_stream > 500 ) {
-                        usleep( 50000 );
-                    }
-                    else if( diff_stream>0 ) {
-                        usleep( diff_stream*100 );
-                    }
-                    if( bufsize>0 && buf){
-                        res =InputAvData(m_decode_handle, buf, bufsize );
-                    }
-                    else {
-                        usleep(10000);
-                    }
-                }
-                else if( m_decode_runmode == DECODE_MODE_PLAY_FASTBACKWARD ) {
-                    ply->getstreamdata(&buf, &bufsize, &frametype );
-                    ply->getstreamtime(&streamtime);
-                    if( bufsize>0 && buf){
-                        res =InputAvData(m_decode_handle, buf, bufsize );
-                    }
-                    else {
-                        usleep(10000);
-                    }
-                }
-                else if( m_decode_runmode == DECODE_MODE_BACKWARD ) {
-                    dvrtime cbegin, pbegin, end ;
-                    if( ply->getcurrentcliptime( &cbegin, &end ) ) {
-                        if( time_dvrtime_diff( &streamtime , &cbegin ) > m_jumptime ) 
-                        {
-                            time_dvrtime_del(&streamtime, m_jumptime);
-                            ply->seek(&streamtime);
-                        }
-                        else if( ply->getprevcliptime( &pbegin, &end ) ) {
-                            time_dvrtime_del(&end, m_jumptime);
-                            ply->seek(&end);
+                        else if( (diff_ref-diff_stream)>1000 ) {
+                            //    streamstart = streamtime ;
+                            //    ref_start = ref_time ;
+                            play=0;
+                            continue ;
                         }
                         else {
-                            ply->seek(&cbegin);
+                            break ;
                         }
                     }
-                    else if( ply->getprevcliptime( &cbegin, &end ) ) {
+                    dvr_screen_playinput(screen_sockfd, m_eaglechannel, buf, bufsize);
+                }
+                m_decode_modesafe = 1 ;
+            }
+            else if( m_decode_runmode == DECODE_MODE_PAUSE ) {
+                //  dvr_screen_playnextframe(screen_sockfd, m_eaglechannel);
+                //  res = DecodeNextFrame(m_decode_handle);
+                //  int dec=0 ;
+                //  struct dec_statistics stat ;
+                m_decode_modesafe = 1 ;
+                usleep(10000);
+                //    res = GetDecodeStatistics( m_decode_handle, &stat );
+                //    if( dec ) {
+                //        DecodeNextFrame(m_decode_handle) ;
+                //    }
+                //    res = GetDecodeStatistics( m_decode_handle, &stat );
+            }
+            else if( m_decode_runmode == DECODE_MODE_PLAY_FASTFORWARD ) {
+                if( m_decode_speed != 0 ) {
+                    ply->readfileheader( (char *)&hdfile, sizeof(hdfile));
+                    restartdecoder(&hdfile);
+                }
+                ply->getstreamdata(&buf, &bufsize, &frametype );
+                ply->getstreamtime(&streamtime);
+
+                int diff_stream;
+                diff_stream = time_dvrtime_diffms( &streamtime, &streamstart );
+                if( diff_stream > 500 ) {
+                    usleep( 50000 );
+                }
+                else if( diff_stream>0 ) {
+                    usleep( diff_stream*100 );
+                }
+                if( bufsize>0 && buf){
+                    //   res = InputAvData(m_decode_handle, buf, bufsize );
+                    dvr_screen_playinput(screen_sockfd, m_eaglechannel, buf, bufsize );
+                }
+                else {
+                    usleep(10000);
+                }
+                m_decode_modesafe = 1 ;
+            }
+            else if( m_decode_runmode == DECODE_MODE_PLAY_FASTBACKWARD ) {
+                ply->getstreamdata(&buf, &bufsize, &frametype );
+                ply->getstreamtime(&streamtime);
+                if( bufsize>0 && buf){
+                    //  res =InputAvData(m_decode_handle, buf, bufsize );
+                    dvr_screen_playinput(screen_sockfd, m_eaglechannel, buf, bufsize );
+                }
+                else {
+                    usleep(10000);
+                }
+            }
+            else if( m_decode_runmode == DECODE_MODE_BACKWARD ) {
+                dvrtime cbegin, pbegin, end ;
+                if( ply->getcurrentcliptime( &cbegin, &end ) ) {
+                    if( time_dvrtime_diff( &streamtime , &cbegin ) > m_jumptime )
+                    {
+                        time_dvrtime_del(&streamtime, m_jumptime);
+                        ply->seek(&streamtime);
+                    }
+                    else if( ply->getprevcliptime( &pbegin, &end ) ) {
                         time_dvrtime_del(&end, m_jumptime);
                         ply->seek(&end);
                     }
-                    play=0 ;
-                    m_decode_runmode = DECODE_MODE_PLAY ;
+                    else {
+                        ply->seek(&cbegin);
+                    }
                 }
-                else if( m_decode_runmode == DECODE_MODE_FORWARD ) {
-                    time_dvrtime_add(&streamtime, m_jumptime);
-                    ply->seek(&streamtime);
-                    play=0 ;
-                    m_decode_runmode = DECODE_MODE_PLAY ;
+                else if( ply->getprevcliptime( &cbegin, &end ) ) {
+                    time_dvrtime_del(&end, m_jumptime);
+                    ply->seek(&end);
                 }
-                else if( m_decode_runmode == DECODE_MODE_PRIOR ) {
-                    dvrtime cbegin, pbegin, end ;
-                    if( ply->getcurrentcliptime( &cbegin, &end ) ) {
-                        if( time_dvrtime_diff( &streamtime , &cbegin ) > screen_play_cliptime ) 
-                        {
-                            time_dvrtime_del(&streamtime, screen_play_cliptime);
-                            ply->seek(&streamtime);
-                        }
-                        else if ( time_dvrtime_diff( &streamtime , &cbegin ) > screen_play_jumptime ) 
-                        {
-                            ply->seek(&cbegin);
-                        }
-                        else if( ply->getprevcliptime( &pbegin, &end ) ) {
-                            time_dvrtime_del(&end, screen_play_cliptime );
-                            if( pbegin < end ) {
-                                ply->seek(&end);
-                            }
-                            else {
-                                ply->seek(&pbegin);
-                            }
-                        }
-                        else {
-                            ply->seek(&cbegin);
-                        }
+                play=0 ;
+                m_decode_runmode = DECODE_MODE_PLAY ;
+            }
+            else if( m_decode_runmode == DECODE_MODE_FORWARD ) {
+                time_dvrtime_add(&streamtime, m_jumptime);
+                ply->seek(&streamtime);
+                play=0 ;
+                m_decode_runmode = DECODE_MODE_PLAY ;
+            }
+            else if( m_decode_runmode == DECODE_MODE_PRIOR ) {
+                dvrtime cbegin, pbegin, end ;
+                if( ply->getcurrentcliptime( &cbegin, &end ) ) {
+                    if( time_dvrtime_diff( &streamtime , &cbegin ) > screen_play_cliptime )
+                    {
+                        time_dvrtime_del(&streamtime, screen_play_cliptime);
+                        ply->seek(&streamtime);
+                    }
+                    else if ( time_dvrtime_diff( &streamtime , &cbegin ) > screen_play_jumptime )
+                    {
+                        ply->seek(&cbegin);
                     }
                     else if( ply->getprevcliptime( &pbegin, &end ) ) {
                         time_dvrtime_del(&end, screen_play_cliptime );
@@ -949,146 +899,158 @@ class video_screen : public window {
                             ply->seek(&pbegin);
                         }
                     }
-                    play=0;
-                    m_decode_runmode = DECODE_MODE_PLAY ;
-                }
-                else if( m_decode_runmode == DECODE_MODE_NEXT ) {
-                    dvrtime begin, end ;
-                    if( ply->getcurrentcliptime( &begin, &end ) ) {
-                        if( time_dvrtime_diff( &end, &streamtime ) > screen_play_cliptime ) {
-                            time_dvrtime_add(&streamtime, screen_play_cliptime);
-                            ply->seek(&streamtime);
-                        }
-                        else if( ply->getnextcliptime( &begin, &end ) ) {
-                            ply->seek(&begin);
-                        }
-                        else {
-                            ply->seek(&end);
-                        }
+                    else {
+                        ply->seek(&cbegin);
                     }
-                    play=0 ;
-                    m_decode_runmode = DECODE_MODE_PLAY ;
                 }
-
-            }
-
-            if( m_decode_handle > 0 ) {
-                StopDecode(m_decode_handle) ;
-                m_decode_handle = 0 ;
-            }
-            delete ply ;
-            m_streamtime = streamtime ;
-            time_now( &m_playbacktime );
-
-        }
-
-        static void * s_playback_thread(void *param) {
-            ((video_screen *)(param))->playback_thread();
-            return NULL ;
-        }
-
-
-        void startdecode(int channel)  {
-            int res ;
-            stop();
-
-            if( channel < eagle32_channels ) {
-                if( !screen_keepcapture ){
-                    cap_stop();       // stop live codec, so decoder has full DSP power
+                else if( ply->getprevcliptime( &pbegin, &end ) ) {
+                    time_dvrtime_del(&end, screen_play_cliptime );
+                    if( pbegin < end ) {
+                        ply->seek(&end);
+                    }
+                    else {
+                        ply->seek(&pbegin);
+                    }
                 }
-                disk_archive_stop();   // stop archiving
-                m_playchannel = channel ;
-                res = SetDecodeScreen(MAIN_OUTPUT, 1, 1);
-                res = SetDecodeAudio(MAIN_OUTPUT, 1, 1);
-                m_videomode = VIDEO_MODE_PLAYBACK ; 
+                play=0;
                 m_decode_runmode = DECODE_MODE_PLAY ;
-                pthread_create(&m_decodethreadid, NULL, s_playback_thread, (void *)(this));
             }
-        }
-
-        void stopdecode()  {
-            int res ;
-            if( m_videomode != VIDEO_MODE_PLAYBACK ) 
-                return ;
-
-            m_decode_runmode = DECODE_MODE_QUIT ;
-            for( res=0 ; res<1000 ; res++ ) {
-                if( m_decode_handle > 0 ) {
-                    StopDecode( m_decode_handle );
-                    usleep(100000);
+            else if( m_decode_runmode == DECODE_MODE_NEXT ) {
+                dvrtime begin, end ;
+                if( ply->getcurrentcliptime( &begin, &end ) ) {
+                    if( time_dvrtime_diff( &end, &streamtime ) > screen_play_cliptime ) {
+                        time_dvrtime_add(&streamtime, screen_play_cliptime);
+                        ply->seek(&streamtime);
+                    }
+                    else if( ply->getnextcliptime( &begin, &end ) ) {
+                        ply->seek(&begin);
+                    }
+                    else {
+                        ply->seek(&end);
+                    }
                 }
-                else {
-                    break;
-                }
+                play=0 ;
+                m_decode_runmode = DECODE_MODE_PLAY ;
             }
-            pthread_join(m_decodethreadid, NULL);
-            m_decodethreadid = 0 ;
-
-            // stop decode screen
-            res = SetDecodeScreen(MAIN_OUTPUT, 1, 0);
-            res = SetDecodeAudio(MAIN_OUTPUT, 1, 0);
-            m_videomode = VIDEO_MODE_NONE ; 
-            cap_start();       // start video capture.
 
         }
 
-        int m_timerstate ;
-        int m_keypad_state ;
-        int m_keypad_state_p ;
-                
-        virtual void ontimer( int id ) {
-#ifdef PWII_APP
-            if( id == ID_VIDEO_SCREEN ) {
-                openmenu(2);
-                return ;
-            }
-            else 
-#endif
-            if( id == VK_MEDIA_STOP ) {
-                stopdecode();
-                stopliveview();
-                m_videomode=VIDEO_MODE_STANDBY ;
-#ifdef	PWII_APP
-                dio_pwii_standby(1);
-#endif
-                return ;
-            }
-            else if( id == VK_POWER ) {
-#ifdef	PWII_APP
-				if( m_videomode == VIDEO_MODE_LCDOFF ) {
-					m_videomode=VIDEO_MODE_STANDBY ;
-					dio_pwii_standby(1);
-				}
-#endif
-                return ;
-            }
-                
-            if( m_keypad_state == VK_MEDIA_PREV_TRACK ) {           // play backward
-//                m_decode_runmode = DECODE_MODE_PLAY_FASTBACKWARD ;
-                m_decode_runmode = DECODE_MODE_BACKWARD ;
-                settimer(2000, id);
-            }
-            else if( m_keypad_state == VK_MEDIA_NEXT_TRACK ) {      // play forward
-//                m_decode_runmode = DECODE_MODE_PLAY_FASTFORWARD ;
-                m_decode_runmode = DECODE_MODE_FORWARD ;
-                settimer(2000, id);
-            }
+        dvr_screen_stop(screen_sockfd, m_eaglechannel);
 
-            updatestatus();
+        //            if( m_decode_handle > 0 ) {
+        //                StopDecode(m_decode_handle) ;
+        //                m_decode_handle = 0 ;
+        //            }
+        delete ply ;
+        m_streamtime = streamtime ;
+        time_now( &m_playbacktime );
+
+    }
+
+    static void * s_playback_thread(void *param) {
+        ((video_screen *)(param))->playback_thread();
+        return NULL ;
+    }
+
+
+    void startdecode(int channel)  {
+        stop();
+
+        if( channel < cap_channels ) {
+            if( !screen_keepcapture ){
+                cap_stop();       // stop live codec, so decoder has full DSP power
+            }
+            disk_archive_stop();   // stop archiving
+            m_playchannel = channel ;
+            m_eaglechannel = cap_channel[channel]->geteaglechannel();
+
+            //                res = SetDecodeScreen(MAIN_OUTPUT, 1, 1);
+            //                res = SetDecodeAudio(MAIN_OUTPUT, 1, 1);
+            m_videomode = VIDEO_MODE_PLAYBACK ;
+            m_decode_runmode = DECODE_MODE_PLAY ;
+            pthread_create(&m_decodethreadid, NULL, s_playback_thread, (void *)(this));
+        }
+    }
+
+    void stopdecode()  {
+        if( m_videomode != VIDEO_MODE_PLAYBACK )
             return ;
-        }
 
-        virtual int onkey( int keycode, int keydown ) {		// keyboard/keypad event
-            if( keydown ) {
-                if( m_keypad_state!=0 ) {
-                    return 1;
+        m_decode_runmode = DECODE_MODE_QUIT ;
+
+        /*
+        for( res=0 ; res<1000 ; res++ ) {
+            if( m_decode_handle > 0 ) {
+                StopDecode( m_decode_handle );
+                usleep(100000);
+            }
+            else {
+                break;
+            }
+        }
+        */
+
+        pthread_join(m_decodethreadid, NULL);
+        m_decodethreadid = 0 ;
+
+        // stop decode screen
+        //            res = SetDecodeScreen(MAIN_OUTPUT, 1, 0);
+        //            res = SetDecodeAudio(MAIN_OUTPUT, 1, 0);
+        m_videomode = VIDEO_MODE_NONE ;
+        cap_start();       // start video capture.
+
+    }
+
+
+    virtual void ontimer( int id ) {
+#ifdef PWII_APP
+        if( id == ID_VIDEO_SCREEN ) {
+            openmenu(2);
+        }
+        else if( id == VK_MEDIA_STOP ) {
+            stopdecode();
+            stopliveview();
+            m_videomode=VIDEO_MODE_STANDBY ;
+            dio_pwii_standby(1);
+        }
+        else if( id == VK_POWER ) {
+            if( m_videomode == VIDEO_MODE_LCDOFF ) {
+                m_videomode=VIDEO_MODE_STANDBY ;
+                dio_pwii_standby(1);
+            }
+        }
+        else {
+            // key pad repeat
+            if( m_videomode == VIDEO_MODE_PLAYBACK &&
+                (m_decode_runmode == DECODE_MODE_PLAY || m_decode_runmode == DECODE_MODE_PAUSE) )
+            {
+                if( id == VK_MEDIA_PREV_TRACK ) {           // play backward
+                    //                m_decode_runmode = DECODE_MODE_PLAY_FASTBACKWARD ;
+                    m_decode_runmode = DECODE_MODE_BACKWARD ;
+                    settimer(2400, id);
                 }
-                m_keypad_state = keycode ;
-                if( keycode == VK_MEDIA_PREV_TRACK ) {     // jump backward
-                    if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
-//                        settimer( 2000 );
-                        if( keycode == m_keypad_state_p && // pressed same key, double the jump timer
-                           (g_timetick-m_keytime)/1000 < screen_play_doublejumptimer ) {
+                else if( id == VK_MEDIA_NEXT_TRACK ) {      // play forward
+                    //                m_decode_runmode = DECODE_MODE_PLAY_FASTFORWARD ;
+                    m_decode_runmode = DECODE_MODE_FORWARD ;
+                    settimer(2400, id);
+                }
+            }
+        }
+#endif  // PWII_APP
+
+        updatestatus();
+        return ;
+    }
+
+    virtual int onkey( int keycode, int keydown ) {		// keyboard/keypad event
+        if( keydown ) {
+            if( keycode == VK_MEDIA_PREV_TRACK ) {     // jump backward
+                if( m_videomode == VIDEO_MODE_LIVE ) { // live mode
+                }
+                else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
+                    if( m_decode_runmode == DECODE_MODE_PLAY || m_decode_runmode == DECODE_MODE_PAUSE ) {
+                        if( keycode == m_keypad_up && // pressed same key, double the jump timer
+                            (g_timetick-m_keytime)/1000 < screen_play_doublejumptimer ) {
                             if( m_jumptime < screen_play_maxjumptime ) {
                                 m_jumptime *= 2 ;
                             }
@@ -1097,17 +1059,29 @@ class video_screen : public window {
                             m_jumptime = screen_play_jumptime ;
                         }
                         m_decode_runmode = DECODE_MODE_BACKWARD ;  //  jump backward.
-                        m_icon->seticon( "rwd.pic" );
                     }
-                    else if( m_videomode == VIDEO_MODE_LIVE ) { // live mode
-                    }
-                    //                    m_decode_runmode = DECODE_MODE_BACKWARD ;
+                    m_icon->seticon( "rwd.pic" );
                 }
-                else if( keycode == VK_MEDIA_NEXT_TRACK ) { //  jump forward.
-                    if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
-//                        settimer( 2000 );
-                        if( keycode == m_keypad_state_p && // pressed same key, double the jump timer
-                           (g_timetick-m_keytime)/1000 < screen_play_doublejumptimer ) {
+                else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
+#ifdef PWII_APP
+                    pwii_menu * pmenu ;                // menu
+                    pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
+                    if( pmenu ) {
+                        pmenu->prev();
+                    }
+#endif      // PWII_APP
+                }
+            }
+            else if( keycode == VK_MEDIA_NEXT_TRACK ) { //  jump forward.
+                if( m_videomode == VIDEO_MODE_LIVE ) { 	// live mode, switch audio on/off
+                    screen_liveaudio = !screen_liveaudio ;
+                    //	 SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),screen_liveaudio);
+                    dvr_screen_audio(screen_sockfd, m_eaglechannel, screen_liveaudio) ;
+                }
+                else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
+                    if( m_decode_runmode == DECODE_MODE_PLAY || m_decode_runmode == DECODE_MODE_PAUSE ) {
+                        if( keycode == m_keypad_up && // pressed same key, double the jump timer
+                            (g_timetick-m_keytime)/1000 < screen_play_doublejumptimer ) {
                             if( m_jumptime < screen_play_maxjumptime ) {
                                 m_jumptime *= 2 ;
                             }
@@ -1116,43 +1090,48 @@ class video_screen : public window {
                             m_jumptime = screen_play_jumptime ;
                         }
                         m_decode_runmode = DECODE_MODE_FORWARD ;  //  jump backward.
-                        m_icon->seticon( "fwd.pic" );   
                     }
-                    else if( m_videomode == VIDEO_MODE_LIVE ) { // live mode
-                        screen_liveaudio = !screen_liveaudio ;
-						SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),screen_liveaudio);
-					}
-                    //                    m_decode_runmode = DECODE_MODE_FORWARD ;
+                    m_icon->seticon( "fwd.pic" );
                 }
-                else if( keycode == VK_MEDIA_PLAY_PAUSE ) { //  in live mode, jump to playback mode, in playback mode, switch between pause and play
-                    if( m_videomode == VIDEO_MODE_LIVE ) { // live mode, set to playback mode.
-                        startdecode(m_playchannel);
-                        m_videomode = VIDEO_MODE_PLAYBACK ;
+                else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
+#ifdef PWII_APP
+                    pwii_menu * pmenu ;                // menu
+                    pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
+                    if( pmenu ) {
+                        pmenu->next();
                     }
-                    else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
-                        // switch between play -> slow -> pause
-                        if( m_decode_runmode == DECODE_MODE_PLAY ) {
-                            m_decode_runmode = DECODE_MODE_PAUSE ;
-                            m_icon->seticon( "pause.pic" );
-                        }
-                        else {
-                            m_decode_runmode = DECODE_MODE_PLAY ;
-                            m_icon->seticon( "play.pic" );
-                        }
+#endif      // PWII_APP
+                }
+            }
+            else if( keycode == VK_MEDIA_PLAY_PAUSE ) { //  in live mode, jump to playback mode, in playback mode, switch between pause and play
+                if( m_videomode == VIDEO_MODE_LIVE ) { // live mode, set to playback mode.
+                    startdecode(m_playchannel);
+                    m_videomode = VIDEO_MODE_PLAYBACK ;
+                }
+                else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
+                    // switch between play -> slow -> pause
+                    if( m_decode_runmode == DECODE_MODE_PLAY ) {
+                        m_decode_runmode = DECODE_MODE_PAUSE ;
+                        m_icon->seticon( "pause.pic" );
                     }
-                    else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
+                    else {
+                        m_decode_runmode = DECODE_MODE_PLAY ;
+                        m_icon->seticon( "play.pic" );
+                    }
+                }
+                else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
 #ifdef PWII_APP        
-                        pwii_menu * pmenu ;                // menu
-                        pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
-                        if( pmenu ) {
-                            pmenu->cancel();
-                        }
-#endif                        
+                    pwii_menu * pmenu ;                // menu
+                    pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
+                    if( pmenu ) {
+                        pmenu->cancel();
                     }
+#endif                        
                 }
-                else if( keycode == VK_MEDIA_STOP ) {      // stop playback if in playback mode, enter menu mode if in live view mode
-                    if( m_videomode ==  VIDEO_MODE_LIVE ) {
-/*                        
+            }
+            else if( keycode == VK_MEDIA_STOP ) {      // stop playback if in playback mode, enter menu mode if in live view mode
+                if( m_videomode ==  VIDEO_MODE_LIVE ) {
+                    /*
 #ifdef	PWII_APP
                         stopliveview();
                         dio_pwii_lcd(0);
@@ -1161,321 +1140,299 @@ class video_screen : public window {
 #endif
 */
 #ifdef PWII_APP        
-                        // bring up menu mode
-                        startmenu();
+                    // bring up menu mode
+                    startmenu();
 #endif      /// PWII_APP        
-                    }
-                    else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
+                }
+                else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
 #ifdef PWII_APP        
-                        pwii_menu * pmenu ;                // menu
-                        pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
-                        if( pmenu ) {
-                            pmenu->enter();
-                        }
+                    pwii_menu * pmenu ;                // menu
+                    pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
+                    if( pmenu ) {
+                        pmenu->enter();
+                    }
 #endif      // PWII_APP        
-                    }
-                    else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
-                        m_icon->seticon( "stop.pic" );   
+                }
+                else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
+                    m_icon->seticon( "stop.pic" );
+                    if( m_decode_runmode == DECODE_MODE_PLAY || m_decode_runmode == DECODE_MODE_PAUSE ) {
                         startliveview(m_playchannel);
-//                        settimer( 5000, keycode );
                     }
-					else if( m_videomode == VIDEO_MODE_LCDOFF ) {   // lcd off
+                    // settimer( 5000, keycode );
+                }
+                else if( m_videomode == VIDEO_MODE_LCDOFF ) {   // lcd off
 #ifdef	PWII_APP
-                        dio_pwii_lcd( 1 ) ;           // turn lcd on
+                    dio_pwii_lcd( 1 ) ;           // turn lcd on
 #endif
-                        startliveview(m_playchannel);
-                    }
-                    else if( m_videomode == VIDEO_MODE_STANDBY ) {   // blackout mode
+                    startliveview(m_playchannel);
+                }
+                else if( m_videomode == VIDEO_MODE_STANDBY ) {   // blackout mode
 #ifdef	PWII_APP
-                        dio_pwii_standby( 0 );        // jump out of standby
-                        dio_pwii_lcd( 1 ) ;           // turn lcd on
+                    dio_pwii_standby( 0 );        // jump out of standby
+                    dio_pwii_lcd( 1 ) ;           // turn lcd on
 #endif
-                        startliveview(m_playchannel);
+                    startliveview(m_playchannel);
+                }
+            }
+            else if( keycode == VK_PRIOR ) { //  previous video clip
+                if( m_videomode==VIDEO_MODE_LIVE ) {   // live
+                    // switch live view channel
+                    int retry = cap_channels ;
+                    int ch = m_playchannel ;
+                    while( retry-->0 ) {
+                        ch -= ScreenNum ;
+                        while( ch<0 ) {
+                            ch+=cap_channels ;
+                        }
+                        if( cap_channel[ch]->enabled() ) {
+                            startliveview(ch);
+                            break;
+                        }
                     }
                 }
-                else if( keycode == VK_PRIOR ) { //  previous video clip
-                    if( m_videomode==VIDEO_MODE_LIVE ) {   // live
-                        // switch live view channel
-						int retry = eagle32_channels ;
-                        int ch = m_playchannel ;
-						while( retry-->0 ) {
-	                        ch -= ScreenNum ;
-							while( ch<0 ) {
-								ch+=eagle32_channels ;
-							}
-							if( eagle32_hikchanelenabled(ch) ) {
-								startliveview(ch);
-								break;
-							}
-						}
-                    }
-                    else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
+                else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
+                    if( m_decode_runmode == DECODE_MODE_PLAY || m_decode_runmode == DECODE_MODE_PAUSE ) {
                         m_decode_runmode = DECODE_MODE_PRIOR ;
                         m_icon->seticon( "rwd.pic" );
                     }
-                    else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
+                }
+                else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
 #ifdef PWII_APP        
-                        pwii_menu * pmenu ;                // menu
-                        pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
-                        if( pmenu ) {
-                            pmenu->prev();
-                        }
+                    pwii_menu * pmenu ;                // menu
+                    pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
+                    if( pmenu ) {
+                        pmenu->prevpage();
+                    }
 #endif      // PWII_APP        
+                }
+            }
+            else if( keycode == VK_NEXT ) { //  jump forward.
+                if( m_videomode==VIDEO_MODE_LIVE ) {   // live, black LCD
+                    // switch live view channel
+                    int retry = cap_channels ;
+                    int ch = m_playchannel ;
+                    while( retry-->0 ) {
+                        ch += ScreenNum ;
+                        while( ch>=cap_channels ) {
+                            ch-=cap_channels ;
+                        }
+                        if( cap_channel[ch]->enabled() ) {
+                            startliveview(ch);
+                            break;
+                        }
                     }
                 }
-                else if( keycode == VK_NEXT ) { //  jump forward.
-                    if( m_videomode==VIDEO_MODE_LIVE ) {   // live, black LCD
-                        // switch live view channel
-						int retry = eagle32_channels ;
-                        int ch = m_playchannel ;
-						while( retry-->0 ) {
-	                        ch += ScreenNum ;
-							while( ch>=eagle32_channels ) {
-								ch-=eagle32_channels ;
-							}
-							if( eagle32_hikchanelenabled(ch) ) {
-								startliveview(ch);
-								break;
-							}
-						}
-                    }
-                    else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
+                else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
+                    if( m_decode_runmode == DECODE_MODE_PLAY || m_decode_runmode == DECODE_MODE_PAUSE ) {
                         m_decode_runmode = DECODE_MODE_NEXT ;
                         m_icon->seticon( "fwd.pic" );
                     }
-                    else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
+                }
+                else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
 #ifdef PWII_APP        
-                        pwii_menu * pmenu ;                // menu
-                        pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
-                        if( pmenu ) {
-                            pmenu->next();
-                        }
+                    pwii_menu * pmenu ;                // menu
+                    pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
+                    if( pmenu ) {
+                        pmenu->nextpage();
+                    }
 #endif      // PWII_APP        
-                    }
                 }
-//                else if( keycode == VK_EM ) { //  event marker key
-//                    m_icon->seticon( "tm.pic" );
-//                }
-                else if( keycode == VK_POWER ) {                //  LCD power on/off and blackout
-                    if( m_videomode <= VIDEO_MODE_PLAYBACK ) {  // playback
-                        stop();
-#ifdef	PWII_APP
-                        dio_pwii_lcd(0);
-                        m_videomode = VIDEO_MODE_LCDOFF ;
-#endif
-                        settimer( 5000, keycode );
-                    }
-                    else if( m_videomode == VIDEO_MODE_LCDOFF ) {   // lcd off
-#ifdef	PWII_APP
-                        dio_pwii_lcd( 1 ) ;           // turn lcd on
-#endif
-                        startliveview(m_playchannel);
-                    }
-                    else if( m_videomode == VIDEO_MODE_STANDBY ) {   // blackout mode
-#ifdef	PWII_APP
-                        dio_pwii_standby( 0 );        // jump out of standby
-                        dio_pwii_lcd( 1 ) ;           // turn lcd on
-#endif
-                        startliveview(m_playchannel);
-                    }
-                }
-				else if( keycode == VK_SILENCE ) { //  switch audio on <--> off 
-					if( m_videomode == VIDEO_MODE_LIVE ) { // live mode
-                        screen_liveaudio = !screen_liveaudio ;
-						SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),screen_liveaudio);
-					}
-//					else {
-//						SetDecodeAudio(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 1);
-//					}
-				}
-				// speaker mute status 
-				else if( keycode == VK_MUTE ) {     // Mute key
-					m_icon->seticon( "mute.pic" );
-				}
-				else if( keycode == VK_SPKON ) {     // Speaker on key
-					m_icon->seticon( "spkon.pic" );
-				}
             }
-            else {                  // key up
-/*
-                 if( m_keypad_state == keycode && m_playmode ) {
-                    if( keycode == VK_MEDIA_PREV_TRACK ) { 
-                        if( m_decode_runmode == DECODE_MODE_PLAY ) {
-                            m_decode_runmode = DECODE_MODE_BACKWARD ;  //  jump backward.
-                        }
-                        else {
-                            m_decode_runmode = DECODE_MODE_PLAY ;
-                        }
-                    }
-                    else if( keycode == VK_MEDIA_NEXT_TRACK ) {
-                        if( m_decode_runmode == DECODE_MODE_PLAY ) {
-                            m_decode_runmode = DECODE_MODE_FORWARD ;  //  jump forward.
-                        }
-                        else {
-                            m_decode_runmode = DECODE_MODE_PLAY ;
-                        }
-                    }
+            //                else if( keycode == VK_EM ) { //  event marker key
+            //                    m_icon->seticon( "tm.pic" );
+            //                }
+            else if( keycode == VK_POWER ) {                //  LCD power on/off and blackout
+                if( m_videomode <= VIDEO_MODE_PLAYBACK ) {  // playback
+                    stop();
+#ifdef	PWII_APP
+                    dio_pwii_lcd(0);
+                    m_videomode = VIDEO_MODE_LCDOFF ;
+#endif
+                    settimer( 5000, keycode );
                 }
-*/            
-               
-                m_keytime = g_timetick ;
-                settimer( 0, 0 );           // delete timer
-                m_keypad_state = 0 ;
-                m_keypad_state_p = keycode ;
-                m_icon->seticon( NULL );
+                else if( m_videomode == VIDEO_MODE_LCDOFF ) {   // lcd off
+#ifdef	PWII_APP
+                    dio_pwii_lcd( 1 ) ;           // turn lcd on
+#endif
+                    startliveview(m_playchannel);
+                }
+                else if( m_videomode == VIDEO_MODE_STANDBY ) {   // blackout mode
+#ifdef	PWII_APP
+                    dio_pwii_standby( 0 );        // jump out of standby
+                    dio_pwii_lcd( 1 ) ;           // turn lcd on
+#endif
+                    startliveview(m_playchannel);
+                }
             }
-            updatestatus();
-            return 1 ;      // key been procesed.
+            else if( keycode == VK_SILENCE ) { //  switch audio on <--> off
+                if( m_videomode == VIDEO_MODE_LIVE ) { // live mode
+                    screen_liveaudio = !screen_liveaudio ;
+                    //						SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),screen_liveaudio);
+                    dvr_screen_audio(screen_sockfd, m_eaglechannel, screen_liveaudio) ;
+                }
+                // else {
+                //   SetDecodeAudio(MAIN_OUTPUT, m_playchannel%ScreenNum+1, 1);
+                // }
+            }
+            // speaker mute status
+            else if( keycode == VK_MUTE ) {     // Mute key
+                m_icon->seticon( "mute.pic" );
+            }
+            else if( keycode == VK_SPKON ) {     // Speaker on key
+                m_icon->seticon( "spkon.pic" );
+            }
         }
+        else {                  // key up
+            m_keytime = g_timetick ;
+            killtimer( 0 );           // delete timer
+            m_keypad_up = keycode ;
+            m_icon->seticon( NULL );
+        }
+        updatestatus();
+        return 1 ;      // key been procesed.
+    }
 
-        virtual int onfocus( int focus ) {
-            int i;
-            video_screen * vs ;
-            for( i=0; i<ScreenNum; i++ ) {
-                vs = (video_screen *) m_parent->findwindow( i ) ;
-                if( vs==NULL ) break;
-                if( vs==this ) {
-                    select(1);
-                }
-                else {
-                    vs->select(0);
-                }
+    virtual int onfocus( int focus ) {
+        int i;
+        video_screen * vs ;
+        for( i=0; i<ScreenNum; i++ ) {
+            vs = (video_screen *) m_parent->findwindow( i ) ;
+            if( vs==NULL ) break;
+            if( vs==this ) {
+                select(1);
             }
-            redraw();
-            return 0 ;
+            else {
+                vs->select(0);
+            }
         }
+        redraw();
+        return 0 ;
+    }
 
 };
 
 
 class controlpanel : public window {
-    protected:
-        UINT32 m_backgroundcolor;
-        window * firstchild ;
-        
-    public:
-        controlpanel( window * parent,int x, int y, int w, int h )
-            : window( parent, 0, x, y, w, h ) {
-            // create all controls
-            hide();
-        }
+protected:
+    UINT32 m_backgroundcolor;
+    window * firstchild ;
 
-        ~controlpanel() {
-        }
-        
-        // event handler
-    protected:
-        virtual void paint() {						// paint window
-            setpixelmode (DRAW_PIXELMODE_COPY);
-            setcolor ( COLOR( 0xe0, 0x10, 0x10, 0xff) ) ;	// selected border
-            resource pic ;
-            int x=0 ;
-            pic.open( "rwd.pic" );
-            drawbitmap( pic, x, 0, 0, 0, 0, 0 );
-            pic.open( "play.pic" );
-            drawbitmap( pic, x+=80, 0, 0, 0, 0, 0 );
-            pic.open( "fwd.pic" );
-            drawbitmap( pic, x+=80, 0, 0, 0, 0, 0 );
-            pic.open( "pause.pic" );
-            drawbitmap( pic, x+=80, 0, 0, 0, 0, 0 );
-            pic.open( "stop.pic" );
-            drawbitmap( pic, x+=80, 0, 0, 0, 0, 0 );
-        }
+public:
+    controlpanel( window * parent, int x, int y, int w, int h )
+        : window( parent, 0, x, y, w, h ) {
+        // create all controls
+        hide();
+    }
 
-        virtual void oncommand( int id, void * param ) {	// children send command to parent
-        }
+    ~controlpanel() {
+    }
 
-        // buttons : low 4 bits=button status, high 4 bits=press/release
-        virtual void onmouse( int x, int y, int buttons ) {		// mouse event
-            if( (buttons & 0x11) == 0x11 ) {                     // click
-                if( y<70 ) {
-                    if( x<80 ) {                // backward
-                    }
-                    else if( x<160 ) {          // play
-                    }   
-                    else if( x<160 ) {          // fwd
-                    }
-                    else if( x<160 ) {          // pause
-                    }
-                    else if( x<160 ) {          // stop
-                    }
+    // event handler
+protected:
+    virtual void paint() {						// paint window
+        setpixelmode (DRAW_PIXELMODE_COPY);
+        setcolor ( COLOR( 0xe0, 0x10, 0x10, 0xff) ) ;	// selected border
+        resource pic ;
+        int x=0 ;
+        pic.open( "rwd.pic" );
+        drawbitmap( pic, x, 0, 0, 0, 0, 0 );
+        pic.open( "play.pic" );
+        drawbitmap( pic, x+=80, 0, 0, 0, 0, 0 );
+        pic.open( "fwd.pic" );
+        drawbitmap( pic, x+=80, 0, 0, 0, 0, 0 );
+        pic.open( "pause.pic" );
+        drawbitmap( pic, x+=80, 0, 0, 0, 0, 0 );
+        pic.open( "stop.pic" );
+        drawbitmap( pic, x+=80, 0, 0, 0, 0, 0 );
+    }
+
+    virtual void oncommand( int id, void * param ) {	// children send command to parent
+    }
+
+    // buttons : low 4 bits=button status, high 4 bits=press/release
+    virtual void onmouse( int x, int y, int buttons ) {		// mouse event
+        if( (buttons & 0x11) == 0x11 ) {                     // click
+            if( y<70 ) {
+                if( x<80 ) {                // backward
+                }
+                else if( x<160 ) {          // play
+                }
+                else if( x<160 ) {          // fwd
+                }
+                else if( x<160 ) {          // pause
+                }
+                else if( x<160 ) {          // stop
                 }
             }
         }
+    }
 
-        virtual void onmouseleave() {							// mouse pointer leave window
-            settimer( 40000, 1 );
-        }
+    virtual void onmouseleave() {							// mouse pointer leave window
+        settimer( 40000, 1 );
+    }
 
-        virtual void onmouseenter() {							// mouse pointer enter window
-        }
+    virtual void onmouseenter() {							// mouse pointer enter window
+    }
 
-        // keyboard or button input, return 1: processed (key event don't go to children), 0: no processed
-        virtual int onkey( int keycode, int keydown ) {		    // keyboard/keypad event
-            return 0 ;
-        }
+    // keyboard or button input, return 1: processed (key event don't go to children), 0: no processed
+    virtual int onkey( int keycode, int keydown ) {		    // keyboard/keypad event
+        return 0 ;
+    }
 
-        virtual void ontimer( int id ) {
-            hide();
-            return ;
-        }
+    virtual void ontimer( int id ) {
+        hide();
+        return ;
+    }
 
 
 };
 
 class iomsg : public window {
-    char m_iomsg[128] ;
-    public:
+public:
     iomsg( window * parent, int id, int x, int y, int w, int h ) :
-        window( parent, id, x, y, w, h ) 
+        window( parent, id, x, y, w, h )
     {
-        show();
         settimer( 2000, 1 );
     }
 
     // event handler
-    protected:
-        virtual void paint() {
-			dio_getiomsg( m_iomsg ) ;
-			int l=strlen(m_iomsg);
-			if( l>0 ) {
-				setpixelmode (DRAW_PIXELMODE_COPY);
-				resource font("mono32b.font");
-				int h = font.fontheight();
-				int w = font.fontwidth();
-				setcolor (COLOR(0,50,240,128)) ;
-				fillrect ( 0, 0, w*l, h );	
-				setcolor(COLOR(240,240,80,200));
-				drawtext( 0, 0, m_iomsg, font );
-#ifdef EAGLE34
-				draw_show(0, 0, w*l, h);
-#endif       
-			}
-#ifdef EAGLE34
-			else {
-				draw_hide();
-			}
-#endif       
-		}
-
-        virtual void ontimer( int id ) {
-            if( dio_getiomsg( m_iomsg ) ) {
-				redraw();
+protected:
+    virtual void paint() {
+        char * iomsg = dio_getiomsg() ;
+        if( iomsg && *iomsg ) {
+            int l=strlen(iomsg);
+            if( l>0 ) {
+                setpixelmode (DRAW_PIXELMODE_COPY);
+                resource font("mono32b.font");
+                int h = font.fontheight();
+                int w = font.fontwidth();
+                setcolor (COLOR(0,50,240,128)) ;
+                fillrect ( 0, 0, w*l, h );
+                setcolor(COLOR(240,240,80,200));
+                drawtext( 0, 0, iomsg, font );
             }
-            settimer( 2000, 1 );
-            return ;
         }
+    }
+
+    virtual void ontimer( int id ) {
+        char * iomsg = dio_getiomsg() ;
+        if( iomsg!=NULL && *iomsg != 0 ) {
+            redraw();
+        }
+        settimer( 2000, 1 );
+        return ;
+    }
 };
 
 class mainwin : public window {
-    protected:
-        UINT32 m_backgroundcolor;
-        window * firstchild ;
-        cursor * mycursor ;
-        controlpanel * panel ;
-        iomsg * iomessage ;
-            
-    public:
+protected:
+    UINT32 m_backgroundcolor;
+    window * firstchild ;
+    cursor * mycursor ;
+    controlpanel * panel ;
+    iomsg * iomessage ;
+
+public:
     mainwin(config &dvrconfig) :
         window( NULL, 0, 0, 0, 720, 480 )
     {
@@ -1527,24 +1484,25 @@ class mainwin : public window {
             panel = NULL ;
         }
 
+        // text message on top
         iomessage = new iomsg( this, 1, 50, m_pos.h/2-20, m_pos.w-100, 40 );
     }
 
-        ~mainwin(){
+    ~mainwin(){
 
-        }
+    }
 
-        // event handler
-    protected:
-        virtual void paint() {
-            setcolor (COLOR( 0, 0, 0x10, 0xff) );
-            setpixelmode (DRAW_PIXELMODE_COPY);
-            fillrect ( 0, 0, m_pos.w, m_pos.h );
-        }
+    // event handler
+protected:
+    virtual void paint() {
+        //            setcolor (COLOR( 0, 0, 0x10, 0xff) );
+        //            setpixelmode (DRAW_PIXELMODE_COPY);
+        //            fillrect ( 0, 0, m_pos.w, m_pos.h );
+    }
 
-        // buttons : low 4 bits=button status, high 4 bits=press/release
-        virtual void onmouse( int x, int y, int buttons ) {		// mouse event
-        }
+    // buttons : low 4 bits=button status, high 4 bits=press/release
+    virtual void onmouse( int x, int y, int buttons ) {		// mouse event
+    }
 
 };
 
@@ -1590,9 +1548,11 @@ int screen_mouseevent(int x, int y, int buttons)
 
 int screen_key( int keycode, int keydown ) 
 {
+#ifdef PWII_APP
     void rec_pwii_toggle_rec(int ch) ;
     void rec_pwii_recon();
     void rec_pwii_recoff();
+#endif  // PWII_APP
 
     NET_DPRINT("screen_key  code : %04x  down: %d\n", keycode, keydown );
     
@@ -1632,25 +1592,25 @@ int screen_key( int keycode, int keydown )
     else if( keycode==(int)VK_LP ) {                             // LP key
         if( keydown ) {
             screen_setliveview(pwii_front_ch);                   // start front camera
-			dio_pwii_lpzoomin( 1 );
+            dio_pwii_lpzoomin( 1 );
             dvr_log("LP pressed!");
         }
         else {
-			dio_pwii_lpzoomin( 0 );
+            dio_pwii_lpzoomin( 0 );
             dvr_log("LP released!");
         }
     }
-/*
-	else if( keycode==(int)VK_MUTE ) {                           // Mute key
+    /*
+    else if( keycode==(int)VK_MUTE ) {                           // Mute key
         if( keydown ) {
             dvr_log("MUTE pressed!");
         }
         else {
             dvr_log("MUTE released!");
         }
-		screen_update();				// just do the screen update for now. (Hardware do mute already)
+        screen_update();    // just do the screen update for now. (Hardware do mute already)
     }
-*/
+    */
 #endif    
     else if( topwindow ) {
 //        dvr_log("Key code 0x%02x %s.", keycode, keydown?"pressed":"released" );
@@ -1666,12 +1626,15 @@ int screen_draw()
         window::gredraw=0 ;
         cursorshow = (Screen_cursor!=NULL)&&(Screen_cursor->isshow());
         if( cursorshow ) {
-            Screen_cursor->hide();			// hide mouse cursor
+            Screen_cursor->hide();		// hide mouse cursor
         }
+
         topwindow->draw();			// do all the painting
-        draw_resetdrawarea ();		// reset draw area to default
+
+        draw_refresh();				// let eaglesvr refresh screen. (eagle34 only)
+
         if( cursorshow ) {
-            Screen_cursor->show();			// show mouse cursor
+            Screen_cursor->show();		// show mouse cursor
         }
     }
     return 0;
@@ -1679,10 +1642,10 @@ int screen_draw()
 
 void screen_update()
 {
-	if( topwindow ) {
-		topwindow->redraw();
-		screen_draw();
-	}
+    if( topwindow ) {
+        topwindow->redraw();
+        screen_draw();
+    }
 }
 
 struct mouse_event {
@@ -1785,28 +1748,25 @@ int screen_io(int usdelay)
 {
     struct mouse_event mev ;
     struct key_event kev ;
-    int event=0 ;
 
     // key pad
-    while( getkeyevent( &kev ) ) {
-        event = 1 ;
+    if( getkeyevent( &kev ) ) {
         screen_key ( kev.keycode, kev.keydown );
+        return 1 ;
     }
 
     // mouse
     if( getmouseevent( &mev, usdelay ) ) {
-        event = 1 ;
         screen_mouseevent(mev.x, mev.y, mev.buttons );
+        return 1 ;
     }
 
     // window timer
     topwindow->checktimer();
     
-    if( event==0 ) {
-        screen_draw();
-    }
+    screen_draw();
 
-    return event;
+    return 0;
 }
 
 int screen_onframe( cap_frame * capframe )
@@ -1814,7 +1774,7 @@ int screen_onframe( cap_frame * capframe )
     if( screen_liveview_handle>0 && 
        capframe->channel==screen_liveview_channel) 
     {
-        InputAvData( screen_liveview_handle, capframe->framedata, capframe->framesize );		
+//        InputAvData( screen_liveview_handle, capframe->framedata, capframe->framesize );		
     }
     return 0;
 }
@@ -1823,6 +1783,8 @@ int screen_onframe( cap_frame * capframe )
 void screen_init(config &dvrconfig)
 {
     string v ;
+	int i;
+	
     ScreenNum = dvrconfig.getvalueint("VideoOut", "screennum" );
     if( ScreenNum!=4 && ScreenNum!=2 ) {		// support 4, 2, 1 screen mode
         ScreenNum=1 ;			// set to one screen mode by default
@@ -1861,13 +1823,36 @@ void screen_init(config &dvrconfig)
     screen_nostartmenu = dvrconfig.getvalueint("VideoOut", "nostartmenu" );
 	screen_nomenu = dvrconfig.getvalueint("VideoOut", "nomenu" );
 #endif
-    
+
+	// initial eaglesvr server
+	v = dvrconfig.getvalue("VideoOut", "server" );
+	if( v.length()==0 ) {
+		v="127.0.0.1" ;			// default to connect localhost
+	}
+	int videoport = dvrconfig.getvalueint("VideoOut", "port" ) ;
+	if( videoport==0 ) {
+		videoport=EAGLESVRPORT ;
+	}
+
+	for( i=0; i<5; i++ ) {		// retry 5 times
+		screen_sockfd = net_connect(v, videoport );
+		if( screen_sockfd > 0 ) {
+			if( dvr_screen_setmode( screen_sockfd, ScreenStandard, ScreenNum ) ) {
+				dvr_log( "Screen connected, set screen number %d.");
+				break;
+			}
+			closesocket(screen_sockfd);
+			sleep(1);
+		}
+	}
+	
+	int ch ;
+	for(ch=0; ch<4; ch++) {
+		dvr_screen_stop( screen_sockfd, ch);
+	}
+
     // select Video output format to NTSC
     draw_init(ScreenStandard);
-
-    if( eagle32_channels>0 ) {
-        screen_setmode();    
-    }
 
     topwindow = new mainwin(dvrconfig);
     topwindow->redraw();
@@ -1916,6 +1901,7 @@ void screen_uninit()
     }
 
     draw_finish();
+	closesocket(screen_sockfd);
 }
 
 #endif	// NO_ONBOARD_EAGLE

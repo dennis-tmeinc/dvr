@@ -27,11 +27,17 @@
 #define _CRT_SECURE_NO_DEPRECATE 1
 #endif
 
+#ifdef WIN32
+#include <windows.h>
+#endif
+
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <stdarg.h>
+#include <unistd.h>
+
+#include "polarssl/config.h"
 
 #include "polarssl/havege.h"
 #include "polarssl/certs.h"
@@ -39,7 +45,116 @@
 #include "polarssl/ssl.h"
 #include "polarssl/net.h"
 
-#include "../../cfg.h"
+#define HTTP_RESPONSE \
+    "HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n" \
+    "<h2>PolarSSL Test Server</h2>\r\n" \
+    "<p>Successful connection using: %s</p>\r\n"
+
+const char my_ca_crt[] =
+"-----BEGIN CERTIFICATE-----\r\n"
+"MIIDhzCCAm+gAwIBAgIBADANBgkqhkiG9w0BAQUFADA7MQswCQYDVQQGEwJOTDER\r\n"
+"MA8GA1UEChMIUG9sYXJTU0wxGTAXBgNVBAMTEFBvbGFyU1NMIFRlc3QgQ0EwHhcN\r\n"
+"MTEwMjEyMTQ0NDAwWhcNMjEwMjEyMTQ0NDAwWjA7MQswCQYDVQQGEwJOTDERMA8G\r\n"
+"A1UEChMIUG9sYXJTU0wxGTAXBgNVBAMTEFBvbGFyU1NMIFRlc3QgQ0EwggEiMA0G\r\n"
+"CSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDA3zf8F7vglp0/ht6WMn1EpRagzSHx\r\n"
+"mdTs6st8GFgIlKXsm8WL3xoemTiZhx57wI053zhdcHgH057Zk+i5clHFzqMwUqny\r\n"
+"50BwFMtEonILwuVA+T7lpg6z+exKY8C4KQB0nFc7qKUEkHHxvYPZP9al4jwqj+8n\r\n"
+"YMPGn8u67GB9t+aEMr5P+1gmIgNb1LTV+/Xjli5wwOQuvfwu7uJBVcA0Ln0kcmnL\r\n"
+"R7EUQIN9Z/SG9jGr8XmksrUuEvmEF/Bibyc+E1ixVA0hmnM3oTDPb5Lc9un8rNsu\r\n"
+"KNF+AksjoBXyOGVkCeoMbo4bF6BxyLObyavpw/LPh5aPgAIynplYb6LVAgMBAAGj\r\n"
+"gZUwgZIwDAYDVR0TBAUwAwEB/zAdBgNVHQ4EFgQUtFrkpbPe0lL2udWmlQ/rPrzH\r\n"
+"/f8wYwYDVR0jBFwwWoAUtFrkpbPe0lL2udWmlQ/rPrzH/f+hP6Q9MDsxCzAJBgNV\r\n"
+"BAYTAk5MMREwDwYDVQQKEwhQb2xhclNTTDEZMBcGA1UEAxMQUG9sYXJTU0wgVGVz\r\n"
+"dCBDQYIBADANBgkqhkiG9w0BAQUFAAOCAQEAuP1U2ABUkIslsCfdlc2i94QHHYeJ\r\n"
+"SsR4EdgHtdciUI5I62J6Mom+Y0dT/7a+8S6MVMCZP6C5NyNyXw1GWY/YR82XTJ8H\r\n"
+"DBJiCTok5DbZ6SzaONBzdWHXwWwmi5vg1dxn7YxrM9d0IjxM27WNKs4sDQhZBQkF\r\n"
+"pjmfs2cb4oPl4Y9T9meTx/lvdkRYEug61Jfn6cA+qHpyPYdTH+UshITnmp5/Ztkf\r\n"
+"m/UTSLBNFNHesiTZeH31NcxYGdHSme9Nc/gfidRa0FLOCfWxRlFqAI47zG9jAQCZ\r\n"
+"7Z2mCGDNMhjQc+BYcdnl0lPXjdDK6V0qCg1dVewhUBcW5gZKzV7e9+DpVA==\r\n"
+"-----END CERTIFICATE-----\r\n";
+
+const char my_ca_key[] =
+"-----BEGIN RSA PRIVATE KEY-----\r\n"
+"Proc-Type: 4,ENCRYPTED\r\n"
+"DEK-Info: DES-EDE3-CBC,A8A95B05D5B7206B\r\n"
+"\r\n"
+"9Qd9GeArejl1GDVh2lLV1bHt0cPtfbh5h/5zVpAVaFpqtSPMrElp50Rntn9et+JA\r\n"
+"7VOyboR+Iy2t/HU4WvA687k3Bppe9GwKHjHhtl//8xFKwZr3Xb5yO5JUP8AUctQq\r\n"
+"Nb8CLlZyuUC+52REAAthdWgsX+7dJO4yabzUcQ22Tp9JSD0hiL43BlkWYUNK3dAo\r\n"
+"PZlmiptjnzVTjg1MxsBSydZinWOLBV8/JQgxSPo2yD4uEfig28qbvQ2wNIn0pnAb\r\n"
+"GxnSAOazkongEGfvcjIIs+LZN9gXFhxcOh6kc4Q/c99B7QWETwLLkYgZ+z1a9VY9\r\n"
+"gEU7CwCxYCD+h9hY6FPmsK0/lC4O7aeRKpYq00rPPxs6i7phiexg6ax6yTMmArQq\r\n"
+"QmK3TAsJm8V/J5AWpLEV6jAFgRGymGGHnof0DXzVWZidrcZJWTNuGEX90nB3ee2w\r\n"
+"PXJEFWKoD3K3aFcSLdHYr3mLGxP7H9ThQai9VsycxZKS5kwvBKQ//YMrmFfwPk8x\r\n"
+"vTeY4KZMaUrveEel5tWZC94RSMKgxR6cyE1nBXyTQnDOGbfpNNgBKxyKbINWoOJU\r\n"
+"WJZAwlsQn+QzCDwpri7+sV1mS3gBE6UY7aQmnmiiaC2V3Hbphxct/en5QsfDOt1X\r\n"
+"JczSfpRWLlbPznZg8OQh/VgCMA58N5DjOzTIK7sJJ5r+94ZBTCpgAMbF588f0NTR\r\n"
+"KCe4yrxGJR7X02M4nvD4IwOlpsQ8xQxZtOSgXv4LkxvdU9XJJKWZ/XNKJeWztxSe\r\n"
+"Z1vdTc2YfsDBA2SEv33vxHx2g1vqtw8SjDRT2RaQSS0QuSaMJimdOX6mTOCBKk1J\r\n"
+"9Q5mXTrER+/LnK0jEmXsBXWA5bqqVZIyahXSx4VYZ7l7w/PHiUDtDgyRhMMKi4n2\r\n"
+"iQvQcWSQTjrpnlJbca1/DkpRt3YwrvJwdqb8asZU2VrNETh5x0QVefDRLFiVpif/\r\n"
+"tUaeAe/P1F8OkS7OIZDs1SUbv/sD2vMbhNkUoCms3/PvNtdnvgL4F0zhaDpKCmlT\r\n"
+"P8vx49E7v5CyRNmED9zZg4o3wmMqrQO93PtTug3Eu9oVx1zPQM1NVMyBa2+f29DL\r\n"
+"1nuTCeXdo9+ni45xx+jAI4DCwrRdhJ9uzZyC6962H37H6D+5naNvClFR1s6li1Gb\r\n"
+"nqPoiy/OBsEx9CaDGcqQBp5Wme/3XW+6z1ISOx+igwNTVCT14mHdBMbya0eIKft5\r\n"
+"X+GnwtgEMyCYyyWuUct8g4RzErcY9+yW9Om5Hzpx4zOuW4NPZgPDTgK+t2RSL/Yq\r\n"
+"rE1njrgeGYcVeG3f+OftH4s6fPbq7t1A5ZgUscbLMBqr9tK+OqygR4EgKBPsH6Cz\r\n"
+"L6zlv/2RV0qAHvVuDJcIDIgwY5rJtINEm32rhOeFNJwZS5MNIC1czXZx5//ugX7l\r\n"
+"I4sy5nbVhwSjtAk8Xg5dZbdTZ6mIrb7xqH+fdakZor1khG7bC2uIwibD3cSl2XkR\r\n"
+"wN48lslbHnqqagr6Xm1nNOSVl8C/6kbJEsMpLhAezfRtGwvOucoaE+WbeUNolGde\r\n"
+"P/eQiddSf0brnpiLJRh7qZrl9XuqYdpUqnoEdMAfotDOID8OtV7gt8a48ad8VPW2\r\n"
+"-----END RSA PRIVATE KEY-----\r\n";
+
+const char my_srv_crt[] =
+"-----BEGIN CERTIFICATE-----\r\n"
+"MIIDPzCCAiegAwIBAgIBATANBgkqhkiG9w0BAQUFADA7MQswCQYDVQQGEwJOTDER\r\n"
+"MA8GA1UEChMIUG9sYXJTU0wxGTAXBgNVBAMTEFBvbGFyU1NMIFRlc3QgQ0EwHhcN\r\n"
+"MTEwMjEyMTQ0NDA2WhcNMjEwMjEyMTQ0NDA2WjA8MQswCQYDVQQGEwJOTDERMA8G\r\n"
+"A1UEChMIUG9sYXJTU0wxGjAYBgNVBAMTEVBvbGFyU1NMIFNlcnZlciAxMIIBIjAN\r\n"
+"BgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqQIfPUBq1VVTi/027oJlLhVhXom/\r\n"
+"uOhFkNvuiBZS0/FDUEeWEllkh2v9K+BG+XO+3c+S4ZFb7Wagb4kpeUWA0INq1UFD\r\n"
+"d185fAkER4KwVzlw7aPsFRkeqDMIR8EFQqn9TMO0390GH00QUUBncxMPQPhtgSVf\r\n"
+"CrFTxjB+FTms+Vruf5KepgVb5xOXhbUjktnUJAbVCSWJdQfdphqPPwkZvq1lLGTr\r\n"
+"lZvc/kFeF6babFtpzAK6FCwWJJxK3M3Q91Jnc/EtoCP9fvQxyi1wyokLBNsupk9w\r\n"
+"bp7OvViJ4lNZnm5akmXiiD8MlBmj3eXonZUT7Snbq3AS3FrKaxerUoJUsQIDAQAB\r\n"
+"o00wSzAJBgNVHRMEAjAAMB0GA1UdDgQWBBQfdNY/KcF0dEU7BRIsPai9Q1kCpjAf\r\n"
+"BgNVHSMEGDAWgBS0WuSls97SUva51aaVD+s+vMf9/zANBgkqhkiG9w0BAQUFAAOC\r\n"
+"AQEAvc+WwZUemsJu2IiI2Cp6liA+UAvIx98dQe3kZs2zAoF9VwQbXcYzWQ/BILkj\r\n"
+"NImKbPL9x0g2jIDn4ZvGYFywMwIO/d++YbwYiQw42/v7RiMy94zBPnzeHi86dy/0\r\n"
+"jpOOJUx3IXRsGLdyjb/1T11klcFqGnARiK+8VYolMPP6afKvLXX7K4kiUpsFQhUp\r\n"
+"E5VeM5pV1Mci2ETOJau2cO40FJvI/C9W/wR+GAArMaw2fxG77E3laaa0LAOlexM6\r\n"
+"A4KOb5f5cGTM5Ih6tEF5FVq3/9vzNIYMa1FqzacBLZF8zSHYLEimXBdzjBoN4qDU\r\n"
+"/WzRyYRBRjAI49mzHX6raleqnw==\r\n"
+"-----END CERTIFICATE-----\r\n";
+
+const char my_srv_key[] =
+"-----BEGIN RSA PRIVATE KEY-----\r\n"
+"MIIEogIBAAKCAQEAqQIfPUBq1VVTi/027oJlLhVhXom/uOhFkNvuiBZS0/FDUEeW\r\n"
+"Ellkh2v9K+BG+XO+3c+S4ZFb7Wagb4kpeUWA0INq1UFDd185fAkER4KwVzlw7aPs\r\n"
+"FRkeqDMIR8EFQqn9TMO0390GH00QUUBncxMPQPhtgSVfCrFTxjB+FTms+Vruf5Ke\r\n"
+"pgVb5xOXhbUjktnUJAbVCSWJdQfdphqPPwkZvq1lLGTrlZvc/kFeF6babFtpzAK6\r\n"
+"FCwWJJxK3M3Q91Jnc/EtoCP9fvQxyi1wyokLBNsupk9wbp7OvViJ4lNZnm5akmXi\r\n"
+"iD8MlBmj3eXonZUT7Snbq3AS3FrKaxerUoJUsQIDAQABAoIBABaJ9eiRQq4Ypv+w\r\n"
+"UTcVpLC0oTueWzcpor1i1zjG4Vzqe/Ok2FqyGToGKMlFK7Hwwa+LEyeJ3xyV5yd4\r\n"
+"v1Mw9bDZFdJC1eCBjoUAHtX6k9HOE0Vd6woVQ4Vi6OPI1g7B5Mnr/58rNrnN6TMs\r\n"
+"x58NF6euecwTU811QJrZtLbX7j2Cr28yB2Vs8qyYlHwVw5jbDOv43D7vU5gmlIDN\r\n"
+"0JQRuWAnOuPzZNoJr4SfJKqHNGxYYY6pHZ1s0dOTLIDb/B8KQWapA2kRmZyid2EH\r\n"
+"nwzgLbAsHJCf+bQnhXjXuxtUsrcIL8noZLazlOMxwNEammglVWW23Ud/QRnFgJg5\r\n"
+"UgcAcRECgYEA19uYetht5qmwdJ+12oC6zeO+vXLcyD9gon23T5J6w2YThld7/OW0\r\n"
+"oArQJGgkAdaq0pcTyOIjtTQVMFygdVmCEJmxh/3RutPcTeydqW9fphKDMej32J8e\r\n"
+"GniGmNGiclbcfNOS8E5TGp445yZb9P1+7AHng16bGg3Ykj5EA4G+HCcCgYEAyHAl\r\n"
+"//ekk8YjQElm+8izLtFkymIK0aCtEe9C/RIRhFYBeFaotC5dStNhBOncn4ovMAPD\r\n"
+"lX/92yDi9OP8PPLN3a4B9XpW3k/SS5GrbT5cwOivBHNllZSmu/2qz5WPGcjVCOrB\r\n"
+"LYl3YWr2h3EGKICT03kEoTkiDBvCeOpW7cCGl2cCgYBD5whoXHz1+ptPlI4YVjZt\r\n"
+"Xh86aU+ajpVPiEyJ84I6xXmO4SZXv8q6LaycR0ZMbcL+zBelMb4Z2nBv7jNrtuR7\r\n"
+"ZF28cdPv+YVr3esaybZE/73VjXup4SQPH6r3l7qKTVi+y6+FeJ4b2Xn8/MwgnT23\r\n"
+"8EFrye7wmzpthrjOgZnUMQKBgE9Lhsz/5J0Nis6Y+2Pqn3CLKEukg9Ewtqdct2y0\r\n"
+"5Dcta0F3TyCRIxlCDKTL/BslqMtfAdY4H268UO0+8IAQMn9boqzBrHIgs/pvc5kx\r\n"
+"TbKHmw2wtWR6vYersBKVgVpbCGSRssDYHGFu1n74qM4HJ/RGcR1zI9QUe1gopSFD\r\n"
+"xDtLAoGAVAdWvrqDwgoL2hHW3scGpxdE/ygJDOwHnf+1B9goKAOP5lf2FJaiAxf3\r\n"
+"ectoPOgZbCmm/iiDmigu703ld3O+VoCLDD4qx3R+KyALL78gtVJYzSRiKhzgCZ3g\r\n"
+"mKsIVRBq4IfwiwyMNG2BYZQAwbSDjjPtn/kPBduPzPj7eriByhI=\r\n"
+"-----END RSA PRIVATE KEY-----\r\n";
 
 /*
  * Computing a "safe" DH-1024 prime can take a very
@@ -47,22 +162,21 @@
  * You may run dh_genprime to generate a new value.
  */
 char *my_dhm_P = 
-    "E2B6CD09F57CA0AD567627993248E1C6" \
-    "4B8E8AEE306E49FA9C14C876549650E5"
-    "045AB70E2ADBCBE92EB99BBD67E42165"
-    "F14D888E7BBFDFF56A0EFF1554B419BA"
-    "689F9F87B45FFF7F9E7D9A5E0E9F2D2F"
-    "7D1D5672CCCEBCE2FC61D0CDFABABB65"
-    "221F767DB3755A1AAC854DF8128645E5"
-    "FF99908981F2D042AAC3B015DE8F98B7" ;
-
+    "CCBF40949DC46E26853B6D699E60D52D"\
+	"E3F35C86C4F6C1C73520596D5D852ED5"\
+	"47461C229CD6070246C9421562C00B15"\
+	"3833740FAD8286FFC2ED31E9744D0542"\
+	"48FD91A81271AA8845096D30BB6C6A27"\
+    "1887E9D066D2F7C843FF16A2AAB3DEC7"\
+	"1DDFA57FC3A144ED150CD2BB619B586E"\
+	"27D5E2682BB310C58BD17D8E65FF51BF";
 
 char *my_dhm_G = "4";
 
 /*
  * Sorted by order of preference
  */
-int my_ciphers[] =
+int my_ciphersuites[] =
 {
     SSL_EDH_RSA_AES_256_SHA,
     SSL_EDH_RSA_CAMELLIA_256_SHA,
@@ -80,33 +194,13 @@ int my_ciphers[] =
 };
 
 #define DEBUG_LEVEL 0
-FILE * debugout=NULL ;
+
 void my_debug( void *ctx, int level, const char *str )
 {
-     if( level < DEBUG_LEVEL )
-    {
-        if( debugout==NULL ) {
-            debugout=fopen("/dev/ttyp0", "w");
-        }        
-        fprintf( (FILE *) debugout, "%s", str );
-        fflush(  (FILE *) debugout  );
-    }
 }
 
-void dbg_print( char * format, ... )
+void my_debug_printf( const char *fmt, ...  )
 {
-#if (DEBUG_LEVEL>0)    
-    va_list ap ;
-    if( debugout==NULL ) {
-        debugout=fopen("/dev/ttyp0", "w");
-    }
-    if( debugout ) {
-        va_start( ap, format );
-        vfprintf(debugout, format, ap );
-        fflush(debugout);
-        va_end(ap);
-    }
-#endif    
 }
 
 /*
@@ -134,7 +228,7 @@ static int my_get_session( ssl_context *ssl )
         if( ssl->timeout != 0 && t - prv->start > ssl->timeout )
             continue;
 
-        if( ssl->session->cipher != prv->cipher ||
+        if( ssl->session->ciphersuite != prv->ciphersuite ||
             ssl->session->length != prv->length )
             continue;
 
@@ -183,40 +277,55 @@ static int my_set_session( ssl_context *ssl )
     return( 0 );
 }
 
-// supporting files
-char httpd[] = APP_DIR"/www/eaglehttpd" ;
-char server_crt[]=APP_DIR"/www/server.crt";
-char server_key[]=APP_DIR"/www/server.key";
-char ca_crt[]=APP_DIR"/www/ca.crt";
-
-static int io_ready(int sec, int fd1, int fd2)
+static int io_ready(int usec, int fd)
 {
     struct timeval timeout ;
     fd_set fds;
-    timeout.tv_sec = sec ;
-    timeout.tv_usec = 0 ;
+    timeout.tv_sec = 0 ;
+    timeout.tv_usec = usec ;
     FD_ZERO(&fds);
-    FD_SET(fd1, &fds);
-    FD_SET(fd2, &fds);
-    if (select(fd1>fd2?(fd1+1):(fd2+1), &fds, NULL, NULL, &timeout) > 0) {
-        if( FD_ISSET( fd1, &fds ) ) {
-            return 1 ;
-        }
-        else if( FD_ISSET( fd2, &fds ) ) {
-            return 2 ;
-        }
-    } 
-    return 0;
+    FD_SET(fd, &fds);
+	return select(fd+1, &fds, NULL, NULL, &timeout) > 0 ;
 }
 
-#define BUFSIZE (2000)
+// spawn a child process, and redirect child's stdin, stdout to pipeout, pipein
+int my_spawn( int *pipein, int * pipeout, int argc, char * argv[] )
+{    
+	int pipe1[2], pipe2[2] ;
+	int i;
+	char * sargv[argc] ;
+	
+    pipe( pipe1 ); 	//  -> child
+    pipe( pipe2 ); 	//  <- child
+    
+    if( fork()==0 ) {
+		for( i=0; i<argc; i++ ) {
+			sargv[i]=argv[i+1] ;
+		}
+        dup2( pipe1[0], 0 ) ;
+        dup2( pipe2[1], 1 ) ;
+		close( pipe1[0] );
+		close( pipe1[1] );
+		close( pipe2[0] );
+		close( pipe2[1] );
+		execv( sargv[0], sargv );
+		// error!
+		exit(0);
+    }
+	
+	*pipeout=pipe1[1] ;
+	*pipein=pipe2[0] ;
+	close( pipe1[0] );
+	close( pipe2[1] );
+	return 1 ;
+}
 
 int main( int argc, char * argv[] )
 {
-    int ret, len;
-    int fd_in, fd_out ;
-    int pipe_in[2], pipe_out[2] ;
-    unsigned char buf[BUFSIZE+1];
+    int ret;
+    int pipein, pipeout ;
+    int serverin, serverout ;
+    unsigned char * ssl_buffer ;
 
     havege_state hs;
     ssl_context ssl;
@@ -224,203 +333,146 @@ int main( int argc, char * argv[] )
     x509_cert srvcert;
     rsa_context rsa;
 
-    // setup pipe of sub process
-    fd_in=0 ;
-    fd_out=1 ;
+    serverin=0 ;			// stdin
+    serverout=1 ;			// stdout
 
-    pipe( pipe_in );
-    pipe( pipe_out );
+    memset( &ssl, 0, sizeof( ssl ) );
+    memset( &srvcert, 0, sizeof( srvcert ) );
+    memset( &rsa, 0, sizeof( rsa ) );
+    memset( &ssn, 0, sizeof( ssn ) );
 
-    fflush(stdin);
-    fflush(stdout);
-    
-    if( fork()==0 ) {
-        close( pipe_in[1] );
-        close( pipe_out[0] );
-        dup2( pipe_in[0], 0 ) ;
-        dup2( pipe_out[1], 1 ) ;
-        close( pipe_in[0] ) ;
-        close( pipe_out[1] ) ;
-
-        execl (httpd, httpd, argv[1], NULL);
-        exit(0);
-    }
-    close( pipe_in[0] );
-    close( pipe_out[1] );
-    
     /*
-     * 1. Load the certificates and private RSA key
+     * Load the certificates and private RSA key
      */
-    dbg_print("\n------------------------------------------------------------------------\n  . Loading the server cert. and key..." );
-
-    memset( &srvcert, 0, sizeof( x509_cert ) );
 
     /*
      * This demonstration program uses embedded test certificates.
      * Instead, you may want to use x509parse_crtfile() to read the
      * server and CA certificates, as well as x509parse_keyfile().
      */
-//    ret = x509parse_crt( &srvcert, (unsigned char *) test_srv_crt,
-//                         strlen( test_srv_crt ) );
-    ret = x509parse_crtfile( &srvcert, server_crt );
+    ret = x509parse_crt( &srvcert, (unsigned char *) my_srv_crt,
+                         strlen( my_srv_crt ) );
     if( ret != 0 )
     {
-        dbg_print( " failed\n  !  x509parse_crt returned %d\n\n" );
+        my_debug_printf( " failed\n  !  x509parse_crt returned %d\n\n", ret );
         goto exit;
     }
 
-//    ret = x509parse_crt( &srvcert, (unsigned char *) test_ca_crt,
-//                         strlen( test_ca_crt ) );
-    ret = x509parse_crtfile( &srvcert, ca_crt );
+    ret = x509parse_crt( &srvcert, (unsigned char *) my_ca_crt,
+                         strlen( my_ca_crt ) );
     if( ret != 0 )
     {
-        dbg_print(" failed\n  !  x509parse_crt returned %d\n\n", ret );
+        my_debug_printf( " failed\n  !  x509parse_crt returned %d\n\n", ret );
         goto exit;
     }
 
-//    ret =  x509parse_key( &rsa, (unsigned char *) test_srv_key,
-//                          strlen( test_srv_key ), NULL, 0 );
-    ret =  x509parse_keyfile( &rsa, server_key, NULL );
+    rsa_init( &rsa, RSA_PKCS_V15, 0 );
+    ret =  x509parse_key( &rsa, (unsigned char *) my_srv_key,
+                          strlen( my_srv_key ), NULL, 0 );
     if( ret != 0 )
     {
-        dbg_print(" failed\n  !  x509parse_key returned %d\n\n", ret );
+        my_debug_printf( " failed\n  !  x509parse_key returned %d\n\n", ret );
         goto exit;
     }
 
-    dbg_print(" ok\n");
-    
-    /*
-     * 2. Setup the listening TCP socket
-     */
+    my_debug_printf( " ok\n" );
 
-    /*
-     * 3. Wait until a client connects
-     */
-    memset( &ssl, 0, sizeof( ssl ) );
     ssl_free( &ssl );
 
     /*
-     * 4. Setup stuff
+     * Setup stuff
      */
-    dbg_print("  . Setting up the RNG and SSL data....");
+    my_debug_printf( "  . Setting up the RNG and SSL data...." );
 
     havege_init( &hs );
 
     if( ( ret = ssl_init( &ssl ) ) != 0 )
     {
-        dbg_print(" failed\n  ! ssl_init returned %d\n\n", ret );
+        my_debug_printf( " failed\n  ! ssl_init returned %d\n\n", ret );
         goto exit;
     }
 
-    dbg_print(" ok\n" );
-    
+    my_debug_printf( " ok\n" );
+
     ssl_set_endpoint( &ssl, SSL_IS_SERVER );
     ssl_set_authmode( &ssl, SSL_VERIFY_NONE );
 
     ssl_set_rng( &ssl, havege_rand, &hs );
     ssl_set_dbg( &ssl, my_debug, NULL );
-    ssl_set_bio( &ssl, net_recv, &fd_in,
-                       net_send, &fd_out );
+    ssl_set_bio( &ssl, net_recv, &serverin,
+                 net_send, &serverout );
     ssl_set_scb( &ssl, my_get_session,
-                       my_set_session );
+                 my_set_session );
 
-    ssl_set_ciphers( &ssl, my_ciphers );
+    ssl_set_ciphersuites( &ssl, my_ciphersuites );
     ssl_set_session( &ssl, 1, 0, &ssn );
-
-    memset( &ssn, 0, sizeof( ssl_session ) );
 
     ssl_set_ca_chain( &ssl, srvcert.next, NULL, NULL );
     ssl_set_own_cert( &ssl, &srvcert, &rsa );
     ssl_set_dh_param( &ssl, my_dhm_P, my_dhm_G );
 
     /*
-     * 5. Handshake
+     * Handshake
      */
-    dbg_print( "  . Performing the SSL/TLS handshake..." );
+    my_debug_printf( "  . Performing the SSL/TLS handshake..." );
 
     while( ( ret = ssl_handshake( &ssl ) ) != 0 )
     {
-        if( ret != POLARSSL_ERR_NET_TRY_AGAIN )
+        if( ret != POLARSSL_ERR_NET_WANT_READ && ret != POLARSSL_ERR_NET_WANT_WRITE )
         {
-            dbg_print( " failed\n  ! ssl_handshake returned %d\n\n", ret );
+            my_debug_printf( " failed\n  ! ssl_handshake returned %d\n\n", ret );
             goto exit;
         }
     }
 
-    dbg_print( " ok\n" );
+    my_debug_printf( " ok\n" );
 
-    while( 1 ) {
-        int io ;
-        io=io_ready( 10, fd_in, pipe_out[0] ) ;
-        if( io==1 ) {       // fd_in available
-            do {
-                ret = ssl_read( &ssl, buf, BUFSIZE );
-                if( ret>0 && ret<=BUFSIZE ) {
-                    buf[ret]=0 ;
-                    dbg_print( " read %d bytes\n%s\n", ret, buf );
-                    len = write(pipe_in[1],buf,ret);
-                    // for eagle board, 
-                    // give CPU a break, so it don't reach 100% usage
-                    usleep(1);
-                }
-            } while( ssl_get_bytes_avail( &ssl )>0 && ret>0 ) ;
+    /*
+  * spawn child process (httpd)
+  */
+    my_spawn( &pipein, &pipeout, argc, argv );
 
-            if( ret<=0 ) {
-                if( ret == POLARSSL_ERR_NET_TRY_AGAIN ) {
-                    dbg_print( " net retry\n\n" );
-                    continue;
-                }
+    net_set_nonblock( pipein );
+    net_set_block( pipeout );
+    net_set_nonblock( serverin );
+    net_set_block( serverout );
 
-                switch( ret )
-                {
-                    case POLARSSL_ERR_SSL_PEER_CLOSE_NOTIFY:
-                        dbg_print( " connection was closed gracefully\n" );
-                        break;
+    ssl_buffer = (unsigned char *)malloc( SSL_BUFFER_LEN ) ;
 
-                    case POLARSSL_ERR_NET_CONN_RESET:
-                        dbg_print( " connection was reset by peer\n" );
-                        break;
+    do {
 
-                    default:
-                        dbg_print( " ssl_read returned %d\n", ret );
-                        break;
-                }
-                break;
+        if( io_ready(0, pipein) ) {
+            ret = net_recv( &pipein, ssl_buffer, SSL_BUFFER_LEN );
+            if( ret>0 ) {
+                ssl_write( &ssl, ssl_buffer, ret );
+                continue ;
+            }
+            else if( ret != POLARSSL_ERR_NET_WANT_READ && ret != POLARSSL_ERR_NET_WANT_WRITE ) {
+                break ;
             }
         }
-        else if( io==2 ) {      // pipe_out available
 
-            len = read(pipe_out[0],buf, BUFSIZE );
-            if( len<=0 || len>BUFSIZE ) {
-                break;
+        if( ssl_get_bytes_avail( &ssl )>0 || io_ready(1000, serverin) ) {
+            ret = ssl_read( &ssl, ssl_buffer, SSL_BUFFER_LEN );
+            if( ret>0 ) {
+                ssl_buffer[ret]=0 ;
+                net_send( &pipeout, ssl_buffer, ret );
             }
-            buf[len]=0 ;
-            
-            dbg_print( " %d bytes to send, cipher: %s\n", len, ssl_get_cipher( &ssl ) );
-
-            if( ( ret = ssl_write( &ssl, buf, len ) ) <= 0 )
-            {
-                if( ret != POLARSSL_ERR_NET_TRY_AGAIN )
-                {
-                    dbg_print( " failed\n  ! ssl_write returned %d\n\n", ret );
-                }
-
-                if( ret == POLARSSL_ERR_NET_CONN_RESET )
-                {
-                    dbg_print( " failed\n  ! peer closed the connection\n\n" );
-                }
-
-                break;
+            else if( ret != POLARSSL_ERR_NET_WANT_READ && ret != POLARSSL_ERR_NET_WANT_WRITE ) {
+                break ;
             }
-
-            dbg_print( " %d bytes written\n\n%s\n", len, (char *) buf );
         }
-    }
-    
+
+    } while( 1 );
+
+    free(ssl_buffer);
+
     ssl_close_notify( &ssl );
 
-exit:
+    close( pipeout );
+    close( pipein );
 
+exit:	
     x509_free( &srvcert );
     rsa_free( &rsa );
     ssl_free( &ssl );
@@ -434,7 +486,6 @@ exit:
         free( prv );
     }
 
-    memset( &ssl, 0, sizeof( ssl_context ) );
-
     return( ret );
 }
+

@@ -62,7 +62,7 @@ fi
 
 if [ ! -f /davinci/ID/APPID ] ; then
 	ln -sf /dav /davinci
-fi	
+fi
 
 cp -f -a * /davinci/
 rm /davinci/sfxrun

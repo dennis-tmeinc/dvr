@@ -1,10 +1,15 @@
 
-#include <sys/mman.h> 
-#include "dvr.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <sys/mman.h>
 
 int g_memdirty = 0;             // kb
 int g_memfree = 0;              // kb
 int g_memused = 0 ;
+
+#define MEM_TAG (0x47eb530f)
 
 static pthread_mutex_t mem_mutex;
 inline void mem_lock()
@@ -43,111 +48,106 @@ void mem_check()
     g_memfree = memfree ;
 }
 
+// copy aligned 32 bit memory.
+void mem_cpy32(void *dest, const void *src, size_t count)
+{
+    if( (count&3) ||
+        ((unsigned long)dest&3) ||
+        ((unsigned long)src&3) )
+    {	// memory not aligned
+        memcpy(dest,src,count);
+    }
+    else {
+        // use 32 bits copy is much faster than memcpy()
+        unsigned long * dst32 = (unsigned long *)dest;
+        const unsigned long * src32 = (const unsigned long * )src;
+        count /= sizeof(unsigned long);
+        while (count--) {
+            *dst32++ = *src32++;
+        }
+    }
+}
+
+struct mem_block {
+    struct mem_block * blockad ;
+    int    tag;
+    int	   refcnt ;
+} ;
+
 void *mem_alloc(int size)
 {
-    int *pmemblk;
-    
-    if (size < 0) {
-        size=0 ;
+    char * pm = NULL ;
+    struct mem_block * mb ;
+    if (size < 4) {
+        size = 4 ;
     }
-    size += 8 ;
     mem_lock();
-    pmemblk = (int *) malloc(size);
-    if (pmemblk == NULL) {
-        // no enough memory error
-        dvr_log("!!!!!mem_alloc failed!");
-        mem_unlock();
-        return NULL;
+    mb = (struct mem_block *)malloc( size+sizeof( struct mem_block ) );
+    if( mb ) {
+        mb->blockad = mb ;
+        mb->tag = MEM_TAG ;
+        mb->refcnt = 1 ;
+        pm = ((char *)mb)+sizeof(struct mem_block) ;
+        g_memused++ ;
     }
-    pmemblk[0] = (int)(&pmemblk[2]);    // memory tag
-    pmemblk[1] = 1 ;			        // reference counter
-    g_memused++;                        // for debug
     mem_unlock();
-    return (void *)(&pmemblk[2]);
+    return pm ;
 }
 
 // check if this memory is allock by mem_alloc
 int mem_check(void *pmem)
 {
-    if (pmem == NULL || (((int)pmem)&3)!=0 )
+    struct mem_block * mb ;
+    if (pmem == NULL || (((unsigned long)pmem)&3)!=0 )
         return 0;
-    return *(((int *)pmem)-2) == (int)pmem ;
+    mb = (struct mem_block *)(((char *)pmem)-sizeof(struct mem_block)) ;
+    if( mb->blockad == mb && mb->tag == MEM_TAG ) {
+        return 1 ;
+    }
+    return 0 ;
 }
 
 void mem_free(void *pmem)
 {
-    int *pmemblk;
-    if (pmem == NULL || (((int)pmem)&3)!=0 ) {
-        dvr_log("!!!!memory release failed!");
-        return;
-    }
-
-    mem_lock();
-    pmemblk = ((int *)pmem)-2 ;
-    if( pmemblk[0]==(int)pmem ) {
-        if( --(pmemblk[1]) <=0 ) {	// reference counter = 0
-            pmemblk[0]=0;		    // clear memory tag
-            free((void *)pmemblk );
-            g_memused--;
+    struct mem_block * mb ;
+    if( mem_check( pmem ) ) {
+        mem_lock();
+        mb = (struct mem_block *)(((char *)pmem)-sizeof(struct mem_block)) ;
+        if( --(mb->refcnt) <= 0 ) {
+            mb->tag = 0 ;			// remove tag
+            free( mb ) ;
+            g_memused-- ;			// for debugging
         }
         mem_unlock();
-    }
-    else {
-        mem_unlock();
-        dvr_log("!!!!memory release failed!");
     }
 }
 
-void *mem_ref(void *pmem, int size)
+void *mem_addref(void *pmem, int size)
 {
-    int *pmemblk;
-    mem_lock();
-    if (pmem && (((int)pmem)&3)==0 ){		// check if this memory block is valid.
-        pmemblk = ((int *)pmem)-2 ;
-        if (pmemblk[0] == (int)pmem){
-            pmemblk[1]++ ;
-            mem_unlock();
-            return pmem ;
-        }
+    struct mem_block * mb ;
+    if( mem_check( pmem ) ) {
+        mem_lock();
+        mb = (struct mem_block *)(((char *)pmem)-sizeof(struct mem_block)) ;
+        ++(mb->refcnt);
+        mem_unlock();
+        return pmem ;
     }
-    mem_unlock();
-    // allock a new memory and copy contents   
-    pmemblk = (int *)mem_alloc(size) ;
-    mem_cpy32( pmemblk, pmem, size );
-    return (void *)pmemblk ;
+    else {
+        void * nmem = mem_alloc( size ) ;
+        mem_cpy32( nmem, pmem, size );
+        return nmem ;
+    }
 }
 
 int mem_refcount(void *pmem)
 {
-    int *pmemblk;
-    int refcount=0 ;
-    if (pmem == NULL || (((int)pmem)&3)!=0 )
-        return 0 ;
-    mem_lock();
-    pmemblk = ((int *)pmem)-2 ;
-    if (pmemblk[0] == (int)pmem){
-        refcount=pmemblk[1] ;
-    }
-    mem_unlock();
-    return refcount ;
-}
-
-// copy aligned 32 bit memory.
-void mem_cpy32(void *dest, const void *src, size_t count) 
-{
-    if( (count&3) ||
-       ((unsigned long)dest&3) || 
-       ((unsigned long)src&3) ) 
-    {
-        memcpy(dest,src,count);
+    struct mem_block * mb ;
+    if( mem_check( pmem ) ) {
+        mb = (struct mem_block *)(((char *)pmem)-sizeof(struct mem_block)) ;
+        return mb->refcnt;
     }
     else {
-        long * dst32 = (long *)dest;
-        const long * src32 = (const long * )src;
-        count /= sizeof(long);
-        while (count--) {
-            *dst32++ = *src32++;
-        }
+        return 0 ;
     }
 }
 
@@ -155,6 +155,7 @@ void mem_init()
 {
     // initial mutex
     pthread_mutex_init(&mem_mutex, NULL);
+    mem_check();
     return;
 }
 
@@ -163,4 +164,5 @@ void mem_uninit()
     pthread_mutex_destroy(&mem_mutex);
     return ;
 }
+
 

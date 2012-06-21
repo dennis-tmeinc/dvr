@@ -60,6 +60,13 @@ fi
 boardid=`cat /davinci/ID/BOARDID`
 ifconfig eth0 192.168.247.${boardid}
 
+# setup initial TZ environment
+cd /davinci
+tzn=`./cfg get system timezone`
+tzl=`./cfg get timezones ${tzn}`
+TZ=${tzl%% *}
+export TZ
+
 # setup network ethernet ip address (as a alias)
 /davinci/dvr/setnetwork
 

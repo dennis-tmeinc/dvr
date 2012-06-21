@@ -13,12 +13,10 @@ HEADERS=diomap.h netdbg.h mcu.h gforce.h iomisc.h
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
-
-#no eagle boards
-ifeq ($(EAGLE),mv)
-LDFLAGS= -lpthread -lstdc++ -lrt -Wl,-rpath,.
+ifeq ($(EAGLE),eagle32)
+LDFLAGS= -lpthread -lstdc++ -L../eaglesvr/$(EAGLE) -lsdk -ldadsp ../eaglesvr/$(EAGLE)/dsplink.lib
 else
-LDFLAGS= -lstdc++  -L../dvrsvr/$(EAGLE) -lsdk -ldadsp ../dvrsvr/$(EAGLE)/dsplink.lib
+LDFLAGS= -lpthread -lstdc++ -lrt -Wl,-rpath,.
 endif
 
 CFLAGS=-I../dvrsvr -g -Wall

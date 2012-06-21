@@ -49,14 +49,14 @@ void time_setmcu()
     bmonth  = bcd( p_dio_mmap->rtc_month );
     byear   = bcd( p_dio_mmap->rtc_year );
     dio_unlock();
-    if( mcu_cmd( NULL, MCU_CMD_WRITERTC, 7, 
-                bsecond,
-                bminute,
-                bhour,
-                bzero,
-                bday,
-                bmonth,
-                byear ) ) 
+    if( mcu_cmd( NULL, MCU_CMD_WRITERTC, 7,
+                 bsecond,
+                 bminute,
+                 bhour,
+                 bzero,
+                 bday,
+                 bmonth,
+                 byear ) )
     {
         p_dio_mmap->rtc_cmd   = 0 ;	// cmd finish
         return ;
@@ -91,10 +91,12 @@ int time_rtctosys()
         settimeofday(&tv, NULL);
         // also set onboard rtc
         rtc_set((time_t)tv.tv_sec);
-		return 1 ;
+        return 1 ;
     }
-	return 0 ;
+    return 0 ;
 }
+
+static int mcuclockerror=0 ;        // mcu clock error flag
 
 void time_syncgps ()
 {
@@ -113,16 +115,17 @@ void time_syncgps ()
                 tv.tv_usec= 0;
                 settimeofday( &tv, NULL );
                 dvr_log ( "Time sync use GPS time." );
+                // set mcu time
+                mcu_w_rtc(gpstime) ;
+                mcuclockerror = 0 ;         // clear mcu clock error flag
+                // also set onboard rtc
+                rtc_set(gpstime);
             }
             else if( diff>1 || diff<-1 ) {
                 tv.tv_sec =(time_t)diff ;
                 tv.tv_usec = 0 ;
                 adjtime( &tv, NULL );
             }
-            // set mcu time
-            mcu_w_rtc(gpstime) ;
-            // also set onboard rtc
-            rtc_set(gpstime);
         }
     }
     else {
@@ -135,188 +138,194 @@ void time_syncmcu()
     int diff ;
     struct timeval tv ;
     time_t rtc ;
-    rtc=mcu_r_rtc();
-    if( (int)rtc>0 ) {
-        gettimeofday(&tv, NULL);
-        diff = (int)rtc - (int)tv.tv_sec ;
-        if( diff>5 || diff<-5 ) {
-            tv.tv_sec=rtc ;
-            tv.tv_usec=0;
-            settimeofday( &tv, NULL );
-            dvr_log ( "Time sync use MCU time." );
+
+    if( mcuclockerror<3 ) {
+        rtc=mcu_r_rtc();
+        if( (int)rtc>0 ) {
+            gettimeofday(&tv, NULL);
+            diff = (int)rtc - (int)tv.tv_sec ;
+            if( diff>5 || diff<-5 ) {
+                tv.tv_sec=rtc ;
+                tv.tv_usec=0;
+                settimeofday( &tv, NULL );
+                dvr_log ( "Time sync use MCU time." );
+                // set onboard rtc
+                rtc_set(rtc);
+            }
+            else if( diff>1 || diff<-1 ){
+                tv.tv_sec =(time_t)diff ;
+                tv.tv_usec = 0 ;
+                adjtime( &tv, NULL );
+            }
+            mcuclockerror=0 ;
         }
-        else if( diff>1 || diff<-1 ){
-            tv.tv_sec =(time_t)diff ;
-            tv.tv_usec = 0 ;
-            adjtime( &tv, NULL );
+        else {
+            mcuclockerror++ ;
         }
-        // set onboard rtc
-        rtc_set(rtc);
     }
 }
 
-
 void check_rtccmd()
 {
-	// rtc command check
-	if( p_dio_mmap->rtc_cmd != 0 ) {
-		if( p_dio_mmap->rtc_cmd == 1 ) {
-			mcu_readrtc(); 
-		}
-		else if( p_dio_mmap->rtc_cmd == 2 ) {
-			time_setmcu();
-		}
-		else if( p_dio_mmap->rtc_cmd == 3 ) {
-			time_syncrtc();
-		}
-		else if( p_dio_mmap->rtc_cmd == 10 ) {      // Ex command, calibrate gforce sensor
-			gforce_calibration();
-		}
-		else if( p_dio_mmap->rtc_cmd == 11 ) {      // Ex command, save gforce crash data
-			p_dio_mmap->rtc_cmd = 0 ;
-			gforce_getcrashdata();
-		}
-		else if( p_dio_mmap->rtc_cmd == 15 ) {      // Ex command, calibrate gforce mount angle
-			p_dio_mmap->rtc_cmd = 0 ;
-			gforce_calibrate_mountangle(1);
-		}
-		else if( p_dio_mmap->rtc_cmd == 16 ) {      // Ex command, stop calibrate gforce mount angle
-			p_dio_mmap->rtc_cmd = 0 ;
-			gforce_calibrate_mountangle(0);
-		}
-		else {
-			p_dio_mmap->rtc_cmd=-1;		// command error, (unknown cmd)
-		}
-	}
+    // rtc command check
+    if( p_dio_mmap->rtc_cmd != 0 ) {
+        if( p_dio_mmap->rtc_cmd == 1 ) {
+            mcu_readrtc();
+        }
+        else if( p_dio_mmap->rtc_cmd == 2 ) {
+            time_setmcu();
+        }
+        else if( p_dio_mmap->rtc_cmd == 3 ) {
+            time_syncrtc();
+        }
+        else if( p_dio_mmap->rtc_cmd == 10 ) {      // Ex command, calibrate gforce sensor
+            gforce_calibration();
+        }
+        else if( p_dio_mmap->rtc_cmd == 11 ) {      // Ex command, save gforce crash data
+            p_dio_mmap->rtc_cmd = 0 ;
+            gforce_getcrashdata();
+        }
+        else if( p_dio_mmap->rtc_cmd == 15 ) {      // Ex command, calibrate gforce mount angle
+            p_dio_mmap->rtc_cmd = 0 ;
+            gforce_calibrate_mountangle(1);
+        }
+        else if( p_dio_mmap->rtc_cmd == 16 ) {      // Ex command, stop calibrate gforce mount angle
+            p_dio_mmap->rtc_cmd = 0 ;
+            gforce_calibrate_mountangle(0);
+        }
+        else {
+            p_dio_mmap->rtc_cmd=-1;		// command error, (unknown cmd)
+        }
+    }
 }	
 
 
 void check_cpuusage()
 {
-	static unsigned int cpuusage_timer ;
-	static int usage_counter=0 ;
-	static float s_cputime=0.0, s_idletime=0.0 ;
-	static float s_usage = 0.0 ;
+    static unsigned int cpuusage_timer ;
+    static int usage_counter=0 ;
+    static float s_cputime=0.0, s_idletime=0.0 ;
+    static float s_usage = 0.0 ;
 
-	if( (runtime - cpuusage_timer)> 5000 ) {    // 5 seconds to monitor cpu usage
-		cpuusage_timer=runtime ;
+    if( (runtime - cpuusage_timer)> 5000 ) {    // 5 seconds to monitor cpu usage
+        cpuusage_timer=runtime ;
 
-		float cputime, idletime ;
-		FILE * uptime ;
-		uptime = fopen( "/proc/uptime", "r" );
-		if( uptime ) {
-			fscanf( uptime, "%f %f", &cputime, &idletime );
-			fclose( uptime );
-			if( cputime>s_cputime ) {
-				s_usage=1.0 -(idletime-s_idletime)/(cputime-s_cputime) ;
-				s_cputime=cputime ;
-				s_idletime=idletime ;
-			}
-		}
-		
-		if( s_usage>0.995 ) {
-			if( ++usage_counter>12 ) {          // CPU keey busy for 1 minites
-				buzzer( 10, 250, 250 );
-				// let system reset by watchdog
-				dvr_log( "CPU usage at 100%% for 60 seconds, reboot system.");
-				p_dio_mmap->iomode=IOMODE_REBOOT ;
-			}
-		}
-		else {
-			usage_counter=0 ;
-		}
-	}
+        float cputime, idletime ;
+        FILE * uptime ;
+        uptime = fopen( "/proc/uptime", "r" );
+        if( uptime ) {
+            fscanf( uptime, "%f %f", &cputime, &idletime );
+            fclose( uptime );
+            if( cputime>s_cputime ) {
+                s_usage=1.0 -(idletime-s_idletime)/(cputime-s_cputime) ;
+                s_cputime=cputime ;
+                s_idletime=idletime ;
+            }
+        }
+
+        if( s_usage>0.995 ) {
+            if( ++usage_counter>12 ) {          // CPU keey busy for 1 minites
+                buzzer( 10, 250, 250 );
+                // let system reset by watchdog
+                dvr_log( "CPU usage at 100%% for 60 seconds, reboot system.");
+                p_dio_mmap->iomode=IOMODE_REBOOT ;
+            }
+        }
+        else {
+            usage_counter=0 ;
+        }
+    }
 }
 
 
 void check_temperature()
 {
-	int i ;
-	static unsigned int temperature_timer ;
-	if( (runtime - temperature_timer)> 10000 ) {    // 10 seconds to read temperature,
-		temperature_timer=runtime ;
+    int i ;
+    static unsigned int temperature_timer ;
+    if( (runtime - temperature_timer)> 10000 ) {    // 10 seconds to read temperature,
+        temperature_timer=runtime ;
 
-		i=mcu_iotemperature();
-		netdbg_print("Temperature: io(%d)",i );
-		if( i > -127 && i < 127 ) {
-			static int saveiotemp = 0 ;
-			if( i>=75 && 
-			   (i-saveiotemp) > 2 ) 
-			{
-				dvr_log ( "High system temperature: %d", i);
-				saveiotemp=i ;
-			}
+        i=mcu_iotemperature();
+        netdbg_print("Temperature: io(%d)",i );
+        if( i > -127 && i < 127 ) {
+            static int saveiotemp = 0 ;
+            if( i>=75 &&
+                (i-saveiotemp) > 2 )
+            {
+                dvr_log ( "High system temperature: %d", i);
+                saveiotemp=i ;
+            }
 
-			p_dio_mmap->iotemperature = i ;
-		}
-		else {
-			p_dio_mmap->iotemperature=-128 ;
-		}
+            p_dio_mmap->iotemperature = i ;
+        }
+        else {
+            p_dio_mmap->iotemperature=-128 ;
+        }
 
-		i=mcu_hdtemperature();
-		netdbg_print(" hd(%d)\n", i );
-		if( i > -127 && i < 127 ) {
-			static int savehdtemp = 0 ;
+        i=mcu_hdtemperature();
+        netdbg_print(" hd(%d)\n", i );
+        if( i > -127 && i < 127 ) {
+            static int savehdtemp = 0 ;
 
-			if( i>=75 && 
-			   (i-savehdtemp) > 2 ) 
-			{
-				dvr_log ( "High hard disk temperature: %d", i);
-				savehdtemp=i ;
-			}
+            if( i>=75 &&
+                (i-savehdtemp) > 2 )
+            {
+                dvr_log ( "High hard disk temperature: %d", i);
+                savehdtemp=i ;
+            }
 
-			p_dio_mmap->hdtemperature = i ;
-		}
-		else {
-			p_dio_mmap->hdtemperature=-128 ;
-		}
+            p_dio_mmap->hdtemperature = i ;
+        }
+        else {
+            p_dio_mmap->hdtemperature=-128 ;
+        }
 
-		// The Buzzer beep 4time at 0.5s interval every 30s when HDD or system temperature is over 66C
-		if( p_dio_mmap->iotemperature > 66 || p_dio_mmap->hdtemperature > 66 ) {
-			static int hitempbeep=0 ;
-			if( ++hitempbeep>3 ) {
-				buzzer( 4, 250, 250 ) ;
-				hitempbeep=0 ;
-			}
-		}
+        // The Buzzer beep 4time at 0.5s interval every 30s when HDD or system temperature is over 66C
+        if( p_dio_mmap->iotemperature > 66 || p_dio_mmap->hdtemperature > 66 ) {
+            static int hitempbeep=0 ;
+            if( ++hitempbeep>3 ) {
+                buzzer( 4, 250, 250 ) ;
+                hitempbeep=0 ;
+            }
+        }
 
-		static int hightemp_norecord = 0 ;
-		if( p_dio_mmap->iotemperature > 83 || p_dio_mmap->hdtemperature > 83 ) {
-			if( hightemp_norecord == 0 &&
-			   p_dio_mmap->iomode==IOMODE_RUN &&                      
-			   p_dio_mmap->dvrpid>0 && 
-			   (p_dio_mmap->dvrstatus & DVR_RUN) &&
-			   (p_dio_mmap->dvrcmd == 0 ) &&
-			   ((p_dio_mmap->dvrstatus & DVR_RECORD)!=0) )
-			{
-				dvr_log( "Stop DVR recording on high temperature."); 
-				p_dio_mmap->dvrcmd = 3;     // stop recording
-				hightemp_norecord = 1 ;
-			}
-		}
-		else if(  p_dio_mmap->iotemperature < 75 && p_dio_mmap->hdtemperature < 75 ) {
-			if( hightemp_norecord == 1 &&
-			   p_dio_mmap->iomode==IOMODE_RUN &&                      
-			   p_dio_mmap->dvrpid>0 && 
-			   (p_dio_mmap->dvrstatus & DVR_RUN) &&
-			   (p_dio_mmap->dvrcmd == 0 ) &&
-			   ((p_dio_mmap->dvrstatus & DVR_RECORD)==0) )
-			{
-				p_dio_mmap->dvrcmd = 4;     // start recording
-				hightemp_norecord = 0 ;
-				dvr_log( "Resume DVR recording on lower temperature.");
-			}
-		}
-	}
+        static int hightemp_norecord = 0 ;
+        if( p_dio_mmap->iotemperature > 83 || p_dio_mmap->hdtemperature > 83 ) {
+            if( hightemp_norecord == 0 &&
+                p_dio_mmap->iomode==IOMODE_RUN &&
+                p_dio_mmap->dvrpid>0 &&
+                (p_dio_mmap->dvrstatus & DVR_RUN) &&
+                (p_dio_mmap->dvrcmd == 0 ) &&
+                ((p_dio_mmap->dvrstatus & DVR_RECORD)!=0) )
+            {
+                dvr_log( "Stop DVR recording on high temperature.");
+                p_dio_mmap->dvrcmd = 3;     // stop recording
+                hightemp_norecord = 1 ;
+            }
+        }
+        else if(  p_dio_mmap->iotemperature < 75 && p_dio_mmap->hdtemperature < 75 ) {
+            if( hightemp_norecord == 1 &&
+                p_dio_mmap->iomode==IOMODE_RUN &&
+                p_dio_mmap->dvrpid>0 &&
+                (p_dio_mmap->dvrstatus & DVR_RUN) &&
+                (p_dio_mmap->dvrcmd == 0 ) &&
+                ((p_dio_mmap->dvrstatus & DVR_RECORD)==0) )
+            {
+                p_dio_mmap->dvrcmd = 4;     // start recording
+                hightemp_norecord = 0 ;
+                dvr_log( "Resume DVR recording on lower temperature.");
+            }
+        }
+    }
 }
 
 void check_watchdog()
 {
-	static unsigned int watchdog_timer = 0 ;
-	if( usewatchdog && (runtime - watchdog_timer)> 3000 ) {    // 3 seconds to kick watchdog
-		watchdog_timer = runtime ;
-		mcu_watchdogkick();
-	}
+    static unsigned int watchdog_timer = 0 ;
+    if( usewatchdog && (runtime - watchdog_timer)> 3000 ) {    // 3 seconds to kick watchdog
+        watchdog_timer = runtime ;
+        mcu_watchdogkick();
+    }
 }		
 
 void dvrsvr_down()
@@ -329,7 +338,7 @@ void dvrsvr_down()
             mcu_input(200000);
             mcu_doutput();
         }
-        sync(); 
+        sync();
     }
 }
 
@@ -380,8 +389,6 @@ void glog_resume()
         fclose( fpid );
     }
 }
-
-
 
 #ifdef PWII_APP
 

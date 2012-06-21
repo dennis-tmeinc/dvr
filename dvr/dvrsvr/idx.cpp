@@ -25,7 +25,7 @@ void rec_index::savefile(char *filename)
     int onoff;
     int i;
     
-    idxfile = file_open(filename, "w");
+    idxfile = fopen(filename, "w");
     if (idxfile == NULL) {
         dvr_log("Can not write index file.");
         return;
@@ -53,7 +53,7 @@ void rec_index::savefile(char *filename)
                 dvrt.second );
     }
     
-    file_close(idxfile);
+    fclose(idxfile);
     empty();
 }
 
@@ -68,7 +68,7 @@ void rec_index::readfile(char *filename)
     struct dvrtime filetime ;
     
     empty();
-    idxfile = file_open(filename, "r");
+    idxfile = fopen(filename, "r");
     if (idxfile == NULL) {
         return;
     }
@@ -106,5 +106,5 @@ void rec_index::readfile(char *filename)
             break;
     }
     
-    file_close(idxfile);
+    fclose(idxfile);
 }

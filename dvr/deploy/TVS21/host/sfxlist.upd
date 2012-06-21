@@ -1,6 +1,7 @@
 ./dvr
 ./dvr/start.sh
 ./dvr/dvrsvr
+./dvr/eaglesvr
 ./dvr/dvrtime
 ./dvr/glog
 ./dvr/ioprocess
@@ -18,6 +19,7 @@
 ./dvr/volumeid
 ./dvr/md5check
 ./dvr/cfg
+./dvr/defconf
 ./dvr/inetd.conf
 ./dvr/setnetwork
 ./dvr/httpd.sfx
@@ -28,7 +30,6 @@
 ./dvr/dropbear dvr/sshd
 ./dvr/rsa_host_key
 ./dvr/librt-0.9.28.so
-./dvr/defconf
 ./dvr/resource
 ./dvr/resource/arrow.cursor
 ./dvr/resource/mono18.font

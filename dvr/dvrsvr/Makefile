@@ -36,11 +36,9 @@ SOURCES=main.cpp \
 		dvrtime.cpp \
 		dvrsvr.cpp \
 		netsvr.cpp \
-		msg.cpp \
 		ptz.cpp \
 		record.cpp \
 		capture.cpp \
-		eaglecapture.cpp \
 		ipcapture.cpp \
 		memory.cpp \
 		dvrfile.cpp \
@@ -50,15 +48,15 @@ SOURCES=main.cpp \
 		idx.cpp \
 		config.cpp \
 		event.cpp \
-		live.cpp \
 		crypt.cpp \
 		dio.cpp \
 		screen.cpp \
 		md5.cpp \
+		cppinitpatch.cpp \
 		draw.cpp
 		
 #LDFLAGS= -lpthread -lstdc++ -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib -Wl,-rpath,.
-LDFLAGS= -lpthread -lstdc++ -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib
+LDFLAGS= -lpthread -lstdc++
 		
 endif	
 
@@ -89,6 +87,7 @@ EAGLESRS=eaglesvr.cpp \
 		md5.cpp
 
 HEADERS=dvr.h \
+		dvrprotocol.h \
 		genclass.h \
 		cfg.h \
 		fbwindow.h \

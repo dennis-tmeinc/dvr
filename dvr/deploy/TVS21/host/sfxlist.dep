@@ -1,6 +1,7 @@
 ./dvr
 ./dvr/start.sh
 ./dvr/dvrsvr
+./dvr/eaglesvr
 ./dvr/dvrtime
 ./dvr/glog
 ./dvr/ioprocess

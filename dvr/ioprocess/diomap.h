@@ -157,7 +157,7 @@ struct dio_mmap {
 #define DEVICE_POWER_HD			(1<<11)		// Power for Hard drive, CAUTION: turn off this actually turn off system (why?)
 
 // power bits on runing mode
-#define DEVICE_POWER_RUN ( DEVICE_POWER_GPS | DEVICE_POWER_SLAVE | DEVICE_POWER_NETWORKSWITCH | DEVICE_POWER_POE | DEVICE_POWER_CAMERA | DEVICE_POWER_HD )
+#define DEVICE_POWER_RUN ( DEVICE_POWER_GPS | DEVICE_POWER_SLAVE | DEVICE_POWER_NETWORKSWITCH | DEVICE_POWER_POE | DEVICE_POWER_CAMERA | DEVICE_POWER_HD | DEVICE_POWER_POEPOWER)
 // power bits on standby mode ( ********** keep HD power, or system will turn off *************** )
 #define DEVICE_POWER_STANDBY ( DEVICE_POWER_HD )
 

@@ -84,9 +84,9 @@ int dio_enablewatchdog()
     dio_lock();
     if( p_dio_mmap ){
 #ifdef  DEBUGGING
-		p_dio_mmap->dvrwatchdog = -1 ;
+        p_dio_mmap->dvrwatchdog = -1 ;
 #else
-		p_dio_mmap->dvrwatchdog = 0 ;
+        p_dio_mmap->dvrwatchdog = 0 ;
 #endif		
     }
     dio_unlock();
@@ -124,7 +124,7 @@ int dio_setstate( int status )
     dio_lock();
     if( p_dio_mmap ){
 #ifdef PWII_APP
-        if( status == DVR_LOCK &&
+        if( (status & DVR_LOCK)!=0 &&
             (p_dio_mmap->dvrstatus & DVR_LOCK)==0 ) 
         {
                 // start recording
@@ -163,7 +163,7 @@ int dio_clearstate( int status )
     if( p_dio_mmap ){
 #ifdef PWII_APP
         if( status == DVR_LOCK &&
-            (p_dio_mmap->dvrstatus & DVR_LOCK) ) 
+            (p_dio_mmap->dvrstatus & DVR_LOCK)!=0 ) 
         {
             // stop recording
             rstart = 0 ;
@@ -182,16 +182,22 @@ int dio_clearstate( int status )
     return 0 ;
 }
 
-// check if IO process busy (doing smartftp)
+// check if io mode allow archiving
 int dio_mode_archive()
 {
-    int arch=0 ;
+    int iomode = 0 ; ;
     if( p_dio_mmap ){
-        dio_lock();
-        arch = ( p_dio_mmap->iomode == IOMODE_ARCHIVE ) ;
-        dio_unlock();
+        iomode = p_dio_mmap->iomode ;
     }
-    return arch ;
+    if( iomode == IOMODE_ARCHIVE ||
+        iomode == IOMODE_RUN ||
+        iomode == IOMODE_SHUTDOWNDELAY )
+    {
+        return 1 ;
+    }
+    else {
+        return 0 ;
+    }
 }
 
 // set video channel status
@@ -311,8 +317,8 @@ void dio_smartserveron(char * interface)
     if( p_dio_mmap ){
         dio_lock();
         if( p_dio_mmap->smartserver==0 ) {
-			p_dio_mmap->smartserver=1;
-			strncpy( p_dio_mmap->smartserver_interface, interface, sizeof(p_dio_mmap->smartserver_interface) );
+            p_dio_mmap->smartserver=1;
+            strncpy( p_dio_mmap->smartserver_interface, interface, sizeof(p_dio_mmap->smartserver_interface) );
             log=1 ;
         }
         dio_unlock();
@@ -338,46 +344,46 @@ int dio_check()
     int res=0 ;
 
     if( p_dio_mmap && p_dio_mmap->iopid ){
-		int iocmd ;
+        int iocmd ;
         dio_lock();
-		iocmd = p_dio_mmap->dvrcmd ;
-		p_dio_mmap->dvrcmd = 0 ;
-		dio_unlock();
-		// dvrcmd :  1: restart(resume), 2: suspend, 3: stop record, 4: start record, 5: start archiving
-		if( iocmd ) {
-			res=1 ;
-			switch (iocmd) {
-				case 1:
-					app_state = APPRESTART ;
-					break;
-				case 2:
-					app_state = APPDOWN ;
-					break;
-				case 3:
-					rec_stop();
-					break;
-				case 4:
-					rec_start();
-					break;
-				case 5:
-					dio_lock();
-					p_dio_mmap->dvrstatus |= DVR_ARCH ;
-					dio_unlock();
-					disk_archive_start();
-					break;
-				case 6:
-					disk_archive_stop();
-					break;
-				case 7:							// update on screen message
-					screen_update();
-					break;
-				default:
-					res=0 ;
-					break;
-			}
-		}
+        iocmd = p_dio_mmap->dvrcmd ;
+        p_dio_mmap->dvrcmd = 0 ;
+        dio_unlock();
+        // dvrcmd :  1: restart(resume), 2: suspend, 3: stop record, 4: start record, 5: start archiving
+        if( iocmd ) {
+            res=1 ;
+            switch (iocmd) {
+            case 1:
+                app_state = APPRESTART ;
+                break;
+            case 2:
+                app_state = APPDOWN ;
+                break;
+            case 3:
+                rec_stop();
+                break;
+            case 4:
+                rec_start();
+                break;
+            case 5:
+                dio_lock();
+                p_dio_mmap->dvrstatus |= DVR_ARCH ;
+                dio_unlock();
+                disk_archive_start();
+                break;
+            case 6:
+                // disk_archive_stop();         // 2011-12-19. Archiving is runing all the time
+                break;
+            case 7:				// update on screen message
+                // screen_update();
+                break;
+            default:
+                res=0 ;
+                break;
+            }
+        }
 
-		dio_lock();
+        dio_lock();
         dio_record = ( p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) ;
         if( dio_inputmap != p_dio_mmap->inputmap ) {
             dio_inputmap = p_dio_mmap->inputmap ;
@@ -389,18 +395,15 @@ int dio_check()
     return res ;
 }
 
-int dio_getiomsg( char * oldmsg )
+char * dio_getiomsg()
 {
-    int res = 0 ;
+    char * iomsg=NULL ;
     dio_lock();
     if( p_dio_mmap ){
-        if( strcmp( oldmsg, p_dio_mmap->iomsg )!=0 ) {
-            strcpy( oldmsg, p_dio_mmap->iomsg );
-            res=1 ;
-        }
+        iomsg = p_dio_mmap->iomsg ;
     }
     dio_unlock();
-    return res ;
+    return iomsg ;
 }
 
 // set usb (don't remove) led
@@ -408,12 +411,12 @@ void dio_usb_led(int v)
 {
     dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ){
-		if( v ) {
-        	p_dio_mmap->panel_led |= 1 ;
-		}
-		else {
-        	p_dio_mmap->panel_led &= ~1 ;
-		}
+        if( v ) {
+            p_dio_mmap->panel_led |= 1 ;
+        }
+        else {
+            p_dio_mmap->panel_led &= ~1 ;
+        }
     }
     dio_unlock();
 }
@@ -423,12 +426,12 @@ void dio_error_led(int v)
 {
     dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ){
-		if( v ) {
-        	p_dio_mmap->panel_led |= 2 ;
-		}
-		else {
-        	p_dio_mmap->panel_led &= ~2 ;
-		}
+        if( v ) {
+            p_dio_mmap->panel_led |= 2 ;
+        }
+        else {
+            p_dio_mmap->panel_led &= ~2 ;
+        }
     }
     dio_unlock();
 }
@@ -438,12 +441,12 @@ void dio_videolost_led(int v)
 {
     dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ){
-		if( v ) {
-        	p_dio_mmap->panel_led |= 4 ;
-		}
-		else {
-        	p_dio_mmap->panel_led &= ~4 ;
-		}
+        if( v ) {
+            p_dio_mmap->panel_led |= 4 ;
+        }
+        else {
+            p_dio_mmap->panel_led &= ~4 ;
+        }
     }
     dio_unlock();
 }
@@ -462,7 +465,7 @@ void dio_devicepower(int onoffmaps)
 // return 0: no g-force data, 1: new g-force data, 2: existing g-force data
 int dio_getgforce( float * gf, float * gr, float *gd )
 {
-    static int gforceupdtime ;  
+    static int gforceupdtime ;
     static int gforceserialno ;
     int v=0 ;
     dio_lock();
@@ -588,7 +591,7 @@ void dio_init(config &dvrconfig)
     p_dio_mmap->dvrpid = getpid () ;
     p_dio_mmap->dvrwatchdog = -1 ;
     p_dio_mmap->usage++ ;
-    // initialize dvrsvr communications 
+    // initialize dvrsvr communications
     p_dio_mmap->dvrcmd = 0 ;
     p_dio_mmap->dvrstatus = DVR_RUN ;
     dio_unlock();

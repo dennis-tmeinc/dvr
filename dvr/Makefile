@@ -21,6 +21,7 @@ SUBDIRS = dvrsvr\
        usbid\
        usbnotify\
        ssl \
+       eaglesvr\
        lpc21isp
 
 .PHONY : $(SUBDIRS) applications
@@ -109,6 +110,18 @@ app_mv:
 firmware:
 	$(MAKE) applications
 	$(MAKE) -C deploy/$(proj)
+
+pw:
+	$(MAKE) rel
+	$(MAKE) app_pw34
+	$(MAKE) firmware
+	$(MAKE) clean
+	$(MAKE) app_pwlite
+	$(MAKE) firmware
+	$(MAKE) clean
+	$(MAKE) app_zeus
+	$(MAKE) firmware
+	$(MAKE) clean
 
 all:
 	$(MAKE) rel

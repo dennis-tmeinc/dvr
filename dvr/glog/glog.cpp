@@ -31,7 +31,7 @@
 
 #include "../cfg.h"
 
-#include "../dvrsvr/eagle32/davinci_sdk.h"
+#include "../eaglesvr/eagle32/davinci_sdk.h"
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
 #include "../dvrsvr/dir.h"
@@ -117,7 +117,7 @@ void sig_handler(int signum)
         sigcap |= 2 ;
     }
     else if( signum == SIGPIPE ) {
-//        sigcap |= 3 ;
+        //        sigcap |= 3 ;
     }
     else {
         sigcap |= 0x8000 ;
@@ -184,11 +184,11 @@ void buzzer(int times, int ontime, int offtime)
 
 int serial_open(int * handle, char * serial_dev, int serial_baudrate )
 {
-	int i;
+    int i;
     int serial_handle = *handle ;
-	if( serial_handle > 0 ) {
-		return serial_handle ;		// opened already
-	}
+    if( serial_handle > 0 ) {
+        return serial_handle ;		// opened already
+    }
     
     // check if serial device is stdin ?
     struct stat stdinstat ;
@@ -200,11 +200,11 @@ int serial_open(int * handle, char * serial_dev, int serial_baudrate )
     if( r1==0 && r2==0 && stdinstat.st_dev == devstat.st_dev && stdinstat.st_ino == devstat.st_ino ) { // matched stdin
         netdbg_print("Stdin match serail port!\n");
         serial_handle = dup(0);     // duplicate stdin
- 		fcntl(serial_handle, F_SETFL, O_RDWR | O_NOCTTY );
+        fcntl(serial_handle, F_SETFL, O_RDWR | O_NOCTTY );
     }
     else {
         serial_handle = open( serial_dev, O_RDWR | O_NOCTTY );
-/*
+        /*
         if(serial_handle>0) {
             close(serial_handle);       // do reopen to fix ttyUSB port bugs
             usleep(20000);
@@ -213,12 +213,12 @@ int serial_open(int * handle, char * serial_dev, int serial_baudrate )
 */
     }
     
-	if( serial_handle >= 0 ) {
-		struct termios tios ;
-		speed_t baud_t ;
-		memset(&tios, 0, sizeof(tios));
-		tcgetattr(serial_handle, &tios);
-		// set serial port attributes
+    if( serial_handle >= 0 ) {
+        struct termios tios ;
+        speed_t baud_t ;
+        memset(&tios, 0, sizeof(tios));
+        tcgetattr(serial_handle, &tios);
+        // set serial port attributes
         tios.c_cflag = CS8|CLOCAL|CREAD;
         tios.c_iflag = IGNPAR;
         tios.c_oflag = 0;
@@ -236,19 +236,19 @@ int serial_open(int * handle, char * serial_dev, int serial_baudrate )
         }
         cfsetispeed(&tios, baud_t);
         cfsetospeed(&tios, baud_t);
-		tcsetattr(serial_handle, TCSANOW, &tios);
-		tcflush(serial_handle, TCIOFLUSH);
-	}
+        tcsetattr(serial_handle, TCSANOW, &tios);
+        tcflush(serial_handle, TCIOFLUSH);
+    }
     *handle = serial_handle ;
-	return serial_handle ;
+    return serial_handle ;
 }
 
 void serial_close(int * serial_handle)
 {
-	if( * serial_handle > 0 ) {
-		tcflush(* serial_handle, TCIFLUSH);
-		close( * serial_handle );
-	}
+    if( * serial_handle > 0 ) {
+        tcflush(* serial_handle, TCIFLUSH);
+        close( * serial_handle );
+    }
     * serial_handle= -1 ;
 }
 
@@ -257,26 +257,26 @@ void serial_close(int * serial_handle)
 //            1: yes
 int serial_dataready(int serial_handle, int microsecondsdelay)
 {
-	struct timeval timeout ;
-	fd_set fds;
-	if( serial_handle<0 ) {
-		return 0;
-	}
-	timeout.tv_sec = microsecondsdelay/1000000 ;
-	timeout.tv_usec = microsecondsdelay%1000000 ;
-	FD_ZERO(&fds);
-	FD_SET(serial_handle, &fds);
-	if (select(serial_handle + 1, &fds, NULL, NULL, &timeout) > 0) {
-		return FD_ISSET(serial_handle, &fds);
-	} else {
-		return 0;
-	}
+    struct timeval timeout ;
+    fd_set fds;
+    if( serial_handle<0 ) {
+        return 0;
+    }
+    timeout.tv_sec = microsecondsdelay/1000000 ;
+    timeout.tv_usec = microsecondsdelay%1000000 ;
+    FD_ZERO(&fds);
+    FD_SET(serial_handle, &fds);
+    if (select(serial_handle + 1, &fds, NULL, NULL, &timeout) > 0) {
+        return FD_ISSET(serial_handle, &fds);
+    } else {
+        return 0;
+    }
 }
 
 int serial_read(int serial_handle, void * buf, size_t bufsize)
 {
     int n=0;
-	if( serial_handle>=0 ) {
+    if( serial_handle>=0 ) {
         n = read( serial_handle, buf, bufsize);
 #ifdef NETDBG
         netdbg_print("serial read %d bytes:", n);
@@ -289,25 +289,25 @@ int serial_read(int serial_handle, void * buf, size_t bufsize)
 int serial_write(int serial_handle, void * buf, size_t bufsize)
 {
     int n=0 ;
-	if( serial_handle>=0 ) {
+    if( serial_handle>=0 ) {
         n = write( serial_handle, buf, bufsize);
 #ifdef NETDBG
         netdbg_print("serial write %d bytes:", n);
         netdbg_dump( buf, bufsize );
 #endif
-	}
-	return n;
+    }
+    return n;
 }
 
 int serial_clear(int serial_handle)
 {
     unsigned char buf[100] ;
-	if( serial_handle>=0 ) {
+    if( serial_handle>=0 ) {
         while( serial_dataready(serial_handle, 1000 ) ) {
             serial_read( serial_handle, buf, sizeof(buf) );
         }
     }
-	return 0;
+    return 0;
 }
 
 // Check if data ready to read on multiple serial ports
@@ -317,11 +317,11 @@ int serial_mready(int microsecondsdelay)
 {
     int i ;
     int maxhandle=0 ;
-	struct timeval timeout ;
-	fd_set fds;
-	timeout.tv_sec = microsecondsdelay/1000000 ;
-	timeout.tv_usec = microsecondsdelay%1000000 ;
-	FD_ZERO(&fds);
+    struct timeval timeout ;
+    fd_set fds;
+    timeout.tv_sec = microsecondsdelay/1000000 ;
+    timeout.tv_usec = microsecondsdelay%1000000 ;
+    FD_ZERO(&fds);
     for( i=0;i<PORTNUM;i++) {
         if( mhandles[i]>=0 ) {
             FD_SET( mhandles[i], &fds);
@@ -368,17 +368,17 @@ int gps_read(char * buf, int bufsize, int ustimeout=0)
 unsigned char gps_calcchecksum( char * line )
 {
     unsigned char sum = 0 ;
-	int i;
-	for( i=1; i<400; i++ ) {
+    int i;
+    for( i=1; i<400; i++ ) {
         if( line[i]==0 || line[i]=='\r' || line[i]=='\n' ) {    // no check sum field
             break ;
         }
-		else if( line[i]=='*' ) {
+        else if( line[i]=='*' ) {
             return sum ;
-		}
-		sum^=(unsigned char)line[i] ;
-	}
-	return 0 ;
+        }
+        sum^=(unsigned char)line[i] ;
+    }
+    return 0 ;
 } 
 
 // set SiRF sentense rate
@@ -407,7 +407,7 @@ char * gps_readline()
 {
     static char gpsline[300] ;
     static int  gpslineidx ;
-	char c ;
+    char c ;
     
     if( gps_port_disable ) {                // gps disabled ?
         return NULL;
@@ -415,7 +415,7 @@ char * gps_readline()
 
     if( gps_port_handle<0 ) {
         if( gps_open() < 0 ) {					// open serial port
-            return NULL ;					
+            return NULL ;
         }
     }
 
@@ -432,13 +432,13 @@ char * gps_readline()
                     return gpsline ;        // got a gps line
                 }
                 else if( c<=1 || c>=127 ) {		// GPS dont give these chars
-					// for unknown reason, serial port mess up all the time??????
+                    // for unknown reason, serial port mess up all the time??????
                     gpslineidx=0 ;
-				}
-				else {
+                }
+                else {
                     gpsline[gpslineidx++]=c ;
-				}
-			}
+                }
+            }
         }
     }
 
@@ -451,32 +451,32 @@ int gps_checksum( char * line )
 {
     unsigned int checksum=0x55 ;
     unsigned char sum = 0 ;
-	int i;
-	for( i=1; i<400; i++ ) {
+    int i;
+    for( i=1; i<400; i++ ) {
         if( line[i]==0 || line[i]=='\r' || line[i]=='\n' ) {    // no check sum field
             return 0 ;
         }
-		else if( line[i]=='*' ) {
+        else if( line[i]=='*' ) {
             sscanf( &line[i+1], "%2x", &checksum );
             return ( sum==checksum);
-		}
-		sum^=(unsigned char)line[i] ;
-	}
-	return 0 ;
+        }
+        sum^=(unsigned char)line[i] ;
+    }
+    return 0 ;
 }
 
 struct gps_data {
-	int valid ;
-	int year ;
-	int month ;
-	int day ;
-	int hour ;
-	int minute ;
-	float second ;
-	float latitude ;
-	float longitude ;
-	float speed ;
-	float direction ;
+    int valid ;
+    int year ;
+    int month ;
+    int day ;
+    int hour ;
+    int minute ;
+    float second ;
+    float latitude ;
+    float longitude ;
+    float speed ;
+    float direction ;
 } ;
 
 // read and parse GPS sentence
@@ -488,7 +488,7 @@ struct gps_data {
 int gps_readdata(struct gps_data * gpsdata)
 {
     char * line ;
-	if( ( line=gps_readline() ) != NULL ) {
+    if( ( line=gps_readline() ) != NULL ) {
 
         netdbg_print("%s\n",line);
         if( gps_checksum(line) ) {
@@ -498,27 +498,27 @@ int gps_readdata(struct gps_data * gpsdata)
                 char lat_dir, long_dir ;
                 memset( gpsdata, 0, sizeof(*gpsdata));
                 sscanf( &line[7], "%2d%2d%f,%c,%2d%f,%c,%3d%f,%c,%f,%f,%2d%2d%d",
-                       &gpsdata->hour,
-                       &gpsdata->minute,
-                       &gpsdata->second,
-                       &fix,
-                       &lat_deg, &gpsdata->latitude, &lat_dir,
-                       &long_deg, &gpsdata->longitude, &long_dir,
-                       &gpsdata->speed,
-                       &gpsdata->direction,
-                       &gpsdata->day,
-                       &gpsdata->month,
-                       &gpsdata->year 
-                       );   
+                        &gpsdata->hour,
+                        &gpsdata->minute,
+                        &gpsdata->second,
+                        &fix,
+                        &lat_deg, &gpsdata->latitude, &lat_dir,
+                        &long_deg, &gpsdata->longitude, &long_dir,
+                        &gpsdata->speed,
+                        &gpsdata->direction,
+                        &gpsdata->day,
+                        &gpsdata->month,
+                        &gpsdata->year
+                        );
 
                 gpsdata->valid = ( fix == 'A' ) ;
 
-                gpsdata->latitude = lat_deg + gpsdata->latitude/60.0 ;	
+                gpsdata->latitude = lat_deg + gpsdata->latitude/60.0 ;
                 if( lat_dir != 'N' ) {
                     gpsdata->latitude = - gpsdata->latitude ;
                 }
 
-                gpsdata->longitude = long_deg + gpsdata->longitude/60.0 ;	
+                gpsdata->longitude = long_deg + gpsdata->longitude/60.0 ;
                 if( long_dir != 'E' ) {
                     gpsdata->longitude = - gpsdata->longitude ;
                 }
@@ -547,7 +547,7 @@ int gps_readdata(struct gps_data * gpsdata)
     }
     return 0 ;
 }
-    
+
 FILE * gps_logfile ;
 static int gps_logday ;
 struct gps_data validgpsdata ;
@@ -556,25 +556,25 @@ static int gps_close_fine = 0 ;
 
 void gps_logclose()
 {
-	if( gps_logfile ) {
-		fclose( gps_logfile );
-		gps_logfile=NULL;
+    if( gps_logfile ) {
+        fclose( gps_logfile );
+        gps_logfile=NULL;
         gps_close_fine=1 ;
-	}
+    }
 }
 
 FILE * gps_logopen(struct tm *t)
 {
-	char curdisk[256] ;
-	char hostname[128] ;
-	int r ;
-	int i;
-	// check if day changed?
-	if( gps_logday != t->tm_mday ) {
-		gps_logclose();
-		gps_logday = t->tm_mday ;
+    char curdisk[256] ;
+    char hostname[128] ;
+    int r ;
+    int i;
+    // check if day changed?
+    if( gps_logday != t->tm_mday ) {
+        gps_logclose();
+        gps_logday = t->tm_mday ;
         gpslogfilename[0]=0 ;               // change file
-	}
+    }
 
     if( gps_logfile==NULL ) {
         if( gpslogfilename[0]==0 ) {
@@ -640,7 +640,7 @@ FILE * gps_logopen(struct tm *t)
             fseek( gps_logfile, 0, SEEK_END ) ;
             if( ftell( gps_logfile )<10 ) {		// new file, add file headers
                 fseek(gps_logfile, 0, SEEK_SET);
-                fprintf(gps_logfile, "%04d-%02d-%02d\n99", 
+                fprintf(gps_logfile, "%04d-%02d-%02d\n99",
                         (int)t->tm_year+1900,
                         (int)t->tm_mon+1,
                         (int)t->tm_mday );
@@ -667,7 +667,7 @@ int gps_logprintf(int logid, char * fmt, ...)
     va_list ap ;
     
     struct tm t ;
-	time_t tt ;
+    time_t tt ;
     
     tt=time(NULL);
     localtime_r(&tt, &t);
@@ -677,37 +677,37 @@ int gps_logprintf(int logid, char * fmt, ...)
         return 0 ;
     }
     
-//    log_lock();
+    //    log_lock();
 
     int iomode = p_dio_mmap->iomode ;
 
-    if( !( iomode==IOMODE_RUN || 
-        iomode==IOMODE_SHUTDOWNDELAY ||
-        iomode==IOMODE_STANDBY) ) {
+    if( !( iomode==IOMODE_RUN ||
+           iomode==IOMODE_SHUTDOWNDELAY ||
+           iomode==IOMODE_STANDBY) ) {
         gps_logclose();
-//        log_unlock();
+        //        log_unlock();
         return 0 ;
     }
     
-	logfile = gps_logopen(&t);
+    logfile = gps_logopen(&t);
     
-	if( logfile==NULL ) {
-//        log_unlock();
+    if( logfile==NULL ) {
+        //        log_unlock();
         glog_ok=0 ;
-		return 0;
-	}
+        return 0;
+    }
     
-    fprintf(logfile, "%02d,%02d:%02d:%02d,%09.6f%c%010.6f%c%.1fD%06.2f", 
-                          logid,
-                          (int)t.tm_hour,
-                          (int)t.tm_min,
-                          (int)t.tm_sec,
-                          validgpsdata.latitude<0.0000000 ? -validgpsdata.latitude : validgpsdata.latitude ,
-                          validgpsdata.latitude<0.0000000 ? 'S' : 'N' ,
-                          validgpsdata.longitude<0.0000000 ? -validgpsdata.longitude: validgpsdata.longitude,
-                          validgpsdata.longitude<0.0000000 ? 'W' : 'E' ,
-                          (float)(validgpsdata.speed * 1.852),      // in km/h.
-                          (float)validgpsdata.direction ) ;
+    fprintf(logfile, "%02d,%02d:%02d:%02d,%09.6f%c%010.6f%c%.1fD%06.2f",
+            logid,
+            (int)t.tm_hour,
+            (int)t.tm_min,
+            (int)t.tm_sec,
+            validgpsdata.latitude<0.0000000 ? -validgpsdata.latitude : validgpsdata.latitude ,
+            validgpsdata.latitude<0.0000000 ? 'S' : 'N' ,
+            validgpsdata.longitude<0.0000000 ? -validgpsdata.longitude: validgpsdata.longitude,
+            validgpsdata.longitude<0.0000000 ? 'W' : 'E' ,
+            (float)(validgpsdata.speed * 1.852),      // in km/h.
+            (float)validgpsdata.direction ) ;
 
     if( fmt!=NULL && *fmt != 0 ) {
         va_start(ap, fmt);
@@ -721,7 +721,7 @@ int gps_logprintf(int logid, char * fmt, ...)
         gps_logclose ();
     }
 
-//    log_unlock();
+    //    log_unlock();
     glog_ok=1 ;
     return 1;
 }
@@ -731,22 +731,22 @@ int gps_logprintf(int logid, char * fmt, ...)
 int	gps_log()
 {
     static float logtime=0.0 ;
-//    static float logdirection=0.0 ;
-//    static float logspeed=0.0 ;
+    //    static float logdirection=0.0 ;
+    //    static float logspeed=0.0 ;
     static int stop = 0 ;
-//    static float disttime = 0 ;
-//    static float dist=0 ;
+    //    static float disttime = 0 ;
+    //    static float dist=0 ;
     
     float ti ;
     float tdiff ;
     int log = 0 ;
 
     ti = 3600.0 * validgpsdata.hour +
-        60.0 * validgpsdata.minute +
-        validgpsdata.second ;
+         60.0 * validgpsdata.minute +
+         validgpsdata.second ;
     
-//    dist+=gpsdata->speed * (1.852/3.6) * (ti-disttime) ;
-//    disttime=ti ;
+    //    dist+=gpsdata->speed * (1.852/3.6) * (ti-disttime) ;
+    //    disttime=ti ;
     tdiff = ti-logtime ;
     if( tdiff<0.0 ) tdiff=1000.0 ;
 
@@ -764,13 +764,13 @@ int	gps_log()
     if( log ) {
         if( gps_logprintf(1, "" ) ) {
             logtime = ti ;
-//            logdirection = gpsdata->direction ;
-//            logspeed = gpsdata->speed ;
-//            dist=0.0 ;
+            //            logdirection = gpsdata->direction ;
+            //            logspeed = gpsdata->speed ;
+            //            dist=0.0 ;
         }
-	}
+    }
 
-	return 1;
+    return 1;
 }
 
 
@@ -853,9 +853,9 @@ void gps_done()
 // log sensor event
 int	sensor_log()
 {
-	int i;
+    int i;
 
-//    if( validgpsdata.year < 1900 ) return 0 ;     // removed, don't wait for gps to record sensor log
+    //    if( validgpsdata.year < 1900 ) return 0 ;     // removed, don't wait for gps to record sensor log
 
     // log ignition changes
     int spoweroff = p_dio_mmap->poweroff ;
@@ -869,8 +869,8 @@ int	sensor_log()
         }
     }
 
-	// log sensor changes
-	unsigned int imap = p_dio_mmap->inputmap ;
+    // log sensor changes
+    unsigned int imap = p_dio_mmap->inputmap ;
 
     int sensorid = 3 ;			// start from 03
     
@@ -917,7 +917,7 @@ int	sensor_log()
         if( g_ser != gforce_ser ) {
             gforce_ser = g_ser ;
             // we record forward/backward, right/left acceleration value, up/down as g-force value
-            gps_logprintf(16, ",%.1f,%.1f,%.1f", 
+            gps_logprintf(16, ",%.1f,%.1f,%.1f",
                           - gforward,
                           - gright,
                           gdown );
@@ -957,7 +957,7 @@ int	sensor_log()
     }
 #endif    
 
-	return 1;
+    return 1;
 }
 
 /*
@@ -1043,7 +1043,7 @@ int tab102b_senddata( unsigned char * data )
     }
     tab102b_calchecksun(data);
 #ifdef NETDEB
-    // for debugging 
+    // for debugging
     struct timeval tv ;
     gettimeofday(&tv, NULL);
     struct tm * ptm ;
@@ -1065,7 +1065,7 @@ int tab102b_recvmsg( unsigned char * data, int size )
         if( n>=5 && n<=size ) {
             n=tab102b_read(data+1, n-1, 1000000)+1 ;
 #ifdef NETDEB
-            // for debugging 
+            // for debugging
             struct timeval tv ;
             gettimeofday(&tv, NULL);
             struct tm * ptm ;
@@ -1075,10 +1075,10 @@ int tab102b_recvmsg( unsigned char * data, int size )
             netdbg_print("%02d:%02d:%02.3f", ptm->tm_hour, ptm->tm_min, sec);
 #endif    
             netdbg_print("tab102b recv %d bytes", n);
-            if( n==*data && 
-                data[1]==0 && 
+            if( n==*data &&
+                data[1]==0 &&
                 data[2]==4 &&
-                tab102b_checksun( data ) == 0 ) 
+                tab102b_checksun( data ) == 0 )
             {
                 return n ;
             }
@@ -1098,10 +1098,10 @@ void tab102b_log( int x, int y, int z)
     y_v = (y-tab102b_y_0g) * (3.3/1024.0/0.12) ;
     z_v = (z-tab102b_z_0g) * (3.3/1024.0/0.12) ;
 
-    netdbg_print( "tab102b: x %05x :%05x : %.2f  y %05x :%05x : %.2f  z %05x :%05x : %.2f\n", 
-           x, tab102b_x_0g, x_v, 
-           y, tab102b_y_0g, y_v, 
-           z, tab102b_z_0g, z_v );
+    netdbg_print( "tab102b: x %05x :%05x : %.2f  y %05x :%05x : %.2f  z %05x :%05x : %.2f\n",
+                  x, tab102b_x_0g, x_v,
+                  y, tab102b_y_0g, y_v,
+                  z, tab102b_z_0g, z_v );
 
     // copy gforce data to shared memory
     dio_lock();
@@ -1120,16 +1120,16 @@ void tab102b_checkinput(unsigned char * ibuf)
     int x, y, z ;
     
     switch( ibuf[3] ) {
-        case '\x1e' :                   // tab102b peak data
-            x = 256*ibuf[5] + ibuf[6] ;
-            y = 256*ibuf[7] + ibuf[8] ;
-            z = 256*ibuf[9] + ibuf[10] ;
-            tab102b_log( x, y, z );
-            break;
+    case '\x1e' :                   // tab102b peak data
+        x = 256*ibuf[5] + ibuf[6] ;
+        y = 256*ibuf[7] + ibuf[8] ;
+        z = 256*ibuf[9] + ibuf[10] ;
+        tab102b_log( x, y, z );
+        break;
         
-        default :
-            // ignor other input messages
-            break;
+    default :
+        // ignor other input messages
+        break;
     }
 }
 
@@ -1190,7 +1190,7 @@ int tab102b_cmd_sync_rtc()
     }
     // build rtc
     struct tm t ;
-	time_t tt ;
+    time_t tt ;
     
     tt=time(NULL);
     localtime_r(&tt, &t);
@@ -1204,7 +1204,7 @@ int tab102b_cmd_sync_rtc()
     
     for( retry=0; retry<10; retry++) {
         tab102b_senddata( cmd_sync_rtc );
-    
+
         if( tab102b_response( response, sizeof(response))>0 ) {
             break;
         }
@@ -1369,7 +1369,7 @@ int tab102b_cmd_ready()
 
     for( retry=0; retry<10; retry++) {
         tab102b_senddata( cmd_ready );
-    
+
         if( tab102b_response( response, sizeof(response))>0 ) {
             return 1 ;
         }
@@ -1388,7 +1388,7 @@ int tab102b_cmd_enablepeak()
     tab102b_senddata( cmd_enablepeak );
     
     if( tab102b_response( response, sizeof(response))>0 ) {
-            return 1 ;
+        return 1 ;
     }
     return 0;
 }
@@ -1404,7 +1404,7 @@ int tab102b_cmd_disablepeak()
     tab102b_senddata( cmd_disablepeak );
     
     if( tab102b_response( response, sizeof(response))>0 ) {
-            return 1 ;
+        return 1 ;
     }
     return 0;
 }
@@ -1500,13 +1500,13 @@ void tab102b_check()
 //        1 : success
 int appinit()
 {
-	int i;
-	char * p ;
+    int i;
+    char * p ;
     FILE * pidf ;
-	string serialport ;
-	string iomapfile ;
+    string serialport ;
+    string iomapfile ;
     string tstr ;
-	config dvrconfig(CFG_FILE);
+    config dvrconfig(CFG_FILE);
     string v ;
 
     // setup dbg host
@@ -1519,9 +1519,9 @@ int appinit()
 
     iomapfile = dvrconfig.getvalue( "system", "iomapfile");
     if( dio_mmap( iomapfile )==NULL ) {
-		netdbg_print("GLOG: IO module not started!");
-		return 0;						// no DIO.
-	}
+        netdbg_print("GLOG: IO module not started!");
+        return 0;						// no DIO.
+    }
 
     if( p_dio_mmap->glogpid > 0 ) {
         kill( p_dio_mmap->glogpid, SIGTERM );
@@ -1531,69 +1531,69 @@ int appinit()
         }
     }
 
-    // init gps log 
+    // init gps log
     dio_lock();
     p_dio_mmap->usage++;
     p_dio_mmap->glogpid = getpid();
     p_dio_mmap->gps_valid = 0 ;
     p_dio_mmap->gps_speed = 0 ;			// knots
     p_dio_mmap->gps_direction = 0 ;     // degree
-    p_dio_mmap->gps_latitude=0 ;		
+    p_dio_mmap->gps_latitude=0 ;
     p_dio_mmap->gps_longitud=0 ;
     p_dio_mmap->gps_gpstime=0 ;
     dio_unlock();
     memset( &validgpsdata, 0, sizeof(validgpsdata) );
 
-	// get GPS port setting
+    // get GPS port setting
     gps_port_disable = dvrconfig.getvalueint( "glog", "gpsdisable");
-	serialport = dvrconfig.getvalue( "glog", "serialport");
-	if( serialport.length()>0 ) {
-		strcpy( gps_port_dev, serialport );
-	}
-	i = dvrconfig.getvalueint("glog", "serialbaudrate");
-	if( i>=1200 && i<=115200 ) {
-		gps_port_baudrate=i ;
-	}
+    serialport = dvrconfig.getvalue( "glog", "serialport");
+    if( serialport.length()>0 ) {
+        strcpy( gps_port_dev, serialport );
+    }
+    i = dvrconfig.getvalueint("glog", "serialbaudrate");
+    if( i>=1200 && i<=115200 ) {
+        gps_port_baudrate=i ;
+    }
     gps_resetsirf = 0 ;              // reset
     
     // get tab102b serial port setting
-	serialport = dvrconfig.getvalue( "glog", "tab102b_port");
-	if( serialport.length()>0 ) {
-		strcpy( tab102b_port_dev, serialport );
-	}
+    serialport = dvrconfig.getvalue( "glog", "tab102b_port");
+    if( serialport.length()>0 ) {
+        strcpy( tab102b_port_dev, serialport );
+    }
     
-	i = dvrconfig.getvalueint("glog", "tab102b_baudrate");
-	if( i>=1200 && i<=115200 ) {
-		tab102b_port_baudrate=i ;
-	}
+    i = dvrconfig.getvalueint("glog", "tab102b_baudrate");
+    if( i>=1200 && i<=115200 ) {
+        tab102b_port_baudrate=i ;
+    }
 
-	strcpy( disksroot, dvrconfig.getvalue("system", "mountdir"));
-	if( strlen( disksroot)<2 ) {
-		strcpy( disksroot, VAR_DIR"/disks" );
-	}
-		
-	// initialize time zone
-	string tz ;
-	string tzi ;
+    strcpy( disksroot, dvrconfig.getvalue("system", "mountdir"));
+    if( strlen( disksroot)<2 ) {
+        strcpy( disksroot, VAR_DIR"/disks" );
+    }
 
-	tz=dvrconfig.getvalue( "system", "timezone" );
-	if( tz.length()>0 ) {
-		tzi=dvrconfig.getvalue( "timezones", tz );
-		if( tzi.length()>0 ) {
-			p=strchr(tzi, ' ' ) ;
-			if( p ) {
-				*p=0;
-			}
-			p=strchr(tzi, '\t' ) ;
-			if( p ) {
-				*p=0;
-			}
-			setenv("TZ", tzi, 1);
-		}
-		else {
-			setenv("TZ", tz, 1);
-		}
-	}
+    // initialize time zone
+    string tz ;
+    string tzi ;
+
+    tz=dvrconfig.getvalue( "system", "timezone" );
+    if( tz.length()>0 ) {
+        tzi=dvrconfig.getvalue( "timezones", tz );
+        if( tzi.length()>0 ) {
+            p=strchr(tzi, ' ' ) ;
+            if( p ) {
+                *p=0;
+            }
+            p=strchr(tzi, '\t' ) ;
+            if( p ) {
+                *p=0;
+            }
+            setenv("TZ", tzi, 1);
+        }
+        else {
+            setenv("TZ", tz, 1);
+        }
+    }
 
     // initialize gps log speed table
     tstr = dvrconfig.getvalue( "glog", "degree1km");
@@ -1642,37 +1642,37 @@ int appinit()
     gforce_log_enable = dvrconfig.getvalueint( "glog", "gforce_log_enable");
 
     // get dvr disk directory
-	dvrcurdisk = dvrconfig.getvalue("system", "currentdisk" );
+    dvrcurdisk = dvrconfig.getvalue("system", "currentdisk" );
 
-	// get sensor name
-	for( i=0; i<MAXSENSORNUM && i<p_dio_mmap->inputnum; i++ ) {
-		char sec[10] ;
-		sprintf( sec, "sensor%d", i+1);
-		sensorname[i] = dvrconfig.getvalue(sec, "name");
+    // get sensor name
+    for( i=0; i<MAXSENSORNUM && i<p_dio_mmap->inputnum; i++ ) {
+        char sec[10] ;
+        sprintf( sec, "sensor%d", i+1);
+        sensorname[i] = dvrconfig.getvalue(sec, "name");
         sensor_invert[i] = dvrconfig.getvalueint(sec, "inverted");
-	}
+    }
     
     gpslogfilename[0]=0 ;
     
     pidf = fopen( pidfile, "w" );
-	if( pidf ) {
-		fprintf(pidf, "%d", (int)getpid() );
-		fclose( pidf );
-	}
+    if( pidf ) {
+        fprintf(pidf, "%d", (int)getpid() );
+        fclose( pidf );
+    }
 
     // create sensor log thread
-//    pthread_create(&sensorthreadid, NULL, sensorlog_thread, NULL); 
+    //    pthread_create(&sensorthreadid, NULL, sensorlog_thread, NULL);
     
     netdbg_print( "GPS logging process started!\n");
 
     // init tab102b
     tab102b_init(dvrconfig) ;
     // create tab102 log thread
-//    if( tab102b_enable ) {
-//        pthread_create(&tab102b_threadid, NULL, tab102b_thread, NULL); 
-//    }
+    //    if( tab102b_enable ) {
+    //        pthread_create(&tab102b_threadid, NULL, tab102b_thread, NULL);
+    //    }
 
-	return 1;
+    return 1;
 }
 
 
@@ -1680,17 +1680,17 @@ int appinit()
 void appfinish()
 {
     // end of sensor log thread,
-//    if( sensorthreadid != 0 ) {
-//        pthread_join( sensorthreadid, NULL );
-//    }
-//    sensorthreadid = 0 ;
+    //    if( sensorthreadid != 0 ) {
+    //        pthread_join( sensorthreadid, NULL );
+    //    }
+    //    sensorthreadid = 0 ;
     
-//    if( tab102b_threadid!=0 ) {
-//        pthread_join( tab102b_threadid, NULL );
-//    }
-//    tab102b_threadid = 0 ;
+    //    if( tab102b_threadid!=0 ) {
+    //        pthread_join( tab102b_threadid, NULL );
+    //    }
+    //    tab102b_threadid = 0 ;
     tab102b_done();
-    // stop gps 
+    // stop gps
     gps_done();
     
     // clean up shared memory
@@ -1698,7 +1698,7 @@ void appfinish()
     p_dio_mmap->gps_valid = 0 ;
     p_dio_mmap->gps_speed = 0 ;			// knots
     p_dio_mmap->gps_direction = 0 ;     // degree
-    p_dio_mmap->gps_latitude=0 ;		
+    p_dio_mmap->gps_latitude=0 ;
     p_dio_mmap->gps_longitud=0 ;
     p_dio_mmap->gps_gpstime=0 ;
     p_dio_mmap->glogpid=0;
@@ -1708,47 +1708,47 @@ void appfinish()
     dio_munmap();
 
     // delete pid file
-	unlink( pidfile );
+    unlink( pidfile );
     
-	netdbg_print( "GPS logging process ended!\n");
+    netdbg_print( "GPS logging process ended!\n");
     netdbg_finish();
 }
 
 int main()
 {
     app_state=1 ;
-    // setup signal handler	
-	signal(SIGQUIT, sig_handler);
-	signal(SIGINT,  sig_handler);
-	signal(SIGTERM, sig_handler);
-	signal(SIGUSR2, sig_handler);
-	signal(SIGUSR1, sig_handler);
-	signal(SIGPIPE, sig_handler);
+    // setup signal handler
+    signal(SIGQUIT, sig_handler);
+    signal(SIGINT,  sig_handler);
+    signal(SIGTERM, sig_handler);
+    signal(SIGUSR2, sig_handler);
+    signal(SIGUSR1, sig_handler);
+    signal(SIGPIPE, sig_handler);
 
-	if( appinit()==0 ) {
-		return 1;
-	}
+    if( appinit()==0 ) {
+        return 1;
+    }
     
-	glog_poweroff = 1 ;         // start from power off
+    glog_poweroff = 1 ;         // start from power off
     
-	while( app_state ) {
+    while( app_state ) {
 
         if( app_state==1 &&
-           ( p_dio_mmap->iomode == IOMODE_RUN  ||
-             p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) )
+            ( p_dio_mmap->iomode == IOMODE_RUN  ||
+              p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY ) )
         {
-                serial_mready(50000) ;
+            serial_mready(50000) ;
 
-                // check table102b
-                if( tab102b_enable ) {
-                    tab102b_check();
-                }
-                // check gps
-                if( gps_port_disable==0 ) {
-                    gps_check();
-                }
-                sensor_log();
-        } 
+            // check table102b
+            if( tab102b_enable ) {
+                tab102b_check();
+            }
+            // check gps
+            if( gps_port_disable==0 ) {
+                gps_check();
+            }
+            sensor_log();
+        }
         else {
             tab102b_done();
             gps_done();
@@ -1761,7 +1761,7 @@ int main()
             if( cap&0x8000 ) {       // Quit signal ?
                 app_state=0 ;
             }
-            if( cap&1 ) {       // SigUsr1? 
+            if( cap&1 ) {       // SigUsr1?
                 app_state=2 ;           // suspend running
             }
             if( cap&2 ) {        // SigUsr2
@@ -1772,7 +1772,7 @@ int main()
         }
     }
     
-	appfinish();
+    appfinish();
 
-	return 0;
+    return 0;
 }

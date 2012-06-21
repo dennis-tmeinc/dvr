@@ -30,7 +30,8 @@ mkdir newcerts
     2. Generate the CA certificate
     ------------------------------
 
-openssl req -config sslconf.txt -days 3653 -x509 -newkey rsa:2048 -set_serial 0 -text -keyout test-ca.key -out test-ca.crt
+openssl req -config sslconf.txt -days 3653 -x509 -newkey rsa:2048 \
+            -set_serial 0 -text -keyout test-ca.key -out test-ca.crt
 
 
     3. Generate the private keys and certificate requests
@@ -45,6 +46,7 @@ openssl req -config sslconf.txt -new -key server1.key -out server1.req
 openssl req -config sslconf.txt -new -key server2.key -out server2.req
 openssl req -config sslconf.txt -new -key client1.key -out client1.req
 openssl req -config sslconf.txt -new -key client2.key -out client2.req
+
 
     4. Issue and sign the certificates
     ----------------------------------
@@ -77,8 +79,6 @@ rm ca_crl.pem
 
 openssl pkcs12 -export -in client2.crt -inkey client2.key \
                       -out client2.pfx
-
-openssl pkcs12 -export -in ca.crt -inkey ca.key -out ca.pfx
 
 
 ##================================================================

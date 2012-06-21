@@ -8,7 +8,7 @@
 #endif
 
 //static WORD eagle32_tsadjust = 0 ;
-#define MAX_EAGLE_CHANNEL   (8)
+#define MAX_EAGLE_CHANNEL   (16)
 
 int eagle32_channels ;
 

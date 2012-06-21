@@ -154,9 +154,9 @@ var synctime=0 ;
 var systime=new Date();
 var dvrtime=new Date();
 
-function statusvalue( statusvalue )
+function statusvalue( stvalue )
 {
- var sval = eval("(" + statusvalue + ")") ;
+ var sval = eval("(" + stvalue + ")") ;
  systime=new Date();
  dvrtime=Date.parse( sval.dvrtime );
  document.getElementById("dvrstatus").reset();

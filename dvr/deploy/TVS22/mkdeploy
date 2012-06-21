@@ -89,6 +89,7 @@ fi
 
 cp -v ${APPROOT}/httpd/eaglehttpd .
 cp -v ${APPROOT}/ssl/programs/ssl/ssl_server .
+${STRIP} eaglehttpd ssl_server
 
 echo "Copy cgi files"
 cp -v ${APPROOT}/httpd/cfgdown/cfgdown.cgi cgi
@@ -106,7 +107,6 @@ cp -v ${APPROOT}/httpd/eagle_setup/getjpeg.cgi cgi
 cp -v ${APPROOT}/httpd/getsetup/applysetup cgi
 cp -v ${APPROOT}/httpd/getsetup/getsetup cgi
 
-${STRIP} eaglehttpd
 cd cgi
 ${STRIP} cfgdown.cgi cfgreport dvrstatus.cgi
 ${STRIP} cfgupload firmwareupd login mcufwupd mfid pagevalue

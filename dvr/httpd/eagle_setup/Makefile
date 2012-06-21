@@ -57,7 +57,7 @@ mcufwupd : mcufwupd.cpp
 	$(STRIP) $(debug_folder)/www/$@
 
 mfid : mfid.cpp ../../dvrsvr/md5.cpp getquery.o
-	$(CC) $(CFLAGS) -o $@ mfid.cpp ../../dvrsvr/md5.cpp getquery.o $(LDFLAGS) $(EXTSOURCES)
+	$(CC) $(CFLAGS) -o $@ mfid.cpp ../../dvrsvr/md5.cpp getquery.o $(EXTSOURCES) $(LDFLAGS)
 	cp $@  $(debug_folder)/www
 	$(STRIP) $(debug_folder)/www/$@
 
@@ -70,7 +70,7 @@ getjpeg.cgi : getjpeg.cpp getquery.o ../../dvrsvr/dvr.h
 	cp $@  $(debug_folder)/www
 
 eagle_setup : $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS) $(EXTSOURCES)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(EXTSOURCES) $(LDFLAGS)
 	cp eagle_setup  $(debug_folder)/www
 	$(STRIP) $(debug_folder)/www/$@
 

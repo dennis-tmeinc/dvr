@@ -61,6 +61,13 @@ fi
 boardid=`cat /davinci/ID/BOARDID`
 ifconfig eth0 192.168.247.${boardid}
 
+# setup initial TZ environment
+cd /davinci
+tzn=`./cfg get system timezone`
+tzl=`./cfg get timezones ${tzn}`
+TZ=${tzl%% *}
+export TZ
+
 # setup network ethernet ip address (as a alias)
 /davinci/dvr/setnetwork
 
@@ -82,6 +89,8 @@ sleep 1
 /bin/inetd /davinci/dvr/inetd.conf  < /dev/null > /dev/null 2> /dev/null
 
 cd /davinci/dvr
+
+./eaglesvr &
 
 #smartftp support
 ln -sf /davinci/dvr/librt-0.9.28.so /lib/librt.so.0

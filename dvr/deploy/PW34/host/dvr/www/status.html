@@ -159,48 +159,48 @@ var synctime=0 ;
 var systime=new Date();
 var dvrtime=new Date();
 
-function statusvalue( statusvalue )
+function statusvalue( stvalue )
 {
- var sval = eval("(" + statusvalue + ")") ;
- systime=new Date();
- dvrtime=Date.parse( sval.dvrtime );
- document.getElementById("dvrstatus").reset();
- JSONinitfield( sval );
+     var sval = eval("(" + stvalue + ")") ;
+     systime=new Date();
+     dvrtime=Date.parse( sval.dvrtime );
+     document.getElementById("dvrstatus").reset();
+     JSONinitfield( sval );
 
- document.getElementById("id_cpu_usage").innerHTML=sval.cpu_usage + "%";
- document.getElementById("id_total_memory").innerHTML=sval.memory_total + " Mbytes" ;
- document.getElementById("id_free_memory").innerHTML=sval.memory_free + " Mbytes" ;
- document.getElementById("id_total_disk").innerHTML=sval.disk_total + " Mbytes" ;
- document.getElementById("id_free_disk").innerHTML=sval.disk_free + " Mbytes" ;
+     document.getElementById("id_cpu_usage").innerHTML=sval.cpu_usage + "%";
+     document.getElementById("id_total_memory").innerHTML=sval.memory_total + " Mbytes" ;
+     document.getElementById("id_free_memory").innerHTML=sval.memory_free + " Mbytes" ;
+     document.getElementById("id_total_disk").innerHTML=sval.disk_total + " Mbytes" ;
+     document.getElementById("id_free_disk").innerHTML=sval.disk_free + " Mbytes" ;
 
- var temp = parseInt( sval.temperature_system_c ) ;
- if( isNaN(temp) ) {
-     document.getElementById('id_tr_sys_temperature').style.display="none" ;
-	 document.getElementById("id_sys_temperature").innerHTML="";
- }
- else {
-     document.getElementById('id_tr_sys_temperature').style.display="" ;
-	 document.getElementById("id_sys_temperature").innerHTML=
- 		(temp*9/5+32) + " \u00B0" + "F / "+ temp + " \u00B0"+"C" ; 
- }
+     var temp = parseInt( sval.temperature_system_c ) ;
+     if( isNaN(temp) ) {
+	 document.getElementById('id_tr_sys_temperature').style.display="none" ;
+	     document.getElementById("id_sys_temperature").innerHTML="";
+     }
+     else {
+	 document.getElementById('id_tr_sys_temperature').style.display="" ;
+	     document.getElementById("id_sys_temperature").innerHTML=
+		    (temp*9/5+32) + " \u00B0" + "F / "+ temp + " \u00B0"+"C" ;
+     }
 
- temp = parseInt( sval.temperature_disc_c ) ;
- if( isNaN(temp) ) {
-     document.getElementById('id_tr_hd_temperature').style.display="none" ;
-	 document.getElementById("id_hd_temperature").innerHTML="" ;
- }
- else {
-     document.getElementById('id_tr_hd_temperature').style.display="" ;
-	 document.getElementById("id_hd_temperature").innerHTML=
- 		(temp*9/5+32) + " \u00B0" + "F / "+ temp + " \u00B0"+"C" ; 
- }
+     temp = parseInt( sval.temperature_disc_c ) ;
+     if( isNaN(temp) ) {
+	 document.getElementById('id_tr_hd_temperature').style.display="none" ;
+	     document.getElementById("id_hd_temperature").innerHTML="" ;
+     }
+     else {
+	 document.getElementById('id_tr_hd_temperature').style.display="" ;
+	     document.getElementById("id_hd_temperature").innerHTML=
+		    (temp*9/5+32) + " \u00B0" + "F / "+ temp + " \u00B0"+"C" ;
+     }
 
- var i ;
- for( i=1; i<=camera_num; i++ ) {
-    document.getElementById("id_bitrate_"+i ).innerHTML= sval["camera_"+i+"_bitrate"] ;
- }
- 
- timefunc();
+     var i ;
+     for( i=1; i<=camera_num; i++ ) {
+	document.getElementById("id_bitrate_"+i ).innerHTML= sval["camera_"+i+"_bitrate"] ;
+     }
+
+     timefunc();
 }
 
 function timefunc()

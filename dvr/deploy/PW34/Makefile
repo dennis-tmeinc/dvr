@@ -8,5 +8,5 @@ include $(PROJDIR)/arm_tool
 all:
 	./mkdeploy $(proj) 1
 
-clean:	
+clean:
 	./mkdeploy clean 0

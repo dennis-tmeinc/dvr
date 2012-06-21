@@ -12,99 +12,16 @@ var ser=1 ;
 
 var camera_number = <!--#include file="camera_number"--> ; 
 var camera_name = new Array();
-camera_name[0] = "<!--#exec cmd="/davinci/dvr/cfg get camera1 name" -->" ; 
+camera_name[0] = "<!--#exec cmd="/davinci/dvr/cfg get camera1 name" -->" ;
 camera_name[1] = "<!--#exec cmd="/davinci/dvr/cfg get camera2 name" -->" ; 
 camera_name[2] = "<!--#exec cmd="/davinci/dvr/cfg get camera3 name" -->" ; 
 camera_name[3] = "<!--#exec cmd="/davinci/dvr/cfg get camera4 name" -->" ; 
 
-function imgstart()
-{
-  var button = document.getElementById("startbutton") ;
-  if( relo ) {
-      relo=0 ;
-      button.value="Start" ;
-  }
-  else {
-      relo=1 ;
-      for( i=0; i<camera_number ; i++ ) { 
-        imgload(i);
-      }
-      button.value="Stop" ;
-  }
-}
-
-function reloadimg(channel)
-{
-  var img = document.getElementById("myImage"+channel) ;
-  var ch  = document.getElementById("id_channel"+channel) ;
-  var quality = document.getElementById("id_quality"+channel) ;
-  var picture = document.getElementById("id_res"+channel) ;
-  if( img && ch && quality && picture ) {
-          var stime = new Date();
-          img.src =
-          "cgi/getjpeg.cgi?channel="
-          + ch.value
-          +"&quality="
-          + quality.value 
-          +"&picture="
-          + picture.value 
-          + "&tmark="+stime.getTime();
-   }
-}
-
-function imgload(channel)
-{
-    if( relo ) {
-       var speed = document.getElementById("id_speed"+channel) ;
-       var display = document.getElementById("id_imgarea"+channel).style.display ;
-       if( speed && display!="none" ) {
-          setTimeout("reloadimg("+channel+")", speed.value);
-       }
-    }
-}
-
-function imgdblclick(channel)
-{
-  var area ;
-  if( channel == singlescreen ) {
-      singlescreen=-1 ;
-      // display all camera
-      for( i=0; i<camera_number; i++) {
-          document.getElementById("id_imgarea"+i).style.width="50%" ;
-          document.getElementById("id_imgarea"+i).style.display="" ;
-          reloadimg(i);
-      }
-  }
-  else {
-      // hide all camera
-      for( i=0; i<camera_number; i++) {
-          if( i==channel ) {
-              document.getElementById("id_imgarea"+i).style.width="100%" ;
-          }
-          else {
-              document.getElementById("id_imgarea"+i).style.display="none" ;
-          }
-      }
-      singlescreen = channel ;
-  }
-}
-
-function cameraoption()
-{
-   var buttonoption = document.getElementById("cameraopt");
-   if( buttonoption.value == "Show Options" ) {
-       buttonoption.value = "Hide Options" ;
-       for( i=0; i<camera_number; i++) {
-           document.getElementById("id_option"+i).style.display="";
-       }
-   }
-   else {
-       buttonoption.value = "Show Options" ;
-       for( i=0; i<camera_number; i++) {
-           document.getElementById("id_option"+i).style.display="none";
-       }
-   }
-}
+var camera_live = new Array();
+camera_live[0] = "cgi/mp4live?channel="+"<!--#exec cmd="/davinci/dvr/cfg get camera1 channel" -->";
+camera_live[1] = "cgi/mp4live?channel="+"<!--#exec cmd="/davinci/dvr/cfg get camera2 channel" -->";
+camera_live[2] = "cgi/mp4live?channel="+"<!--#exec cmd="/davinci/dvr/cfg get camera3 channel" -->";
+camera_live[3] = "cgi/mp4live?channel="+"<!--#exec cmd="/davinci/dvr/cfg get camera4 channel" -->";
 
 function badbrowser()
 {
@@ -122,8 +39,59 @@ function badbrowser()
         }
     }
     else {
-        // all other browser are good.
+	// all other browsers are good.
         return 0 ;
+    }
+}
+
+function startchannel(channel)
+{
+    var vlc;
+    vlc = document.getElementById("camobj"+channel);
+    if( vlc ) {
+	vlc.style.display="" ;
+    }
+    if( !vlc || !vlc.playlist ) {
+	vlc = document.getElementById("camemb"+channel);
+    }
+    if( vlc && vlc.playlist ) {
+	vlc.playlist.items.clear();
+	vlc.playlist.add(camera_live[channel]);
+	vlc.playlist.play();
+    }
+    else if( vlc ) {
+	vlc.src=camera_live[channel];
+    }
+}
+
+function stopchannel(channel)
+{
+   var vlc;
+   vlc = document.getElementById("camobj"+channel);
+   if( vlc && vlc.playlist ) {
+       if( vlc.playlist.items.count > 0 ) {
+	   if( vlc.playlist.isPlaying == true ) {
+	      vlc.playlist.stop();
+	   }
+	   vlc.playlist.items.clear();
+       }
+   }
+   else if( vlc ) {
+      vlc.src="";
+   }
+   if( vlc ) {
+       vlc.style.display="none" ;
+   }
+}
+
+function livestart()
+{
+    var i;
+    for( i=0 ; i<camera_number; i++ ) {
+       stopchannel(i);
+       if( document.getElementById("id_cam"+(i+1)).checked==true ) {
+	    startchannel(i);
+       }
     }
 }
 
@@ -132,203 +100,89 @@ function badbrowser()
 
 <body>
 
-<table id="id_imgarea" width="100%" >
-<tr>
+<object classid="clsid:9BE31822-FDAD-461B-AD51-BE1D1C159921"
+  width="640" height="480"
+  id="camobj0" >
+ <param name="Src" value="" />
+ <param name="ShowDisplay" value="True" />
+ <param name="AutoLoop" value="False" />
+ <param name="AutoPlay" value="False" />
 
-<td id="id_imgarea0" style="display:none;width:50%">
-<img id="myImage0" width="100%" onload="imgload(0)" ondblclick="imgdblclick(0)" />
-<div id="id_option0">
-<p/>
-Camera:
-<select id="id_channel0" name="channel">
-<script type="text/javascript">
-  cur_cam=0 ;
-  for( ser=0 ; ser<camera_number; ser++ ) {
-      document.write("<option value='"+ser+"'" );
-      if( ser == cur_cam ) {
-          document.write("selected='selected'" );
-      }
-      document.write(">"+camera_name[ser]+"</option>");
-  }
-</script>
-</select>
-<br/>
-Quality:
-<select id="id_quality0" name="quality">
-    <option value="best">best</option>
-    <option value="better" selected="selected">better</option>
-    <option value="average">average</option>
-</select>
-<br/>
-Resolution:
-<select id="id_res0" name="res">
-    <option value="4cif" selected="selected">4cif</option>
-    <option value="cif">cif</option>
-    <option value="qcif">qcif</option>
-</select>
-<br/>
-Speed:
-<select id="id_speed0" name="speed">
-    <option value="10">Fastest</option>
-    <option value="300" selected="selected">Fast</option>
-    <option value="1000">Slow</option>
-    <option value="5000">Slowest</option>
-</select>
-<input id="id_full0" name="full0" value="0" type="hidden" />
-</div>
-</td>
+<embed type="video/mp4"
+    width="640"
+    height="480"
+    id="camemb0" />
+</object>
 
-<td id="id_imgarea1" style="display:none;width:50%" >
-<img id="myImage1" width="100%" onload="imgload(1)" ondblclick="imgdblclick(1)" />
-<div id="id_option1">
-<p/>
-Camera:
-<select id="id_channel1" name="channel">
-<script type="text/javascript">
-  cur_cam=1 ;
-  for( ser=0 ; ser<camera_number; ser++ ) {
-      document.write("<option value='"+ser+"'" );
-      if( ser == cur_cam ) {
-          document.write("selected='selected'" );
-      }
-      document.write(">"+camera_name[ser]+"</option>");
-  }
-</script>
-</select>
-<br/>
-Quality:
-<select id="id_quality1" name="quality" value="better">
-    <option value="best">best</option>
-    <option value="better" selected="selected">better</option>
-    <option value="average">average</option>
-</select>
-<br/>
-Resolution:
-<select id="id_res1" name="res">
-    <option value="4cif" selected="selected">4cif</option>
-    <option value="cif">cif</option>
-    <option value="qcif">qcif</option>
-</select>
-<br/>
-Speed:
-<select id="id_speed1" name="speed">
-    <option value="10">Fastest</option>
-    <option value="300" selected="selected">Fast</option>
-    <option value="1000">Slow</option>
-    <option value="5000">Slowest</option>
-</select>
-<input id="id_full1" name="full1" value="0" type="hidden" />
-</div>
-</td>
+<object classid="clsid:9BE31822-FDAD-461B-AD51-BE1D1C159921"
+  width="640" height="480"
+  id="camobj1" >
+ <param name="Src" value="" />
+ <param name="ShowDisplay" value="True" />
+ <param name="AutoLoop" value="False" />
+ <param name="AutoPlay" value="False" />
 
-</tr>
+<embed type="video/mp4"
+    width="640"
+    height="480"
+    id="camemb1" />
+</object>
 
-<tr>
+<object classid="clsid:9BE31822-FDAD-461B-AD51-BE1D1C159921"
+  width="640" height="480"
+  id="camobj2" >
+ <param name="Src" value="" />
+ <param name="ShowDisplay" value="True" />
+ <param name="AutoLoop" value="False" />
+ <param name="AutoPlay" value="False" />
 
-<td id="id_imgarea2" style="display:none;width:50%">
-<img id="myImage2" width="100%" onload="imgload(2)" ondblclick="imgdblclick(2)" />
-<div id="id_option2">
-<p/>
-Camera:
-<select id="id_channel2" name="channel">
-<script type="text/javascript">
-  cur_cam=2 ;
-  for( i=0 ; i<camera_number; i++ ) {
-      document.write("<option value='"+i+"'" );
-      if( i == cur_cam ) {
-          document.write("selected='selected'" );
-      }
-      document.write(">"+camera_name[i]+"</option>");
-  }
-</script>
-</select>
-<br/>
-Quality:
-<select id="id_quality2" name="quality">
-    <option value="best">best</option>
-    <option value="better" selected="selected">better</option>
-    <option value="average">average</option>
-</select>
-<br/>
-Resolution:
-<select id="id_res2" name="res">
-    <option value="4cif" selected="selected">4cif</option>
-    <option value="cif">cif</option>
-    <option value="qcif">qcif</option>
-</select>
-<br/>
-Speed:
-<select id="id_speed2" name="speed">
-    <option value="10">Fastest</option>
-    <option value="300" selected="selected">Fast</option>
-    <option value="1000">Slow</option>
-    <option value="5000">Slowest</option>
-</select>
-<input id="id_full2" name="full2" value="0" type="hidden" />
-</div>
-</td>
+<embed type="video/mp4"
+    width="640"
+    height="480"
+    id="camemb2" />
+</object>
 
-<td id="id_imgarea3" style="display:none;width:50%" >
-<img id="myImage3" width="100%" onload="imgload(3)" ondblclick="imgdblclick(3)" />
-<div id="id_option3">
-<p/>
-Camera:
-<select id="id_channel3" name="channel">
-<script type="text/javascript">
-  cur_cam=3 ;
-  for( i=0 ; i<camera_number; i++ ) {
-      document.write("<option value='"+i+"'" );
-      if( i == cur_cam ) {
-          document.write("selected='selected'" );
-      }
-      document.write(">"+camera_name[i]+"</option>");
-  }
-</script>
-</select>
-<br/>
-Quality:
-<select id="id_quality3" name="quality" value="better">
-    <option value="best">best</option>
-    <option value="better" selected="selected">better</option>
-    <option value="average">average</option>
-</select>
-<br/>
-Resolution:
-<select id="id_res3" name="res">
-    <option value="4cif" selected="selected">4cif</option>
-    <option value="cif">cif</option>
-    <option value="qcif">qcif</option>
-</select>
-<br/>
-Speed:
-<select id="id_speed3" name="speed">
-    <option value="10">Fastest</option>
-    <option value="300" selected="selected">Fast</option>
-    <option value="1000">Slow</option>
-    <option value="5000">Slowest</option>
-</select>
-<input id="id_full3" name="full1" value="0" type="hidden" />
-</div>
-</td>
+<object classid="clsid:9BE31822-FDAD-461B-AD51-BE1D1C159921"
+  width="640" height="480"
+  id="camobj3" >
+ <param name="Src" value="" />
+ <param name="ShowDisplay" value="True" />
+ <param name="AutoLoop" value="False" />
+ <param name="AutoPlay" value="False" />
 
-</tr>
-
-</table>
+<embed type="video/mp4"
+    width="640"
+    height="480"
+    id="camemb3" />
+</object>
 
 <p/>
-<input type="button" id="startbutton" onclick="imgstart()" value="Start" />
-<input type="button" id="cameraopt" onclick="cameraoption()" value="Hide Options" />
+
+<input id="id_cam1" value="on" type="checkbox" checked="checked" />
+<label for="id_cam1" id="label_cam1">Camera 1</label>
+
+<input id="id_cam2" value="on" type="checkbox" />
+<label for="id_cam2" id="label_cam2">Camera 2</label>
+
+<input id="id_cam3" value="on" type="checkbox" />
+<label for="id_cam3" id="label_cam3">Camera 3</label>
+
+<input id="id_cam4" value="on" type="checkbox" />
+<label for="id_cam4" id="label_cam4">Camera 4</label>
+
+<p />
+<input type="button" id="startbutton" onclick="livestart()" value="ReStart" />
 <input type="button" onclick="window.location.assign('system.html')" value="System Setup" />
 <p/>
 </body>
-<script type="text/javascript">
-  for( i=0 ; i<camera_number; i++ ) {
-      area = document.getElementById("id_imgarea"+i) ;
-      if( area ) {
-         area.style.display="" ;
-      }
-      reloadimg(i);
-  }
-</script>
 </html>
+<script type="text/javascript">
+
+for( i=1; i<=4; i++ ) {
+   document.getElementById("label_cam"+i).innerHTML=camera_name[i-1] ;
+}
+
+setTimeout("livestart()", 2000);
+
+</script>
 

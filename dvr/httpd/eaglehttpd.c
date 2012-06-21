@@ -12,8 +12,9 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+#include "../cfg.h"
 
-#define SERVER_NAME "Eagle HTTP 0.21"
+#define SERVER_NAME "Eagle HTTP 0.22"
 #define PROTOCOL "HTTP/1.1"
 #define RFC1123FMT "%a, %d %b %Y %H:%M:%S GMT"
 
@@ -47,13 +48,14 @@ static char * mime_type[][2] =
     {"mp3", "audio/mpeg"},
     {"ogg", "application/ogg"},
     {"txt", "text/plain"},
+    {"mp4", "video/mp4"},
     {"", "stream/octem"}
 } ;
 
 char * document_root="/home/www" ;
 
 #define CACHE_MAXAGE        (600)
-#define KEEP_ALIVE          (300)
+#define KEEP_ALIVE          (30)
 
 int    http_keep_alive ;
 long   http_etag ;           // Etag of request document
@@ -88,7 +90,7 @@ char * cleanstring( char * instr )
         len--;
     }
     instr[len]=0;
-    return instr ;    
+    return instr ;
 }
 
 char * get_mime_type( char* name )
@@ -159,7 +161,7 @@ char * getquery( const char * qname )
         if( strncmp(qname, qvalue, l)==0 && qvalue[l]=='=' ) {
             return &qvalue[l+1] ;
         }
-        if( query[x]=='\0' ) 
+        if( query[x]=='\0' )
             break;
         else {
             query+=x+1;
@@ -171,7 +173,7 @@ char * getquery( const char * qname )
         if( strncmp(qname, qvalue, l)==0 && qvalue[l]=='=' ) {
             return &qvalue[l+1] ;
         }
-        if( query[x]=='\0' ) 
+        if( query[x]=='\0' )
             break;
         else {
             query+=x+1;
@@ -237,14 +239,14 @@ struct http_msg_t {
     char * msg ;
 } http_msg_table [] =
 {
-    { 100, "Continue" },
-    { 200, "OK" },
-    { 300, "Multiple Choices" },
-    { 304, "Not Modified" },
-    { 400, "Bad Request" },
-    { 403, "Forbidden" },
-    { 404, "Not Found" },
-    { 0, "" },
+{ 100, "Continue" },
+{ 200, "OK" },
+{ 300, "Multiple Choices" },
+{ 304, "Not Modified" },
+{ 400, "Bad Request" },
+{ 403, "Forbidden" },
+{ 404, "Not Found" },
+{ 0, "" },
 } ;
 
 char * http_msg( int status )
@@ -288,7 +290,7 @@ void http_header( int status, char * title, char * mime_type, int length)
     
     printf( "%s %d %s\r\n", PROTOCOL, status, title );
     unsetenv("HEADER_Server");                  //  Not allowed for CGI to change server
-    unsetenv("HEADER_Date");                    //  Not allowed for CGI to change date 
+    unsetenv("HEADER_Date");                    //  Not allowed for CGI to change date
     printf( "Server: %s\r\n", SERVER_NAME );
     now = time( (time_t*) NULL );
     strftime( hbuf, sizeof(hbuf), RFC1123FMT, gmtime( &now ) );
@@ -307,7 +309,7 @@ void http_header( int status, char * title, char * mime_type, int length)
     if( fn ) {
         FILE * fexhdr = fopen( fn, "r" );
         if( fexhdr ) {
-            while( fgets( hbuf, sizeof(hbuf), fexhdr ) ) 
+            while( fgets( hbuf, sizeof(hbuf), fexhdr ) )
             {
                 if( (fn=strchr(hbuf, ':' )) ) {
                     *fn=0 ;
@@ -339,8 +341,8 @@ void http_header( int status, char * title, char * mime_type, int length)
         i++ ;
     }
 
-    // empty line, finishing the http header 
-    printf("\r\n");             
+    // empty line, finishing the http header
+    printf("\r\n");
 }
 
 void http_error( int status, char * title )
@@ -400,7 +402,7 @@ int http_checkcache()
     }
 
     if( http_modtime==(time_t)0 || http_etag==0 ) {
-            return http_nocache();
+        return http_nocache();
     }
     
     sprintf( tbuf, "max-age=%d",  http_cachemaxage );
@@ -432,9 +434,9 @@ int copycleanstring( char * instr, char * outstr )
 {
     int len = 0 ;
     while( *instr > 0 &&
-          *instr<=' ' ) {
-              instr++;
-          }
+           *instr<=' ' ) {
+        instr++;
+    }
     while( *instr ) {
         *outstr++=*instr++ ;
         len++ ;
@@ -442,16 +444,28 @@ int copycleanstring( char * instr, char * outstr )
     *outstr=0 ;
     while(len>0) {
         outstr-- ;
-        if( *outstr > 0 && 
-           *outstr <= ' ' ) {
-               *outstr=0 ;
-               len-- ;
-           }
+        if( *outstr > 0 &&
+            *outstr <= ' ' ) {
+            *outstr=0 ;
+            len-- ;
+        }
         else {
             break;
         }
     }
     return len ;
+}
+
+int cgi_exec()
+{
+    char  cgibuf[512] ;
+    fflush(stdout);
+    http_keep_alive=0  ;        // quit process if exec failed
+
+    // cgi file name
+    sprintf( cgibuf, "%s%s", document_root, getenv("REQUEST_URI") );
+    execl( cgibuf, cgibuf, NULL );
+    return 0;
 }
 
 int cgi_run()
@@ -517,7 +531,7 @@ int cgi_run()
 
         http_header( 200, NULL, NULL, len-ftell(fp) );
 
-        // output cgi 
+        // output cgi
         int ch ;
         while( (ch = fgetc( fp ))!=EOF ) {
             fputc( ch, stdout ) ;
@@ -659,7 +673,7 @@ void smallssi_include_file( char * ifilename )
     fclose( fp );
 }
 
-char serfile[]="/tmp/wwwserialnofile" ;
+char serfile[]=WWWSERIALFILE ;
 
 int checkserialno( char * serialno )
 {
@@ -715,12 +729,12 @@ int savepostfile()
     int datatype = 1 ;      // 0: dataend, 1: data, 2: databoundary
     int res=0;
 
-    p = getenv("CONTENT_LENGTH" );
+    p = getenv("HTTP_CONTENT_LENGTH" );
     if( p ) {
         sscanf(p,"%d", &content_length);
     }
 
-    p = getenv("CONTENT_TYPE");
+    p = getenv("HTTP_CONTENT_TYPE");
     if( p ) {
         boundary = strstr(p, "boundary=" ) ;
         if( boundary ) {
@@ -744,7 +758,7 @@ int savepostfile()
         return res;
     if( linebuf[0]!='-' ||
         linebuf[1]!='-' ||
-        strncmp( &linebuf[2], boundary, lbdy )!=0 ) 
+        strncmp( &linebuf[2], boundary, lbdy )!=0 )
         return res;
 
     
@@ -762,35 +776,35 @@ int savepostfile()
         // get form data headers
         while ( fgets( linebuf, sizeof(linebuf), stdin )  )
         {
-             if( linebuf[0] == 0 ||
-                strcmp( linebuf, "\n" ) == 0 || 
+            if( linebuf[0] == 0 ||
+                strcmp( linebuf, "\n" ) == 0 ||
                 strcmp( linebuf, "\r\n" ) == 0 ){
-                    break;
+                break;
+            }
+            else if( strncmp(linebuf, "Content-Disposition: form-data", 30)==0 ) {
+                p=strstr(&linebuf[30], " name=");
+                if( p && p[6]=='\"') {
+                    p2=strchr(&p[7], '\"');
+                    if( p2 ) {
+                        *p2='\0';
+                        strncpy( part_name, &p[7], sizeof(part_name)-1 );
+                        *p2='\"' ;
+                    }
                 }
-             else if( strncmp(linebuf, "Content-Disposition: form-data", 30)==0 ) {
-                 p=strstr(&linebuf[30], " name=");
-                 if( p && p[6]=='\"') {
-                     p2=strchr(&p[7], '\"');
-                     if( p2 ) {
-                         *p2='\0';
-                         strncpy( part_name, &p[7], sizeof(part_name)-1 );
-                         *p2='\"' ;
-                     }
-                 }
 
-                 p=strstr(&linebuf[30], " filename=");
-                 if( p && p[10]=='\"') {
-                     p2=strchr(&p[11], '\"');
-                     if( p2 ) {
-                         *p2='\0';
-                         strncpy( part_filename, &p[11], sizeof(part_filename)-1 );
-                         *p2='\"' ;
-                     }
-                 }
-             }
+                p=strstr(&linebuf[30], " filename=");
+                if( p && p[10]=='\"') {
+                    p2=strchr(&p[11], '\"');
+                    if( p2 ) {
+                        *p2='\0';
+                        strncpy( part_filename, &p[11], sizeof(part_filename)-1 );
+                        *p2='\"' ;
+                    }
+                }
+            }
         }
         
-        if( strlen(part_name)<=0 ) 
+        if( strlen(part_name)<=0 )
             break ;
         
         sprintf(postfilename, "%s/post_file_%d_%s", document_root, (int)getpid(), part_name );
@@ -856,8 +870,8 @@ int savepostfile()
         else {
             break;                              // can't open file
         }
-            
-        if( datatype==0 ) 
+
+        if( datatype==0 )
             break;
         else {
             fgets(linebuf,sizeof(linebuf), stdin);
@@ -881,37 +895,37 @@ int savepostfile()
 
 int check_access()
 {
-	char * p ;
-	char * uri ;
+    char * p ;
+    char * uri ;
     int res=1 ;
-	char access[128] ;
-	FILE * accessfile = fopen( "access", "r" );
-	if( accessfile ) {
-		uri = getenv("REQUEST_URI");
-		while( fgets( access, 128, accessfile ) ) {
-			if( strcmp( cleanstring(access), uri )==0 ) {
-				// access check required
-				p = getquery("ser") ;
-				if( p ) {
-					setcookie("ser",p);
-				}
-				else {
-					p = getcookie("ser");
-				}
+    char access[128] ;
+    FILE * accessfile = fopen( "access", "r" );
+    if( accessfile ) {
+        uri = getenv("REQUEST_URI");
+        while( fgets( access, 128, accessfile ) ) {
+            if( strcmp( cleanstring(access), uri )==0 ) {
+                // access check required
+                p = getquery("ser") ;
+                if( p ) {
+                    setcookie("ser",p);
+                }
+                else {
+                    p = getcookie("ser");
+                }
 
-				if( p && checkserialno (p)) {
-					updateserialno(p);
-				}
-				else {
-					setenv("REQUEST_URI", DENIED_PAGE, 1);	// replace denied page
+                if( p && checkserialno (p)) {
+                    updateserialno(p);
+                }
+                else {
+                    setenv("REQUEST_URI", DENIED_PAGE, 1);          // replace denied page
                     setenv("HTTP_CACHE_CONTROL", "no-cache", 1 );   // force no cache on denied page
-					res=0 ;
-				}
-				break;
-			}
-		}
-		fclose( accessfile );
-	}
+                    res=0 ;
+                }
+                break;
+            }
+        }
+        fclose( accessfile );
+    }
     return res ;
 }
 
@@ -953,10 +967,8 @@ void smallssi_run()
     
     // restore stdout
     fflush( stdout );
-	
     dup2( oldstdout, 1 );
-	close( oldstdout );
-
+    close( oldstdout );
     dup2( oldstderr, 2 );
     close( oldstderr );
 
@@ -989,24 +1001,24 @@ void sethttpenv(char * headerline)
     strcpy(envname,"HTTP_");
     pn = &envname[5] ;
     for(i=0;i<100;i++){
-            if(headerline[i]>='a' && headerline[i]<='z') {
-                pn[i]=headerline[i]-'a'+'A' ;
-            }
-            else if( headerline[i]=='-' ) {
-                pn[i]='_' ;
-            }
-            else if( headerline[i]==0 ) {
-                break ;
-            }
-            else if( headerline[i]==':' ) {
-                pn[i]=0 ;
-                setenv( envname, cleanstring(&headerline[i+1]), 1 );
-                break ;
-            }
-            else {
-                pn[i] = headerline[i] ;
-            }
-     }
+        if(headerline[i]>='a' && headerline[i]<='z') {
+            pn[i]=headerline[i]-'a'+'A' ;
+        }
+        else if( headerline[i]=='-' ) {
+            pn[i]='_' ;
+        }
+        else if( headerline[i]==0 ) {
+            break ;
+        }
+        else if( headerline[i]==':' ) {
+            pn[i]=0 ;
+            setenv( envname, cleanstring(&headerline[i+1]), 1 );
+            break ;
+        }
+        else {
+            pn[i] = headerline[i] ;
+        }
+    }
 }
 
 // un-set http headers as environment variable. 
@@ -1019,10 +1031,6 @@ void unsethttpenv()
 
     // un-set regular HTTP env
     unsetenv( "QUERY_STRING" );
-    unsetenv( "SERVER_PORT" );
-    unsetenv( "SERVER_NAME" );
-    unsetenv( "CONTENT_TYPE" );
-    unsetenv( "CONTENT_LENGTH" );
     
     for(i=0; i<200; ) {
         if( environ[i]==NULL || environ[i][0]==0 ) {
@@ -1066,22 +1074,22 @@ int savepost()
     int  r ;
     
     // check input
-    p = getenv("CONTENT_LENGTH") ;
+    p = getenv("HTTP_CONTENT_LENGTH") ;
     if( p ) {
         sscanf( p, "%d", &content_length );
     }
     if( content_length<=0 ) {       // no contents
-        return 1 ;                  // return success. 
+        return 1 ;                  // return success.
     }
     
-    content_type = getenv("CONTENT_TYPE");
+    content_type = getenv("HTTP_CONTENT_TYPE");
     request_method = getenv("REQUEST_METHOD") ;
     if( strcmp( request_method, "POST" )==0 &&      // support "POST" contents only
-       content_type &&                              // content-type must be provided by client
-       content_length<20000000 )                    // can't handle huge contents
+        content_type &&                              // content-type must be provided by client
+        content_length<20000000 )                    // can't handle huge contents
     {
         if( content_length<100000 &&
-            strncasecmp( content_type, "application/x-www-form-urlencoded", 32)==0 ) 
+            strncasecmp( content_type, "application/x-www-form-urlencoded", 32)==0 )
         {
             post_string = (char *)malloc( content_length + 1 );
             if( post_string ) {
@@ -1111,7 +1119,7 @@ void http_document()
     int ch ;
 
     // use linebuf to store document name.
-	uri = getenv("REQUEST_URI");
+    uri = getenv("REQUEST_URI");
 
     if( uri==NULL ) {
         http_error( 404, NULL );
@@ -1128,26 +1136,35 @@ void http_document()
         http_error( 403, NULL );
         return ;
     }
-   
+
     uri = getenv("HTTP_KEEP_ALIVE");
     if( uri ) {
         sscanf(uri, "%d", &http_keep_alive );
+        if(http_keep_alive>KEEP_ALIVE) {
+            http_keep_alive=KEEP_ALIVE  ;
+        }
     }
     else {
         http_keep_alive=KEEP_ALIVE  ;
     }
+
     http_cachemaxage=CACHE_MAXAGE ;
 
-	len = strlen( fname );
+    len = strlen( fname );
 
     // check file type by extension
     if(strcasecmp(&fname[len-5], ".html")==0 ||   // to run small ssi
-       strcasecmp(&fname[len-6], ".shtml")==0 ) 
-    {  
+       strcasecmp(&fname[len-6], ".shtml")==0 )
+    {
         smallssi_run();
     }
+    else if( strncmp(fname, "cgi/mp4", 7 )==0 )
+    {
+        // execute cgi for mp4 streaming.
+        cgi_exec();
+    }
     else if( strncmp(fname, "cgi/", 4 )==0 ||
-	         strcasecmp(&fname[len-4], ".cgi")==0 ) 
+             strcasecmp(&fname[len-4], ".cgi")==0 )
     {
         // execute cgi.
         cgi_run();
@@ -1179,9 +1196,9 @@ void http_document()
 
         http_header( 200, NULL, get_mime_type( fname ), len );
 
-        // output whole file 
+        // output whole file
         while ( ( ch = getc( fp ) ) != EOF ) {
-            putchar( ch );    
+            putchar( ch );
         }
 
         fclose( fp );
@@ -1189,7 +1206,7 @@ void http_document()
     
 }
 
-// process_input of http protocol
+// process_input (header part) of http protocol 
 // return 1: success, 0: failed
 int http_input()
 {
@@ -1198,9 +1215,6 @@ int http_input()
     char * query ;	// request query string
     char * protocol ;	// request protocol
     char linebuf[1024] ;
-
-    char * ext ;
-    char * pc ;
 
     if ( fgets( linebuf, sizeof(linebuf), stdin ) == NULL )
     {
@@ -1228,8 +1242,8 @@ int http_input()
     
     // check uri
     if( uri[0] != '/' ||
-       uri[1] == '/' ||
-       strstr( uri, "/../" ) ) 
+        uri[1] == '/' ||
+        strstr( uri, "/../" ) )
     {
         return 0 ;
     }
@@ -1262,37 +1276,16 @@ int http_input()
         setenv( "REQUEST_URI", uri, 1 );
     }
 
-    // Not using these variables, but put them there for compatible.
-    setenv("PATH_INFO", "", 1 );
-    setenv("PATH_TRANSLATED", "", 1);
-    
     // analyz request header
     while ( fgets( linebuf, sizeof(linebuf), stdin )  )
     {
-        if( linebuf[0] < ' ' )
+        if( linebuf[0] >= ' ' )
         {
-            break;
-        }
-        else if( strncmp(linebuf, "Host:", 5)==0 )
-        {
-            pc = cleanstring( linebuf+5 );
-            setenv("HTTP_HOST", pc, 1);
-            ext = strrchr( pc, ':' ) ;
-            if( ext ) {
-                setenv("SERVER_PORT", ext+1, 1 );
-                *ext=0;
-            }
-            setenv("SERVER_NAME", pc, 1 );
-        }
-        else if( strncmp(linebuf, "Content-Type:", 13)==0 ) {
-            setenv("CONTENT_TYPE", cleanstring(linebuf+13), 1 );
-        }
-        else if( strncmp(linebuf, "Content-Length:", 15)==0 ) {
-            setenv("CONTENT_LENGTH", cleanstring(linebuf+15), 1 );
+            // set header as env HTTP_???
+            sethttpenv(linebuf);
         }
         else {
-            // all other header lines. set var as HTTP_???
-            sethttpenv(linebuf);
+            break;
         }
     }
     return 1 ;
@@ -1321,17 +1314,17 @@ void http()
     }
     // all inputs processed!
 
-	// access check
-	check_access() ;
+    // access check
+    check_access() ;
 
-    // out put http document
+    // output http document
     http_document() ;
 
 http_done:
     
     fflush(stdout);
 
-    // remove all HTTP_* environment
+    // remove all HTTP_* environment and POST files
     unsethttpenv() ;
 
     return ;
@@ -1351,13 +1344,13 @@ void http_listen()
     struct addrinfo hints;
     struct addrinfo *res;
     struct addrinfo *ressave;
-	union {
-		struct sockaddr_in sin ;
-		struct sockaddr_in6 sin6 ;
-	} saddr ;
-	socklen_t saddrlen;
+    union {
+        struct sockaddr_in sin ;
+        struct sockaddr_in6 sin6 ;
+    } saddr ;
+    socklen_t saddrlen;
     int sockfd;
-	int asockfd ;
+    int asockfd ;
     int val;
     
     memset(&hints, 0, sizeof(struct addrinfo));
@@ -1391,7 +1384,7 @@ void http_listen()
                        sizeof(val));
             if (bind(sockfd, res->ai_addr, res->ai_addrlen) == 0) {
                 break;
-			}
+            }
             close(sockfd);
             sockfd = -1;
         }
@@ -1402,24 +1395,24 @@ void http_listen()
     
     if (sockfd == -1) {
         printf("Error:listen!");
-		exit(1);
+        exit(1);
     }
     listen(sockfd, 10);
 
-	while( (asockfd=accept( sockfd, (struct sockaddr *)&saddr, &saddrlen  ))>0 ) {
-		if( fork()==0 ) {
-			// child process
-			dup2( asockfd, 0 );	// dup to 0, 1
-			dup2( asockfd, 1 );
-			close( sockfd );	// close listening socket
-			close( asockfd );
-			break;
-		}
-		close( asockfd ) ;
-		while( waitpid(0, NULL, WNOHANG)>0 );
-	}
+    while( (asockfd=accept( sockfd, (struct sockaddr *)&saddr, &saddrlen  ))>0 ) {
+        if( fork()==0 ) {
+            // child process
+            dup2( asockfd, 0 );	// dup to 0, 1
+            dup2( asockfd, 1 );
+            close( sockfd );	// close listening socket
+            close( asockfd );
+            break;
+        }
+        close( asockfd ) ;
+        while( waitpid(0, NULL, WNOHANG)>0 );
+    }
 
-   
+
     return ;
 }
 
@@ -1427,16 +1420,18 @@ void http_listen()
 
 int main(int argc, char * argv[])
 {
+    int maxkeepalive=50 ;
+
     if( argc>1 ) {
         document_root=argv[1] ;
     }
-	if( argc>2 ) {
-		if( argv[2][0]=='-' && argv[2][1]=='l' ) {
-			http_listen();
-		}
-	}
+    if( argc>2 ) {
+        if( argv[2][0]=='-' && argv[2][1]=='l' ) {
+            http_listen();
+        }
+    }
 
-	// set document root dir
+    // set document root dir
     setenv( "DOCUMENT_ROOT", document_root, 1);
     chdir(document_root);
 
@@ -1444,7 +1439,7 @@ int main(int argc, char * argv[])
     signal(SIGPIPE,  sigpipe );
 
     http_keep_alive=KEEP_ALIVE ;
-    while( http_keep_alive ) {
+    while( http_keep_alive && maxkeepalive-->0 ) {
         http();
     }
     return 0 ;

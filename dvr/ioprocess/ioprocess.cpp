@@ -16,7 +16,7 @@
 
 #include "../cfg.h"
 
-#include "../dvrsvr/eagle32/davinci_sdk.h"
+#include "../eaglesvr/eagle32/davinci_sdk.h"
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
 #include "netdbg.h"
@@ -80,10 +80,10 @@ unsigned int input_map_table [MAXINPUT] = {
 #endif  // TVS_APP
 
 #ifdef PWII_APP
-#define MAXINPUT    (12)
-#define HDINSERTED	(1<<6)
-#define HDKEYLOCK	(1<<7)
-#define PWII_MIC    (1<<11)
+#define MAXINPUT        (12)
+#define HDINSERTED      (1<<6)
+#define HDKEYLOCK       (1<<7)
+#define PWII_MIC        (1<<11)
 unsigned int input_map_table [MAXINPUT] = {
     1,          // bit 0
     (1<<1),     // bit 1
@@ -150,13 +150,16 @@ void sig_handler(int signum)
 //       0: log to temperary file
 int dvr_log(char *fmt, ...)
 {
-    int res = 0 ;
     char lbuf[512];
-    FILE *flog;
+    FILE *flog=NULL;
     time_t ti;
     int l;
     va_list ap ;
-    struct stat st ;
+
+    // check logfile, it must be a symlink to hard disk
+    if( readlink(logfile, lbuf, 512)>10 ) {
+        flog = fopen(logfile, "a");
+    }
 
     ti = time(NULL);
     ctime_r(&ti, lbuf);
@@ -175,31 +178,20 @@ int dvr_log(char *fmt, ...)
     netdbg_print("%s\n", lbuf);
 
     // check logfile, it must be a symlink to hard disk
-	if( stat(logfile, &st)==0 ) {
-        if( S_ISLNK(st.st_mode) ) {
-            flog = fopen(logfile, "a");
-            if (flog) {
-                fprintf(flog, "%s\n", lbuf);
-                if( fclose(flog)==0 ) {
-                    res=1 ;
-                }
-            }
-        }
-    }
-    
-    if( res==0 ) {
-        flog = fopen(temp_logfile, "a");
-        if (flog) {
-            fprintf(flog, "%s *\n", lbuf);
-            if( fclose(flog)==0 ) {
-                res=1 ;
-            }
-        }
+    if (flog) {
+        fprintf(flog, "%s\n", lbuf);
+        fclose( flog ) ;
+        return 1;
     }
 
-    return res ;
+    flog = fopen(temp_logfile, "a");
+    if (flog) {
+        fprintf(flog, "%s *\n", lbuf);
+        fclose(flog);
+    }
+
+    return 0 ;
 }
-
 
 static time_t starttime=0 ;
 void initruntime()
@@ -217,13 +209,12 @@ unsigned int getruntime()
     return (unsigned int)(tp.tv_sec-starttime)*1000 + tp.tv_nsec/1000000 ;
 }
 
-
 #ifdef PWII_APP
 
 // Set C1/C2 LED and set external mic
 void mcu_pwii_setc1c2() 
 {
-   // C1 LED (front)
+    // C1 LED (front)
     dio_lock();
     if( p_dio_mmap->camera_status[pwii_front_ch] & 2 ) {         // front camera recording?
         if( (p_dio_mmap->pwii_output & PWII_LED_C1 ) == 0 ) {
@@ -248,12 +239,12 @@ void mcu_pwii_setc1c2()
         }
     }
     
-   // C2 LED
-   if( p_dio_mmap->camera_status[pwii_rear_ch] & 2 ) {         // rear camera recording?
-       p_dio_mmap->pwii_output |= PWII_LED_C2 ;
-   }
+    // C2 LED
+    if( p_dio_mmap->camera_status[pwii_rear_ch] & 2 ) {         // rear camera recording?
+        p_dio_mmap->pwii_output |= PWII_LED_C2 ;
+    }
     else {
-       p_dio_mmap->pwii_output &= (~PWII_LED_C2) ;
+        p_dio_mmap->pwii_output &= (~PWII_LED_C2) ;
     }
     dio_unlock();
 }
@@ -265,56 +256,56 @@ void mcu_pwii_output()
 {
     unsigned int xouts ;
 
-	if( (p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY) 
-	   && (p_dio_mmap->pwii_output & PWII_POWER_BLACKOUT) ) 
-	{
-		dio_lock();
-		p_dio_mmap->pwii_output &= ~( 
-		                             PWII_LED_POWER | 
-		                             PWII_LED_C1 |
-		                             PWII_LED_C2 |
-		                             PWII_LED_MIC |
-		                             PWII_LED_ERROR | 
-		                             PWII_POWER_LCD ) ;
-		dio_unlock();
-	}
-	else {
-		mcu_pwii_setc1c2()  ;       // check c1 c2 led.
-	}
-	
+    if( (p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY)
+        && (p_dio_mmap->pwii_output & PWII_POWER_BLACKOUT) )
+    {
+        dio_lock();
+        p_dio_mmap->pwii_output &= ~(
+                                       PWII_LED_POWER |
+                                       PWII_LED_C1 |
+                                       PWII_LED_C2 |
+                                       PWII_LED_MIC |
+                                       PWII_LED_ERROR |
+                                       PWII_POWER_LCD ) ;
+        dio_unlock();
+    }
+    else {
+        mcu_pwii_setc1c2()  ;       // check c1 c2 led.
+    }
+
     xouts = pwii_outs ^ p_dio_mmap->pwii_output ;
 
     if( xouts ) {
         pwii_outs ^= xouts ;
         if( xouts & PWII_POWER_BLACKOUT ) {         // Black out bit
             mcu_pwii_cmd(NULL, PWII_CMD_STANDBY, 1, (pwii_outs&PWII_POWER_BLACKOUT)!=0 );
-			if( (pwii_outs&PWII_POWER_BLACKOUT)==0 ) {
-				p_dio_mmap->pwii_output |= PWII_LED_POWER ;			// out of blackout also turn on POWER LED
-			}
+            if( (pwii_outs&PWII_POWER_BLACKOUT)==0 ) {
+                p_dio_mmap->pwii_output |= PWII_LED_POWER ;			// out of blackout also turn on POWER LED
+            }
         }
 
-        if( xouts & PWII_LED_POWER ) { 
+        if( xouts & PWII_LED_POWER ) {
             // BIT 4: POWER LED
             mcu_pwii_cmd(NULL, PWII_CMD_LEDPOWER, 1, ((pwii_outs&PWII_LED_POWER)!=0) );
-		}
+        }
 
-		if( xouts & PWII_LED_C1 ) { 
+        if( xouts & PWII_LED_C1 ) {
             mcu_pwii_cmd(NULL, PWII_CMD_C1, 1, ((pwii_outs&PWII_LED_C1)!=0) );
-		}
+        }
 
-		if( xouts & PWII_LED_C2 ) { 
+        if( xouts & PWII_LED_C2 ) {
             mcu_pwii_cmd(NULL, PWII_CMD_C2, 1, ((pwii_outs&PWII_LED_C2)!=0) );
-		}
+        }
 
-		if( xouts & PWII_LED_MIC ) { 
+        if( xouts & PWII_LED_MIC ) {
             mcu_pwii_cmd(NULL, PWII_CMD_LEDMIC, 1, ((pwii_outs&PWII_LED_MIC)!=0) );
-		}
+        }
 
-		if( xouts & PWII_LP_ZOOMIN ) {
-			mcu_camera_zoom( pwii_outs & PWII_LP_ZOOMIN ) ;
-		}
+        if( xouts & PWII_LP_ZOOMIN ) {
+            mcu_camera_zoom( pwii_outs & PWII_LP_ZOOMIN ) ;
+        }
 
-		if( xouts & PWII_LED_ERROR ) {           // bit 3: ERROR LED
+        if( xouts & PWII_LED_ERROR ) {           // bit 3: ERROR LED
             if((pwii_outs&PWII_LED_ERROR)!=0) {
                 if( p_dio_mmap->pwii_error_LED_flash_timer>0 ) {
                     mcu_pwii_cmd(NULL, PWII_CMD_LEDERROR, 2, 2, p_dio_mmap->pwii_error_LED_flash_timer );
@@ -329,7 +320,7 @@ void mcu_pwii_output()
         }
 
         if( xouts & PWII_POWER_LCD ) {          	// LCD  power
-			mcu_pwii_cmd(NULL, PWII_CMD_LCD, 1, ((pwii_outs&PWII_POWER_LCD)!=0) );
+            mcu_pwii_cmd(NULL, PWII_CMD_LCD, 1, ((pwii_outs&PWII_POWER_LCD)!=0) );
         }
         
         if( xouts & PWII_POWER_ANTENNA ) {          // BIT 8: GPS antenna power
@@ -356,29 +347,30 @@ unsigned int pwii_keyreltime ;
 // auto release keys REC, C2, TM
 void pwii_keyautorelease()
 {
-	void mode_poweroff();
-	if( p_dio_mmap->pwii_buttons != 0 ) {
-		if( (runtime-pwii_keytime) > pwii_keyreltime ) {
-			p_dio_mmap->pwii_buttons = 0 ;
-			p_dio_mmap->iomsg[0]=0 ;
-		}
-		if( p_dio_mmap->poweroff && (p_dio_mmap->pwii_buttons & PWII_BT_POWER) ) {
-			if( (runtime-pwii_keytime) > 3000 ) {			// POWER/ST button pressed for 3 seconds
-				mode_poweroff();
-			}
-		}
-	}
+    void mode_poweroff();
+    if( p_dio_mmap->pwii_buttons != 0 ) {
+        if( (runtime-pwii_keytime) > pwii_keyreltime ) {
+            p_dio_mmap->pwii_buttons = 0 ;
+            p_dio_mmap->iomsg[0]=0 ;
+        }
+        if( p_dio_mmap->poweroff && (p_dio_mmap->pwii_buttons & PWII_BT_POWER) ) {
+            if( (runtime-pwii_keytime) > 3000 ) {			// POWER/ST button pressed for 3 seconds
+                mode_poweroff();
+                pwii_keytime=runtime ;
+            }
+        }
+    }
 }
 
 void mcu_pwii_init()
 {
     pwii_outs = mcu_pwii_ouputstatus() ;
     p_dio_mmap->pwii_output =
-		PWII_LED_POWER |
-		PWII_POWER_ANTENNA |
-		PWII_POWER_GPS |
-		PWII_POWER_RF900 |
-		PWII_POWER_LCD ;
+            PWII_LED_POWER |
+            PWII_POWER_ANTENNA |
+            PWII_POWER_GPS |
+            PWII_POWER_RF900 |
+            PWII_POWER_LCD ;
 }
 
 // zoom in/out front camera
@@ -403,13 +395,13 @@ void mcu_dinput_help(char * ibuf)
 
     dio_lock();
     // get digital input map
-    imap1 = (unsigned char)ibuf[5]+256*(unsigned int)(unsigned char)ibuf[6] ; ;
+    imap1 = (unsigned char)ibuf[5]+256*(unsigned int)(unsigned char)ibuf[6] ;
     imap2 = 0 ;
     for( i=0; i<MAXINPUT; i++ ) {
         if( imap1 & input_map_table[i] )
             imap2 |= (1<<i) ;
     }
-	
+
     p_dio_mmap->inputmap = imap2;
     // hdlock = (imap1 & (HDINSERTED|HDKEYLOCK) )==0 ;	// HD plugged in and locked
     hdlock = (imap1 & (HDKEYLOCK) )==0 ;	                // HD plugged in and locked
@@ -461,92 +453,105 @@ int mcu_checkinputbuf(char * ibuf)
 
 #ifdef PWII_APP
 
-	else if( ibuf[4]=='\x02' && ibuf[2]=='\x05' )          // input from MCU5 (MR. Henry?)
-	{
-		mcu_pwii_cdcfailed = 0 ;					// clear pwii cdc error!
-		pwii_keytime = runtime ;
-		pwii_keyreltime = 20000 ;         			// all keys will be auto-released in 20 sec, or set bellow
-		switch( ibuf[3] ) {
-		case PWII_INPUT_REC :                        // Front Camera (REC) button
-			p_dio_mmap->pwii_buttons = PWII_BT_C1 ;  // bit 8: front camera
-			pwii_keyreltime = 1000 ;         		// auto release in 1 sec
-	        if( (p_dio_mmap->pwii_output&PWII_POWER_STANDBY)==0 ) {       // not in standby mode
-				mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&PWII_LED_C1)!=0) );  // bit 0: c1 led
-			}
-			else {
-				mcu_response( ibuf, 1, 0 );  // bit 0: c1 led
-			}
-			break;
-			
-       case PWII_INPUT_C2 :                         // Back Seat Camera (C2) Starts/Stops Recording
-			p_dio_mmap->pwii_buttons = PWII_BT_C2 ;      // bit 9: back camera
-			pwii_keyreltime = 1000 ;         			// auto release in 1 sec
-	        if( (p_dio_mmap->pwii_output&PWII_POWER_STANDBY)==0 ) {       // not in standby mode
-				mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&PWII_LED_C2)!=0) );  // bit 1: c2 led
-			}
-			else {
-				mcu_response( ibuf, 1, 0 );  // bit 0: c1 led
-			}
-			break;
-			
-       case PWII_INPUT_TM :                                 // TM Button
-			if( ibuf[5] ) {
-				p_dio_mmap->pwii_buttons = PWII_BT_TM ;     // bit 10: tm button
-			}
-			else {
-				pwii_keyreltime = 500 ;         	// extend TM key release 0.5 second. (allow dvrsvr to response)
-			}
-			mcu_response( ibuf );
+    else if( ibuf[4]=='\x02' && ibuf[2]=='\x05' )       // input from MCU5 (MR. Henry?)
+    {
+        mcu_pwii_cdcfailed = 0 ;                        // clear pwii cdc error!
+        pwii_keytime = runtime ;
+        pwii_keyreltime = 20000 ;         		// all keys will be auto-released in 20 sec, or set bellow
+        switch( ibuf[3] ) {
+        case PWII_INPUT_REC :                        // Front Camera (REC) button
+            p_dio_mmap->pwii_buttons = PWII_BT_C1 ;  // bit 8: front camera
+            pwii_keyreltime = 1000 ;         		// auto release in 1 sec
+            if( (p_dio_mmap->pwii_output&PWII_POWER_STANDBY)==0 ) {       // not in standby mode
+                mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&PWII_LED_C1)!=0) );  // bit 0: c1 led
+            }
+            else {
+                mcu_response( ibuf, 1, 0 );  // bit 0: c1 led
+            }
+            break;
 
-			break;
-			
-       case PWII_INPUT_LP :                                 // LP button
-           mcu_response( ibuf );
-           if( ibuf[5] ) {
-               p_dio_mmap->pwii_buttons = PWII_BT_LP ;     // bit 11: LP button
-           }
-           else {
-			   pwii_keyreltime = 500 ;         	// extend LP key release 0.5 second. 
-		   }
-           break;
+        case PWII_INPUT_C2 :                         // Back Seat Camera (C2) Starts/Stops Recording
+            p_dio_mmap->pwii_buttons = PWII_BT_C2 ;      // bit 9: back camera
+            pwii_keyreltime = 1000 ;         			// auto release in 1 sec
+            if( (p_dio_mmap->pwii_output&PWII_POWER_STANDBY)==0 ) {       // not in standby mode
+                mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&PWII_LED_C2)!=0) );  // bit 1: c2 led
+            }
+            else {
+                mcu_response( ibuf, 1, 0 );  // bit 0: c1 led
+            }
+            break;
 
-       case PWII_INPUT_BO :                                 // BIT 12:  blackout, 1: pressed, 0: released, auto release
-           if( ibuf[5] ) {
+        case PWII_INPUT_TM :                                 // TM Button
+            if( ibuf[5] ) {
+                p_dio_mmap->pwii_buttons = PWII_BT_TM ;     // bit 10: tm button
+            }
+            else {
+                pwii_keyreltime = 500 ;         	// extend TM key release 0.5 second. (allow dvrsvr to response)
+            }
+            mcu_response( ibuf );
+
+            break;
+
+        case PWII_INPUT_LP :                                 // LP button
+            mcu_response( ibuf );
+            if( ibuf[5] ) {
+                p_dio_mmap->pwii_buttons = PWII_BT_LP ;     // bit 11: LP button
+            }
+            else {
+                pwii_keyreltime = 500 ;         	// extend LP key release 0.5 second.
+            }
+            break;
+
+        case PWII_INPUT_BO :                                 // BIT 12:  blackout, 1: pressed, 0: released, auto release
+            if( ibuf[5] ) {
                 p_dio_mmap->pwii_buttons = PWII_BT_BO ;    // bit 12: blackout
-           }
-           else {
+            }
+            else {
                 p_dio_mmap->pwii_buttons = 0 ;
-           }
-           mcu_response( ibuf );
-           break;
-           
-       case PWII_INPUT_MEDIA :                              // Video play Control
-			p_dio_mmap->pwii_buttons = (unsigned char) (~ibuf[5]) ;
-			mcu_response( ibuf );
-			break;
+            }
+            mcu_response( ibuf );
+            break;
 
-		case PWII_INPUT_BOOTUP :                         // CDC ask for boot up ready
-			mcu_response( ibuf, 1, 1  );                 // possitive response
-			pwii_outs = mcu_pwii_ouputstatus();
-           break;
+        case PWII_INPUT_MEDIA :                              // Video play Control
+            p_dio_mmap->pwii_buttons = (unsigned char) (~ibuf[5]) ;
+            mcu_response( ibuf );
+            break;
 
-       case PWII_INPUT_SPEAKERSTATUS : 
-		   if( ibuf[5] ) { 
-			   p_dio_mmap->pwii_buttons = PWII_BT_SPKON ;           
-		   }
-		   else {
-			   p_dio_mmap->pwii_buttons = PWII_BT_SPKMUTE ;         
-		   }
-		   pwii_keyreltime = 3000 ;         			// auto release in 3 sec
-		   mcu_response( ibuf );                 		// possitive response
+        case PWII_INPUT_BOOTUP :                         // CDC ask for boot up ready
+            mcu_response( ibuf, 1, 1  );                 // possitive response
 
-		   break;
+            mcu_pwii_bootupready() ;					//  re-send boot up event. (Have to do this, because possitive response do not work on newer CDC
 
-       default :
+            pwii_outs = mcu_pwii_ouputstatus();
+
+            dvr_log("CDC Plug-in Event!");
+
+            break;
+
+        case PWII_INPUT_SPEAKERSTATUS :
+            mcu_response( ibuf );                 		// possitive response
+            if( ibuf[5] ) {
+                p_dio_mmap->pwii_buttons = PWII_BT_SPKON ;
+
+                dvr_log("Speaker On Event!");
+
+            }
+            else {
+                p_dio_mmap->pwii_buttons = PWII_BT_SPKMUTE ;
+
+                dvr_log("Speaker Mute Event!" );
+
+            }
+            pwii_keyreltime = 3000 ;         			// auto release in 3 sec
+            mcu_response( ibuf );                 		// possitive response
+
+            break;
+
+        default :
             netdbg_print("Unknown message from PWII MCU.\n");
             break;
 
-       }
+        }
     }
 
 #endif    // PWII_APP
@@ -611,7 +616,8 @@ void wifi_up()
     // turn on wifi power. mar 04-2010
     dio_lock();
     p_dio_mmap->pwii_output |= PWII_POWER_WIFI ;
-    p_dio_mmap->devicepower |= DEVICE_POWER_POEPOWER ;			// USE POE for wifi device
+    // DEVICE_POWER_POEPOWER always on
+    //    	p_dio_mmap->devicepower |= DEVICE_POWER_POEPOWER ;		// USE POE for wifi device
     dio_unlock();
     wifi_run=1 ;
     netdbg_print("Wifi up\n");
@@ -628,7 +634,8 @@ void wifi_down()
         // turn off wifi power
         dio_lock();
         p_dio_mmap->pwii_output &= ~PWII_POWER_WIFI ;
-    	p_dio_mmap->devicepower &= ~DEVICE_POWER_POEPOWER ;		// USE POE for wifi device
+        // DEVICE_POWER_POEPOWER always on
+        //    	p_dio_mmap->devicepower &= ~DEVICE_POWER_POEPOWER ;		// USE POE for wifi device
         dio_unlock();
         netdbg_print("Wifi down\n");
         wifi_run=0 ;
@@ -686,23 +693,23 @@ void smartftp_start(int src=0)
 {
     // Wifi status
     int     smartserver ;        // smartserver detected
-	char    smartserver_interface[32] ;
-	
-	dio_lock();
-	smartserver = p_dio_mmap->smartserver ;
-	strncpy( smartserver_interface, p_dio_mmap->smartserver_interface, sizeof( smartserver_interface ) );
-	dio_unlock();
-	if( smartserver == 0 ) {
-	    dvr_log( "Smartftp not started, no smartserver detected." );
-		return ;		// not smartserver detected
-	}
-	
+    char    smartserver_interface[32] ;
+
+    dio_lock();
+    smartserver = p_dio_mmap->smartserver ;
+    strncpy( smartserver_interface, p_dio_mmap->smartserver_interface, sizeof( smartserver_interface ) );
+    dio_unlock();
+    if( smartserver == 0 ) {
+        dvr_log( "Smartftp not started, no smartserver detected." );
+        return ;		// not smartserver detected
+    }
+
     smartftp_src = src ;
     dvr_log( "Start smart server uploading. (%s)", (src==0)?"disks":"arch" );
     pid_smartftp = fork();
     if( pid_smartftp==0 ) {     // child process
         char hostname[128] ;
-//        char mountdir[250] ;
+        //        char mountdir[250] ;
 
         // get BUS name
         gethostname(hostname, 128) ;
@@ -710,36 +717,36 @@ void smartftp_start(int src=0)
         // be nice to other processes
         nice(10);
         
-//      system(APP_DIR"/setnetwork");  // reset network, this would restart wifi adaptor
+        //      system(APP_DIR"/setnetwork");  // reset network, this would restart wifi adaptor
         if( src==0 ) {
             execl( APP_DIR"/smartftp", "smartftp",
-              smartserver_interface,
-              hostname,
-              "247SECURITY",
-              disk_dir,
-              "510",
-              "247ftp",
-              "247SECURITY",
-              "0",
-              smartftp_reporterror?"Y":"N",
-              getenv("TZ"), 
-              NULL 
-              );
+                   smartserver_interface,
+                   hostname,
+                   "247SECURITY",
+                   disk_dir,
+                   "510",
+                   "247ftp",
+                   "247SECURITY",
+                   "0",
+                   smartftp_reporterror?"Y":"N",
+                   getenv("TZ"),
+                   NULL
+                   );
         }
         else {
             execl( APP_DIR"/smartftp", "smartftp",
-              smartserver_interface,
-              hostname,
-              "247SECURITY",
-              disk_archdir,
-              "510",
-              "247ftp",
-              "247SECURITY",
-              "0",
-              smartftp_reporterror?"Y":"N",
-              getenv("TZ"), 
-              NULL 
-              );
+                   smartserver_interface,
+                   hostname,
+                   "247SECURITY",
+                   disk_archdir,
+                   "510",
+                   "247ftp",
+                   "247SECURITY",
+                   "0",
+                   smartftp_reporterror?"Y":"N",
+                   getenv("TZ"),
+                   NULL
+                   );
         }
         dvr_log( "Start smart server uploading failed!");
         exit(101);      // error happened.
@@ -747,7 +754,7 @@ void smartftp_start(int src=0)
     else if( pid_smartftp<0 ) {
         pid_smartftp=0;
     }
-//    smartftp_log( "Smartftp started." );
+    //    smartftp_log( "Smartftp started." );
 }
 
 int smartftp_wait()
@@ -762,8 +769,8 @@ int smartftp_wait()
             if( WIFEXITED( smartftp_status ) ) {
                 exitcode = WEXITSTATUS( smartftp_status ) ;
                 dvr_log( "\"smartftp\" exit. (code:%d)", exitcode );
-                if( (exitcode==3 || exitcode==6) && 
-                   --smartftp_retry>0 ) 
+                if( (exitcode==3 || exitcode==6) &&
+                    --smartftp_retry>0 )
                 {
                     dvr_log( "\"smartftp\" failed, retry...");
                     smartftp_start(smartftp_src);
@@ -798,7 +805,7 @@ int g_syncrtc=0 ;
 
 int io_firstrun=0 ;
 
-// return 
+// return
 //        0 : failed
 //        1 : success
 int appinit()
@@ -816,7 +823,7 @@ int appinit()
         v = dvrconfig.getvalue( "debug", "host" ) ;
         netdbg_init( v, i );
     }
-    
+
     // setup time zone
     string tz ;
     string tzi ;
@@ -843,7 +850,7 @@ int appinit()
     if (v.length() > 0){
         strncpy( temp_logfile, v, sizeof(temp_logfile));
     }
-        
+
     v = dvrconfig.getvalue( "system", "iomapfile");
     char * iomapfile = v;
     if( iomapfile && strlen(iomapfile)>0 ) {
@@ -857,23 +864,23 @@ int appinit()
         io_firstrun=1 ;
         dvr_log("IO first time running!");
     }
-    
+
     if( fd<=0 ) {
         dvr_log("Can't create io map file (%s).", dvriomap);
         return 0 ;
     }
     ftruncate(fd, sizeof(struct dio_mmap));
     close(fd);
-    
+
     if( dio_mmap( dvriomap )==NULL ) {
         dvr_log( "IO memory map failed!");
         return 0 ;
     }
-    
+
     if( io_firstrun ) {
         memset( p_dio_mmap, 0, sizeof( struct dio_mmap ) );
     }
-    
+
     p_dio_mmap->usage++;                           // add one usage
 
     if( p_dio_mmap->iopid > 0 ) { 				// another ioprocess running?
@@ -893,20 +900,20 @@ int appinit()
     p_dio_mmap->iomode=0 ;
 
     // initialize shared memory
-    p_dio_mmap->inputnum = dvrconfig.getvalueint( "io", "inputnum");	
+    p_dio_mmap->inputnum = dvrconfig.getvalueint( "io", "inputnum");
     if( p_dio_mmap->inputnum<=0 || p_dio_mmap->inputnum>32 )
-        p_dio_mmap->inputnum = MCU_INPUTNUM ;	
-    p_dio_mmap->outputnum = dvrconfig.getvalueint( "io", "outputnum");	
+        p_dio_mmap->inputnum = MCU_INPUTNUM ;
+    p_dio_mmap->outputnum = dvrconfig.getvalueint( "io", "outputnum");
     if( p_dio_mmap->outputnum<=0 || p_dio_mmap->outputnum>32 )
-        p_dio_mmap->outputnum = MCU_OUTPUTNUM ;	
+        p_dio_mmap->outputnum = MCU_OUTPUTNUM ;
 
     p_dio_mmap->panel_led = 0;
     p_dio_mmap->devicepower = DEVICE_POWER_RUN;		// assume all device is power on
-    
+
     p_dio_mmap->iopid = getpid () ;					// io process pid
 
     // check if sync rtc wanted
-    
+
     g_syncrtc = dvrconfig.getvalueint("io", "syncrtc");
 
     // smartftp variable
@@ -933,12 +940,12 @@ int appinit()
                 fprintf( pwiiversionfile, "%s", pwii_version );
                 fclose( pwiiversionfile );
             }
-        }     
-        
+        }
+
     }
 
     mcu_pwii_init();    // init pwii variables
-    
+
     pwii_front_ch = dvrconfig.getvalueint( "pwii", "front");
     pwii_rear_ch = dvrconfig.getvalueint( "pwii", "rear");
 
@@ -950,22 +957,22 @@ int appinit()
     }
     zoomcam_baud = dvrconfig.getvalueint("io", "zoomcam_baudrate");
     if( zoomcam_baud<2400 || zoomcam_baud>115200 ) {
-            mcu_baud=DEFSERIALBAUD ;
+        mcu_baud=DEFSERIALBAUD ;
     }
 
     zoomcam_enable = dvrconfig.getvalueint("io", "zoomcam_enable");
-	
-#endif // PWII_APP   
+
+#endif // PWII_APP
 
     if( g_syncrtc ) {
         if( time_rtctosys()== 0 ) {	// failed ?
-			// try syn system time back to RTC
-			time_syncrtc();
-		}
+            // try syn system time back to RTC
+            time_syncrtc();
+        }
     }
 
     gforce_init( dvrconfig );
-     
+
     usewatchdog = dvrconfig.getvalueint("io", "usewatchdog");
     watchdogtimeout=dvrconfig.getvalueint("io", "watchdogtimeout");
     if( watchdogtimeout<10 )
@@ -987,7 +994,7 @@ int appinit()
     }
 
     restartonswitch = dvrconfig.getvalueint( "system", "restartonswitch");
-	
+
     standbytime = dvrconfig.getvalueint( "system", "standbytime");
     if(standbytime<0 ) {
         standbytime=0 ;
@@ -1011,14 +1018,14 @@ int appinit()
         archivetime=1800 ;
     }
 
-	strcpy( disk_dir, dvrconfig.getvalue("system", "mountdir"));
-	strcpy( disk_archdir, dvrconfig.getvalue("system", "archivedir"));
-	
+    strcpy( disk_dir, dvrconfig.getvalue("system", "mountdir"));
+    strcpy( disk_archdir, dvrconfig.getvalue("system", "archivedir"));
+
     smartftp_arch = dvrconfig.getvalueint( "system", "archive_upload");
 
-	disable_wifiupload = dvrconfig.getvalueint( "system", "disable_wifiupload");
-	disable_archive = dvrconfig.getvalueint( "system", "disable_archive");
-	
+    disable_wifiupload = dvrconfig.getvalueint( "system", "disable_wifiupload");
+    disable_archive = dvrconfig.getvalueint( "system", "disable_archive");
+
     pidf = fopen( pidfile, "w" );
     if( pidf ) {
         fprintf(pidf, "%d", (int)getpid() );
@@ -1027,7 +1034,7 @@ int appinit()
 
     // initialize timer
     initruntime();
-    
+
     return 1;
 }
 
@@ -1038,7 +1045,7 @@ void appfinish()
 #ifdef PWII_APP    
     zoomcam_close();
 #endif
-        
+
     mcu_watchdogdisable();
 
     gforce_finish();
@@ -1059,21 +1066,21 @@ void appfinish()
 unsigned int modeendtime ;
 void mode_run()
 {
-	int omode = p_dio_mmap->iomode ;
+    int omode = p_dio_mmap->iomode ;
     glog_resume();
-	if( restartonswitch ) {
-		if( omode >= IOMODE_ARCHIVE ) {
-			p_dio_mmap->iomode=IOMODE_REBOOT ;    
-			dvr_log("Power on switch, restarting system. (mode %d)", p_dio_mmap->iomode);
-		}
-	}
-	else {
-	    dvr_log("Power on switch, set to running mode. (mode %d)", p_dio_mmap->iomode);
-		if( omode > IOMODE_SHUTDOWNDELAY ) {
-			dvrsvr_resume() ;
-		}
-	}
-	dio_lock();
+    if( restartonswitch ) {
+        if( omode >= IOMODE_ARCHIVE ) {
+            p_dio_mmap->iomode=IOMODE_REBOOT ;
+            dvr_log("Power on switch, restarting system. (mode %d)", p_dio_mmap->iomode);
+        }
+    }
+    else {
+        dvr_log("Power on switch, set to running mode. (mode %d)", p_dio_mmap->iomode);
+        if( omode > IOMODE_SHUTDOWNDELAY ) {
+            dvrsvr_resume() ;
+        }
+    }
+    dio_lock();
     p_dio_mmap->devicepower=DEVICE_POWER_RUN ;    // turn on all devices power
     p_dio_mmap->iomsg[0]=0 ;
     p_dio_mmap->iomode=IOMODE_RUN ;    // back to run normal
@@ -1082,50 +1089,50 @@ void mode_run()
 
 void mode_archive()
 {
-	if( disable_archive ) {
-		p_dio_mmap->iomode = IOMODE_ARCHIVE ;
-		modeendtime = runtime ;    						// timeout 
-	}
-	else {
-		dio_lock();
-		strcpy( p_dio_mmap->iomsg, "Archiving, Do not remove CF Card.");
-		p_dio_mmap->iomode=IOMODE_ARCHIVE  ;
-		p_dio_mmap->dvrcmd = 5 ;
-		dio_unlock();
-		modeendtime = runtime+archivetime*1000 ;   
-		dvr_log("Enter archiving mode. (mode %d).", p_dio_mmap->iomode);
+    if( disable_archive ) {
+        p_dio_mmap->iomode = IOMODE_ARCHIVE ;
+        modeendtime = runtime ;    						// timeout
+    }
+    else {
+        dio_lock();
+        strcpy( p_dio_mmap->iomsg, "Archiving, Do not remove CF Card.");
+        p_dio_mmap->iomode=IOMODE_ARCHIVE  ;
+        p_dio_mmap->dvrcmd = 5 ;
+        dio_unlock();
+        modeendtime = runtime+archivetime*1000 ;
+        dvr_log("Enter archiving mode. (mode %d).", p_dio_mmap->iomode);
 #ifdef PWII_APP    
-		zoomcam_close(); 
+        zoomcam_close();
 #endif              
-	}
+    }
 }
 
 void mode_detectwireless()
 {
-	if( disable_wifiupload ) {
-		p_dio_mmap->iomode = IOMODE_DETECTWIRELESS ;
-		modeendtime = runtime ;    						// timeout 
-	}
-	else {
-		wifi_up();                                      // turn on wifi
-		dio_lock();
-		p_dio_mmap->smartserver=0 ;         // smartserver detected
-		p_dio_mmap->iomode = IOMODE_DETECTWIRELESS ;
-		strcpy( p_dio_mmap->iomsg, "Detecting Smart Server!");
-		p_dio_mmap->dvrcmd = 7 ;
-		dio_unlock();
-		modeendtime = runtime + wifidetecttime * 1000 ;    
-		dvr_log("Start detecting smart server. (mode %d).", p_dio_mmap->iomode);
-	}
+    if( disable_wifiupload ) {
+        p_dio_mmap->iomode = IOMODE_DETECTWIRELESS ;
+        modeendtime = runtime ;    						// timeout
+    }
+    else {
+        wifi_up();                                      // turn on wifi
+        dio_lock();
+        p_dio_mmap->smartserver=0 ;         // smartserver detected
+        p_dio_mmap->iomode = IOMODE_DETECTWIRELESS ;
+        strcpy( p_dio_mmap->iomsg, "Detecting Smart Server!");
+        p_dio_mmap->dvrcmd = 7 ;
+        dio_unlock();
+        modeendtime = runtime + wifidetecttime * 1000 ;
+        dvr_log("Start detecting smart server. (mode %d).", p_dio_mmap->iomode);
+    }
 }
 
 void mode_upload()
 {
-	if( disable_wifiupload ) {
-		return ;
-	}
-	
-	// suspend dvrsvr and glog before start uploading.
+    if( disable_wifiupload ) {
+        return ;
+    }
+
+    // suspend dvrsvr and glog before start uploading.
 
     glog_susp();
     
@@ -1143,7 +1150,7 @@ void mode_upload()
     strcpy( p_dio_mmap->iomsg, "Uploading Video to Smart Server!");
     p_dio_mmap->iomode = IOMODE_UPLOADING ;
     dio_unlock();
-    modeendtime = runtime+uploadingtime*1000 ; 
+    modeendtime = runtime+uploadingtime*1000 ;
     dvr_log("Enter uploading mode. (mode %d).", p_dio_mmap->iomode);
     buzzer( 3, 250, 250);
 }
@@ -1155,42 +1162,44 @@ void mode_standby()
     p_dio_mmap->iomode=IOMODE_STANDBY ;
 
 #ifdef PWII_APP	
-	p_dio_mmap->pwii_output &= ~(
-	                             PWII_LED_C1 |
-	                             PWII_LED_C2 |
-	                             PWII_LED_MIC |
-	                             PWII_POWER_LCD ) ;
-	p_dio_mmap->pwii_output |= PWII_POWER_BLACKOUT ;         // STANDBY mode ( to turn ff backlights )
+    p_dio_mmap->pwii_output &= ~(
+                                   PWII_LED_C1 |
+                                   PWII_LED_C2 |
+                                   PWII_LED_MIC |
+                                   PWII_POWER_LCD ) ;
+    p_dio_mmap->pwii_output |= PWII_POWER_BLACKOUT ;         // STANDBY mode ( to turn ff backlights )
 #endif	
-	
+
     dio_unlock();
-    modeendtime = runtime+standbytime*1000 ;   
+    modeendtime = runtime+standbytime*1000 ;
     dvr_log("Enter standby mode. (mode %d)", p_dio_mmap->iomode);
 }
 
 void mode_poweroff()			// request to power off
 {
-    dvr_log( "Power button pushed, shutdown system.");
-	sync();
-	dio_lock();
-	// shutdown message
-	strcpy( p_dio_mmap->iomsg, "System shutdown, please wait...");
-	p_dio_mmap->iomode=IOMODE_POWEROFF ;
-	p_dio_mmap->pwii_output |= PWII_LED_POWER ;
-	modeendtime = runtime+10000 ;			// 10 seconds timeout and force shutdown
-	p_dio_mmap->dvrcmd = 7 ;
-	dio_unlock();
+    sync();
+    dio_lock();
+    if( p_dio_mmap->iomode != IOMODE_POWEROFF ) {
+        p_dio_mmap->iomode=IOMODE_POWEROFF ;
+        dvr_log( "Power button pushed, shutdown system.");
+        // shutdown message
+        strcpy( p_dio_mmap->iomsg, "System shutdown, please wait...");
+        p_dio_mmap->pwii_output |= PWII_LED_POWER ;
+        modeendtime = runtime+10000 ;			// 10 seconds timeout and force shutdown
+        p_dio_mmap->dvrcmd = 7 ;
+    }
+    dio_unlock();
 }
 
 
 void mode_shutdown()
 {
-	// start shutdown
-	p_dio_mmap->devicepower=0 ;    // turn off all devices power
-	p_dio_mmap->iomode=IOMODE_SHUTDOWN ;    // turn off mode
-	modeendtime = runtime+90000 ;
-	dvr_log("Standby timeout, system shutdown. (mode %d).", p_dio_mmap->iomode );
-	buzzer( 5, 250, 250 );
+    // start shutdown
+    p_dio_mmap->devicepower=0 ;    // turn off all devices power
+    p_dio_mmap->iomode=IOMODE_SHUTDOWN ;    // turn off mode
+    modeendtime = runtime+90000 ;
+    dvr_log("Standby timeout, system shutdown. (mode %d).", p_dio_mmap->iomode );
+    buzzer( 5, 250, 250 );
 }
 
 int main(int argc, char * argv[])
@@ -1204,8 +1213,10 @@ int main(int argc, char * argv[])
         return 1;
     }
 
-//    signal(SIGUSR1, sig_handler);
-//    signal(SIGUSR2, sig_handler);
+    printf("%s started!\n", argv[0]);
+
+    //    signal(SIGUSR1, sig_handler);
+    //    signal(SIGUSR2, sig_handler);
     
     // check if we need to update firmware
     if( argc>=2 ) {
@@ -1231,17 +1242,17 @@ int main(int argc, char * argv[])
                 else if(delay>100 ) {
                     delay=100;
                 }
-//                sleep(delay);
+                //                sleep(delay);
                 mcu_watchdogenable (delay) ;
                 sleep(delay+20) ;
                 mcu_reset();
                 return 1;
             }
-            else if( strcasecmp( argv[i], "-fwreset" )==0 ) {	
-				mcu_sendcmd( MCU_CMD_REBOOT ) ;			// only works on PWZEUS
-//				if( !mcu_reboot() ) {
-//	                mcu_reset();
-//				}
+            else if( strcasecmp( argv[i], "-fwreset" )==0 ) {
+                mcu_sendcmd( MCU_CMD_REBOOT ) ;			// only works on PWZEUS
+                //				if( !mcu_reboot() ) {
+                //	                mcu_reset();
+                //				}
                 return 0;
             }
         }
@@ -1254,7 +1265,7 @@ int main(int argc, char * argv[])
     signal(SIGUSR2, sig_handler);
     
     dvr_log( "DVR IO process started!");
-   
+
     // get default digital input
     mcu_dinput();
 
@@ -1267,9 +1278,9 @@ int main(int argc, char * argv[])
     
     // initialize device power
     devicepower = 0 ;
-	p_dio_mmap->devicepower = DEVICE_POWER_RUN ;
+    p_dio_mmap->devicepower = DEVICE_POWER_RUN ;
 
-	if( io_firstrun && gforce_crashdata_enable )  {
+    if( io_firstrun && gforce_crashdata_enable )  {
         gforce_getcrashdata();                      // iomode is set to IOMODE_REINITAPP
     }
     p_dio_mmap->iomode = IOMODE_RUN ;
@@ -1301,16 +1312,16 @@ int main(int argc, char * argv[])
 #endif            
 
         // rtc command check
-		check_rtccmd();
+        check_rtccmd();
 
-		// check cpu usage
-		check_cpuusage();
+        // check cpu usage
+        check_cpuusage();
 
-		// check temperature
-		check_temperature();
+        // check temperature
+        check_temperature();
 
-		// kick watchdog
-		check_watchdog();
+        // kick watchdog
+        check_watchdog();
 
         static unsigned int appmode_timer ;
         if( (runtime - appmode_timer)> 3000 ) {    // 3 seconds mode timer
@@ -1324,18 +1335,18 @@ int main(int argc, char * argv[])
             if( p_dio_mmap->iomode==IOMODE_RUN ) {                         // running mode
                 static int app_run_bell = 0 ;
                 if( app_run_bell==0 &&
-                   p_dio_mmap->dvrpid>0 && 
-                   (p_dio_mmap->dvrstatus & DVR_RUN) ) 
+                    p_dio_mmap->dvrpid>0 &&
+                    (p_dio_mmap->dvrstatus & DVR_RUN) )
                 {
                     app_run_bell=1 ;                    // dvr started bell
                     buzzer(1, 1000, 100);
                 }
                 
-                if( p_dio_mmap->dvrpid>0 && 
-                   (p_dio_mmap->dvrstatus & DVR_DISKREADY) ) 
+                if( p_dio_mmap->dvrpid>0 &&
+                    (p_dio_mmap->dvrstatus & DVR_DISKREADY) )
                 {
                     if( gforce_crashdatalen>0 )  {
-                        gforce_savecrashdata();               
+                        gforce_savecrashdata();
                     }
                 }
                 
@@ -1350,16 +1361,16 @@ int main(int argc, char * argv[])
                 if( p_dio_mmap->poweroff ) {
                     mcu_poweroffdelay() ;
                     if( runtime>modeendtime  ) {
-						if( (p_dio_mmap->dvrstatus & DVR_SENSOR ) &&
-						    (p_dio_mmap->dvrstatus & DVR_RECORD ) )
-						{
-							// extend shutdown delay time
-							modeendtime = runtime+5 ;
-						}
-						else {
-							// start wifi detecting
-							mode_detectwireless();
-						}
+                        if( (p_dio_mmap->dvrstatus & DVR_SENSOR ) &&
+                            (p_dio_mmap->dvrstatus & DVR_RECORD ) )
+                        {
+                            // extend shutdown delay time
+                            modeendtime = runtime+5 ;
+                        }
+                        else {
+                            // start wifi detecting
+                            mode_detectwireless();
+                        }
                     }
                 }
                 else {
@@ -1380,7 +1391,7 @@ int main(int argc, char * argv[])
                         wifi_down();
                         mode_archive();
                     }
-					else if( p_dio_mmap->smartserver ) {
+                    else if( p_dio_mmap->smartserver ) {
                         if( smartftp_disable==0 ) {
                             mode_upload();
                         }
@@ -1412,22 +1423,22 @@ int main(int argc, char * argv[])
             else if( p_dio_mmap->iomode==IOMODE_ARCHIVE ) {   // archiving, For pwii, copy file to CF in CDC
                 if( p_dio_mmap->poweroff ) {
                     mcu_poweroffdelay ();               // keep system alive
-                
+
                     if( runtime>modeendtime &&
-                       p_dio_mmap->dvrpid>0 &&
-                       p_dio_mmap->dvrcmd==0 &&
-                       (p_dio_mmap->dvrstatus & DVR_ARCH ) )
+                        p_dio_mmap->dvrpid>0 &&
+                        p_dio_mmap->dvrcmd==0 &&
+                        (p_dio_mmap->dvrstatus & DVR_ARCH ) )
                     {
                         // try to stop archiving
                         p_dio_mmap->dvrcmd=6 ;
                     }
-					else if( p_dio_mmap->dvrpid<=0 ||
-                       	( (p_dio_mmap->dvrstatus & DVR_RECORD )==0 &&
-                         (p_dio_mmap->dvrstatus & DVR_ARCH )==0 ) )
+                    else if( p_dio_mmap->dvrpid<=0 ||
+                             ( (p_dio_mmap->dvrstatus & DVR_RECORD )==0 &&
+                               (p_dio_mmap->dvrstatus & DVR_ARCH )==0 ) )
                     {
                         // do gforce crashdata collection here. (any other choice?)
                         if( gforce_crashdata_enable )  {
-                            gforce_getcrashdata(); 
+                            gforce_getcrashdata();
                             // save data right away, of data may get lost if power turn off
                             if( gforce_crashdatalen>0 )  {
                                 gforce_savecrashdata();
@@ -1443,13 +1454,13 @@ int main(int argc, char * argv[])
                 }
             }
             else if( p_dio_mmap->iomode==IOMODE_STANDBY ) {         // standby
-                if( p_dio_mmap->poweroff == 0 ) {     
+                if( p_dio_mmap->poweroff == 0 ) {
 #ifdef PWII_APP
                     // pwii jump out of standby
                     dio_lock();
-					p_dio_mmap->pwii_output &= ~PWII_POWER_BLACKOUT ;	// standby off
+                    p_dio_mmap->pwii_output &= ~PWII_POWER_BLACKOUT ;	// standby off
                     p_dio_mmap->pwii_output |= PWII_POWER_LCD ;      	// LCD on
-					dio_unlock();
+                    dio_unlock();
 #endif                    
                     wifi_down();
                     mode_run();
@@ -1460,9 +1471,9 @@ int main(int argc, char * argv[])
                 else {
                     mcu_poweroffdelay ();
                     p_dio_mmap->outputmap ^= HDLED ;        // flash LED slowly to indicate standy mode
-					p_dio_mmap->pwii_output |= PWII_LED_POWER ;
-					
-                    if( p_dio_mmap->dvrpid>0 && 
+                    p_dio_mmap->pwii_output |= PWII_LED_POWER ;
+
+                    if( p_dio_mmap->dvrpid>0 &&
                         (p_dio_mmap->dvrstatus & DVR_RUN) &&
                         (p_dio_mmap->dvrstatus & DVR_NETWORK) )
                     {
@@ -1483,16 +1494,13 @@ int main(int argc, char * argv[])
                         p_dio_mmap->outputmap &= ~HDLED ;   // turn off HDLED
                         if( hdpower ) {
                             hdpower=0;
-
-							printf("HD turn off\n");
-							
                             mcu_hdpoweroff ();				// warning , this may turn off system power
                         }
                     }
                     
                     if( runtime>modeendtime  ) {
                         // start shutdown
-						mode_shutdown();
+                        mode_shutdown();
                     }
                 }
             }
@@ -1506,14 +1514,10 @@ int main(int argc, char * argv[])
                     mode_run();                                     // back to run normal
                 }
             }
-            else if( p_dio_mmap->iomode==IOMODE_SHUTDOWN ) {                    // turn off mode, no keep power on 
+            else if( p_dio_mmap->iomode==IOMODE_SHUTDOWN ) {                    // turn off mode, no keep power on
                 if( p_dio_mmap->dvrpid > 0 ) {
-#ifdef EAGLE34						
-					kill(p_dio_mmap->dvrpid, SIGUSR1);
-#else						
-					kill(p_dio_mmap->dvrpid, SIGTERM);
-#endif						
-				}
+                    kill(p_dio_mmap->dvrpid, SIGTERM);
+                }
                 if( p_dio_mmap->glogpid > 0 ) {
                     kill(p_dio_mmap->glogpid, SIGTERM);
                 }
@@ -1532,11 +1536,7 @@ int main(int argc, char * argv[])
                 sync();
                 if( reboot_begin==0 ) {
                     if( p_dio_mmap->dvrpid > 0 ) {
-#ifdef EAGLE34						
-                        kill(p_dio_mmap->dvrpid, SIGUSR1);
-#else						
                         kill(p_dio_mmap->dvrpid, SIGTERM);
-#endif						   
                     }
                     if( p_dio_mmap->glogpid > 0 ) {
                         kill(p_dio_mmap->glogpid, SIGTERM);
@@ -1547,7 +1547,7 @@ int main(int argc, char * argv[])
                     reboot_begin=1 ;                        // rebooting in process
                     modeendtime=runtime+20000 ;             // 20 seconds time out, watchdog should kick in already!
                 }
-                else if( runtime>modeendtime ) { 
+                else if( runtime>modeendtime ) {
                     // program should not go throught here,
                     mcu_reset();
                     system("/bin/reboot");                  // do software reboot
@@ -1561,35 +1561,32 @@ int main(int argc, char * argv[])
                 p_dio_mmap->iomode = IOMODE_RUN ;
             }
             else if( p_dio_mmap->iomode==IOMODE_POWEROFF ) {	// to force power off, only on ignition is off
-				sync();
-				if( p_dio_mmap->glogpid > 0 ) {
-					kill(p_dio_mmap->glogpid, SIGTERM);
-				}
-				if( p_dio_mmap->dvrpid > 0 && runtime<modeendtime  ) {
-#ifdef EAGLE34						
-					kill(p_dio_mmap->dvrpid, SIGUSR1);
-#else						
-					kill(p_dio_mmap->dvrpid, SIGTERM);
-#endif						   
-				}
-				else {
-					sync();
-					mcu_reset();							// use mcu_reset to force POWER off
-				}
+                sync();
+                if( p_dio_mmap->glogpid > 0 ) {
+                    kill(p_dio_mmap->glogpid, SIGTERM);
+                }
+                if( p_dio_mmap->dvrpid > 0 && runtime<modeendtime  ) {
+                    kill(p_dio_mmap->dvrpid, SIGTERM);
+                }
+                else {
+                    sync();
+                    mcu_reset();							// use mcu_reset to force POWER off
+                }
             }
             else if( p_dio_mmap->iomode==IOMODE_QUIT ) {
                 break ;
             }
             else {
-                // no good, enter undefined mode 
+                // no good, enter undefined mode
                 dvr_log("Error! Enter undefined mode %d.", p_dio_mmap->iomode );
                 p_dio_mmap->iomode = IOMODE_RUN ;              // we retry from mode 1
             }
 
             // DVRSVR watchdog running?
-            if( p_dio_mmap->dvrpid>0 && 
-               p_dio_mmap->dvrwatchdog >= 0 )
-            {      	
+            if( usewatchdog &&
+                p_dio_mmap->dvrpid>0 &&
+                p_dio_mmap->dvrwatchdog >= 0 )
+            {
                 ++(p_dio_mmap->dvrwatchdog) ;
                 if( p_dio_mmap->dvrwatchdog == 50 ) {	// DVRSVR dead for 2.5 min?
                     if( kill( p_dio_mmap->dvrpid, SIGUSR2 )!=0 ) {
@@ -1600,7 +1597,7 @@ int main(int argc, char * argv[])
                         dvr_log( "Dvr watchdog failed, try restart DVR!!!");
                     }
                 }
-                else if( p_dio_mmap->dvrwatchdog > 110 ) {	
+                else if( p_dio_mmap->dvrwatchdog > 110 ) {
                     buzzer( 10, 250, 250 );
                     dvr_log( "Dvr watchdog failed, system reboot.");
                     p_dio_mmap->iomode=IOMODE_REBOOT ;
@@ -1608,9 +1605,9 @@ int main(int argc, char * argv[])
                 }
                 
                 static int nodatawatchdog = 0;
-                if( (p_dio_mmap->dvrstatus & DVR_RUN) && 
-                   (p_dio_mmap->dvrstatus & DVR_NODATA ) &&     // some camera not data in
-                   p_dio_mmap->iomode==IOMODE_RUN )
+                if( (p_dio_mmap->dvrstatus & DVR_RUN) &&
+                    (p_dio_mmap->dvrstatus & DVR_NODATA ) &&     // some camera not data in
+                    p_dio_mmap->iomode==IOMODE_RUN )
                 {
                     if( ++nodatawatchdog > 20 ) {   // 1 minute
                         buzzer( 10, 250, 250 );
@@ -1619,7 +1616,7 @@ int main(int argc, char * argv[])
                         p_dio_mmap->iomode=IOMODE_REBOOT ;
                     }
                 }
-                else 
+                else
                 {
                     nodatawatchdog = 0 ;
                 }
@@ -1630,7 +1627,7 @@ int main(int argc, char * argv[])
         if( (runtime - hd_timer)> 500 ) {    // 0.5 seconds to check hard drive and power button
             hd_timer=runtime ;
 
-			// check HD plug-in state
+            // check HD plug-in state
             if( hdlock && hdkeybounce<10 ) {          // HD lock on
                 if( hdpower==0 ) {
                     // turn on HD power
@@ -1639,6 +1636,7 @@ int main(int argc, char * argv[])
                 hdkeybounce = 0 ;
 
                 if( hdinserted &&                      // hard drive inserted
+                    usewatchdog &&
                     p_dio_mmap->dvrpid > 0 &&
                     p_dio_mmap->dvrwatchdog >= 0 &&
                     (p_dio_mmap->dvrstatus & DVR_RUN) &&
@@ -1647,7 +1645,7 @@ int main(int argc, char * argv[])
                     p_dio_mmap->outputmap ^= HDLED ;
                     
                     if( ( p_dio_mmap->iomode==IOMODE_RUN ||
-                        p_dio_mmap->iomode==IOMODE_SHUTDOWNDELAY ) &&
+                          p_dio_mmap->iomode==IOMODE_SHUTDOWNDELAY ) &&
                         ++hdpower>hd_timeout*2 )                		// 120 seconds, sometimes it take 100s to mount HD(CF)
                     {
                         dvr_log("Hard drive failed, system reset!");
@@ -1655,8 +1653,10 @@ int main(int argc, char * argv[])
 
                         // turn off HD led
                         p_dio_mmap->outputmap &= ~HDLED ;
-                        mcu_hdpoweroff();                   // FOR NEW MCU, THIS WOULD TURN OFF SYSTEM POWER?!
+                        mcu_hdpoweroff();                   // FOR NEW MCU, THIS WOULD TURN OFF SYSTEM POWER?! (this stop working since 2011-11-15)
                         hdpower=0;
+                        // added on 2011-11-18, force system to reboot.
+                        p_dio_mmap->iomode=IOMODE_REBOOT ;
                     }
                 }
                 else {
@@ -1780,7 +1780,7 @@ int main(int argc, char * argv[])
                 devicepower = p_dio_mmap->devicepower ;
                 
                 // reset network interface, some how network interface dead after device power changes
-//                setnetwork();
+                //                setnetwork();
             }
         }
         
@@ -1802,28 +1802,29 @@ int main(int argc, char * argv[])
                     buzzer( 3, 300, 300 );
                 }
             }
-            if( (runtime - adjtime_timer)> 600000 ||
-               (runtime < adjtime_timer) )
-            {    // call adjust time every 10 minute
-                if( g_syncrtc ) {
-                    if( gpsavailable ) {
-                        if( gpsvalid ) {
-                            time_syncgps();
-                            adjtime_timer=runtime ;
-                        }
+            if( (runtime - adjtime_timer)> 1800000 ||
+                (runtime < adjtime_timer) ||
+                adjtime_timer == 0 )
+            {
+                // call adjust time every 30 minute
+                adjtime_timer=runtime ;
+                if( gpsavailable ) {
+                    if( gpsvalid ) {
+                        time_syncgps();
                     }
-                    else {
-                        time_syncmcu();
-                        adjtime_timer=runtime ;
-                    }
+                }
+                else if( g_syncrtc ) {
+                    time_syncmcu();
                 }
             }
         }
     }
-    
+
     appfinish();
     
     dvr_log( "DVR IO process ended!");
+
+    printf("%s End!\n", argv[0]);
     return 0;
 }
 

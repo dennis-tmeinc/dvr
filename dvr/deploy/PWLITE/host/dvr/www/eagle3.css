@@ -6,7 +6,7 @@ body {
 }
 div.tabs {
   width: 100%;
-  background-image: url(tab_b.png);
+  background-image: url(tab_x_b.png);
   background-color: transparent;
   background-repeat: repeat-x;
   background-position: center bottom;
@@ -23,7 +23,7 @@ div.tabs li {
   display: inline;
 }
 div.tabs a {
-  background: transparent url(tab_r.png) no-repeat scroll right top;
+  background: transparent url(tab_x_r.png) no-repeat scroll right top;
   float: left;
   font-weight: bold;
   cursor: pointer;
@@ -33,7 +33,7 @@ div.tabs a:hover {
 }
 div.tabs span {
   padding: 6px 9px;
-  background: transparent url(tab_l.png) no-repeat scroll left top;
+  background: transparent url(tab_x_l.png) no-repeat scroll left top;
   float: left;
   white-space: nowrap;
 }
@@ -41,10 +41,10 @@ div.tabs a:hover span {
   background-position: 0% -150px;
 }
 div.tabs li.current a {
-  background: transparent url(tab_r.png) no-repeat scroll 100% -150px;
+  background: transparent url(tab_x_r.png) no-repeat scroll 100% -150px;
 }
 div.tabs li.current span {
-  background: transparent url(tab_l.png) no-repeat scroll 0% -150px;
+  background: transparent url(tab_x_l.png) no-repeat scroll 0% -150px;
   padding-bottom: 7px;
 }
 table {

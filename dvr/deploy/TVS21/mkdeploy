@@ -34,7 +34,7 @@ if [ ${appid} = "clean" ]; then
 # clean host firmware filesa
     cd ${DEPROOT}/host/dvr
     rm -f httpd.sfx firmwareid
-    rm -f dvrsvr dvrtime eaglehost udhcpc glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
+    rm -f dvrsvr eaglesvr dvrtime eaglehost udhcpc glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
     
     cd ${DEPROOT}/host/ID
     rm -f BOARDNUM APPID BOARDID
@@ -89,6 +89,7 @@ fi
 
 cp -v ${APPROOT}/httpd/eaglehttpd .
 cp -v ${APPROOT}/ssl/programs/ssl/ssl_server .
+${STRIP} eaglehttpd ssl_server
 
 echo "Copy cgi files"
 cp -v ${APPROOT}/httpd/cfgdown/cfgdown.cgi cgi
@@ -106,7 +107,6 @@ cp -v ${APPROOT}/httpd/eagle_setup/getjpeg.cgi cgi
 cp -v ${APPROOT}/httpd/getsetup/applysetup cgi
 cp -v ${APPROOT}/httpd/getsetup/getsetup cgi
 
-${STRIP} eaglehttpd
 cd cgi
 ${STRIP} cfgdown.cgi cfgreport dvrstatus.cgi
 ${STRIP} cfgupload firmwareupd login mcufwupd mfid pagevalue
@@ -130,6 +130,7 @@ echo Building Host deploy firmware.
 cd ${DEPROOT}/host/dvr
 echo copy dvr host files
 cp -v ${APPROOT}/dvrsvr/dvrsvr .
+cp -v ${APPROOT}/eaglesvr/eaglesvr .
 cp -v ${APPROOT}/dvrtime/dvrtime .
 cp -v ${APPROOT}/eaglehost/eaglehost .
 cp -v ${APPROOT}/glog/glog .
@@ -147,7 +148,7 @@ cp -v ${APPROOT}/volumeid/volumeid .
 cp -v ${APPROOT}/cfg/cfg .
 cp -v ${APPROOT}/dhcp/udhcpc .
 
-${STRIP} dvrsvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg
+${STRIP} dvrsvr eaglesvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg
 cd ${DEPROOT}/host
 echo ${firmwareid} > dvr/firmwareid
 ${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.dep ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW

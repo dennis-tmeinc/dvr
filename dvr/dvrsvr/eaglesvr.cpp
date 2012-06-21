@@ -51,8 +51,13 @@ int dvr_log(char *fmt, ...)
 
 int dvr_getsystemsetup(struct system_stru * psys)
 {
-    return 0 ;
+	memset( psys, 0, sizeof(struct system_stru) );
+    strcpy(  psys->productid, "EAGLE");
+    strncpy(psys->ServerName, (char *)g_servername, sizeof(psys->ServerName));
+    psys->cameranum = cap_channels;
+    return 1 ;
 }
+
 
 int dvr_setsystemsetup(struct system_stru * psys)
 {
@@ -200,7 +205,7 @@ int main()
                 app_ostate = APPUP ;
             }
             time_tick();
-            sleep(1);                               // will wake up on signal.
+			net_wait(1000);
         }
         else if (app_state == APPDOWN ) {			// application down
             if( app_ostate == APPUP ) {

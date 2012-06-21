@@ -1,20 +1,15 @@
 ./dvr
 ./ID
 sfxrun.upd sfxrun
-./HZK16.bin
 ./rt73.ko
 ./initrun.sh
 ./mbcache.ko
 ./libiw.so.26
-./spidrv.ko
 ./ext3.ko
-./92_92.yuv
 ./jbd.ko
 ./720.422
 ./iwconfig
 ./iwpriv
-./nosignal.bin
-./dsplinkk.ko
 ./mos7840.ko
 ./usbserial.ko
 ./ID/APPID
@@ -51,6 +46,7 @@ sfxrun.upd sfxrun
 ./dvr/passwd
 ./dvr/wifi_down
 ./dvr/dvrsvr
+./dvr/eaglesvr
 ./dvr/inetd.conf
 ./dvr/glog
 ./dvr/tdevhotplug

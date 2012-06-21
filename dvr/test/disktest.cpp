@@ -19,6 +19,7 @@ int buffersize = 0 ;
 int byterate = 0 ;
 int freespace = 5 ;
 int filesize = 100*1024*1024 ;
+int filesync = 0 ;
 char * buf ;
 
 int app_quit=0 ;
@@ -27,6 +28,7 @@ struct filet_struct {
 	FILE * filehandle ;
 	int del_file ;
 	int cur_file ;
+    char filename[512] ;
 } * pfilet ;
 
 void sig_handler(int sig)
@@ -50,6 +52,7 @@ int sync_dirty = 1000 ;
 // Parse /proc/meminfo
 void check_sync()
 {
+/*    
     int dirty = 0 ;
     FILE *fproc=NULL;
     char buf[256];
@@ -67,6 +70,7 @@ void check_sync()
     }
     fclose(fproc);
     return ;
+*/
 }
 
 // return time in seconds from first call to this function
@@ -168,6 +172,10 @@ void spdtest_file()
             buf = (char *)malloc( wsize );
             wsize = fwrite( buf, 1, wsize, handle ) ;
             free( buf );
+            if( filesync ) {
+                sync();
+            }
+            
         }
 		if( wsize<=0 || ftell( handle )>filesize ) {
             fflush( handle );
@@ -231,8 +239,8 @@ void spdtest()
 	// initial time
 	starttime = prevtime = gettime() ;
 
-	sprintf(filename, "%s_lock", prefix ) ;
-	pfilet[0].filehandle = fopen( filename, "wb" );
+	sprintf(pfilet[0].filename, "%s_lock", prefix ) ;
+	pfilet[0].filehandle = fopen( pfilet[0].filename, "wb" );
 	fprintf(pfilet[0].filehandle, "%d", 1 );
 	fclose( pfilet[0].filehandle );
 	pfilet[0].filehandle = NULL ;
@@ -241,20 +249,24 @@ void spdtest()
 		for( i=0; i<filenumber; i++ ) {
 			if( pfilet[i].filehandle==NULL ) {
 				pfilet[i].cur_file++ ;
-				sprintf(filename, "%s_%d_%d", prefix, pfilet[i].cur_file, i) ;
-				pfilet[i].filehandle = fopen( filename, "wb" );
+				sprintf(pfilet[i].filename, "%s_%d_%d", prefix, pfilet[i].cur_file, i) ;
+				pfilet[i].filehandle = fopen( pfilet[i].filename, "wb" );
 				if( pfilet[i].filehandle && buffersize>1024 ) {
-					setvbuf( pfilet[i].filehandle, NULL, _IOFBF, buffersize );
+//					setvbuf( pfilet[i].filehandle, NULL, _IOFBF, buffersize );
 				}
 			}
 			wsize = 0 ;
             if( pfilet[i].filehandle ) {
                 wsize = byterategen() ;
+                wsize = buffersize ;
                 if( wsize > 0 ) {
                     buf = (char *)malloc( wsize ) ;
                     wsize = fwrite( buf, 1, wsize, pfilet[i].filehandle ) ;
 //                    wsize = write( fileno(pfilet[i].filehandle), buf, wsize );
                     free( buf );
+                    if( filesync ) {
+                        sync();
+                    }
                 }
 
 				sprintf(filename, "%s_lock", prefix ) ;
@@ -273,10 +285,14 @@ void spdtest()
                     wsize=0;
                 }
             }
+
+            
             if( pfilet[i].filehandle && ftell( pfilet[i].filehandle )>filesize ) {
 				fclose( pfilet[i].filehandle ) ;
 				pfilet[i].filehandle=NULL ;
 			}
+
+            
             sum+=wsize ;
             // counting
             thistime = gettime(); 
@@ -357,7 +373,7 @@ void ratetest()
 void usage(char * appname)
 {
 	printf("Usage:\n"
-	       "  %s -f<filesize> -b<buffersize> -n<filenumber> -d<devicename|filename> -p<fileprefix> -r<byterate> -s<freespace>\n", appname );
+	       "  %s -f<filesize> -b<buffersize> -n<filenumber> -d<devicename|filename> -p<fileprefix> -r<byterate> -s<freespace> -c\n", appname );
 	return ;
 }	
 
@@ -428,6 +444,10 @@ int main(int argc, char * argv[])
                     strcpy( filename, &(argv[i][2]) ) ;
                     break;
                     
+                case 'c' :
+                    filesync=1 ;
+                    break;
+
                 case 'p' :
                     strcpy( prefix, &(argv[i][2]) ) ;
                     break;

@@ -59,8 +59,8 @@ int draw_init(int videoformat);
 void draw_finish();
 int draw_screenwidth();				// return screen width
 int draw_screenheight();			// return screen height
-int draw_resetdrawarea();								// reset draw area to (0,0, screen_width, screen_height)
 int draw_setdrawarea( int x, int y, int w, int h );		// set draw area, all drawing limited inside this area
+int draw_refresh();					// refresh screen
 void draw_setcolor( UINT32 color ) ;
 UINT32 draw_getcolor();
 void draw_setpixelmode( int pixelmode );
@@ -77,16 +77,11 @@ void draw_closebmp( struct BITMAP * bmp );
 void draw_bitmap( struct BITMAP * bmp, int dx, int dy, int sx, int sy, int w, int h ) ;
 void draw_stretchbitmap( struct BITMAP * bmp, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh ) ;
 int draw_readbitmap(struct BITMAP * bmp, int x, int y, int w, int h );
+void draw_setfont(struct BITMAP * font);
 int draw_fontwidth(struct BITMAP * font);
 int draw_fontheight(struct BITMAP * font);
 void draw_text( int dx, int dy, char * text, struct BITMAP * font);
 void draw_text_ex( int dx, int dy, char * text, struct BITMAP * font, int fontw, int fonth);
-
-#ifdef EAGLE34
-void draw_refresh() ;
-void draw_show( void * id, int x, int y, int w, int h ) ;
-void draw_hide( void * id );
-#endif
 
 #define draw_fillscreen() draw_fillrect( 0, 0, draw_screenwidth(), draw_screenheight() ) 
 

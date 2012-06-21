@@ -56,12 +56,12 @@ int main()
     if( value.length()>0 ) {
         fvalue = fopen("manufacture_id", "w");
         if( fvalue ) {
-            fprintf(fvalue, "%s", value );
+            fprintf(fvalue, "%s", (char *)value );
             fclose( fvalue );
         }
         fvalue = fopen("tvs_ivcs_prefix", "w");
         if( fvalue ) {
-            fprintf(fvalue, "%s", value+2 );
+            fprintf(fvalue, "%s", (char *)value+2 );
             fclose( fvalue );
         }
     } 
@@ -153,6 +153,12 @@ int main()
             }
         }
 
+        // custom timezone string
+        value = dvrconfig.getvalue("timezones", "Custom");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"custom_tz\":\"%s\",", (char *)value );
+        }
+
         // shutdown_delay
         value = dvrconfig.getvalue("system", "shutdowndelay");
         if( value.length()>0 ) {
@@ -169,6 +175,12 @@ int main()
         value = dvrconfig.getvalue( "system", "uploadingtime");
         if( value.length()>0 ) {
             fprintf(fvalue, "\"uploadingtime\":\"%s\",", (char *)value );
+        }
+
+        // uploading time
+        value = dvrconfig.getvalue( "system", "archivetime");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"archivingtime\":\"%s\",", (char *)value );
         }
 
         // file_size
@@ -899,18 +911,17 @@ int main()
         enumkey.line=0 ;
         while( (p=dvrconfig.enumkey("timezones", &enumkey))!=NULL ) {
             tzi=dvrconfig.getvalue("timezones", p );
-            fprintf(fvalue, "<option value=\"%s\">", p );
-            if( tzi.length()<=0 ) {
-                fprintf(fvalue, "%s", p);
-            }
-            else {
+            fprintf(fvalue, "<option value=\"%s\">%s ", p, p );
+            if( tzi.length()>0 ) {
                 zoneinfobuf=tzi;
                 while( *zoneinfobuf != ' ' && 
                       *zoneinfobuf != '\t' &&
                       *zoneinfobuf != 0 ) {
                           zoneinfobuf++ ;
                       }
-                fprintf(fvalue, "%s -%s", p, zoneinfobuf );
+                if( strlen(zoneinfobuf) > 1 ) {
+                    fprintf(fvalue, "-%s", zoneinfobuf );
+                }
             }
             fprintf(fvalue, "</option>\n");
         }
