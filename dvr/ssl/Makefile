@@ -20,4 +20,4 @@ programs/ssl/ssl_server:
 clean:
 	cd library  && $(MAKE) clean && cd ..
 	cd programs && $(MAKE) clean && cd ..
-	rm ssl_server
+	rm -r ssl_server

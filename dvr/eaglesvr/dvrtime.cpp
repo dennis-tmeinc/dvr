@@ -73,12 +73,7 @@ time_t time_utctime(struct dvrtime *dvrt)
 // set timezone with "TZ" environment
 void time_settimezone(char * timezone)
 {
-	char * otz ;
-	otz = getenv("TZ");
-	if( otz && timezone && strcmp( otz, timezone )==0 ) {  // same TZ
-		return ;
-	}
-	setenv("TZ", timezone, 1);
+    setenv("TZ", timezone, 1);
 }
 
 

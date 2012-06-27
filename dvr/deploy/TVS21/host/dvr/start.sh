@@ -62,7 +62,7 @@ boardid=`cat /davinci/ID/BOARDID`
 ifconfig eth0 192.168.247.${boardid}
 
 # setup initial TZ environment
-cd /davinci
+cd /davinci/dvr
 tzn=`./cfg get system timezone`
 tzl=`./cfg get timezones ${tzn}`
 TZ=${tzl%% *}
