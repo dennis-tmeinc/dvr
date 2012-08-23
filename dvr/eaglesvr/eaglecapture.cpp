@@ -8,20 +8,94 @@
 #include "eagle34/davinci_sdk.h"
 #endif
 
-eagle_capture::eagle_capture( int channel, int hikchannel ) 
+#ifdef EAGLE32
+char Dvr264Header[40] =
+{
+    '\x34', '\x48', '\x4B', '\x48', '\xFE', '\xB3', '\xD0', '\xD6',
+    '\x08', '\x03', '\x04', '\x20', '\x00', '\x00', '\x00', '\x00',
+    '\x03', '\x10', '\x02', '\x10', '\x01', '\x10', '\x10', '\x00',
+    '\x80', '\x3E', '\x00', '\x00', '\x10', '\x02', '\x40', '\x01',
+    '\x11', '\x10', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00'
+};
+#endif
+#ifdef EAGLE34
+char Dvr264Header[40] =
+{
+    '\x49', '\x4d', '\x4b', '\x48', '\x01', '\x01', '\x01', '\x00',
+    '\x02', '\x00', '\x01', '\x00', '\x21', '\x72', '\x01', '\x0e',
+    '\x80', '\x3e', '\x00', '\x00', '\x00', '\x7d', '\x00', '\x00',
+    '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00',
+    '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00'
+};
+#endif
+
+
+class eagle_capture : public capture {
+protected:
+    // Hik Eagle32 parameter
+    int m_hikhandle;				// hikhandle = hikchannel+1
+    int m_chantype ;
+    int m_dspdatecounter ;
+
+    char m_motiondata[256] ;
+    int m_motionupd;				// motion status changed ;
+
+public:
+    eagle_capture(int channel);
+    ~eagle_capture();
+
+    int gethandle(){
+        return m_hikhandle;
+    }
+
+    int getresolution(){
+        return m_attr.Resolution;
+    }
+
+    virtual void getattr(struct DvrChannel_attr * pattr) {
+        memcpy( pattr, &m_attr, sizeof(m_attr) );
+    }
+    virtual void setattr(struct DvrChannel_attr * pattr) {
+        if( pattr->structsize == sizeof(struct DvrChannel_attr) && memcmp(pattr, &m_attr, pattr->structsize)!=0 ) {
+            memcpy(&m_attr, pattr, pattr->structsize );
+            if( m_started ) {
+                restart();
+            }
+        }
+    }
+    virtual void streamcallback( void * buf, int size, int frame_type);
+    virtual void setosd( struct hik_osd_type * posd );
+
+    // virtual function implements
+    virtual void update(int updosd);	// periodic update procedure, updosd: require to update OSD
+    virtual void start();
+    virtual void stop();
+    virtual void captureIFrame();       // force to capture I frame
+    // to capture one jpeg frame
+    virtual void captureJPEG(int quality, int pic) ;
+    //    virtual void docaptureJPEG() ;
+    virtual int getsignal();        // get signal available status, 1:ok,0:signal lost
+};
+
+
+eagle_capture::eagle_capture( int channel )
 : capture(channel)
 {
     m_type=CAP_TYPE_HIKLOCAL;
 
     // hik eagle32 parameters
-    m_hikhandle=hikchannel+1 ;			// handle = channel+1
+    m_hikhandle=channel+1 ;			// handle = channel+1
     m_chantype=MAIN_CHANNEL ;
     m_dspdatecounter=0 ;
-    
+
     m_motion=0 ;
     m_motionupd = 1 ;
     m_started = 0 ;                 // no started.
     m_enable = 1 ;
+
+    // default file header
+    m_headerlen = 40 ;
+    memcpy( m_header, Dvr264Header, 40 );
 }
 
 eagle_capture::~eagle_capture()
@@ -35,7 +109,7 @@ static int motionanalyze( unsigned int * mddata, int line )
     int i, j, motion ;
     unsigned int m;
     motion=0 ;
-    if( line>15 ) 
+    if( line>15 )
         line=15 ;
     for( i=0; i<line; i++) {
         m = *mddata++ ;
@@ -55,63 +129,66 @@ static void StreamReadCallBack(	int handle,
                                void * buf,
                                int size,
                                int frame_type,
-                               void * context ) 
+                               void * context )
 {
-	handle-- ;
-    if( handle>=0 && 
-        handle<cap_channels &&
-        cap_channel[handle] ) 
+    int channel = handle-1 ;
+    if( channel>=0 &&
+        channel<cap_channels &&
+        cap_channel[channel] )
     {
-        cap_channel[handle]->streamcallback( buf, size, frame_type );
+        cap_channel[channel]->streamcallback( buf, size, frame_type );
     }
-}		
+}
 #endif
 
 
 #ifdef EAGLE34
 static void StreamReadCallBack(CALLBACK_DATA CallBackData,void* context)
 {
-    int handle=CallBackData.channel-1 ;
-	if( handle>=0 && 
-	   handle<cap_channels &&
-	   cap_channel[handle] ) 
-	{
-        cap_channel[handle]->streamcallback(CallBackData.pBuf, 
-                                                    CallBackData.size, 
+    int channel=CallBackData.channel-1 ;
+    if( channel>=0 &&
+       channel<cap_channels &&
+       cap_channel[channel] )
+    {
+        cap_channel[channel]->streamcallback(CallBackData.pBuf,
+                                                    CallBackData.size,
                                                     CallBackData.frameType );
     }
 }
 #endif
 
-void eagle_capture::streamcallback( 
+void eagle_capture::streamcallback(
                                    void * buf,
                                    int size,
                                    int frame_type)
 {
+    if( !m_started ) {      // not started?
+        return ;
+    }
     struct cap_frame capframe;
     capframe.frametype = FRAMETYPE_UNKNOWN  ;
-    if( m_started ) {            // record or send frame only when necessary. 
+    if( m_started ) {            // record or send frame only when necessary.
         switch(frame_type){
-#ifdef EAGLE32    
+#ifdef EAGLE32
             case FRAME_TYPE_AUDIO:
-#endif                
+#endif
 #ifdef EAGLE34
             case FRAME_TYPE_AUDIO_PS:
-#endif                
+#endif
                 capframe.frametype = FRAMETYPE_AUDIO ;
                 break ;
-#ifdef EAGLE32    
+#ifdef EAGLE32
             case FRAME_TYPE_VIDEO_P:
             case FRAME_TYPE_VIDEO_SUB_P:
             case FRAME_TYPE_VIDEO_BP:
             case FRAME_TYPE_VIDEO_SUB_BP:
-#endif                
+#endif
 #ifdef EAGLE34
             case FRAME_TYPE_VIDEO_P_PS:
-#endif                
+#endif
                 capframe.frametype = FRAMETYPE_VIDEO ;
                 break;
-#ifdef EAGLE32    
+#ifdef EAGLE32
             case FRAME_TYPE_VIDEO_I:
             case FRAME_TYPE_VIDEO_SUB_I:
                 struct hd_frame * pframe = (struct hd_frame *)buf;
@@ -121,7 +198,7 @@ void eagle_capture::streamcallback(
                 else {
                     m_signal_standard = 2 ;         // PAL mode video
                 }
-#endif                
+#endif
 #ifdef EAGLE34
             case FRAME_TYPE_VIDEO_I_PS:
 #endif
@@ -152,13 +229,8 @@ void eagle_capture::streamcallback(
         if( capframe.frametype != FRAMETYPE_UNKNOWN ) {
             capframe.channel = m_channel ;
             capframe.framesize = size ;
-
-            capframe.framedata = (char *) mem_alloc( capframe.framesize );
-            if( capframe.framedata ) {
-                mem_cpy32(capframe.framedata, buf, size ) ;
-                onframe(&capframe);
-                mem_free(capframe.framedata);
-            }
+            capframe.framedata = (char *) buf ;
+            onframe(&capframe);
         }
     }
 }
@@ -168,15 +240,15 @@ void eagle_capture::start()
     int res ;
     if( m_enable && (!m_started) ) {
 
-		dvr_log("Cap channel %d started!", m_channel );
-		
+        dvr_log("Cap channel %d started!", m_channel );
+
         if( m_attr.disableaudio ) {
             res = SetStreamType(m_hikhandle, m_chantype,  STREAM_TYPE_VIDOE);
         }
         else {
             res = SetStreamType(m_hikhandle, m_chantype,  STREAM_TYPE_AVSYN);
         }
-        
+
         int QuantVal;
         if( m_attr.PictureQuality>10 ) {
             m_attr.PictureQuality = 10 ;
@@ -186,7 +258,7 @@ void eagle_capture::start()
         }
         QuantVal = 12+(10-m_attr.PictureQuality);
         res = SetDefaultQuant(m_hikhandle, m_chantype, QuantVal)	; // quality should be between 12 to 30
-        
+
         // set frame mode
         if( m_attr.key_interval<=0 ) {
             m_attr.key_interval = 3 * m_attr.FrameRate ;
@@ -194,7 +266,7 @@ void eagle_capture::start()
                 m_attr.key_interval=12 ;
             }
         }
-        
+
         if( m_attr.b_frames <=0  && m_attr.b_frames > 10 ) {
             m_attr.b_frames = 2;
         }
@@ -202,9 +274,9 @@ void eagle_capture::start()
         if( m_attr.p_frames <=0  && m_attr.p_frames > 10 ) {
             m_attr.p_frames = 1;
         }
-        
+
         res= SetIBPMode(m_hikhandle, m_chantype, m_attr.key_interval, m_attr.b_frames, m_attr.p_frames, m_attr.FrameRate);
-        
+
         // setup bitrate control
         if( m_attr.BitrateEn ) {
             res = SetBitrateControl(m_hikhandle, m_chantype, m_attr.Bitrate, ( m_attr.BitMode==0 )?MODE_VBR:MODE_CBR  );
@@ -212,7 +284,7 @@ void eagle_capture::start()
         else {
             res = SetBitrateControl(m_hikhandle, m_chantype, 4000000, MODE_VBR  );
         }
-        
+
         const static picture_format fmt[5] = {
             ENC_CIF,
             ENC_2CIF,
@@ -227,7 +299,7 @@ void eagle_capture::start()
             m_attr.Resolution = 3 ;
         }
         res = SetEncoderPictureFormat(m_hikhandle, m_chantype, fmt[m_attr.Resolution] );
-        
+
         if( m_attr.MotionSensitivity>=0 ) {
             RECT rect ;
             rect.left = 5 ;
@@ -242,8 +314,8 @@ void eagle_capture::start()
         }
 
         // set color contrl
-        SetVideoParam(m_hikhandle, 
-                      128-80+m_attr.brightness*16, 
+        SetVideoParam(m_hikhandle,
+                      128-80+m_attr.brightness*16,
                       128-80+m_attr.contrast*16,
                       128-120+m_attr.saturation*24,
                       128-20+m_attr.hue*4 );
@@ -255,14 +327,11 @@ void eagle_capture::start()
 
 //        eagle32_tsadjust=0 ;
 
-		StartCodec( m_hikhandle, m_chantype );
+        StartCodec( m_hikhandle, m_chantype );
 
         // start encoder
         m_started = 1 ;
-        
-        // Update OSD
-        updateOSD();
-    }		
+    }
 }
 
 void eagle_capture::stop()
@@ -270,7 +339,7 @@ void eagle_capture::stop()
     int res ;
     if( m_started ) {
 
-		dvr_log("Cap channel %d stopped!", m_channel );
+        dvr_log("Cap channel %d stopped!", m_channel );
 
         res=EnalbeMotionDetection(m_hikhandle, 0);	// disable motion detection
         res=StopCodec(m_hikhandle, m_chantype);
@@ -286,7 +355,7 @@ void eagle_capture::captureIFrame()
 }
 
 // this is call from main thread to do actural jpeg capture
-/* 
+/*
 void eagle_captureJPEG()
 {
     int ch ;
@@ -432,9 +501,8 @@ int eagle_capture::getsignal()
             video_standard v ;
             res = GetVideoParam(m_hikhandle, &v, &b, &c, &s, &h );
             m_signal_standard = (int)v ;
-            updateOSD();
         }
-#endif        
+#endif
     }
     return m_signal ;
 }
@@ -460,56 +528,66 @@ int eagle32_hikchanelenabled(int channel)
     return 0 ;
 }
 
-
 static int eagle_InitSystem=0 ;
 
-int eagle32_init()
+int eagle_init()
 {
     int res ;
-    int eagle_channels;
-    struct board_info binfo ;
-	
+    int i;
+    board_info binfo ;
+
     if( eagle_InitSystem==0 ) {
         res = InitSystem();
         if( res<0 ) {
-            printf("Board init failed!\n");
-//            return 0;
+            dvr_log("Board init failed!\n");
+            // return 0;
         }
         eagle_InitSystem=1 ;
     }
 
-	eagle_channels = 0 ;
-	
-    if( GetBoardInfo(&binfo)==0 ) {
-        eagle_channels = (int)binfo.enc_chan ;
+    eagle_uninit();
 
-        if( eagle_channels<0 ) {
-            eagle_channels=0;
+    if( GetBoardInfo(&binfo)==0 ) {
+        cap_channels = (int)binfo.enc_chan ;
+
+        if( cap_channels<0 || cap_channels>16 ) {
+            cap_channels=0;
         }
-        if( eagle_channels>16 ) {
-            eagle_channels = 16 ;
-        }
-        if( eagle_channels > 0 ) {
+        else {
+            cap_channel = new capture * [cap_channels] ;
+            //    dvr_log("%d capture card (local) channels detected.", dvrchannels);
+            for (i = 0; i < cap_channels; i++ ) {
+                cap_channel[i]=new eagle_capture(i);
+            }
             res=RegisterStreamDataCallback(StreamReadCallBack,NULL);
         }
     }
-    return eagle_channels ;
+
+    return cap_channels ;
 }
 
-void eagle32_uninit()
+void eagle_uninit()
 {
-    RegisterStreamDataCallback(NULL,NULL);
-	//   this function never works!
-	// FiniSystem();
+    int i;
+    cap_stop();
+    if( cap_channels > 0 ) {
+        i=cap_channels ;
+        cap_channels=0 ;
+        while(i>0) {
+            delete cap_channel[--i] ;
+            cap_channel[--i]=NULL ;
+        }
+        delete [] cap_channel ;
+        cap_channel=NULL ;
+        RegisterStreamDataCallback(NULL,NULL);
+    }
 }
 
-void eagle32_finish()
+void eagle_finish()
 {
-	if(	eagle_InitSystem ) {
-		FiniSystem(); 			// 	this function never works!
-	}
+    if(	eagle_InitSystem ) {
+        FiniSystem(); 			// Works eagle368 (did not hang ~~)
+        eagle_InitSystem=0 ;
+        dvr_log("eagle_finish\n");
+    }
 }
-
-
-
-

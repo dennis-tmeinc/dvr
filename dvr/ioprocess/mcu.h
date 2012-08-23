@@ -2,6 +2,8 @@
 #ifndef __MCU_H__
 #define __MCU_H__
 
+#define ID_HOST     (0)
+#define ID_MCU      (1)
 
 #define MCU_CMD_RESET	        (0)
 #define MCU_CMD_REBOOT	        (0x01) 			// this command would send back response compare to MCU_CMD_RESET (USED on ZEUS project)
@@ -42,14 +44,17 @@
 #define MCU_CMD_POEPOWER	    (0x3a)
 #define MCU_CMD_RADARPOWER	    (0x3b)
 
-// setup sensor 2/3 power on 
-#define MCU_CMD_SENSOR23		(0x37)		
-#define MCU_CMD_SENSORINVMAP	(MCU_CMD_SENSOR23)		
+// setup sensor 2/3 power on
+#define MCU_CMD_SENSOR23		(0x37)
+#define MCU_CMD_SENSORINVMAP	(MCU_CMD_SENSOR23)
 
+#ifdef SUPPORT_YAGF
+#define MCU_CMD_BLOCKMCU        (0x42)
+#endif
 
 // mcu input
 #define MCU_INPUT_DIO           (0x1C)
-#define MCU_INPUT_IGNITIONOFF   (0x08) 
+#define MCU_INPUT_IGNITIONOFF   (0x08)
 #define MCU_INPUT_IGNITIONON    (0x09)
 #define MCU_INPUT_GSENSOR       (0x40)
 
@@ -65,6 +70,8 @@
 
 
 #ifdef PWII_APP
+
+#define ID_PWII      (5)
 
 #define PWII_CMD_BOOTUPREADY    (4)
 #define PWII_CMD_VERSION        (0x11)
@@ -82,7 +89,7 @@
 #define PWII_CMD_OUTPUTSTATUS   (0x17)
 #define PWII_CMD_SPEAKERVOLUME  (0x1a)
 
-// CDC inputs 
+// CDC inputs
 #define PWII_INPUT_REC ('\x05')
 #define PWII_INPUT_C1 (PWII_INPUT_REC)
 #define PWII_INPUT_C2 ('\x06')
@@ -119,7 +126,7 @@ extern int mcu_inputmissed ;
 
 #define MCU_MAX_MSGSIZE (100)
 
-// check if data from mcu is ready          
+// check if data from mcu is ready
 int mcu_dataready(int usdelay=MIN_SERIAL_DELAY, int * usremain=NULL) ;
 // read one byte from mcu
 int mcu_readbyte(char * b, int timeout=MIN_SERIAL_DELAY);
@@ -136,7 +143,9 @@ int mcu_recv( char * mcu_msg, int bufsize, int usdelay = MIN_SERIAL_DELAY, int *
 unsigned char checksum( unsigned char * data, int datalen ) ;
 char mcu_checksum( char * data ) ;
 void mcu_calchecksum( char * data );
+int mcu_sendcmd_va( int target, int cmd, int datalen, va_list arg );
 int mcu_sendcmd(int cmd, int datalen=0, ...);
+int mcu_cmd_va(int target, char * rsp, int cmd, int datalen, va_list arg);
 int mcu_cmd(char * rsp, int cmd, int datalen=0, ...);
 
 int mcu_reset();

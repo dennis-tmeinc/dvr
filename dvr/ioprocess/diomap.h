@@ -12,25 +12,25 @@
 struct dio_mmap {
     int     usage ;         // how many processes use this structure
     int     lock ;          // >0 if some process is writing to this structure
-    pid_t	iopid ;			// process id of io process
-    pid_t	dvrpid ;		// process id of dvr server, 0 when dvrsvr is down
+    pid_t   iopid ;         // process id of io process
+    pid_t   dvrpid ;        // process id of dvr server, 0 when dvrsvr is down
     pid_t   glogpid ;       // process id of glog (gpslog)
-    
+
     int		inputnum ;
-    unsigned int inputmap ;		// 32 input pin max
+    unsigned int inputmap ;     // 32 input pin max
     int		outputnum ;
     unsigned int outputmap ;	// 32 output pin max
-    
-    int		dvrcmd ;		// -1: status error, 0: status OK, 1: restart(resume), 2: suspend, 3: stop record, 4: start record
+
+    int     dvrcmd ;		// -1: status error, 0: status OK, 1: restart(resume), 2: suspend, 3: stop record, 4: start record
     int     dvrstatus ;		// (see DVR STATUS bit definition) bit0: running, bit1: recording, bit2: video lost, bit3: no motion, bit4: network active, bit5: disk ready, bit6: no camera data, bit15: error condition
-    char    iomsg[128] ;    // IO message to display on screen
+    char    iomsg[128] ;        // IO message to display on screen
 
     int     poweroff ;
-    int		lockpower ;		// 1: lock power (don't turn off power), 0: unlock power
-    int		dvrwatchdog ;	// dvr watchdog counter, dvr should clear this number
-    int     iomode ;        // io runing mode
-    int     suspendtimer ;  // suspend timer for IO suspend mode (during file copying)
- 
+    int     lockpower ;		// 1: lock power (don't turn off power), 0: unlock power
+    int     dvrwatchdog ;	// dvr watchdog counter, dvr should clear this number
+    int     iomode ;            // io runing mode
+    int     suspendtimer ;      // suspend timer for IO suspend mode (during file copying)
+
     unsigned short rtc_year ;
     unsigned short rtc_month ;
     unsigned short rtc_day ;
@@ -38,43 +38,43 @@ struct dio_mmap {
     unsigned short rtc_minute ;
     unsigned short rtc_second ;
     unsigned short rtc_millisecond ;
-    int	    rtc_cmd ;		// DVR rtc command, 1: read rtc, 2: set rtc, 3: sync system time to rtc, 0: cmd finish, -1: error
-    
+    int	    rtc_cmd ;               // DVR rtc command, 1: read rtc, 2: set rtc, 3: sync system time to rtc, 0: cmd finish, -1: error
+
     // GPS communicate area
-    int		gps_valid ;			// 1 for valid gps signal data
-    double	gps_speed ;			// knots
-    double	gps_direction ;     // degree
-    double  gps_latitude ;		// degree, + for north, - for south
-    double  gps_longitud ;      // degree, + for east,  - for west
-    double  gps_gpstime ;		// seconds from 1970-1-1 12:00:00 (utc)
-   
-	// Extra IO
-	// Panel LEDs
-	unsigned int	panel_led ;		// bit 0: USB flash LED, bit1: Error LED, bit2: Video Lost LED
-									// set 0 turn off, set 1 to flash
-	unsigned int	devicepower ;	// power on/off 
-                                    // bit 0: GPS, bit 1:  Slave_Eagle32, bit 2: Network Switch, bit 3: POE, bit 4: camera power
-									// (another set device power, 2011-05-05) bit 8: Wifi, bit 9: POW, bit 10: Radar
-    int    iotemperature ;          // io board temperature
-    int    hdtemperature ;          // hard drive temperature
-    
+    int     gps_valid ;             // 1 for valid gps signal data
+    double  gps_speed ;             // knots
+    double  gps_direction ;         // degree
+    double  gps_latitude ;          // degree, + for north, - for south
+    double  gps_longitud ;          // degree, + for east,  - for west
+    double  gps_gpstime ;           // seconds from 1970-1-1 12:00:00 (utc)
+
+    // Extra IO
+    // Panel LEDs
+    unsigned int	panel_led ;	// bit 0: USB flash LED, bit1: Error LED, bit2: Video Lost LED
+                                        // set 0 turn off, set 1 to flash
+    unsigned int	devicepower ;	// power on/off
+                                        // bit 0: GPS, bit 1:  Slave_Eagle32, bit 2: Network Switch, bit 3: POE, bit 4: camera power
+                                        // (another set device power, 2011-05-05) bit 8: Wifi, bit 9: POW, bit 10: Radar
+    int    iotemperature ;		// io board temperature
+    int    hdtemperature ;              // hard drive temperature
+
     // G force sensor value
-    int     gforce_serialno ;    // indicator
+    int     gforce_serialno ;           // indicator
     float   gforce_right ;
     float   gforce_forward ;
-    float   gforce_down ;    
+    float   gforce_down ;
 
     // DVR camera status ;
-    int     camera_status[8] ;  // bit 0 = signal, bit 1 = recording, bit 2 = motion, bit 3 = camera video data available
-    
+    int     camera_status[8] ;          // bit 0 = signal, bit 1 = recording, bit 2 = motion, bit 3 = camera video data available
+
     // PWII mcu support
     unsigned int pwii_buttons ;         // pwii button,  1: pressed, 0: released
-                                         //      DD BIT0: Function REW
-                                         //      DD BIT1: Function P/P
-                                         //      DD BIT2: Function FF
-                                         //      DD BIT3: Function ST/PWR
-                                         //      DD BIT4: Function PR
-                                         //      DD BIT5: Function NX
+                                        //      DD BIT0: Function REW
+                                        //      DD BIT1: Function P/P
+                                        //      DD BIT2: Function FF
+                                        //      DD BIT3: Function ST/PWR
+                                        //      DD BIT4: Function PR
+                                        //      DD BIT5: Function NX
                                         //  BIT 8: front camera button, 1: pressed, auto release
                                         //  BIT 9: back camera button,  1: pressed, auto release
                                         //  BIT 10:  tm, 1: pressed, 0: released
@@ -82,7 +82,7 @@ struct dio_mmap {
                                         //  BIT 12:  blackout, 1: pressed, 0: released
                                         //  BIT 13:  Speaker Mute Botton (virtual) 1: pressed, auto release
                                         //  BIT 14:  Sperker On Botton (virtual) 1: pressed, auto release
-	
+
     unsigned int pwii_output ;          // LEDs and device power (outputs)
                                         // BIT 0: C1 LED
                                         // BIT 1: C2 LED
@@ -91,8 +91,8 @@ struct dio_mmap {
                                         // BIT 4: POWER LED
                                         // BIT 5: BO_LED
                                         // BIT 6: Backlight LED
-										// BIT 7: LP zoom in
-    
+                                        // BIT 7: LP zoom in
+
                                         // BIT 8: GPS antenna power
                                         // BIT 9: GPS POWER
                                         // BIT 10: RF900 POWER
@@ -103,8 +103,8 @@ struct dio_mmap {
     char    pwii_VRI[128] ;             // current VRI(video recording Id)
 
     // Wifi status
-    int     smartserver ;        // smartserver detected
-	char    smartserver_interface[32] ;
+    int     smartserver ;               // smartserver detected
+    char    smartserver_interface[32] ;
 
 } ;
 
@@ -119,11 +119,11 @@ struct dio_mmap {
 #define DVR_DISKREADY   (0x20)			// disk ready ( recording disk )
 #define DVR_NODATA      (0x40)			// no video data (any channel)
 #define DVR_LOCK        (0x80)			// recording locked file (any channel) (PWII only)
-#define DVR_ARCH        (0x100)         // archive thread running
+#define DVR_ARCH        (0x100)			// archive thread running
 #define DVR_ARCHDISK    (0x200)			// archive disk ready
 #define DVR_SENSOR      (0x400)			// sensor active
 
-#define DVR_FAILED      (0x4000)        // should ioprocess reboot system?
+#define DVR_FAILED      (0x4000)		// should ioprocess reboot system?
 #define DVR_ERROR       (0x8000)
 
 // io mode
@@ -140,7 +140,7 @@ struct dio_mmap {
 #define IOMODE_SUSPEND         (10)
 #define IOMODE_POWEROFF        (11)
 
-// HARD DRIVE LED and STATUS 
+// HARD DRIVE LED and STATUS
 #define HDLED	(0x10)
 
 // device power bit
@@ -151,8 +151,8 @@ struct dio_mmap {
 #define DEVICE_POWER_CAMERA		(1<<4)
 
 // new adds on power bit
-#define DEVICE_POWER_WIFI		(1<<8)		// wifi power on PW unit 
-#define DEVICE_POWER_POEPOWER	(1<<9)		// wow , another POE power? 
+#define DEVICE_POWER_WIFI		(1<<8)		// wifi power on PW unit
+#define DEVICE_POWER_POEPOWER           (1<<9)          // wow , another POE power?
 #define DEVICE_POWER_RADAR		(1<<10)		// Radar power, what is this?
 #define DEVICE_POWER_HD			(1<<11)		// Power for Hard drive, CAUTION: turn off this actually turn off system (why?)
 
@@ -195,7 +195,7 @@ struct dio_mmap {
 #define PWII_POWER_BLACKOUT		(1<<12)
 #define PWII_POWER_STANDBY		(PWII_POWER_BLACKOUT)
 #define PWII_POWER_WIFI			(1<<13)
-                                       
+
 
 extern struct dio_mmap * p_dio_mmap;
 void dio_lock();

@@ -4,6 +4,9 @@
 
 include config
 
+CFLAGS= -O2 -s
+export CFLAGS
+
 SUBDIRS = dvrsvr\
        dvrtime\
        eaglehost\
@@ -21,8 +24,9 @@ SUBDIRS = dvrsvr\
        usbid\
        usbnotify\
        ssl \
-       eaglesvr\
-       lpc21isp
+       eaglesvr \
+       lpc21isp \
+       dosfstools
 
 .PHONY : $(SUBDIRS) applications
 
@@ -34,17 +38,17 @@ $(SUBDIRS) :
 mdvr:
 	cp cfg.h.mdvr cfg.h
 	$(MAKE) applications
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR602 1 
+	cd deploy/MDVR5100 ; ./mkdeploy MDVR602 1
 	cd deploy/MDVR5100 ; ./mkdeploy MDVR5102 1
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5104 2 
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5108 4 
+	cd deploy/MDVR5100 ; ./mkdeploy MDVR5104 2
+	cd deploy/MDVR5100 ; ./mkdeploy MDVR5108 4
 
 mdvr_special:
-	$(MAKE) application 
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5108 4 
+	$(MAKE) application
+	cd deploy/MDVR5100 ; ./mkdeploy MDVR5108 4
 	cd deploy/MDVR5100 ; ./mkdeploy MDVR5108 4 1
 	cd deploy/MDVR5100 ; ./mkdeploy MDVR5108 4 2
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5104 2 
+	cd deploy/MDVR5100 ; ./mkdeploy MDVR5104 2
 	cd deploy/MDVR5100 ; ./mkdeploy MDVR5104 2 1
 	cd deploy/MDVR5100 ; ./mkdeploy MDVR5104 2 2
 	cd deploy/MDVR5100 ; ./mkdeploy MDVR5102 1
@@ -53,7 +57,7 @@ mdvr_special:
 
 firmware_cycle:
 	cp -u cfg.h.cycle cfg.h
-	$(MAKE) application 
+	$(MAKE) application
 	cd deploy/MDVR5100 ; ./mkdeploy MDVR602 1  cycle
 	cd deploy/MDVR5100 ; ./mkdeploy MDVR5102 1 cycle
 	cd deploy/MDVR5100 ; ./mkdeploy MDVR5104 2 cycle
@@ -82,7 +86,7 @@ app_pwii:
 	echo "proj=PWII" >> config
 	echo "EAGLE=eagle32" >> config
 	cp cfg.h.PWII cfg.h
-	
+
 app_pw34:
 	echo PROJDIR=`pwd` > config
 	echo "proj=PW34" >> config
@@ -101,6 +105,12 @@ app_zeus:
 	echo "EAGLE=eagle34" >> config
 	cp cfg.h.zeus cfg.h
 
+app_pwzeus3:
+	echo PROJDIR=`pwd` > config
+	echo "proj=PWZEUS3" >> config
+	echo "EAGLE=zeus3" >> config
+	cp cfg.h.zeus3 cfg.h
+
 app_mv:
 	echo PROJDIR=`pwd` > config
 	echo "proj=PW34" >> config
@@ -112,25 +122,6 @@ firmware:
 	$(MAKE) -C deploy/$(proj)
 
 pw:
-	$(MAKE) rel
-	$(MAKE) app_pw34
-	$(MAKE) firmware
-	$(MAKE) clean
-	$(MAKE) app_pwlite
-	$(MAKE) firmware
-	$(MAKE) clean
-	$(MAKE) app_zeus
-	$(MAKE) firmware
-	$(MAKE) clean
-
-all:
-	$(MAKE) rel
-	$(MAKE) app_tvs
-	$(MAKE) firmware
-	$(MAKE) clean
-	$(MAKE) app_tvs22
-	$(MAKE) firmware
-	$(MAKE) clean
 	$(MAKE) app_pwii
 	$(MAKE) firmware
 	$(MAKE) clean
@@ -143,6 +134,18 @@ all:
 	$(MAKE) app_zeus
 	$(MAKE) firmware
 	$(MAKE) clean
+	$(MAKE) app_pwzeus3
+	$(MAKE) firmware
+
+tvs:
+	$(MAKE) app_tvs
+	$(MAKE) firmware
+	$(MAKE) clean
+	$(MAKE) app_tvs22
+	$(MAKE) firmware
+	$(MAKE) clean
+
+all: tvs pw
 
 clean:
 	for dir in $(SUBDIRS); do $(MAKE) -C $$dir clean ; done

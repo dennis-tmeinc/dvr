@@ -16,7 +16,7 @@ int decode(const char * in, char * out, int osize );
 char * getquery( const char * qname );
 
 char serfile[]=WWWSERIALFILE;
-char * makeserialno( char * buf, int bufsize ) 
+char * makeserialno( char * buf, int bufsize )
 {
     time_t t ;
     FILE * sfile ;
@@ -28,16 +28,16 @@ char * makeserialno( char * buf, int bufsize )
         c=(((unsigned int)fgetc(sfile))*256+(unsigned int)fgetc(sfile))%62 ;
         if( c<10 )
             buf[i]= '0'+ c;
-        else if( c<36 ) 
+        else if( c<36 )
             buf[i]= 'a' + (c-10) ;
         else if( c<62 )
             buf[i]= 'A' + (c-36) ;
-        else 
+        else
             buf[i]='A' ;
     }
     buf[i]=0;
     fclose(sfile);
-    
+
     sfile=fopen(serfile, "w");
     time(&t);
     if(sfile) {
@@ -53,14 +53,14 @@ int cleanserialno()
     return 0 ;
 }
 
-extern char *crypt (__const char *__key, __const char *__salt) __THROW;
+extern char *crypt (__const char *__key, __const char *__salt);
 
 int checkloginpassword()
 {
     int res=0;
     char * p ;
     char username[100], password[100] ;
-    char passwdline[200] ;    
+    char passwdline[200] ;
     char salt[20] ;
     char * key ;
     int l;
@@ -69,29 +69,66 @@ int checkloginpassword()
     password[0]=0;
     p = getquery( "login_username" );
     if( p )strcpy( username, p );
+    if( strcmp(username, "admin") == 0 ) {
+        // replace admin with root
+        strcpy(username, "root") ;
+    }
     p = getquery( "login_password" );
     if( p )strcpy( password, p );
-    
+
+    int useshadow = 0 ;
+
     fpasswd=fopen("/etc/passwd", "r");
     if( fpasswd ) {
         while( fgets(passwdline, sizeof(passwdline), fpasswd) ) {
             l=strlen(username);
-            if( strncmp(username, passwdline, l)==0 && 
+            if( strncmp(username, passwdline, l)==0 &&
                passwdline[l]==':' ) {                    // username matched
-                   strncpy(salt, passwdline+l+1, 13);
-                   salt[12]=0;
-                   key = crypt(password, salt);
-                   if( key ) {
-                       if( strncmp( key, passwdline+l+1, strlen(key) )==0 ) {
-                           setenv("loginname", username, 1);
-                           res=1 ;
-                       }
-                   }
-                   break;
+                if( passwdline[l+1]=='x' && passwdline[l+2]==':') {
+                    // to use shadowed password
+                    useshadow = 1 ;
+                }
+                else {
+                    strncpy(salt, passwdline+l+1, 13);
+                    salt[12]=0;
+                    key = crypt(password, salt);
+                    if( key ) {
+                        if( strncmp( key, passwdline+l+1, strlen(key) )==0 ) {
+                            setenv("loginname", username, 1);
+                            res=1 ;
+                        }
+                    }
+                }
+                break;
             }
         }
         fclose(fpasswd);
     }
+
+    fpasswd=NULL ;
+    if( useshadow ) {
+        fpasswd=fopen("/etc/shadow", "r");
+    }
+    if( fpasswd ) {
+        while( fgets(passwdline, sizeof(passwdline), fpasswd) ) {
+            l=strlen(username);
+            if( strncmp(username, passwdline, l)==0 &&
+               passwdline[l]==':' ) {                    // username matched
+                strncpy(salt, passwdline+l+1, 13);
+                salt[12]=0;
+                key = crypt(password, salt);
+                if( key ) {
+                    if( strncmp( key, passwdline+l+1, strlen(key) )==0 ) {
+                        setenv("loginname", username, 1);
+                        res=1 ;
+                    }
+                }
+                break;
+            }
+        }
+        fclose(fpasswd);
+    }
+
     return res ;
 }
 
@@ -121,7 +158,7 @@ int main()
         makeserialno( serno, sizeof(serno));
         // set cookie
         set_cookie( "ser", serno );
-		// output a redirect http to system.html
-		printf( redirformat, "system.html" );
+        // output a redirect http to system.html
+        printf( redirformat, "system.html" );
     }
 }

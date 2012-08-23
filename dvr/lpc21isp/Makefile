@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR ioprocess app 
+# Makefile for Eagle32 DVR ioprocess app
 #
 
 include ../config
@@ -9,7 +9,7 @@ SOURCES=adprog.c lpc21isp.c lpcprog.c lpcterm.c
 HEADERS=$(patsubst %.c, %.h, $(SOURCES))
 OBJS = $(patsubst %.c, %.o, $(SOURCES))
 
-CFLAGS=-I../dvrsvr -g -Wall
+CFLAGS+= -I../dvrsvr -Wall
 
 lpc21isp: $(SOURCES) $(HEADERS)
 	$(CC) $(CFLAGS) -o $@ $(SOURCES) $(LDFLAGS)

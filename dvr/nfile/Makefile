@@ -1,11 +1,11 @@
 
-# Makefile for Eagle32 DVR ioprocess app 
+# Makefile for Eagle32 DVR ioprocess app
 #
 
 include ../config
 include $(PROJDIR)/arm_tool
 
-CFLAGS=
+CFLAGS+= -Wall
 
 SOURCES=nfile.c
 
@@ -13,7 +13,7 @@ HEADERS=
 
 OBJS = $(patsubst %.c, %.o, $(SOURCES))
 
-LDFLAGS= 
+LDFLAGS=
 
 
 nfile:  $(SOURCES)

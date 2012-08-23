@@ -1,8 +1,8 @@
 
 #include <errno.h>
-#include <netinet/ip.h>
-#include <sys/ioctl.h>
-#include <net/if.h>
+#include <sys/stat.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 #include "eaglesvr.h"
 
@@ -11,7 +11,9 @@ struct sockad multicast_addr;	// multicast address
 
 static int serverfd;
 
-static struct sockad loopback;
+#ifdef SUPPORT_UNIXSOCKET
+static int unixfd;
+#endif
 
 static int net_run;
 static int net_port;
@@ -25,11 +27,6 @@ static void net_lock()
 static void net_unlock()
 {
     pthread_mutex_unlock(&net_mutex);
-}
-
-// trigger a new network wait cycle
-void net_trigger()
-{
 }
 
 // wait for socket ready to send (timeout in micro-seconds)
@@ -85,7 +82,7 @@ int net_addr(char *netname, int port, struct sockad *addr)
     struct addrinfo hints;
     struct addrinfo *res;
     char service[20];
-    
+
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_DGRAM;
@@ -110,11 +107,11 @@ int net_connect(char *netname, int port)
     int sockflags ;
     int conn_res ;
     char service[20];
-    
+
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    
+
     sprintf(service, "%d", port);
     res = NULL;
     if (getaddrinfo(netname, service, &hints, &res) != 0) {
@@ -126,7 +123,7 @@ int net_connect(char *netname, int port)
         return -1;
     }
     ressave = res;
-    
+
     /*
      Try open socket with each address getaddrinfo returned,
      until getting a valid socket.
@@ -135,7 +132,7 @@ int net_connect(char *netname, int port)
     while (res) {
         sockfd = socket(res->ai_family,
                         res->ai_socktype, res->ai_protocol);
-        
+
         if (sockfd != -1) {
             // Set non-blocking
             sockflags = fcntl( sockfd, F_GETFL, NULL) ;
@@ -159,14 +156,14 @@ int net_connect(char *netname, int port)
         }
         res = res->ai_next;
     }
-    
+
     freeaddrinfo(ressave);
-    
+
     if (sockfd == -1) {
         //        dvr_log("Error:netsvr:net_connect!");
         return -1;
     }
-    
+
     return sockfd;
 }
 
@@ -176,7 +173,7 @@ void net_close(int sockfd)
 }
 
 // send all data
-// return 
+// return
 //       0: failed
 //       other: success
 int net_send(int sockfd, void * data, int datasize)
@@ -205,7 +202,7 @@ void net_clean(int sockfd)
 }
 
 // receive all data
-// return 
+// return
 //       0: failed (time out)
 //       other: success
 int net_recv(int sockfd, void * data, int datasize)
@@ -226,6 +223,34 @@ int net_recv(int sockfd, void * data, int datasize)
     return 0;
 }
 
+int net_listen_unix( char * socketname )
+{
+    struct sockaddr_un local  ;
+    int sockfd, len ;
+
+    if( (sockfd = socket(AF_UNIX, SOCK_STREAM, 0))==-1 ) {
+        return -1 ;
+    }
+
+    unlink( socketname ) ;
+    local.sun_family = AF_UNIX ;
+    strcpy( local.sun_path, socketname ) ;
+    len = sizeof( local ) ;
+    if( bind (sockfd, (struct sockaddr *)&local, len) == -1 ) {
+        // can't bind
+        closesocket( sockfd ) ;
+        return -1 ;
+    }
+
+    if( listen( sockfd, 5)==-1 ) {
+        // can't listen
+        closesocket( sockfd ) ;
+        return -1 ;
+    }
+
+    return sockfd ;
+}
+
 int net_listen(int port, int socktype)
 {
     struct addrinfo hints;
@@ -234,14 +259,14 @@ int net_listen(int port, int socktype)
     int sockfd;
     int val;
     char service[20];
-    
+
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_flags = AI_PASSIVE;
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = socktype;
-    
+
     sprintf(service, "%d", port);
-    
+
     res = NULL;
     if (getaddrinfo(NULL, service, &hints, &res) != 0) {
         dvr_log("Error:netsvr:net_listen!");
@@ -252,7 +277,7 @@ int net_listen(int port, int socktype)
         return -1;
     }
     ressave = res;
-    
+
     /*
      Try open socket with each address getaddrinfo returned,
      until getting a valid listening socket.
@@ -261,7 +286,7 @@ int net_listen(int port, int socktype)
     while (res) {
         sockfd = socket(res->ai_family,
                         res->ai_socktype, res->ai_protocol);
-        
+
         if (sockfd != -1) {
             val = 1;
             setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &val,
@@ -273,9 +298,9 @@ int net_listen(int port, int socktype)
         }
         res = res->ai_next;
     }
-    
+
     freeaddrinfo(ressave);
-    
+
     if (sockfd == -1) {
         dvr_log("Error:netsvr:net_listen!");
         return -1;
@@ -283,11 +308,11 @@ int net_listen(int port, int socktype)
     if (socktype == SOCK_STREAM) {
         listen(sockfd, 10);
     }
-    
+
     return sockfd;
 }
 
-void net_wait(int timeout_ms)
+int net_wait(int timeout_ms)
 {
     struct timeval timeout ;
     fd_set readfds;
@@ -321,6 +346,9 @@ void net_wait(int timeout_ms)
     }
     net_unlock();
     FD_SET(serverfd, &readfds);
+#ifdef SUPPORT_UNIXSOCKET
+    FD_SET(unixfd, &readfds);
+#endif
 
     timeout.tv_sec = timeout_ms/1000 ;
     timeout.tv_usec = (timeout_ms%1000)*1000 ;
@@ -329,16 +357,28 @@ void net_wait(int timeout_ms)
         if (FD_ISSET(serverfd, &readfds)) {
             fd = accept(serverfd, NULL, NULL);
             if (fd > 0) {
-                flag=fcntl(fd, F_GETFL, NULL);
-                fcntl(fd, F_SETFL, flag|O_NONBLOCK);		// work on non-block mode
-                flag = 1 ;
+//                flag=fcntl(fd, F_GETFL, NULL);
+//                fcntl(fd, F_SETFL, flag|O_NONBLOCK);		// work on non-block mode
                 // turn on TCP_NODELAY, to increase performance
+                flag = 1 ;
                 setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
                 net_lock();
                 pconn =	new dvrsvr(fd);
                 net_unlock();
             }
         }
+#ifdef SUPPORT_UNIXSOCKET
+        else if (FD_ISSET(unixfd, &readfds)) {
+            fd = accept(unixfd, NULL, NULL);
+            if (fd > 0) {
+//                flag=fcntl(fd, F_GETFL, NULL);
+//                fcntl(fd, F_SETFL, flag|O_NONBLOCK);		// work on non-block mode
+                net_lock();
+                pconn =	new dvrsvr(fd);
+                net_unlock();
+            }
+        }
+#endif
         else {
             pconn = dvrsvr::head();
             while ( pconn != NULL ) {
@@ -357,8 +397,9 @@ void net_wait(int timeout_ms)
                 net_unlock();
             }
         }
+        return 1 ;
     }
-    return ;
+    return 0 ;
 }
 
 
@@ -370,13 +411,15 @@ void net_init()
 
     net_port = EAGLESVRPORT ;
 
+#ifdef SUPPORT_UNIXSOCKET
+    unixfd = net_listen_unix("/var/dvr/eaglesvr") ;
+#endif
+
     serverfd = net_listen(net_port, SOCK_STREAM);
     if (serverfd == -1) {
         dvr_log("Can not initialize network!");
         return;
     }
-
-    net_addr(NULL, net_port, &loopback);	// get loopback addr
 
     net_run = 1;
 
@@ -404,6 +447,11 @@ void net_uninit()
 
     closesocket(serverfd);
     serverfd=0;
+
+#ifdef SUPPORT_UNIXSOCKET
+    closesocket(unixfd);
+    unixfd=0;
+#endif
 
     dvr_log("Network uninitialized.");
     pthread_mutex_destroy(&net_mutex);

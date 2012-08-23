@@ -26,7 +26,7 @@ int cap_channels;
 capture * * cap_channel;
 
 #ifdef EAGLE32
-char Dvr264Header[40] = 
+char Dvr264Header[40] =
 {
     '\x34', '\x48', '\x4B', '\x48', '\xFE', '\xB3', '\xD0', '\xD6',
     '\x08', '\x03', '\x04', '\x20', '\x00', '\x00', '\x00', '\x00',
@@ -46,30 +46,41 @@ char Dvr264Header[40] =
 };
 #endif
 
+#ifdef EAGLE368
+char Dvr264Header[40] =
+{
+    '\x46', '\x45', '\x4d', '\x54', '\x01', '\x00', '\x01', '\x00',
+    '\x01', '\x00', '\x01', '\x00', '\x01', '\x00', '\x01', '\x10',
+    '\x40', '\x1f', '\x00', '\x00', '\x80', '\x3e', '\x00', '\x00',
+    '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00',
+    '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00'
+};
+#endif
+
 // return true for ok
 int dvr_getchannelsetup(int ch, struct DvrChannel_attr * pchannel,  int attrsize)
 {
-    if( attrsize == sizeof( struct DvrChannel_attr ) && ch>=0 && ch<cap_channels ) 
+    if( attrsize == sizeof( struct DvrChannel_attr ) && ch>=0 && ch<cap_channels )
     {
         cap_channel[ch]->getattr( pchannel ) ;
-        return 1 ;        
+        return 1 ;
     }
 
     return 0 ;
 }
 
-// return true for ok. 
+// return true for ok.
 int dvr_setchannelsetup(int ch, struct DvrChannel_attr * pchannel, int attrsize)
 {
     if( ch>=0 && ch<cap_channels &&
        attrsize == sizeof( struct DvrChannel_attr ) &&
-       pchannel->structsize == attrsize ) 
+       pchannel->structsize == attrsize )
     {
         cap_channel[ch]->setattr( pchannel ) ;
         cap_channel[ch]->restart();
-        return 1 ;        
+        return 1 ;
     }
-    
+
     return 0 ;
 }
 
@@ -107,9 +118,9 @@ void capture::loadconfig()
     m_sensorosd=0 ;
 
     config dvrconfig(CFG_FILE);
-    
+
     m_attr.structsize = sizeof(m_attr);
-    
+
     sprintf(section, "camera%d", m_channel+1);
     m_attr.Enable = dvrconfig.getvalueint( section, "enable");
     tmpstr=dvrconfig.getvalue( section, "name");
@@ -117,19 +128,19 @@ void capture::loadconfig()
         strcpy(m_attr.CameraName, section );
     else
         strncpy(m_attr.CameraName, tmpstr, sizeof(m_attr.CameraName) );
-    
+
     m_attr.Resolution=dvrconfig.getvalueint( section, "resolution");
     m_attr.RecMode=dvrconfig.getvalueint( section, "recordmode");
     m_attr.PictureQuality=dvrconfig.getvalueint( section, "quality");
     m_attr.FrameRate=dvrconfig.getvalueint( section, "framerate");
-    
+
     // dummy trigger and osd field. these field are not used since we use web base configuration
     for(i=0; i<4; i++) {
         m_attr.SensorEn[i]=0;
         m_attr.Sensor[i]=0;
         m_attr.SensorOSD[i]=0;
     }
-    
+
     // osd sensor
     for(i=0; i<32; i++) {
         sprintf(buf, "sensorosd%d", i+1);
@@ -138,36 +149,36 @@ void capture::loadconfig()
             m_sensorosd |= (1<<i);
         }
     }
-    
+
     m_attr.PreRecordTime=dvrconfig.getvalueint( section, "prerecordtime");
     m_attr.PostRecordTime=dvrconfig.getvalueint( section, "postrecordtime");
-    
+
     // recording alarm
     m_attr.RecordAlarm=dvrconfig.getvalueint( section, "recordalarm");
     m_attr.RecordAlarmEn=dvrconfig.getvalueint( section, "recordalarmen");
     m_attr.RecordAlarmPat=dvrconfig.getvalueint( section, "recordalarmpattern");
-    
+
     // video lost alarm
     m_attr.VideoLostAlarm=dvrconfig.getvalueint( section, "videolostalarm");
     m_attr.VideoLostAlarmEn=dvrconfig.getvalueint( section, "videolostalarmen");
     m_attr.VideoLostAlarmPat=dvrconfig.getvalueint( section, "videolostalarmpattern");
-    
+
     // motion detection
     m_attr.MotionAlarm=dvrconfig.getvalueint( section, "motionalarm");
     m_attr.MotionAlarmEn=dvrconfig.getvalueint( section, "motionalarmen");
     m_attr.MotionAlarmPat=dvrconfig.getvalueint( section, "motionalarmpattern");
     m_attr.MotionSensitivity=dvrconfig.getvalueint( section, "motionsensitivity");
-    
+
     // GPS
     m_attr.GPS_enable=dvrconfig.getvalueint( section, "gpsen");
     m_attr.ShowGPS=dvrconfig.getvalueint( section, "showgps");
     m_attr.GPSUnit=dvrconfig.getvalueint( section, "gpsunit");
-    
+
     // bitrate
     m_attr.BitrateEn=dvrconfig.getvalueint( section, "bitrateen");
     m_attr.Bitrate=dvrconfig.getvalueint( section, "bitrate");
     m_attr.BitMode=dvrconfig.getvalueint( section, "bitratemode");
-    
+
     // ptz address
     m_attr.ptz_addr=dvrconfig.getvalueint( section, "ptzaddr");
 
@@ -178,11 +189,11 @@ void capture::loadconfig()
     m_attr.hue       =dvrconfig.getvalueint( section, "hue");
 
     m_attr.key_interval = dvrconfig.getvalueint( section, "key_interval" );
-    
+
     m_attr.b_frames = dvrconfig.getvalueint( section, "b_frames" );
     m_attr.p_frames = dvrconfig.getvalueint( section, "p_frames" );
-    
-    m_attr.disableaudio = dvrconfig.getvalueint( section, "disableaudio" );    
+
+    m_attr.disableaudio = dvrconfig.getvalueint( section, "disableaudio" );
 
     m_motionalarm = dvrconfig.getvalueint( section, "motionalarm" );
     m_motionalarm_pattern = dvrconfig.getvalueint( section, "motionalarmpattern" );
@@ -190,6 +201,7 @@ void capture::loadconfig()
     m_signallostalarm_pattern = dvrconfig.getvalueint( section, "videolostalarmpattern" );
 
     m_showgpslocation=dvrconfig.getvalueint( section, "showgpslocation" );
+
 #ifdef TVS_APP
     m_show_medallion=dvrconfig.getvalueint( section, "show_medallion" );
     m_show_licenseplate=dvrconfig.getvalueint( section, "show_licenseplate" );
@@ -200,9 +212,10 @@ void capture::loadconfig()
 #ifdef PWII_APP
     m_show_vri=dvrconfig.getvalueint( section, "show_vri" );
     m_show_policeid=dvrconfig.getvalueint( section, "show_policeid" );
-#endif        
+#endif
+
     m_show_gforce=dvrconfig.getvalueint( section, "show_gforce" );
-    
+
     // reset some attr for special 2 version ()
     int videotype = dvrconfig.getvalueint( section, "videotype" );
     if( videotype>0 ) {
@@ -260,13 +273,13 @@ void capture::loadconfig()
                 m_attr.Bitrate=768000;
                 m_attr.key_interval=180 ;
         }
-        
+
         if( m_channel<2 ) {                         // force first two channel to 768kbps
             if( m_attr.Bitrate>768000 ) {
                  m_attr.Bitrate=768000;
             }
         }
-        
+
         if( dvrconfig.getvalueint( section, "cameratype" )==1 ) {                   // Exterial Camera? change resolution to 528x320
             if (m_attr.Resolution==3 ) {
                 m_attr.Resolution=2 ;
@@ -282,7 +295,7 @@ void capture::onframe(cap_frame * pcapframe)
 //    if( pcapframe->frametype == FRAMETYPE_KEYVIDEO ) {
 //        time_now(&(pcapframe->frametime));
 //    }
-    if( !m_started ) 
+    if( !m_started )
         return ;
     m_working=10;
     m_streambytes+=pcapframe->framesize ;               // for bitrate calculation
@@ -293,19 +306,19 @@ void capture::onframe(cap_frame * pcapframe)
     }
     rec_onframe(pcapframe);
     net_onframe(pcapframe);
-    screen_onframe(pcapframe); 
+    screen_onframe(pcapframe);
 
-#ifdef EAGLE34      
+#ifdef EAGLE34
 
-#if 0
+#ifdef EAGLE34_TESTING
 //     NET_DPRINT( "frame on channel %d\n", pcapframe->channel ) ;
 
-    // try analyze frames 
+    // try analyze frames
     if( pcapframe->channel==0 ) {
         static float tsref, tref=0 ;
         static float t1=0 ;
         static unsigned int count=0 ;
-        
+
         char * ps=(char *)pcapframe->framedata ;
         int  si = pcapframe->framesize ;
         NET_DPRINT( "frame type : %d frame size: %d\n", pcapframe->frametype, si ) ;
@@ -324,7 +337,7 @@ void capture::onframe(cap_frame * pcapframe)
                     NET_DPRINT( "%02x ", (int)ps[k] );
                 }
                 NET_DPRINT( "\n");
-                
+
                 marker = (ps[4]>>6) & 3 ;
                 if( marker != 1 ) {
                     NET_DPRINT( "First marker bits error!\n");
@@ -335,17 +348,17 @@ void capture::onframe(cap_frame * pcapframe)
                     NET_DPRINT( "Second marker bits error!\n");
                 }
                 systemclock<<=15 ;
-                systemclock|= 
+                systemclock|=
                     ((((unsigned int)ps[4])&0x3)<<13) |
                     ((((unsigned int)ps[5])&0xff)<<5) |
                     ((((unsigned int)ps[6])&0xf8)>>3) ;
-                marker = ((((unsigned int)ps[6])&0x4)>>2) ; 
+                marker = ((((unsigned int)ps[6])&0x4)>>2) ;
                 if( marker != 1 ) {
                     NET_DPRINT( "Third marker bits error!\n");
                 }
 //                systemclock<<=15 ;
                 systemclock<<=14 ;
-                systemclock|= 
+                systemclock|=
                     ((((unsigned int)ps[6])&0x3)<<12) |
                     ((((unsigned int)ps[7])&0xff)<<4) |
                     ((((unsigned int)ps[8])&0xf8)>>4) ;
@@ -366,12 +379,12 @@ void capture::onframe(cap_frame * pcapframe)
                     NET_DPRINT( "rate %f , count :%d\n", a/b, count );
                 }
                 count++;
-                
+
                 marker = ((((unsigned int)ps[8])&0x4)>>2) ;
                 if( marker != 1 ) {
                     NET_DPRINT( "Third marker bits error!\n");
                 }
-                systemclock= 
+                systemclock=
                     ((((unsigned int)ps[8])&0x3)<<7) |
                     ((((unsigned int)ps[9])&0xfe)>>1) ;
 //                NET_DPRINT( "System clock ext: %d\n", systemclock );
@@ -379,7 +392,7 @@ void capture::onframe(cap_frame * pcapframe)
                 if( marker != 1 ) {
                     NET_DPRINT( "4th marker bits error!\n");
                 }
-                systemclock= 
+                systemclock=
                     ((((unsigned int)ps[10]))<<14) |
                     ((((unsigned int)ps[11]))<<6) |
                     ((((unsigned int)ps[12])&0xfc)>>2) ;
@@ -404,7 +417,7 @@ void capture::onframe(cap_frame * pcapframe)
                     NET_DPRINT( "%02x ", (int)ps[k] );
                 }
                 NET_DPRINT( "\n");
-                
+
                 si-= 4+2+packsize ;
                 ps+= 4+2+packsize ;
             }
@@ -417,8 +430,8 @@ void capture::onframe(cap_frame * pcapframe)
     }
 
 
-#endif  // 0    
-    
+#endif  // 0
+
 #endif      // EAGLE34
 
 }
@@ -450,7 +463,7 @@ static int line_dist = 24 ;
 static int linepos[8] = {
     0, 1, -1, -2
 } ;
-    
+
 void capture::updateOSD()
 {
     char * k ;
@@ -459,7 +472,7 @@ void capture::updateOSD()
     char osdbuf[128] ;
     struct hik_osd_type	osd ;
     int y_max ;
-    
+
     if( !m_enable || m_remoteosd ) {
         return ;
     }
@@ -478,11 +491,11 @@ void capture::updateOSD()
 // for Eagle34 boards, OSD support exp
     osd.twinkle |= (_osd_vert_exp<<16) ;
     osd.twinkle |= (_osd_hori_exp<<24) ;
-#endif    
+#endif
     line=0 ;
-    
+
     // prepare first line, Date/time and sensor ( always display )
-    i=0; 
+    i=0;
     osd.osdline[line][i++]=8 ;           // x position
     if( linepos[line]>=0 ) {
         osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
@@ -497,7 +510,7 @@ void capture::updateOSD()
     }
     osd.osdline[line][i++] = ' ' ;
     osd.osdline[line][i++] = ' ' ;
-    
+
     // Show Camera name
     k=m_attr.CameraName;
     while( *k) {
@@ -505,16 +518,16 @@ void capture::updateOSD()
     }
     osd.osdline[line][i++] = ' ' ;
     osd.osdline[line][i++] = ' ' ;
-    
+
     if( m_motion ){
         osd.osdline[line][i++] = '*' ;
     }
     else {
         osd.osdline[line][i++] = ' ' ;
     }
-    
+
     osd.osdline[line][i++] = ' ' ;
-    
+
     if( m_attr.GPS_enable && m_attr.ShowGPS && g_gpsspeed>-0.1) {
         if( m_attr.GPSUnit ) {			// kmh or mph
             sprintf( osdbuf, "%.1f km/h", g_gpsspeed * 1.852 );
@@ -531,7 +544,7 @@ void capture::updateOSD()
     line++;
 
     // prepare line 2, medallion and license plate number
-    i=0; 
+    i=0;
     osd.osdline[line][i++]=8 ;             // x position
     if( linepos[line]>=0 ) {
         osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
@@ -542,18 +555,18 @@ void capture::updateOSD()
 
     // date and time
     osd.osdline[line][i++]=_OSD_MONTH2 ;          // Month
-    osd.osdline[line][i++]='/' ;          
+    osd.osdline[line][i++]='/' ;
     osd.osdline[line][i++]=_OSD_DAY ;             // Day
-    osd.osdline[line][i++]='/' ;         
+    osd.osdline[line][i++]='/' ;
     osd.osdline[line][i++]=_OSD_YEAR4 ;           // 4 digit year
-    osd.osdline[line][i++]=' ' ;          
+    osd.osdline[line][i++]=' ' ;
     osd.osdline[line][i++]=_OSD_HOUR24 ;          // 24 hour
-    osd.osdline[line][i++]=':' ;        
+    osd.osdline[line][i++]=':' ;
     osd.osdline[line][i++]=_OSD_MINUTE ;          // Minute
-    osd.osdline[line][i++]=':' ;          
+    osd.osdline[line][i++]=':' ;
     osd.osdline[line][i++]=_OSD_SECOND ;          // Second
-    osd.osdline[line][i++]=' ' ;         
-    osd.osdline[line][i++]=' ' ;         
+    osd.osdline[line][i++]=' ' ;
+    osd.osdline[line][i++]=' ' ;
 
     // Show sensors
     for(j=0; j<num_sensors; j++) {
@@ -570,12 +583,12 @@ void capture::updateOSD()
             }
         }
     }
-    
+
     osd.osdline[line][i]=0 ;
     line++ ;
 
     // prepare line 3, medallion and license plate number
-    i=0; 
+    i=0;
     osd.osdline[line][i++]=8 ;             // x position
     if( linepos[line]>=0 ) {
         osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
@@ -616,8 +629,8 @@ void capture::updateOSD()
             lomin = (int)(longi*60) ;
             longi -= ((double)lomin)/60.0 ;
             losecond = (int)(longi*3600) ;
-            
-            sprintf( osdbuf, "%d\xf8%02d\'%02d\"%c %d\xf8%02d\'%02d\"%c", 
+
+            sprintf( osdbuf, "%d\xf8%02d\'%02d\"%c %d\xf8%02d\'%02d\"%c",
                     ladeg, lamin, lasecond, north,
                     lodeg, lomin, losecond, east );
             k=osdbuf ;
@@ -634,7 +647,7 @@ void capture::updateOSD()
     setosd(&osd);
     return ;
 }
-    
+
 #endif		// MDVR_APP
 
 
@@ -646,7 +659,7 @@ static int line_dist = 24 ;
 static int linepos[8] = {
     -1, 0, 1, -3, -2
 } ;
-    
+
 void capture::updateOSD()
 {
     char * k ;
@@ -655,7 +668,7 @@ void capture::updateOSD()
     char osdbuf[128] ;
     struct hik_osd_type	osd ;
     int y_max ;
-    
+
     if( !m_enable || m_remoteosd ) {
         return ;
     }
@@ -674,11 +687,11 @@ void capture::updateOSD()
 // for Eagle34 boards, OSD support exp
     osd.twinkle |= (_osd_vert_exp<<16) ;
     osd.twinkle |= (_osd_hori_exp<<24) ;
-#endif    
+#endif
     line=0 ;
-    
+
     // prepare first line, Date/time and sensor ( always display )
-    i=0; 
+    i=0;
     osd.osdline[line][i++]=8 ;           // x position
     if( linepos[line]>=0 ) {
         osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
@@ -686,21 +699,21 @@ void capture::updateOSD()
     else {
         osd.osdline[line][i++]=y_max - bottom_margin + linepos[line]*line_dist; // y position
     }
-    
+
     // date and time
     osd.osdline[line][i++]=_OSD_MONTH2 ;          // Month
-    osd.osdline[line][i++]='/' ;          
+    osd.osdline[line][i++]='/' ;
     osd.osdline[line][i++]=_OSD_DAY ;             // Day
-    osd.osdline[line][i++]='/' ;         
+    osd.osdline[line][i++]='/' ;
     osd.osdline[line][i++]=_OSD_YEAR4 ;           // 4 digit year
-    osd.osdline[line][i++]=' ' ;          
+    osd.osdline[line][i++]=' ' ;
     osd.osdline[line][i++]=_OSD_HOUR24 ;          // 24 hour
-    osd.osdline[line][i++]=':' ;        
+    osd.osdline[line][i++]=':' ;
     osd.osdline[line][i++]=_OSD_MINUTE ;          // Minute
-    osd.osdline[line][i++]=':' ;          
+    osd.osdline[line][i++]=':' ;
     osd.osdline[line][i++]=_OSD_SECOND ;          // Second
-    osd.osdline[line][i++]=' ' ;         
-    osd.osdline[line][i++]=' ' ;         
+    osd.osdline[line][i++]=' ' ;
+    osd.osdline[line][i++]=' ' ;
 
     // Show sensors
     for(j=0; j<num_sensors; j++) {
@@ -717,12 +730,12 @@ void capture::updateOSD()
             }
         }
     }
-    
+
     osd.osdline[line][i]=0 ;
     line++ ;
 
     // prepare line 2, medallion and license plate number
-    i=0; 
+    i=0;
     osd.osdline[line][i++]=8 ;             // x position
     if( linepos[line]>=0 ) {
         osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
@@ -733,7 +746,7 @@ void capture::updateOSD()
 
     // show medallion and license plate number
     if( m_show_medallion || m_show_licenseplate ) {
-        sprintf( &osdbuf[i], "%-20s %20s", 
+        sprintf( &osdbuf[i], "%-20s %20s",
             m_show_medallion?g_id1:"",
             m_show_licenseplate?g_id2:"" );
         while( i<50 && osdbuf[i] ) {
@@ -743,9 +756,9 @@ void capture::updateOSD()
     }
     osd.osdline[line][i]=0 ;
     line++ ;
-    
+
     // prepare line 3, ivcs and camera name
-    i=0; 
+    i=0;
     osd.osdline[line][i++]=8 ;              // x position
     if( linepos[line]>=0 ) {
         osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
@@ -757,7 +770,7 @@ void capture::updateOSD()
     // show IVCS and/or camera serial no
     if( m_show_ivcs || m_show_cameraserial ) {
         sprintf( osdbuf, "%-20s %18s %c",
-            m_show_ivcs?g_serial : " ", 
+            m_show_ivcs?g_serial : " ",
             m_show_cameraserial? m_attr.CameraName : " ",
             m_motion?'*':' ');
         k=osdbuf ;
@@ -769,7 +782,7 @@ void capture::updateOSD()
     line++;
 
     // prepare line 4, g-force value
-    i=0; 
+    i=0;
     osd.osdline[line][i++]=8 ;              // x position
     if( linepos[line]>=0 ) {
         osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
@@ -780,9 +793,9 @@ void capture::updateOSD()
 
     float gf, gr, gd ;
     if( m_show_gforce && dio_getgforce( &gf, &gr, &gd ) ) {
-        sprintf( osdbuf, "%c%2.1lf %c%2.1lf %c%2.1lf", 
+        sprintf( osdbuf, "%c%2.1lf %c%2.1lf %c%2.1lf",
                 gf>=0.0?'F':'B',
-                gf>=0.0?gf:-gf, 
+                gf>=0.0?gf:-gf,
                 gr>=0.0?'R':'L',
                 gr>=0.0?gr:-gr,
                 gd>=0.0?'D':'U',
@@ -797,7 +810,7 @@ void capture::updateOSD()
     line++ ;
 
     // prepare line 5, GPS
-    i=0; 
+    i=0;
     osd.osdline[line][i++]=8 ;             // x position
     if( linepos[line]>=0 ) {
         osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
@@ -805,9 +818,9 @@ void capture::updateOSD()
     else {
         osd.osdline[line][i++]=y_max - bottom_margin + linepos[line]*line_dist; // y position
     }
-    
+
     double lati, longi, speed ;
-    if( m_attr.GPS_enable && 
+    if( m_attr.GPS_enable &&
         gps_location(&lati, &longi, &speed) )
     {
         if( m_showgpslocation ) {
@@ -839,7 +852,7 @@ void capture::updateOSD()
             lomin = (int)(longi*60) ;
             longi -= ((double)lomin)/60.0 ;
             losecond = (int)(longi*3600) ;
-            sprintf( osdbuf, "%3d\xf8%02d\'%02d\"%c %3d\xf8%02d\'%02d\"%c", 
+            sprintf( osdbuf, "%3d\xf8%02d\'%02d\"%c %3d\xf8%02d\'%02d\"%c",
                     ladeg, lamin, lasecond, north,
                     lodeg, lomin, losecond, east );
             k=osdbuf ;
@@ -860,7 +873,7 @@ void capture::updateOSD()
             else {
                 sprintf( osdbuf, "%11.1f mph", speed * 1.150779 );
             }
-            
+
             k=osdbuf ;
             while( *k && i<50 ) {
                 osd.osdline[line][i++] = * k++ ;
@@ -883,7 +896,7 @@ static int top_margin = 20 ;
 static int bottom_margin = 20 ;
 static int line_dist = 24 ;
 static int linepos[8] = {
-    0, -3, -2, -1, 1 
+    0, -3, -2, -1, 1
 };
 
 void capture::updateOSD()
@@ -894,7 +907,7 @@ void capture::updateOSD()
     char osdbuf[128] ;
     struct hik_osd_type	osd ;
     int y_max ;
-    
+
     if( !m_enable || m_remoteosd ) {
         return ;
     }
@@ -905,7 +918,7 @@ void capture::updateOSD()
     else {
         y_max = 480 ;
     }
-    
+
     osd.brightness = osdbrightness ;
     osd.translucent = osdtranslucent ;
     osd.twinkle = osdtwinkle  ;
@@ -913,11 +926,11 @@ void capture::updateOSD()
 // for Eagle34 boards, OSD support exp
     osd.twinkle |= (_osd_vert_exp<<16) ;
     osd.twinkle |= (_osd_hori_exp<<24) ;
-#endif    
+#endif
     line=0 ;
-    
+
     // prepare first line, Date/time
-    i=0; 
+    i=0;
     osd.osdline[line][i++]=8 ;           // x position
     if( linepos[line]>=0 ) {
         osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
@@ -925,20 +938,20 @@ void capture::updateOSD()
     else {
         osd.osdline[line][i++]=y_max - bottom_margin + linepos[line]*line_dist; // y position
     }
-    
+
     // date and time
     osd.osdline[line][i++]=_OSD_MONTH2 ;          // Month
-    osd.osdline[line][i++]='/' ;          
+    osd.osdline[line][i++]='/' ;
     osd.osdline[line][i++]=_OSD_DAY ;             // Day
-    osd.osdline[line][i++]='/' ;         
+    osd.osdline[line][i++]='/' ;
     osd.osdline[line][i++]=_OSD_YEAR4 ;           // 4 digit year
-    osd.osdline[line][i++]=' ' ;          
+    osd.osdline[line][i++]=' ' ;
     osd.osdline[line][i++]=_OSD_HOUR24 ;          // 24 hour
-    osd.osdline[line][i++]=':' ;        
+    osd.osdline[line][i++]=':' ;
     osd.osdline[line][i++]=_OSD_MINUTE ;          // Minute
-    osd.osdline[line][i++]=':' ;          
+    osd.osdline[line][i++]=':' ;
     osd.osdline[line][i++]=_OSD_SECOND ;          // Second
-    osd.osdline[line][i++]=' ' ;         
+    osd.osdline[line][i++]=' ' ;
     osd.osdline[line][i++]=' ' ;
 
     // show Police ID
@@ -960,9 +973,9 @@ void capture::updateOSD()
     else {
         osd.osdline[line][i++]=y_max - bottom_margin + linepos[line]*line_dist; // y position
     }
-    
+
     double lati, longi, speed ;
-    if( m_attr.GPS_enable && 
+    if( m_attr.GPS_enable &&
         (m_attr.ShowGPS || m_showgpslocation) &&
         gps_location(&lati, &longi, &speed) )
     {
@@ -995,7 +1008,7 @@ void capture::updateOSD()
             lomin = (int)(longi*60) ;
             longi -= ((double)lomin)/60.0 ;
             losecond = (int)(longi*3600) ;
-            sprintf( osdbuf, "%3d\xf8%02d\'%02d\"%c %3d\xf8%02d\'%02d\"%c", 
+            sprintf( osdbuf, "%3d\xf8%02d\'%02d\"%c %3d\xf8%02d\'%02d\"%c",
                     ladeg, lamin, lasecond, north,
                     lodeg, lomin, losecond, east );
             k=osdbuf ;
@@ -1016,7 +1029,7 @@ void capture::updateOSD()
             else {
                 sprintf( osdbuf, "%11.1f mph", speed * 1.150779 );
             }
-            
+
             k=osdbuf ;
             while( *k && i<50 ) {
                 osd.osdline[line][i++] = * k++ ;
@@ -1025,9 +1038,9 @@ void capture::updateOSD()
     }
     osd.osdline[line][i]=0 ;            // null terminal
     line++ ;
-    
+
     // prepare line 3, sensor
-    i=0; 
+    i=0;
     osd.osdline[line][i++]=8 ;             // x position
     if( linepos[line]>=0 ) {
         osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
@@ -1035,7 +1048,7 @@ void capture::updateOSD()
     else {
         osd.osdline[line][i++]=y_max - bottom_margin + linepos[line]*line_dist; // y position
     }
-    
+
     // Show sensors
     for(j=0; j<num_sensors; j++) {
         if( m_sensorosd & (1<<j) ) {
@@ -1053,9 +1066,9 @@ void capture::updateOSD()
     }
     osd.osdline[line][i]=0 ;            // null terminal
     line++ ;
-    
+
     // prepare line 4, camera name
-    i=0; 
+    i=0;
     osd.osdline[line][i++]=8 ;              // x position
     if( linepos[line]>=0 ) {
         osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
@@ -1069,7 +1082,7 @@ void capture::updateOSD()
             m_show_vri?g_vri:" ",           // optional VRI(video referrence id)
             m_attr.CameraName ,
             m_motion?'*':' ');
-    
+
     k=osdbuf ;
     while( *k && i<50 ) {
         osd.osdline[line][i++] = * k++ ;
@@ -1078,7 +1091,7 @@ void capture::updateOSD()
     line++ ;
 
     // prepare line 5, g-force value
-    i=0; 
+    i=0;
     osd.osdline[line][i++]=8 ;              // x position
     if( linepos[line]>=0 ) {
         osd.osdline[line][i++]=top_margin + linepos[line]*line_dist ;  // y position
@@ -1089,9 +1102,9 @@ void capture::updateOSD()
 
     float gf, gr, gd ;
     if( m_show_gforce && dio_getgforce( &gf, &gr, &gd ) ) {
-        sprintf( osdbuf, "%c%2.1lf %c%2.1lf %c%2.1lf", 
+        sprintf( osdbuf, "%c%2.1lf %c%2.1lf %c%2.1lf",
                 gf>=0.0?'F':'B',
-                gf>=0.0?gf:-gf, 
+                gf>=0.0?gf:-gf,
                 gr>=0.0?'R':'L',
                 gr>=0.0?gr:-gr,
                 gd>=0.0?'D':'U',
@@ -1117,14 +1130,14 @@ void capture::alarm()
     if( m_enable ) {
         // signal lost alarms
         if( getsignal()==0 &&
-           m_signallostalarm_pattern > 0 && 
+           m_signallostalarm_pattern > 0 &&
            m_signallostalarm>=0 && m_signallostalarm<num_alarms ) {
                alarms[m_signallostalarm]->setvalue(m_signallostalarm_pattern);
            }
-        
+
         // motion alarms
         if( m_motion &&
-           m_motionalarm_pattern > 0 && 
+           m_motionalarm_pattern > 0 &&
            m_motionalarm>=0 && m_motionalarm<num_alarms ) {
                alarms[m_motionalarm]->setvalue(m_motionalarm_pattern);
            }
@@ -1133,24 +1146,35 @@ void capture::alarm()
 
 void cap_start()
 {
-    int i; 
+    int i;
     for( i=0; i<cap_channels; i++) {
         cap_channel[i]->start();
     }
+
+#ifdef EAGLE368
+    for( i=0; i<cap_channels; i++) {
+        if( cap_channel[i]->isstarted() ) {
+            ((ipeagle32_capture *)cap_channel[i])->eagle368_startcapture();
+            break;
+        }
+    }
+#endif
 }
 
 void cap_stop()
 {
-    int i; 
+    int i;
+
+#ifdef EAGLE368
+    for( i=0; i<cap_channels; i++) {
+        if( cap_channel[i]->isstarted() ) {
+            ((ipeagle32_capture *)cap_channel[i])->eagle368_stopcapture();
+            break;
+        }
+    }
+#endif
     for( i=0; i<cap_channels; i++) {
         cap_channel[i]->stop();
-    }
-}
-
-void cap_restart(int channel)
-{
-    if( channel>=0 && channel<cap_channels ) {
-        cap_channel[channel]->restart();
     }
 }
 
@@ -1178,11 +1202,11 @@ void cap_init(config &dvrconfig)
     int videostandard ;
     int enabled_channels ;
     enabled_channels = 0 ;
-    
-	cap_channels = dvrconfig.getvalueint("system", "totalcamera");
-	if( cap_channels<=0 || cap_channels>64 ) {
-		cap_channels = 4 ;
-	}
+
+    cap_channels = dvrconfig.getvalueint("system", "totalcamera");
+    if( cap_channels<=0 || cap_channels>64 ) {
+        cap_channels = 4 ;
+    }
     cap_channel = new capture * [cap_channels] ;
 
     // initialize local capture card (eagle32)
@@ -1193,19 +1217,19 @@ void cap_init(config &dvrconfig)
         char cameraid[16] ;
         int cameratype ;
         sprintf(cameraid, "camera%d", i+1 );
-        cameratype = dvrconfig.getvalueint(cameraid, "type");	
+        cameratype = dvrconfig.getvalueint(cameraid, "type");
         if( cameratype == 1 ) {	// ip camera
             cap_channel[i] = new ipeagle32_capture(i);
         }
         else {
             cap_channel[i]=new capture(i);					// dummy channel
         }
-        
+
         if( cap_channel[i]->enabled() ) {
             enabled_channels++ ;
         }
     }
-    
+
 //    if( enabled_channels<=0 ) {
 //        printf("No camera available, DVR QUIT!\n");
 //        exit(1);
@@ -1218,17 +1242,17 @@ void cap_uninit()
 {
     int i;
     cap_stop();
-	i=cap_channels;
+    i=cap_channels;
     cap_channels=0 ;
-	if( cap_channel != NULL ) {
-		while(--i>=0) {
-			if( cap_channel[i] ) {
-				delete cap_channel[i] ;
-			}
-		}
-		delete [] cap_channel ;
-		cap_channel=NULL ;
-	}
+    if( cap_channel != NULL ) {
+        while(--i>=0) {
+            if( cap_channel[i] ) {
+                delete cap_channel[i] ;
+            }
+        }
+        delete [] cap_channel ;
+        cap_channel=NULL ;
+    }
     // un initialize local capture card
     dvr_log("Camera uninitialized.");
 }

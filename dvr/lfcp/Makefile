@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR server app 
+# Makefile for Eagle32 DVR server app
 #
 
 include ../config
@@ -10,8 +10,8 @@ EXTRASOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp ../ioprocess/diomap.cpp
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
-CFLAGS=-Wall -g -lstdc++
-LDFLAGS= 
+CFLAGS+= -Wall -lstdc++
+LDFLAGS=
 
 all: filert iomsg
 

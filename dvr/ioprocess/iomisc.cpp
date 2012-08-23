@@ -25,7 +25,7 @@
 #include "diomap.h"
 #include "iomisc.h"
 
-// set onboard rtc 
+// set onboard rtc
 void rtc_set(time_t utctime)
 {
     struct tm ut ;
@@ -197,7 +197,7 @@ void check_rtccmd()
             p_dio_mmap->rtc_cmd=-1;		// command error, (unknown cmd)
         }
     }
-}	
+}
 
 
 void check_cpuusage()
@@ -246,7 +246,7 @@ void check_temperature()
         temperature_timer=runtime ;
 
         i=mcu_iotemperature();
-        netdbg_print("Temperature: io(%d)",i );
+//        netdbg_print("Temperature: io(%d)",i );
         if( i > -127 && i < 127 ) {
             static int saveiotemp = 0 ;
             if( i>=75 &&
@@ -263,7 +263,7 @@ void check_temperature()
         }
 
         i=mcu_hdtemperature();
-        netdbg_print(" hd(%d)\n", i );
+//        netdbg_print(" hd(%d)\n", i );
         if( i > -127 && i < 127 ) {
             static int savehdtemp = 0 ;
 
@@ -326,7 +326,7 @@ void check_watchdog()
         watchdog_timer = runtime ;
         mcu_watchdogkick();
     }
-}		
+}
 
 void dvrsvr_down()
 {

@@ -19,10 +19,10 @@ alarm_t ** alarms ;
 
 double g_gpsspeed ;
 
-sensor_t::sensor_t(int n) 
+sensor_t::sensor_t(int n)
 {
     config dvrconfig(CFG_FILE);
-    char section[64] ;	
+    char section[64] ;
     sprintf(section, "sensor%d", n+1);
     m_name=dvrconfig.getvalue(section, "name");
     if( m_name.length()==0 )
@@ -71,7 +71,7 @@ void alarm_t::clear()
     m_value=0;
 }
 
-// value priority order:  1-2-3-4-5-6-7-0 
+// value priority order:  1-2-3-4-5-6-7-0
 int alarm_t::setvalue(int v)
 {
     if( m_value<=0 ) {
@@ -130,7 +130,7 @@ static void cpu_usage()
     }
 }
 
-int event_tm ;          // To support PWII Trace Mark 
+int event_tm ;          // To support PWII Trace Mark
 
 // main program loop here
 int event_check()
@@ -153,7 +153,7 @@ int event_check()
         for(i=0; i<cap_channels; i++ ) {
             cap_channel[i]->update(1);
         }
-        
+
         // update recording status
         rec_update();
 
@@ -161,7 +161,7 @@ int event_check()
         for(i=0; i<num_alarms; i++) {
             alarms[i]->clear();
         }
-        
+
         // update capture channel alarm
         for(i=0; i<cap_channels; i++ ) {
             cap_channel[i]->alarm();
@@ -169,7 +169,7 @@ int event_check()
 
         // update recording alarm
         rec_alarm();
-        
+
         videolost=0;
         videodata=1 ;
         for(i=0; i<cap_channels; i++ ) {
@@ -282,7 +282,7 @@ int event_check()
                 }
             }
         }
-#endif    
+#endif
 
         if( g_timetick<timer_1s || g_timetick-timer_1s > 1000 ) {
             timer_1s = g_timetick ;
@@ -295,8 +295,8 @@ int event_check()
             // calculate cpu usage
             cpu_usage();
 
-            // check memory
-            mem_check();
+            // check memory availablity
+            mem_available();
             if( g_memfree < g_lowmemory ) {
                 dvr_log("Memory low. restart DVR.");
                 app_state = APPRESTART ;
@@ -323,30 +323,30 @@ void event_init( config &dvrconfig )
     cyclefile = dvrconfig.getvalue("debug", "cyclefile" );
     cycleserver = dvrconfig.getvalue("debug", "cycleserver" );
 #endif
-    
+
     dio_init(dvrconfig);
     num_sensors=dio_inputnum();
     dvr_log("%d sensors detected!", num_sensors );
     if( num_sensors>0 ) {
         sensors = new sensor_t * [num_sensors] ;
-        for(i=0;i<num_sensors; i++) 
+        for(i=0;i<num_sensors; i++)
             sensors[i]=new sensor_t(i);
     }
-    
+
     num_alarms=dio_outputnum();
     dvr_log("%d alarms detected!", num_alarms );
     if( num_alarms>0 ) {
         alarms = new alarm_t * [num_alarms] ;
-        for(i=0;i<num_alarms; i++) 
+        for(i=0;i<num_alarms; i++)
             alarms[i]=new alarm_t(i);
     }
 //    config dvrconfig(dvrconfigfile);
 //    shutdowndelaytime = dvrconfig.getvalueint( "system", "shutdowndelay");
 //    if( shutdowndelaytime < 5 )
 //        shutdowndelaytime=5 ;
-    // $$$$ pre-set shut down delay time. 
+    // $$$$ pre-set shut down delay time.
 //    dio_lockpower(shutdowndelaytime);
-    
+
     g_gpsspeed = 0 ;
     alarm_suspend_timer = 0 ;
     event_tm = 0 ;
@@ -355,9 +355,9 @@ void event_init( config &dvrconfig )
 void event_uninit()
 {
     int i;
-    
+
     if( num_alarms>0 ) {
-        for(i=0;i<num_alarms; i++) 
+        for(i=0;i<num_alarms; i++)
             delete alarms[i] ;
         delete alarms ;
     }
@@ -368,10 +368,10 @@ void event_uninit()
         delete sensors ;
     }
     num_sensors=0 ;
-    
+
     // don't want shutdown delay
 //    dio_lockpower(0);
-    
+
 //    dio_unlockpower();
     dio_uninit();
 }

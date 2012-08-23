@@ -291,33 +291,33 @@ static int io_ready(int usec, int fd)
 // spawn a child process, and redirect child's stdin, stdout to pipeout, pipein
 int my_spawn( int *pipein, int * pipeout, int argc, char * argv[] )
 {    
-	int pipe1[2], pipe2[2] ;
-	int i;
-	char * sargv[argc] ;
-	
+    int pipe1[2], pipe2[2] ;
+    int i;
+    char * sargv[argc] ;
+
     pipe( pipe1 ); 	//  -> child
     pipe( pipe2 ); 	//  <- child
     
     if( fork()==0 ) {
-		for( i=0; i<argc; i++ ) {
-			sargv[i]=argv[i+1] ;
-		}
+        for( i=0; i<argc; i++ ) {
+            sargv[i]=argv[i+1] ;
+        }
         dup2( pipe1[0], 0 ) ;
         dup2( pipe2[1], 1 ) ;
-		close( pipe1[0] );
-		close( pipe1[1] );
-		close( pipe2[0] );
-		close( pipe2[1] );
-		execv( sargv[0], sargv );
-		// error!
-		exit(0);
+        close( pipe1[0] );
+        close( pipe1[1] );
+        close( pipe2[0] );
+        close( pipe2[1] );
+        execv( sargv[0], sargv );
+        // error!
+        exit(0);
     }
-	
-	*pipeout=pipe1[1] ;
-	*pipein=pipe2[0] ;
-	close( pipe1[0] );
-	close( pipe2[1] );
-	return 1 ;
+
+    *pipeout=pipe1[1] ;
+    *pipein=pipe2[0] ;
+    close( pipe1[0] );
+    close( pipe2[1] );
+    return 1 ;
 }
 
 int main( int argc, char * argv[] )

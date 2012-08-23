@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR ioprocess app 
+# Makefile for Eagle32 DVR ioprocess app
 #
 
 include ../config
@@ -12,17 +12,17 @@ HEADERS=cfg.h genclass.h
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
 #LDFLAGS= -lstdc++ -L./eagle32 -lsdk -ldadsp ./eagle32/dsplink.lib
-LDFLAGS= -lstdc++ 
-CCFLAGS= -g
+LDFLAGS= -lstdc++
+CFLAGS+= -Wall
 
 
 hid : $(OBJS) $(SOURCES_C)
-	$(CC) $(CCFLAGS) -o $@ $(LDFLAGS) $(OBJS) -Wl,-rpath,.
+	$(CC) $(CFLAGS) -o $@ $(LDFLAGS) $(OBJS) -Wl,-rpath,.
 	cp hid  $(debug_folder)
 
 
 %.o : %.cpp $(HEADERS)
-	$(CC) $(CCFLAGS) -Wall -c $< -o $@
+	$(CC) $(CFLAGS) -Wall -c $< -o $@
 
 clean :
 	rm *.o

@@ -2,35 +2,20 @@
 #include "../cfg.h"
 #include "diomap.h"
 
+#include "../dvrsvr/memory.h"
+
 /*
    share memory lock implemented use atomic swap
 
     operations between lock() and unlock() should be quick enough and do only memory access .
- 
-*/ 
 
-// atomically swap value
-/*
-    result=*m ;
-    *m = v ;
-    return result ;
 */
-int atomic_swap( int *m, int v)
-{
-    register int result ;
-    asm volatile (
-                "swp  %0, %2, [%1]\n\t"
-                : "=r" (result)
-                : "r" (m), "r" (v)
-                ) ;
-    return result ;
-}
 
 void dio_lock()
 {
     if( p_dio_mmap ) {
         int c=0;
-        while( atomic_swap( &(p_dio_mmap->lock), 1 ) ) {
+        while( arm_atomic_swap(1, &(p_dio_mmap->lock) ) ) {
             if( c++<100 ) {
                 sched_yield();
             }

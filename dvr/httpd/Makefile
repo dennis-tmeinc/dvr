@@ -1,22 +1,22 @@
 
-# Makefile for Eagle32 DVR ioprocess app 
+# Makefile for Eagle32 DVR ioprocess app
 #
 
 include ../config
 include $(PROJDIR)/arm_tool
 
-CFLAGS=-g -Wall
+CFLAGS+= -Wall
 
 HEADERS=
 
-LDFLAGS= 
+LDFLAGS=
 
 all: eaglehttpd eagle_setup- getsetup- cfgdown- livecam-
 
 eaglehttpd: eaglehttpd.c
 	$(CC) $(CFLAGS) -o $@ eaglehttpd.c $(LDFLAGS)
 	cp eaglehttpd  $(debug_folder)/www
-    
+
 eagle_setup- :
 	make -C eagle_setup
 

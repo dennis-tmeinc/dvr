@@ -14,6 +14,7 @@ void time_init()
     struct timespec tp ;
     clock_gettime(CLOCK_MONOTONIC, &tp );
     timetick_ref = tp.tv_sec ;
+    time_tick();
 }
 
 void time_uninit()
@@ -85,11 +86,11 @@ int time_setlocaltime(struct dvrtime *dvrt)
     tv.tv_usec=dvrt->milliseconds * 1000 ;
     tv.tv_sec=time_timelocal (dvrt) ;
     res=settimeofday( &tv, NULL );
-    
+
     //	system("hwclock --systohc --utc");		// update time to RTC
     // update RTC
     time_setrtc();
-    
+
     return res ;
 }
 
@@ -98,15 +99,15 @@ int time_setutctime(struct dvrtime *dvrt)
 {
     int res ;
     struct timeval tv ;
-    
+
     tv.tv_usec=dvrt->milliseconds * 1000 ;
     tv.tv_sec=time_timeutc(dvrt);
-    
+
     res=settimeofday( &tv, NULL );
-    
+
     // update RTC
     time_setrtc();
-    
+
     dvr_log("Set time: (UTC) %04d-%02d-%02d %02d:%02d:%02d.%03d",
             dvrt->year,
             dvrt->month,
@@ -124,15 +125,15 @@ int time_adjtime(struct dvrtime *dvrt)
     int res ;
     struct timeval tv, adjtv ;
     signed long diffs, diffus ;
-    
+
     gettimeofday(&tv, NULL );
-    
+
     adjtv.tv_usec=dvrt->milliseconds * 1000 ;
     adjtv.tv_sec=time_timeutc(dvrt);
-    
+
     diffs = (int)adjtv.tv_sec-(int)tv.tv_sec ;
     diffus = (int)adjtv.tv_usec - (int)tv.tv_usec ;
-    
+
     if( diffs>=-2 && diffs<=2 ) {
         diffus+=diffs*1000000 ;
         if( diffus<2000000 && diffus>-2000000 ) {
@@ -144,14 +145,10 @@ int time_adjtime(struct dvrtime *dvrt)
     }
 
     res=settimeofday( &adjtv, NULL );
-    
-    // restart capture ?!
-    cap_stop () ;
-    cap_start () ;
-    
+
     // update RTC
     time_setrtc();
-        
+
     dvr_log("adjtime: (UTC) %04d-%02d-%02d %02d:%02d:%02d.%03d",
             dvrt->year,
             dvrt->month,
@@ -160,7 +157,7 @@ int time_adjtime(struct dvrtime *dvrt)
             dvrt->minute,
             dvrt->second,
             dvrt->milliseconds );
-    
+
     return res ;
 }
 

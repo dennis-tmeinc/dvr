@@ -13,108 +13,6 @@
 
 char tzfile[] = "tz_option" ;
 
-// wait for socket ready to read (timeout in micro-seconds)
-int net_recvok(int fd, int tout)
-{
-    struct timeval timeout ;
-    timeout.tv_sec = tout/1000000 ;
-    timeout.tv_usec = tout%1000000 ;
-    fd_set fds;
-    FD_ZERO(&fds);
-    FD_SET(fd, &fds);
-    if (select(fd + 1, &fds, NULL, NULL, &timeout) > 0) {
-        return FD_ISSET(fd, &fds);
-    } else {
-        return 0;
-    }
-}
-
-int net_connect(const char *netname, int port)
-{
-    struct addrinfo hints;
-    struct addrinfo *res;
-    struct addrinfo *ressave;
-    int sockfd;
-    char service[20];
-    
-    memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family = PF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    
-    sprintf(service, "%d", port);
-    res = NULL;
-    if (getaddrinfo(netname, service, &hints, &res) != 0) {
-        return -1;
-    }
-    if (res == NULL) {
-        return -1;
-    }
-    ressave = res;
-    
-    /*
-     Try open socket with each address getaddrinfo returned,
-     until getting a valid socket.
-     */
-    sockfd = -1;
-    while (res) {
-        sockfd = socket(res->ai_family,
-                        res->ai_socktype, res->ai_protocol);
-        
-        if (sockfd != -1) {
-            if( connect(sockfd, res->ai_addr, res->ai_addrlen)==0 ) {
-                break;
-            }
-            close(sockfd);
-            sockfd = -1;
-        }
-        res = res->ai_next;
-    }
-    
-    freeaddrinfo(ressave);
-    
-    return sockfd;
-}
-
-// send all data
-// return 
-//       0: failed
-//       other: success
-int net_send(int sockfd, void * data, int datasize)
-{
-    int s ;
-    char * cbuf=(char *)data ;
-    while( (s = send(sockfd, cbuf, datasize, 0))>=0 ) {
-        datasize-=s ;
-        if( datasize==0 ) {
-            return 1;			// success
-        }
-        cbuf+=s ;
-    }
-    return 0;
-}
-
-// receive all data
-// return 
-//       0: failed (time out)
-//       other: success
-int net_recv(int sockfd, void * data, int datasize)
-{
-    int r ;
-    char * cbuf=(char *)data ;
-    while( net_recvok(sockfd, 5000000) ) {
-        r = recv(sockfd, cbuf, datasize, 0);
-        if( r<=0 ) {
-            break;				// error
-        }
-        datasize-=r ;
-        if( datasize==0 ) {
-            return 1;			// success
-        }
-        cbuf+=r ;
-    }
-    return 0;
-}
-
 struct channelstate {
     int sig ;
     int rec ;
@@ -154,7 +52,7 @@ int getchannelstate(struct channelstate * chst, unsigned long * streambytes, int
                 }
             }
         }
-        
+
         // get stream bytes
         for( i=0; i<rch; i++ ) {
             streambytes[i]=0;
@@ -169,7 +67,7 @@ int getchannelstate(struct channelstate * chst, unsigned long * streambytes, int
                 }
             }
         }
-        close( sockfd );        
+        close( sockfd );
     }
     return rch ;
 }
@@ -237,7 +135,7 @@ struct dvrstat {
     float uptime, idletime ;
     unsigned long streambytes[16] ;
 } savedstat ;
-    
+
 
 // generate status page
 void print_status()
@@ -250,7 +148,7 @@ void print_status()
     int camera_number ;
     struct channelstate cs[16] ;
     struct dvrstat stat ;
-    
+
     memset( &savedstat, 0, sizeof( savedstat ) );
     statfile = fopen( "savedstat", "rb");
     if( statfile ) {
@@ -272,33 +170,33 @@ void print_status()
         fclose(ftz);
         setenv("TZ", tz, 1);
     }
-        
+
     //JSON head
     printf("{");
-        
+
     // dvr time
     char timebuf[100] ;
     double timeinc ;
     gettimeofday(&stat.checktime, NULL);
-    
+
     time_t ttnow ;
     ttnow = (time_t) stat.checktime.tv_sec ;
 #define RFC1123FMT "%a, %d %b %Y %H:%M:%S "
-    strftime( timebuf, sizeof(timebuf), RFC1123FMT, localtime( &ttnow ) );  
+    strftime( timebuf, sizeof(timebuf), RFC1123FMT, localtime( &ttnow ) );
     printf("\"dvrtime\":\"%s\",", timebuf);
-    
+
     if( savedstat.checktime.tv_sec==0 ) {
         timeinc = 1.0 ;
     }
     else {
-        timeinc = (double)(stat.checktime.tv_sec-savedstat.checktime.tv_sec) + 
+        timeinc = (double)(stat.checktime.tv_sec-savedstat.checktime.tv_sec) +
             (double)(stat.checktime.tv_usec - savedstat.checktime.tv_usec)/1000000.0 ;
     }
-    
+
     // get status from dvrsvr
     memset( cs, 0, sizeof(cs) );
     chno=getchannelstate(cs, stat.streambytes, 16);
-    for( i=1; i<=camera_number ; i++ ) 
+    for( i=1; i<=camera_number ; i++ )
     {
         if( cs[i-1].sig ) {
             printf("\"camera_%d_signal_lost\":\"on\",", i );
@@ -308,24 +206,24 @@ void print_status()
         }
         if( cs[i-1].mot ) {
             printf("\"camera_%d_motion\":\"on\",", i );
-        }                
-        
+        }
+
         double bitrate = (double)(stat.streambytes[i-1] - savedstat.streambytes[i-1]) / (timeinc*125.0) ;
         if( bitrate > 10000.0 ) {
             bitrate = 0.0 ;
         }
-        
+
         printf("\"camera_%d_bitrate\":\"%d\",", i, (int)bitrate );
-        
+
     }
-        
+
     // calculate CPU usage
     FILE * uptimefile = fopen("/proc/uptime", "r" );
     if( uptimefile ) {
         fscanf( uptimefile, "%f %f", &stat.uptime, &stat.idletime ) ;
         fclose( uptimefile );
     }
-    
+
     float cpuusage = stat.uptime - savedstat.uptime ;
     if( cpuusage < 0.1 ) {
         cpuusage = 99.0 ;
@@ -333,16 +231,16 @@ void print_status()
     else {
         cpuusage = 100.0 * (cpuusage - (stat.idletime-savedstat.idletime)) / cpuusage ;
     }
-    
+
     printf("\"cpu_usage\":\"%.1f\",", cpuusage );
-    
+
     // print memory usage
     int stfree, sttotal ;
     if( memory_usage(&sttotal, &stfree) ) {
         printf("\"memory_total\":\"%.1f\",", ((float)sttotal)/1000.0 );
         printf("\"memory_free\":\"%.1f\",", ((float)stfree)/1000.0 );
     }
-    
+
     // print disk usage
     if( disk_usage(&sttotal, &stfree) ) {
         printf("\"disk_total\":\"%d\",", sttotal );
@@ -352,7 +250,7 @@ void print_status()
         printf("\"disk_total\":\"%d\",", 0 );
         printf("\"disk_free\":\"%d\",", 0 );
     }
-    
+
     // print system temperature
     int systemperature=-128, hdtemperature=-128 ;
     get_temperature(&systemperature, &hdtemperature) ;
@@ -371,8 +269,8 @@ void print_status()
     else {
         printf("\"temperature_disk_c\":\" \"," );
         printf("\"temperature_disk_f\":\" \"," );
-    }    
-    
+    }
+
     printf("\"objname\":\"status_value\"}\r\n" );
 
     statfile = fopen( "savedstat", "wb");
@@ -380,9 +278,9 @@ void print_status()
         fwrite( &stat, sizeof(stat), 1, statfile );
         fclose( statfile );
     }
-    
+
 }
- 
+
 
 int print_cfgreport()
 {
@@ -412,19 +310,19 @@ int print_cfgreport()
         sprintf( section, "sensor%d", i+1 );
         sensornames[i] = dvrconfig.getvalue(section, "name") ;
     }
-    
+
     // write TVS mf id
     value = dvrconfig.getvalue("system", "tvsmfid" );
     if( value.length()>0 ) {
         printf("TVS manufacturer ID : %s\n", (char *)value );
     }
-    
+
     // write system_value
     value = dvrconfig.getvalue("system","tvs_licenseplate");
     if( value.length()>0 ) {
         printf("Cab license plate number : %s\n", (char *)value );
     }
-    
+
     value = dvrconfig.getvalue("system","tvs_medallion");
     if( value.length()>0 ) {
         printf("Cab medallion : %s\n", (char *)value );
@@ -444,7 +342,7 @@ int print_cfgreport()
         }
         fclose( ifile );
     }
-    
+
     ifile = fopen( VAR_DIR"/mcuversion", "r" );
     if( ifile ) {
         l = fread( buf, 1, 99, ifile );
@@ -472,7 +370,7 @@ int print_cfgreport()
     if( get_temperature( &total, &free ) ) {
         printf("System temperature : %d degree C / %d degree F\n", total, total*9/5+32 );
     }
-    
+
     // dvr_time_zone
     value = dvrconfig.getvalue("system", "timezone");
     if( value.length()>0 ) {
@@ -496,7 +394,7 @@ int print_cfgreport()
     if( value.length()>0 ) {
         printf("Event marker post-lock time : %s\n", (char *)value );
     }
-        
+
     // no rec playback
     ivalue = dvrconfig.getvalueint("system", "norecplayback");
     printf( "Stop recording when playback : %s\n" , ivalue >0 ? "yes": "no" );
@@ -508,13 +406,13 @@ int print_cfgreport()
     // gpslog enable
     ivalue = dvrconfig.getvalueint("glog", "gpsdisable");
     printf( "GPS loggin %s\n", ivalue==0 ? "enabled." : "disabled." );
-        
+
     // gps port
     value = dvrconfig.getvalue("glog", "serialport");
     if( value.length()>0 ) {
            printf("GPS port : %s\n", (char *)value );
     }
-        
+
     // gps baud rate
     value = dvrconfig.getvalue("glog", "serialbaudrate");
     if( value.length()>0 ) {
@@ -522,11 +420,11 @@ int print_cfgreport()
     }
 
     // write camera_value
-  
+
     for( i=1; i<=camera_number; i++ ) {
         printf( "\nCamera #%d settings.\n", i );
         char section[10] ;
-            
+
         sprintf(section, "camera%d", i);
 
          // camera_name
@@ -542,11 +440,11 @@ int print_cfgreport()
         else {
             printf( "Camera disabled.\n" );
         }
-        
+
 
         // recording_mode
-        static char * recordingmode[5]={ 
-            "Continue", 
+        static char * recordingmode[5]={
+            "Continue",
             "Trigger by sensor",
             "Trigger by motion",
             "Trigger by sensor", "" } ;
@@ -555,7 +453,7 @@ int print_cfgreport()
 
         // # resolution, 0:CIF, 1:2CIF, 2:DCIF, 3:4CIF
         // resolution
-        static char * picres[5]={ 
+        static char * picres[5]={
             "352x240",
             "704x240",
             "528x320",
@@ -621,7 +519,7 @@ int print_cfgreport()
         printf("Post-recording time for trigger mode : %d (s)\n", ivalue );
 
         printf("    Triggering sensors: \n");
-        // trigger 
+        // trigger
         for( ivalue=1; ivalue<=sensor_number; ivalue++ ) {
             char trigger[30] ;
             int  itrig ;
@@ -729,14 +627,14 @@ int print_cfgreport()
         ivalue = dvrconfig.getvalueint(section, "inverted") ;
         printf( "    Inverted : %s\n", ivalue>0 ? "on" : "off" );
     }
-    
+
     // write network_value
     printf( "Network settings,\n");
 
     // eth_ip
     value = dvrconfig.getvalue("network", "eth_ip");
     printf( "Ethernet IP address : %s\n", (char *)value );
-    
+
     // eth_mask
     value = dvrconfig.getvalue("network", "eth_mask");
     printf( "Ethernet net mask : %s\n", (char *)value );
@@ -756,7 +654,7 @@ int print_cfgreport()
     // wifi_id
     value = dvrconfig.getvalue("network", "wifi_essid");
     printf( "Wireless essid : %s\n", (char *)value );
-    
+
     return 0;
 }
 
@@ -771,7 +669,7 @@ int main()
     id[0]=0 ;
     fread( id, 1, 10, f ) ;
     fclose( f );
-    if( 
+    if(
        (id[0]=='M' && id[1]=='F') ||
        (id[0]=='I' && id[1]=='N') ||
        (id[0]=='I' && id[1]=='S') )

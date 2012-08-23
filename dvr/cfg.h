@@ -4,11 +4,15 @@
 #define __CFG_H__
 
 //#define EAGLE32
-#define EAGLE34
+#define EAGLE368
 
 //#define MDVR_APP
 #define PWII_APP
 //#define TVS_APP
+#define PWZEUS_APP
+
+// yet another g-force
+#define SUPPORT_YAGF
 
 //#define EAGLESVR
 
@@ -23,11 +27,11 @@
 
 #endif
 
-#define	APPNAME	"PW34"
+#define	APPNAME	"PWZ3"
 
 // default config file
-#define	CFG_DEFFILE	"/davinci/dvr/defconf" 
-#define	CFG_FILE	"/etc/dvr/dvr.conf" 
+#define	CFG_DEFFILE	"/davinci/dvr/defconf"
+#define	CFG_FILE	"/etc/dvr/dvr.conf"
 
 // applications dir
 #define APP_DIR		"/davinci/dvr"

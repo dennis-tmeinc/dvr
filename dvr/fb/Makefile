@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR ioprocess app 
+# Makefile for Eagle32 DVR ioprocess app
 #
 
 include ../config
@@ -7,11 +7,11 @@ include $(PROJDIR)/arm_tool
 
 HEADERS=
 
-CFLAGS=
+CFLAGS+= -Wall
 
 default: libfbdraw.so
 
-fb : $(OBJS) fb.cpp libfbdraw.so 
+fb : $(OBJS) fb.cpp libfbdraw.so
 	$(CC) $(CFLAGS) -o $@ fb.cpp libfbdraw.so -Wl,-rpath,. -lstdc++
 	cp fb ~/nfsroot/
 	cp libfbdraw.so  $(debug_folder)

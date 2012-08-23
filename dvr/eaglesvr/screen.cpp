@@ -22,7 +22,13 @@
 #include "eagle34/davinci_sdk.h"
 #endif
 
+#ifdef EAGLE368
+#include "eagle368/tme_sdk.h"
+#endif
+
+#ifndef MAIN_OUTPUT
 #define MAIN_OUTPUT  (0)
+#endif
 
 static int ScreenStandard = STANDARD_NTSC ;
 static int ScreenNum ;
@@ -61,8 +67,13 @@ public:
 
         dvr_log( "Screen channle %d start liveview.", m_channel );
 
-        SetPreviewScreen(MAIN_OUTPUT,m_channel+1,1);          // third  parameter turn on/off specified channel
-        SetPreviewAudio(MAIN_OUTPUT,m_channel+1,1);           // turn on/off audio ?
+#ifdef EAGLE368
+        SetPreviewScreen(m_channel,1);                      // third  parameter turn on/off specified channel
+        SetPreviewAudio(m_channel,1);                       // turn on/off audio ?
+#else   // EAGLE34/EAGLE34
+        SetPreviewScreen(MAIN_OUTPUT,m_channel+1,1);        // third  parameter turn on/off specified channel
+        SetPreviewAudio(MAIN_OUTPUT,m_channel+1,1);         // turn on/off audio ?
+#endif
         m_playmode = SCREEN_PLAYMODE_LIVE ;
     }
 
@@ -71,40 +82,43 @@ public:
 
         dvr_log( "Screen channle %d start decode.", m_channel );
 
+#if defined(EAGLE32) || defined( EAGLE34 )
         // replace channel to 0, because it is the only channel support playback
         dvr_log( "Mapped screen channle %d.", m_channel%ScreenNum  );
 
         SetDecodeScreen(MAIN_OUTPUT, m_channel%ScreenNum+1, 1);
         SetDecodeAudio(MAIN_OUTPUT, m_channel%ScreenNum+1, 1);
-#ifdef EAGLE32            
         m_decodehandle = StartDecode(MAIN_OUTPUT, m_channel%ScreenNum+1, 1, cap_fileheader(0));
-#endif            
-#ifdef EAGLE34
-	m_decodehandle = StartDecode(MAIN_OUTPUT, m_channel%ScreenNum+1, 1,  NULL);
+        m_decodespeed = DECODE_SPEED_NORMAL ;
+        SetDecodeSpeed(m_decodehandle, m_decodespeed);
+        m_playmode = SCREEN_PLAYMODE_DECODE ;
 #endif
-	m_decodespeed = DECODE_SPEED_NORMAL ;
-	SetDecodeSpeed(m_decodehandle, m_decodespeed);
-	m_playmode = SCREEN_PLAYMODE_DECODE ;
     }
 
     void stop() {
 
         if( m_playmode==SCREEN_PLAYMODE_DECODE ) {
+#if defined(EAGLE32) || defined( EAGLE34 )
             if( m_decodehandle>=0 ) {
                 StopDecode( m_decodehandle );
                 m_decodehandle = -1 ;
             }
             SetDecodeScreen(MAIN_OUTPUT, m_channel%ScreenNum+1, 0);
             SetDecodeAudio(MAIN_OUTPUT, m_channel%ScreenNum+1, 0);
-
+#endif
             dvr_log( "Screen channle %d stop decode.", m_channel );
 
         }
         else {
             // stop live view
+#if defined(EAGLE32) || defined( EAGLE34 )
             SetPreviewScreen(MAIN_OUTPUT,m_channel+1,0);          // third  parameter turn on/off specified channel
             SetPreviewAudio(MAIN_OUTPUT,m_channel+1,0);           // turn on/off audio ?
-
+#endif
+#ifdef EAGLE368
+            SetPreviewScreen(m_channel,0);
+            SetPreviewAudio(m_channel,0);
+#endif
             dvr_log( "Screen channle %d stop live view.", m_channel );
 
         }
@@ -114,10 +128,16 @@ public:
     // 1: turn audio on, 0: turn audio off
     void setaudio( int onoff ) {
         if( m_playmode==1 ) {
+#ifdef EAGLE368
+            SetPreviewAudio(m_channel, onoff );
+#else
             SetPreviewAudio(MAIN_OUTPUT,m_channel+1, onoff );
+#endif
         }
         else if( m_playmode==2 ) {
+#if defined(EAGLE32) || defined( EAGLE34 )
             SetDecodeAudio(MAIN_OUTPUT,m_channel+1, onoff );
+#endif
         }
     }
 
@@ -132,20 +152,23 @@ public:
     // set decode speed. 0
     // decode speed, 0=fastest, 3=fast, 4=normal, 5=slow, 6=slowest, >=7 error
     void decodespeed( int speed ) {
+#if defined(EAGLE32) || defined( EAGLE34 )
         if( m_decodehandle>=0 ) {
             m_decodespeed = speed ;
             SetDecodeSpeed(m_decodehandle, m_decodespeed);
         }
+#endif
     }
 
     // input decode data
     void decodeinput( void * inputbuff, int bufsize ) {
 
         // dvr_log( "Screen channle %d input %d bytes.", m_channel, bufsize );
-
+#if defined(EAGLE32) || defined( EAGLE34 )
         if( m_decodehandle>=0 ) {
             InputAvData(m_decodehandle, inputbuff, bufsize );
         }
+#endif
     }
 } ;
 
@@ -158,18 +181,8 @@ videoscreen ** screen_vs = NULL ;
 //          displayorder: screen layout. support  1 , 2, 4 (2x2), 6 (3x3), 8 (?), 9 (3x3 ), 16 (4x4)
 void screen_setmode( int videostd, int screennum, unsigned char * displayorder )
 {
-    // setup preview display screen
-    int res = 0 ;
     int i;
-
-    // NTSC : 1  , PAL : 2
-    ScreenStandard = videostd ;
-    SetOutputFormat( ScreenStandard ) ;
-    // clear display
-    ClrDisplayParams(MAIN_OUTPUT,0);
-    res=SetDisplayParams(MAIN_OUTPUT, screennum);       //  set screen format, support 1 , 2, 4 (2x2), 6 (3x3), 8 (?), 9 (3x3 ), 16 (4x4)
-    res=SetDisplayOrder(MAIN_OUTPUT, displayorder );    // select screen channel order, also turn on all preview channels
-
+    // setup preview display screen
     ScreenNum = screennum ;
     if( ScreenNum<0 ) {
         ScreenNum=1  ;
@@ -178,6 +191,22 @@ void screen_setmode( int videostd, int screennum, unsigned char * displayorder )
         ScreenNum=cap_channels ;
     }
 
+    // NTSC : 1  , PAL : 2
+    ScreenStandard = videostd ;
+
+#if defined(EAGLE32)||defined(EAGLE34)
+    int res = 0 ;
+    SetOutputFormat( ScreenStandard ) ;
+    // clear display
+    ClrDisplayParams(MAIN_OUTPUT,0);
+    res=SetDisplayParams(MAIN_OUTPUT, ScreenNum);       //  set screen format, support 1 , 2, 4 (2x2), 6 (3x3), 8 (?), 9 (3x3 ), 16 (4x4)
+    res=SetDisplayOrder(MAIN_OUTPUT, displayorder );    // select screen channel order, also turn on all preview channels
+#endif
+
+#ifdef EAGLE368
+    SetDisplayParams(ScreenNum);
+#endif
+
     if( screen_vs ) {
         for( i=0; i<cap_channels; i++ ) {
             if( screen_vs[i] ) {
@@ -185,7 +214,6 @@ void screen_setmode( int videostd, int screennum, unsigned char * displayorder )
             }
         }
     }
-
     // select Video output format to NTSC and initial drawing surface
     draw_init(ScreenStandard);
 }
@@ -204,7 +232,6 @@ void screen_init()
     for( i=0; i<cap_channels; i++ ) {
         screen_vs[i]=new videoscreen(i);
     }
-    ScreenNum=1;
 }
 
 // screen finish, clean up
@@ -224,8 +251,16 @@ void screen_uninit()
 
 // support screen service over tcp
 
-void screen_live( int channel ) 
+void screen_live( int channel )
 {
+    if( ScreenNum==1 ) {        // single screen
+        int ch ;
+        for (ch=0; ch<cap_channels; ch++ ) {
+            if( ch!=channel ) {
+                screen_vs[ch]->stop();
+            }
+        }
+    }
     if( channel>=0 && channel<cap_channels ) {
         if( !screen_vs[channel]->islive() ) {
             screen_vs[channel]->startliveview();
@@ -233,23 +268,35 @@ void screen_live( int channel )
     }
 }
 
-void screen_playback( int channel, int speed ) 
+void screen_playback( int channel, int speed )
 {
+    if( ScreenNum==1 ) {        // single screen
+        int ch ;
+        for (ch=0; ch<cap_channels; ch++ ) {
+            if( ch!=channel ) {
+                screen_vs[ch]->stop();
+            }
+        }
+    }
+#if defined(EAGLE32) || defined(EAGLE34)
     if( channel>=0 && channel<cap_channels ) {
         if( !screen_vs[channel]->isdecode() ) {
             screen_vs[channel]->startdecode();
         }
         screen_vs[channel]->decodespeed(speed);
     }
+#endif
 }
 
 void screen_playbackinput( int channel, void * buffer, int bufsize )
-{	
+{
+#if defined(EAGLE32) || defined(EAGLE34)
     if( channel>=0 && channel<cap_channels ) {
         if( screen_vs[channel]->isdecode() ) {
             screen_vs[channel]->decodeinput(buffer, bufsize);
         }
     }
+#endif
 }
 
 void screen_stop( int channel )

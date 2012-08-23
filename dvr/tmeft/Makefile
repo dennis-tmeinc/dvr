@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR ioprocess app 
+# Makefile for Eagle32 DVR ioprocess app
 #
 
 include ../config
@@ -16,7 +16,7 @@ OBJS = $(patsubst %.c, %.o, $(SOURCES))
 
 LDFLAGS=
 
-CFLAGS=-g -Wall
+CFLAGS+= -Wall
 
 all: tmefile
 

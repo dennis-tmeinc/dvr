@@ -5,11 +5,11 @@
 include ../config
 include $(PROJDIR)/arm_tool
 
-export CFLAGS=
+CFLAGS+=
 
 HEADERS=
 
-LDFLAGS= 
+LDFLAGS=
 
 programs/ssl/ssl_server:
 	cd library  && $(MAKE) all && cd ..

@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR dvrsetup app 
+# Makefile for Eagle32 DVR dvrsetup app
 #
 
 include ../../config
@@ -16,20 +16,20 @@ OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
 LDFLAGS= -lstdc++ -lcrypt
 
-CFLAGS=-I../dvrsvr -g -Wall
+CFLAGS+= -I../dvrsvr -Wall
 
 all: getsetup applysetup
 
 getsetup: getsetup.cpp $(EXTSOURCES) $(EXTHEADERS)
-	$(CC) -g -o $@ getsetup.cpp $(EXTSOURCES) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ getsetup.cpp $(EXTSOURCES) $(LDFLAGS)
 	cp getsetup  $(debug_folder)/www
 
 applysetup: applysetup.cpp $(EXTSOURCES) $(EXTHEADERS)
-	$(CC) -g -o $@ applysetup.cpp $(EXTSOURCES) ../../dvrsvr/crypt.cpp $(LDFLAGS) 
+	$(CC) $(CFLAGS) -o $@ applysetup.cpp $(EXTSOURCES) ../../dvrsvr/crypt.cpp $(LDFLAGS)
 	cp applysetup  $(debug_folder)/www
 
 %.o : %.cpp $(HEADERS)
-	$(CC) -g -Wall -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	rm -f applysetup

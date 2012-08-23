@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR dvrsetup app 
+# Makefile for Eagle32 DVR dvrsetup app
 #
 
 include ../../config
@@ -8,14 +8,14 @@ include $(PROJDIR)/arm_tool
 SOURCES=
 
 EXTHEADERS=../../dvrsvr/cfg.h ../../dvrsvr/genclass.h
-EXTSOURCES=../../dvrsvr/config.cpp ../../dvrsvr/string.cpp
+EXTSOURCES=../../dvrsvr/config.cpp ../../dvrsvr/string.cpp ../net.cpp
 HEADERS=
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
 LDFLAGS=
 
-CFLAGS= -g -Wall -Wno-write-strings
+CFLAGS+= -Wall -Wno-write-strings
 TARGET=cfgdown.cgi dvrstatus.cgi cfgreport gcal.cgi gcrash.cgi
 
 all: $(TARGET)
@@ -33,7 +33,7 @@ gcrash.cgi : gcrash.cpp ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h
 	cp $@  $(debug_folder)/www
 
 dvrstatus.cgi : dvrstatus.cpp ../eagle_setup/getquery.cpp $(EXTHEADERS) $(EXTSOURCES) ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h
-	$(CC) $(CFLAGS) -o $@ dvrstatus.cpp ../eagle_setup/getquery.cpp ../../ioprocess/diomap.cpp $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ dvrstatus.cpp ../net.cpp ../eagle_setup/getquery.cpp ../../ioprocess/diomap.cpp $(LDFLAGS)
 	cp $@  $(debug_folder)/www
 
 cfgreport : cfgreport.cpp $(EXTHEADERS) $(EXTSOURCES) ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h

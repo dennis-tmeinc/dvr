@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <netinet/ip.h>
 #include <sys/ioctl.h>
+#include <sys/un.h>
 #include <net/if.h>
 
 #include "dvr.h"
@@ -63,11 +64,11 @@ int net_recvok(int fd, int tout)
     struct timeval timeout ;
     timeout.tv_sec = tout/1000000 ;
     timeout.tv_usec = tout%1000000 ;
-    fd_set fds;
-    FD_ZERO(&fds);
-    FD_SET(fd, &fds);
-    if (select(fd + 1, &fds, NULL, NULL, &timeout) > 0) {
-        return FD_ISSET(fd, &fds);
+    fd_set fdsr;
+    FD_ZERO(&fdsr);
+    FD_SET(fd, &fdsr);
+    if (select(fd + 1, &fdsr, NULL, NULL, &timeout) > 0) {
+        return FD_ISSET(fd, &fdsr);
     } else {
         return 0;
     }
@@ -77,12 +78,12 @@ int net_onframe(cap_frame * pframe)
 {
     int sends = 0;
     dvrsvr *pconn;
-    
+
     // see if we can use multicast
     //    if( multicast_en ) {
     //        sendto( ) ;
     //    }
-    
+
     if( net_run == 1 ) {
         net_lock();
         pconn = dvrsvr::head();
@@ -114,7 +115,7 @@ void net_message()
         if (req == REQDVREX) {
             req = DVRSVREX;
             sendto(msgfd, &req, sizeof(req), 0, &(from.addr), from.addrlen);
-        } 
+        }
         else if (req == REQSHUTDOWN) {
             app_state = APPQUIT;
         }
@@ -135,42 +136,42 @@ void net_message()
         else if (strncmp(msgbuf, "iamserver", 9)==0) {
             // received response from a smartserver
 
-			// detecting which interface the packet coming from.
-			char          buf[1024];
-			struct ifconf ifc;
-			struct ifreq *ifr;
-			int           nInterfaces;
-			int           i;
+            // detecting which interface the packet coming from.
+            char          buf[1024];
+            struct ifconf ifc;
+            struct ifreq *ifr;
+            int           nInterfaces;
+            int           i;
 
-			/* Query available interfaces. */
-			memset( buf, 0, sizeof(buf));
-			memset( &ifc, 0, sizeof(ifc));
-			ifc.ifc_len = sizeof(buf);
-			ifc.ifc_buf = buf;
-			if(ioctl(msgfd, SIOCGIFCONF, &ifc) < 0)
-			{
-				return ;
-			}
+            /* Query available interfaces. */
+            memset( buf, 0, sizeof(buf));
+            memset( &ifc, 0, sizeof(ifc));
+            ifc.ifc_len = sizeof(buf);
+            ifc.ifc_buf = buf;
+            if(ioctl(msgfd, SIOCGIFCONF, &ifc) < 0)
+            {
+                return ;
+            }
 
-			/* Iterate through the list of interfaces. */
-			ifr         = ifc.ifc_req;
-			nInterfaces = ifc.ifc_len / sizeof(struct ifreq);
-			for(i = 0; i < nInterfaces; i++)
-			{
-				struct ifreq *item = &ifr[i];
-				struct ifreq ifrmask ;
-				ifrmask = *item ;
+            /* Iterate through the list of interfaces. */
+            ifr         = ifc.ifc_req;
+            nInterfaces = ifc.ifc_len / sizeof(struct ifreq);
+            for(i = 0; i < nInterfaces; i++)
+            {
+                struct ifreq *item = &ifr[i];
+                struct ifreq ifrmask ;
+                ifrmask = *item ;
 
-				// get mask address
-				if(ioctl(msgfd, SIOCGIFNETMASK, &ifrmask) >= 0) {
-					if( ((((struct sockaddr_in *)&ifrmask.ifr_netmask)->sin_addr).s_addr & (((struct sockaddr_in *)&from.addr)->sin_addr).s_addr ) ==
-					   ((((struct sockaddr_in *)&ifrmask.ifr_netmask)->sin_addr).s_addr & (((struct sockaddr_in *)&item->ifr_addr)->sin_addr).s_addr ) ) 
-					{
-						dio_smartserveron( item->ifr_name );
-						return ;
-					}
-				}
-			}
+                // get mask address
+                if(ioctl(msgfd, SIOCGIFNETMASK, &ifrmask) >= 0) {
+                    if( ((((struct sockaddr_in *)&ifrmask.ifr_netmask)->sin_addr).s_addr & (((struct sockaddr_in *)&from.addr)->sin_addr).s_addr ) ==
+                       ((((struct sockaddr_in *)&ifrmask.ifr_netmask)->sin_addr).s_addr & (((struct sockaddr_in *)&item->ifr_addr)->sin_addr).s_addr ) )
+                    {
+                        dio_smartserveron( item->ifr_name );
+                        return ;
+                    }
+                }
+            }
             dio_smartserveron("unknown");
         }
     }
@@ -181,10 +182,13 @@ int net_addr(char *netname, int port, struct sockad *addr)
     struct addrinfo hints;
     struct addrinfo *res;
     char service[20];
-    
+
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_DGRAM;
+    if(netname==NULL) {
+        hints.ai_flags |= AI_PASSIVE ;
+    }
     sprintf(service, "%d", port);
     res = NULL;
     if (getaddrinfo(netname, service, &hints, &res) != 0) {
@@ -197,6 +201,29 @@ int net_addr(char *netname, int port, struct sockad *addr)
     return 0;
 }
 
+int net_name(struct sockad *sad, char *netname, int netnamelen )
+{
+    return getnameinfo( &(sad->addr), sad->addrlen, netname, netnamelen, NULL, 0, NI_NUMERICHOST );
+}
+
+// change port number of sad
+int net_setport(struct sockad *sad, int port)
+{
+    char hostnamex[64] ;
+    net_name( sad, hostnamex, sizeof(hostnamex) );
+    return net_addr(hostnamex, port, sad) ;
+}
+
+// compare ip address, return turn if two addr is the same (ip)
+int net_cmpaddr(struct sockad *sad1, struct sockad *sad2)
+{
+    char hostname1[64] ;
+    char hostname2[64] ;
+    net_name( sad1, hostname1, sizeof(hostname1) );
+    net_name( sad2, hostname2, sizeof(hostname2) );
+    return strcmp( hostname1, hostname2 ) ;
+}
+
 // send out UDP message use msgfd
 int net_sendmsg( char * dest, int port, const void * msg, int msgsize )
 {
@@ -205,7 +232,7 @@ int net_sendmsg( char * dest, int port, const void * msg, int msgsize )
     return (int)sendto( msgfd, msg, (size_t)msgsize, 0, &(destaddr.addr), destaddr.addrlen );
 }
 
-void net_dprint( char * fmt, ... ) 
+void net_dprint( char * fmt, ... )
 {
     if( netdbg_on && msgfd>0 ) {
         char msg[1024] ;
@@ -234,7 +261,7 @@ int net_broadcast(char * interface, int port, void * msg, int msgsize )
         getnameinfo( &(ifr.ifr_broadaddr), sizeof(ifr.ifr_broadaddr), brname, sizeof(brname), NULL, 0, NI_NUMERICHOST );
         return net_sendmsg( brname, port, msg, msgsize );
     }
-    return 0 ;   
+    return 0 ;
 }
 
 char net_smartserver[128] ;
@@ -249,41 +276,64 @@ int net_detectsmartserver()
     }
     else {
         // "rausb0", 49954, "lookingforsmartserver", 21 );
-		char          buf[1024];
-		struct ifconf ifc;
-		struct ifreq *ifr;
-		int           nInterfaces;
-		int           i;
+        char          buf[1024];
+        struct ifconf ifc;
+        struct ifreq *ifr;
+        int           nInterfaces;
+        int           i;
 
-		/* Query available interfaces. */
-		memset( buf, 0, sizeof(buf));
-		memset( &ifc, 0, sizeof(ifc));
-		ifc.ifc_len = sizeof(buf);
-		ifc.ifc_buf = buf;
-		if(ioctl(msgfd, SIOCGIFCONF, &ifc) < 0)
-		{
-			return 0;
-		}
+        /* Query available interfaces. */
+        memset( buf, 0, sizeof(buf));
+        memset( &ifc, 0, sizeof(ifc));
+        ifc.ifc_len = sizeof(buf);
+        ifc.ifc_buf = buf;
+        if(ioctl(msgfd, SIOCGIFCONF, &ifc) < 0)
+        {
+            return 0;
+        }
 
-		/* Iterate through the list of interfaces. */
-		ifr         = ifc.ifc_req;
-		nInterfaces = ifc.ifc_len / sizeof(struct ifreq);
-		for(i = 0; i < nInterfaces; i++)
-		{
-			struct ifreq *item = &ifr[i];
+        /* Iterate through the list of interfaces. */
+        ifr         = ifc.ifc_req;
+        nInterfaces = ifc.ifc_len / sizeof(struct ifreq);
+        for(i = 0; i < nInterfaces; i++)
+        {
+            struct ifreq *item = &ifr[i];
 
-			//    "rausb0", 49954, "lookingforsmartserver", 21 );
-			/* Get the broadcast address (added by Eric) */
-			if(ioctl(msgfd, SIOCGIFBRDADDR, item) >= 0) {
-		        net_sendmsg( inet_ntoa(((struct sockaddr_in *)&item->ifr_broadaddr)->sin_addr),  
-		                    net_smartserverport, smartserver_detection, strlen(smartserver_detection) ) ;
-			}
-		}
+            //    "rausb0", 49954, "lookingforsmartserver", 21 );
+            /* Get the broadcast address (added by Eric) */
+            if(ioctl(msgfd, SIOCGIFBRDADDR, item) >= 0) {
+                net_sendmsg( inet_ntoa(((struct sockaddr_in *)&item->ifr_broadaddr)->sin_addr),
+                            net_smartserverport, smartserver_detection, strlen(smartserver_detection) ) ;
+            }
+        }
     }
     return 1;
 }
 
-int net_connect(char *netname, int port)
+// connect to local unix socket
+int net_connect_unix(const char *netname)
+{
+    int sockfd, len;
+    struct sockaddr_un remote ;
+
+    sockfd = socket( AF_UNIX, SOCK_STREAM, 0 ) ;
+    if( sockfd == -1 ) {
+        return -1 ;
+    }
+
+    remote.sun_family = AF_UNIX ;
+    strcpy( remote.sun_path, netname ) ;
+    len = sizeof( remote ) ;
+    if( connect(sockfd, (struct sockaddr *)&remote, len)==-1 ) {
+        closesocket(sockfd) ;
+        return -1 ;
+    }
+
+    return sockfd ;
+}
+
+
+int net_connect(const char *netname, int port)
 {
     struct addrinfo hints;
     struct addrinfo *res;
@@ -292,11 +342,15 @@ int net_connect(char *netname, int port)
     int sockflags ;
     int conn_res ;
     char service[20];
-    
+
+    if( *netname=='/') {
+        return net_connect_unix( netname ) ;
+    }
+
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    
+
     sprintf(service, "%d", port);
     res = NULL;
     if (getaddrinfo(netname, service, &hints, &res) != 0) {
@@ -308,7 +362,7 @@ int net_connect(char *netname, int port)
         return -1;
     }
     ressave = res;
-    
+
     /*
      Try open socket with each address getaddrinfo returned,
      until getting a valid socket.
@@ -317,9 +371,9 @@ int net_connect(char *netname, int port)
     while (res) {
         sockfd = socket(res->ai_family,
                         res->ai_socktype, res->ai_protocol);
-        
+
         if (sockfd != -1) {
-            // Set non-blocking 
+            // Set non-blocking
             sockflags = fcntl( sockfd, F_GETFL, NULL) ;
             fcntl(sockfd, F_SETFL, sockflags|O_NONBLOCK ) ;
             conn_res = connect(sockfd, res->ai_addr, res->ai_addrlen) ;
@@ -327,7 +381,7 @@ int net_connect(char *netname, int port)
                 fcntl( sockfd, F_SETFL, sockflags );
                 break;
             }
-            else if( conn_res < 0 && errno == EINPROGRESS) { 
+            else if( conn_res < 0 && errno == EINPROGRESS) {
                 // waiting 1.5 seconds
                 if( net_sendok( sockfd, 1500000 )>0 ) {
                     fcntl( sockfd, F_SETFL, sockflags );
@@ -337,23 +391,23 @@ int net_connect(char *netname, int port)
 
             closesocket(sockfd);
             sockfd = -1;
-           
+
         }
         res = res->ai_next;
     }
-    
+
     freeaddrinfo(ressave);
-    
+
     if (sockfd == -1) {
 //        dvr_log("Error:netsvr:net_connect!");
         return -1;
     }
-    
+
     return sockfd;
 }
 
 // send all data
-// return 
+// return
 //       0: failed
 //       other: success
 int net_send(int sockfd, void * data, int datasize)
@@ -382,25 +436,23 @@ void net_clean(int sockfd)
 }
 
 // receive all data
-// return 
+// return
 //       0: failed (time out)
 //       other: success
-int net_recv(int sockfd, void * data, int datasize)
+int net_recv(int sockfd, void * data, int datasize, int ustimeout)
 {
-    int r ;
+    int tr = 0 ;
     char * cbuf=(char *)data ;
-    while( net_recvok(sockfd, 5000000) ) {
-        r = recv(sockfd, cbuf, datasize, 0);
-        if( r<=0 ) {
-            break;				// error
+    while( tr<datasize && net_recvok(sockfd, ustimeout) ) {
+        int r = recv( sockfd, cbuf+tr, datasize-tr, 0 ) ;
+        if( r>0 && r<=datasize ) {
+            tr+= r ;
         }
-        datasize-=r ;
-        if( datasize==0 ) {
-            return 1;			// success
+        else {
+            return 0 ;
         }
-        cbuf+=r ;
     }
-    return 0;
+    return tr ;
 }
 
 int net_listen(int port, int socktype)
@@ -411,14 +463,14 @@ int net_listen(int port, int socktype)
     int sockfd;
     int val;
     char service[20];
-    
+
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_flags = AI_PASSIVE;
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = socktype;
-    
+
     sprintf(service, "%d", port);
-    
+
     res = NULL;
     if (getaddrinfo(NULL, service, &hints, &res) != 0) {
         dvr_log("Error:netsvr:net_listen!");
@@ -429,7 +481,7 @@ int net_listen(int port, int socktype)
         return -1;
     }
     ressave = res;
-    
+
     /*
      Try open socket with each address getaddrinfo returned,
      until getting a valid listening socket.
@@ -438,7 +490,7 @@ int net_listen(int port, int socktype)
     while (res) {
         sockfd = socket(res->ai_family,
                         res->ai_socktype, res->ai_protocol);
-        
+
         if (sockfd != -1) {
             val = 1;
             setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &val,
@@ -450,9 +502,9 @@ int net_listen(int port, int socktype)
         }
         res = res->ai_next;
     }
-    
+
     freeaddrinfo(ressave);
-    
+
     if (sockfd == -1) {
         dvr_log("Error:netsvr:net_listen!");
         return -1;
@@ -460,7 +512,7 @@ int net_listen(int port, int socktype)
     if (socktype == SOCK_STREAM) {
         listen(sockfd, 10);
     }
-    
+
     return sockfd;
 }
 
@@ -479,15 +531,15 @@ int net_join( int fd, struct sockad *group )
     int tfd = socket(PF_INET,SOCK_DGRAM,IPPROTO_IP);
     strcpy(ifr.ifr_name, "eth0:1");
     ioctl(tfd, SIOCGIFADDR,(void *)&ifr,sizeof(ifr));
-    
+
     closesocket( tfd );
 
     psin = (struct sockaddr_in *) &(ifr.ifr_addr) ;
     memcpy( &(mreq.imr_interface), &(psin->sin_addr), sizeof(mreq.imr_interface.s_addr)  ) ;
-    
+
     psin = (struct sockaddr_in *) &(group->addr) ;
     memcpy(&mreq.imr_multiaddr, &(psin->sin_addr), sizeof(mreq.imr_multiaddr));
-    
+
     if(setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&mreq, sizeof(mreq)) < 0) {
         r = errno ;
         return 0 ;
@@ -511,12 +563,12 @@ void *net_thread(void *param)
 
     net_lock();
     while (net_run == 1) {		// running?
-        
+
         // setup select()
         FD_ZERO(&readfds);
         FD_ZERO(&writefds);
         FD_ZERO(&exceptfds);
-        
+
         pconn = dvrsvr::head();
         while (pconn != NULL) {
             pconn1 = pconn->next();
@@ -531,7 +583,7 @@ void *net_thread(void *param)
             }
             pconn = pconn1;
         }
-        
+
         FD_SET(serverfd, &readfds);
         FD_SET(msgfd, &readfds);
         timeout.tv_sec = 10 ;
@@ -562,7 +614,7 @@ void *net_thread(void *param)
                     setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, (char *) &flag, sizeof(int));
                     flag = 60 ;
                     setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, (char *) &flag, sizeof(int));
-                        
+
                     pconn =	new dvrsvr(fd);
                     continue ;
                 }
@@ -600,7 +652,7 @@ void *net_thread(void *param)
                     net_active = 0 ;
 #if defined (TVS_APP) || defined (PWII_APP)
                     dvr_logkey( 0, NULL );
-#endif                    
+#endif
                 }
             }
         }
@@ -625,7 +677,7 @@ void net_init(config &dvrconfig)
     net_port = dvrconfig.getvalueint("network", "port");
     if (net_port == 0)
         net_port = DVRPORT;
-    
+
     net_livefifosize=dvrconfig.getvalueint("network", "livefifo");
     if( net_livefifosize<10000 ) {
         net_livefifosize=10000 ;
@@ -633,9 +685,9 @@ void net_init(config &dvrconfig)
     if( net_livefifosize>10000000 ) {
         net_livefifosize=10000000 ;
     }
-    
+
     noreclive =  dvrconfig.getvalueint("system", "noreclive");
-    
+
     serverfd = net_listen(net_port, SOCK_STREAM);
     if (serverfd == -1) {
         dvr_log("Can not initialize network!");
@@ -651,7 +703,7 @@ void net_init(config &dvrconfig)
     // make msgfd broadcast capable
     int broadcast=1 ;
     setsockopt(msgfd, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast));
-    
+
     multicast_en = dvrconfig.getvalueint("network", "multicast_en");
     if( multicast_en ) {
         string v ;
@@ -684,7 +736,7 @@ void net_init(config &dvrconfig)
         net_smartserver[0]=0 ;
         net_smartserverport=49954 ;
     }
-    
+
     net_active = 0 ;
     net_run = 1;
     pthread_create(&net_threadid, NULL, net_thread, NULL);
@@ -696,7 +748,7 @@ void net_init(config &dvrconfig)
         iv=dvrconfig.getvalueint("debug", "port");
         net_addr( v, iv, &netdbg_destaddr );
     }
-    
+
     dvr_log("Network initialized.");
 }
 

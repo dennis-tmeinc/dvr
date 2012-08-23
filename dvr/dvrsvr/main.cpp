@@ -29,7 +29,7 @@ char g_vri[128] ;           // VRI (video recording id) for PWII
 string g_policeidlistfile ; // Police ID list filename
 char g_policeid[32];        // Police ID for PWII
 
-// get a random number 
+// get a random number
 unsigned dvr_random()
 {
     FILE * fd ;
@@ -49,38 +49,38 @@ void dvr_cleanlogfile(const char * lfilename, int cutsize)
     FILE * flog ;
     flog = fopen(lfilename, "r+");
     if( flog==NULL ) {
-		disk_error=1 ;
+        disk_error=1 ;
         return ;
-	}
-	posw=ftell(flog);
+    }
+    posw=ftell(flog);
     fseek( flog, 0, SEEK_END );
-	posr = (int)ftell(flog) - cutsize ;
+    posr = (int)ftell(flog) - cutsize ;
     if( posr > (cutsize/2) ) {
         char fbuf[4096] ;
-		fseek( flog, posr, SEEK_SET );       
-		// skip one line
-		fgets( fbuf, 512, flog );
-		while( (rsize=fread(fbuf, 1, 4096, flog))>0 ) {
-			posr = ftell(flog) ;
-			fseek( flog, posw, SEEK_SET );
-			fwrite( fbuf, 1, rsize, flog );
-			posw = ftell(flog) ;
-			if( rsize<4096 ) {
-				break;
-			}
-			fseek( flog, posr, SEEK_SET );
-		}
-		fseek( flog, 0, SEEK_SET );
-		fflush( flog );
-		ftruncate( fileno(flog), posw );
-	}
+        fseek( flog, posr, SEEK_SET );
+        // skip one line
+        fgets( fbuf, 512, flog );
+        while( (rsize=fread(fbuf, 1, 4096, flog))>0 ) {
+            posr = ftell(flog) ;
+            fseek( flog, posw, SEEK_SET );
+            fwrite( fbuf, 1, rsize, flog );
+            posw = ftell(flog) ;
+            if( rsize<4096 ) {
+                break;
+            }
+            fseek( flog, posr, SEEK_SET );
+        }
+        fseek( flog, 0, SEEK_SET );
+        fflush( flog );
+        ftruncate( fileno(flog), posw );
+    }
     fclose( flog );
 }
 
 const char *logfilelnk=VAR_DIR"/dvrlogfile" ;
 
-// write log to log file. 
-// return 
+// write log to log file.
+// return
 //       1: log to recording hd
 //       0: log to temperary file
 int dvr_log(const char *fmt, ...)
@@ -92,24 +92,24 @@ int dvr_log(const char *fmt, ...)
     int l;
     va_list ap ;
 
-	flog=NULL ;
-	// check logfile, it must be a symlink to hard disk
-	if( readlink(logfilelnk, lbuf, 512)>10 ) {
+    flog=NULL ;
+    // check logfile, it must be a symlink to hard disk
+    if( readlink(logfilelnk, lbuf, 512)>10 ) {
         flog = fopen(logfilelnk, "a");
-	}
-	else {
+    }
+    else {
         if (rec_basedir.length() > 0) {
             sprintf(lbuf, "%s/_%s_/%s", (char *)rec_basedir, (char *)g_servername, (char *)logfile);
             unlink(logfilelnk);
             if( symlink(lbuf, logfilelnk)==0 ) {		// success
-				flog = fopen(logfilelnk, "a");
-			}
-		}
+                flog = fopen(logfilelnk, "a");
+            }
+        }
     }
 
-	// copy over temperay logs
+    // copy over temperay logs
     if (flog) {
-        ftmplog = fopen(tmplogfile, "r");	// copy temperary log to logfile        
+        ftmplog = fopen(tmplogfile, "r");	// copy temperary log to logfile
         if (ftmplog) {
             while (fgets(lbuf, 512, ftmplog)) {
                 fputs(lbuf, flog);
@@ -117,9 +117,9 @@ int dvr_log(const char *fmt, ...)
             fclose(ftmplog);
             unlink(tmplogfile);
         }
-	}
-	
-	ti = time(NULL);
+    }
+
+    ti = time(NULL);
     ctime_r(&ti, lbuf);
     l = strlen(lbuf);
     if (lbuf[l - 1] == '\n')
@@ -128,32 +128,34 @@ int dvr_log(const char *fmt, ...)
     l++ ;
     va_start( ap, fmt );
     vsprintf( &(lbuf[l]), fmt, ap );
-	va_end( ap );
-	
+    va_end( ap );
+
+    printf("%s\n", lbuf);
+
     net_dprint("%s\n", lbuf );
-	
-    if (flog) {
-		fprintf(flog, "%s\n", lbuf);
-		if( fclose( flog )==EOF ) {
-			disk_error=1 ;		// log file writing error
-		}
-		else {
-			dvr_cleanlogfile(logfilelnk, logfilesize);
-			return 1;
-		}
-	}
 
-	// make sure no erro on link
-	unlink(logfilelnk);
-
-	// log to temperary log file
-	flog = fopen(tmplogfile, "a");
-	
     if (flog) {
-		fprintf(flog, "%s *\n", lbuf);
-		fclose( flog ) ;
-		dvr_cleanlogfile(tmplogfile, tmplogfilesize);
-	}
+        fprintf(flog, "%s\n", lbuf);
+        if( fclose( flog )==EOF ) {
+            disk_error=1 ;		// log file writing error
+        }
+        else {
+            dvr_cleanlogfile(logfilelnk, logfilesize);
+            return 1;
+        }
+    }
+
+    // make sure no erro on link
+    unlink(logfilelnk);
+
+    // log to temperary log file
+    flog = fopen(tmplogfile, "a");
+
+    if (flog) {
+        fprintf(flog, "%s *\n", lbuf);
+        fclose( flog ) ;
+        dvr_cleanlogfile(tmplogfile, tmplogfilesize);
+    }
 
     return 0 ;
 }
@@ -190,11 +192,11 @@ static void dvr_logkey_settings()
     if( flog==NULL ) {
         return ;
     }
-    if( g_usbid[0] == 'I' && g_usbid[1] == 'N' ) {		// log installer only 
+    if( g_usbid[0] == 'I' && g_usbid[1] == 'N' ) {		// log installer only
         //			write down some settings changes
         string v ;
         config dvrconfig(CFG_FILE);
-        
+
 #ifdef TVS_APP
         fprintf(flog, "\nTVS settings\n" );
         fprintf(flog, "\tMedallion #: %s\n", dvrconfig.getvalue("system", "tvs_medallion") );
@@ -207,7 +209,7 @@ static void dvr_logkey_settings()
         fprintf(flog, "\tVehicle ID: %s\n", dvrconfig.getvalue("system", "id1") );
         fprintf(flog, "\tDistrict : %s\n", dvrconfig.getvalue("system", "id2") );
         fprintf(flog, "\tUnit #: %s\n", dvrconfig.getvalue("system", "serial") );
-#endif					
+#endif
 
         fprintf(flog, "\tTime Zone : %s\n", dvrconfig.getvalue("system", "timezone") );
         for( int camera=1; camera<=2 ; camera++ ) {
@@ -239,7 +241,7 @@ static void dvr_logkey_settings()
                         fprintf(flog, "Turn Off\n");
                     }
                     else {
-                        fprintf(flog, "None\n");					
+                        fprintf(flog, "None\n");
                     }
                 }
 
@@ -254,7 +256,7 @@ static void dvr_logkey_settings()
     return ;
 }
 
-void dvr_logkey( int op, struct key_data * key ) 
+void dvr_logkey( int op, struct key_data * key )
 {
     static char TVSchecksum[16] ;
     char lbuf[512];
@@ -296,7 +298,7 @@ void dvr_logkey( int op, struct key_data * key )
             }
             flog = dvr_logkey_file();
             if( flog ) {
-                fprintf(flog, "\n%s:Viewer connected, key ID: %s\n%s", 
+                fprintf(flog, "\n%s:Viewer connected, key ID: %s\n%s",
                     lbuf, key->usbid, ((char *)&(key->size))+key->keyinfo_start );
                 fclose( flog );
             }
@@ -322,30 +324,30 @@ int dvr_getsystemsetup(struct system_stru * psys)
     const char * pv ;
     config dvrconfig(CFG_FILE);
 
-#ifdef MDVR_APP    
+#ifdef MDVR_APP
     strcpy(  psys->productid, "MDVR");
-#endif    
+#endif
 
-#ifdef TVS_APP    
+#ifdef TVS_APP
     strcpy(  psys->productid, "TVS" );
-#endif    
-   
+#endif
+
 #ifdef PWII_APP
     // for PWII, this field will be used to store pwii info
     strcpy(  psys->productid, "PWII" );
 #endif
-    
+
     strncpy( psys->serial, g_serial, sizeof(psys->serial) );
     strncpy( psys->ID1, g_id1, sizeof(psys->ID1) );
     strncpy( psys->ID2, g_id2, sizeof(psys->ID2) );
-    
+
     strncpy(psys->ServerName, (char *)g_servername, sizeof(psys->ServerName));
 
     psys->cameranum = cap_channels;
     psys->alarmnum = num_alarms ;
     psys->sensornum = num_sensors ;
     psys->breakMode = 0 ;
-    
+
     // maxfilelength ;
     pv = dvrconfig.getvalue("system", "maxfilelength");
     if (sscanf(pv, "%d", &x)>0) {
@@ -362,7 +364,7 @@ int dvr_getsystemsetup(struct system_stru * psys)
     if (x > (24 * 3600))
         x = (24 * 3600);
     psys->breakTime = x ;
-    
+
     // maxfilesize
     pv = dvrconfig.getvalue("system", "maxfilesize");
     if (sscanf(pv, "%d", &x)>0) {
@@ -377,10 +379,10 @@ int dvr_getsystemsetup(struct system_stru * psys)
     if (x < 1024*1024)
         x = 1024*1024;
     if (x > 1024*1024*1024)
-        x = 1024*1024*1024;	
+        x = 1024*1024*1024;
     psys->breakSize = x;
-    
-    // mindiskspace	
+
+    // mindiskspace
     pv = dvrconfig.getvalue("system", "mindiskspace");
     if (sscanf(pv, "%d", &x)) {
         i = strlen(pv);
@@ -399,7 +401,7 @@ int dvr_getsystemsetup(struct system_stru * psys)
         x = 100*1024*1024;
     }
     psys->minDiskSpace = x;
-    
+
     psys->shutdowndelay = dvrconfig.getvalueint("system", "shutdowndelay") ;
     psys->autodisk[0]=0 ;
     if( psys->sensornum>16 )
@@ -415,7 +417,7 @@ int dvr_getsystemsetup(struct system_stru * psys)
         }
         psys->sensorinverted[i] = dvrconfig.getvalueint(buf, "inverted");
     }
-    
+
     // set eventmarker
     psys->eventmarker=dvrconfig.getvalueint("eventmarker", "eventmarker") ;
     psys->eventmarker_enable=(psys->eventmarker>0) ;
@@ -428,7 +430,7 @@ int dvr_getsystemsetup(struct system_stru * psys)
 
     psys->eventmarker_prelock=dvrconfig.getvalueint("eventmarker", "prelock" );
     psys->eventmarker_postlock=dvrconfig.getvalueint("eventmarker", "postlock" );
-    
+
     psys->ptz_en=dvrconfig.getvalueint("ptz", "enable");
     tmpstr=dvrconfig.getvalue("ptz", "device");
     if( tmpstr.length()>9 ) {
@@ -443,33 +445,33 @@ int dvr_getsystemsetup(struct system_stru * psys)
     tmpstr=dvrconfig.getvalue("ptz", "protocol");
     if( *(char *)tmpstr=='P' )
         psys->ptz_protocol=1 ;
-    else 
+    else
         psys->ptz_protocol=0 ;
-    
+
     psys->videoencrpt_en=dvrconfig.getvalueint("system", "fileencrypt");
     strcpy( psys->videopassword, "********" );
-    
+
     psys->rebootonnoharddrive=0 ;
-    
+
     return 1 ;
 }
 
 int dvr_setsystemsetup(struct system_stru * psys)
 {
-#ifdef MDVR_APP    
-	
+#ifdef MDVR_APP
+
     int i ;
     string tmpstr;
     char buf[40] ;
     char system[]="system" ;
     config dvrconfig(CFG_FILE);
-    
+
     if( strcmp( (char *)g_servername, psys->ServerName )!=0 ) {	// set hostname
-		g_servername = psys->ServerName ;
+        g_servername = psys->ServerName ;
         sethostname(psys->ServerName, strlen(psys->ServerName)+1);
         dvrconfig.setvalue(system, "hostname", psys->ServerName);
     }
-    
+
     dvrconfig.setvalueint(system, "camera_number", psys->cameranum) ;
     dvrconfig.setvalueint(system, "alarm_number", psys->alarmnum) ;
     dvrconfig.setvalueint(system, "sensor_number", psys->sensornum) ;
@@ -509,15 +511,15 @@ int dvr_setsystemsetup(struct system_stru * psys)
     else {
         dvrconfig.setvalue("ptz", "protocol", "P");
     }
-    
+
     if( psys->videoencrpt_en ) {
         if( strcmp(psys->videopassword, "********")!=0 ) {		// if user enable encryption by accident, do change any thing
             // user set a password
             dvrconfig.setvalueint(system, "fileencrypt", 1) ;
-            
+
             unsigned char filekey256[260] ;
             char filekeyc64[512] ;								// size should > 260*4/3
-            
+
             key_256( psys->videopassword, filekey256 );			// hash password
             bin2c64(filekey256, 256, filekeyc64);				// convert to c64
             dvrconfig.setvalue("system", "filepassword", filekeyc64);	// save password to config file
@@ -527,15 +529,15 @@ int dvr_setsystemsetup(struct system_stru * psys)
         dvrconfig.setvalueint(system, "fileencrypt", 0) ;
         dvrconfig.removekey(system,"filepassword");				// remove password
     }
-    
+
     psys->videoencrpt_en=dvrconfig.getvalueint("system", "fileencrypt");
     strcpy( psys->videopassword, "********" );
-    
+
     dvrconfig.save();
-    app_state = APPRESTART ;			// restart application	
+    app_state = APPRESTART ;			// restart application
 
 #endif    		// MDVR
-	
+
     return 1 ;
 }
 
@@ -560,36 +562,36 @@ void sig_check()
     if( sigmap == 0 ) {
         return ;
     }
-    
-    if( sigmap & (1<<SIGTERM) ) 
+
+    if( sigmap & (1<<SIGTERM) )
     {
         dvr_log("Signal <SIGTERM> captured.");
         app_state = APPQUIT ;
     }
-    else if( sigmap & (1<<SIGQUIT) ) 
+    else if( sigmap & (1<<SIGQUIT) )
     {
         dvr_log("Signal <SIGQUIT> captured.");
         app_state = APPQUIT ;
     }
-    else if( sigmap & (1<<SIGINT) ) 
+    else if( sigmap & (1<<SIGINT) )
     {
         dvr_log("Signal <SIGINT> captured.");
         app_state = APPQUIT ;
     }
-    else if( sigmap & (1<<SIGUSR2) ) 
+    else if( sigmap & (1<<SIGUSR2) )
     {
         app_state = APPRESTART ;
     }
-    else if( sigmap & (1<<SIGUSR1) ) 
+    else if( sigmap & (1<<SIGUSR1) )
     {
         app_state = APPDOWN ;
     }
-    
-    if( sigmap & (1<<SIGPIPE) ) 
+
+    if( sigmap & (1<<SIGPIPE) )
     {
         dvr_log("Signal <SIGPIPE> captured.");
     }
-    
+
     if( app_signal_ex ) {
         dvr_log("Signal %d captured.", app_signal_ex );
         app_signal_ex=0 ;
@@ -607,27 +609,27 @@ void app_init( config & dvrconfig )
     string tzi ;
     char * p ;					// general pointer
     FILE * fid = NULL ;
-    
+
     pid_t mypid ;
     mypid=getpid();
-    
+
     // make var directory ("/var/dvr") if it is not there.
     mkdir( VAR_DIR, 0777 );
 
-	// if log file link exist, delete it.
-	unlink(logfilelnk);
-	
+    // if log file link exist, delete it.
+    unlink(logfilelnk);
+
     pidfile=dvrconfig.getvalue("system", "pidfile");
     if( pidfile.length()<=0 ) {
         pidfile=VAR_DIR"/dvrsvr.pid" ;
     }
-    
+
     fid=fopen(pidfile, "w");
     if( fid ) {
         fprintf(fid, "%d", (int)mypid);
         fclose(fid);
     }
-    
+
     // setup log file names
     tmplogfile = dvrconfig.getvalue("system", "temp_logfile");
     if (tmplogfile.length() == 0)
@@ -640,11 +642,11 @@ void app_init( config & dvrconfig )
         logfilesize = 100*1024 ;
     }
 
-	tmplogfilesize = dvrconfig.getvalueint("system", "temp_logsize");
+    tmplogfilesize = dvrconfig.getvalueint("system", "temp_logsize");
     if( tmplogfilesize< (20*1024 ) || tmplogfilesize>(3*1024*1024) ) {
         tmplogfilesize = 50*1024 ;
     }
-    
+
     // set timezone the first time
     tz=dvrconfig.getvalue( "system", "timezone" );
     if( tz.length()>0 ) {
@@ -665,14 +667,14 @@ void app_init( config & dvrconfig )
         }
     }
 
-#ifdef MDVR_APP   
+#ifdef MDVR_APP
     t=dvrconfig.getvalue("system", "hostname" );
     if( t.length()>0 ){
-		g_servername=t ;
+        g_servername=t ;
     }
 #endif
-    
-#ifdef TVS_APP    
+
+#ifdef TVS_APP
     // TVS related
     t = dvrconfig.getvalue("system", "tvsmfid" );
     if( t.length()>0 ) {
@@ -684,7 +686,7 @@ void app_init( config & dvrconfig )
         }
     }
     g_keycheck = dvrconfig.getvalueint( "system", "tvskeycheck" );
-    
+
     t = dvrconfig.getvalue("system","tvs_licenseplate");
     if( t.length()>0 ) {
          sprintf(g_id2, "%s", (char *)t );
@@ -693,16 +695,16 @@ void app_init( config & dvrconfig )
     t = dvrconfig.getvalue("system","tvs_medallion");
     if( t.length()>0 ) {
         sprintf(g_id1, "%s", (char *)t );
-		g_servername = t ;
+        g_servername = t ;
     }
-    
+
     t = dvrconfig.getvalue("system","tvs_ivcs_serial");
     if( t.length()>0 ) {
          sprintf(g_serial, "%s%s", &g_mfid[2], (char *)t );
     }
 
     keylogfile = dvrconfig.getvalue("system","keylogfile");
-	dvr_logkey( 2, NULL );	// try logdown settings
+    dvr_logkey( 2, NULL );	// try logdown settings
 #endif
 
 #ifdef PWII_APP
@@ -726,7 +728,7 @@ void app_init( config & dvrconfig )
     t = dvrconfig.getvalue("system","id1");
     if( t.length()>0 ) {
         sprintf(g_id1, "%s", (char *)t );
-		g_servername = t ;
+        g_servername = t ;
     }
 
     t = dvrconfig.getvalue("system","id2");
@@ -735,7 +737,7 @@ void app_init( config & dvrconfig )
     }
 
     keylogfile = dvrconfig.getvalue("system","keylogfile");
-	dvr_logkey( 2, NULL );	// try logdown settings
+    dvr_logkey( 2, NULL );	// try logdown settings
 
     // police id list file format:
     //          first line : current police ID, empty line indicate NO current ID (bypass)
@@ -751,23 +753,23 @@ void app_init( config & dvrconfig )
 
 #endif
 
-	// setup hostname
-	sethostname( (char *)g_servername, g_servername.length()+1);
-	dvr_log("Setup hostname: %s", (char *)g_servername);
-	
+    // setup hostname
+    sethostname( (char *)g_servername, g_servername.length()+1);
+    dvr_log("Setup hostname: %s", (char *)g_servername);
+
     g_lowmemory=dvrconfig.getvalueint("system", "lowmemory" );
     if( g_lowmemory<10000 ) {
         g_lowmemory=10000 ;
     }
-    
-    // setup signal handler	
+
+    // setup signal handler
     signal(SIGQUIT, sig_handler);
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
     signal(SIGUSR1, sig_handler);
     signal(SIGUSR2, sig_handler);
     signal(SIGPOLL, sig_handler);
-	// ignor these signal
+    // ignor these signal
     signal(SIGPIPE, SIG_IGN);		// ignor this
 
     if( app_start==0 ) {
@@ -787,7 +789,7 @@ void do_init()
     config dvrconfig(CFG_FILE);
 
     app_init(dvrconfig);
-    
+
     time_init();
     event_init(dvrconfig);
     disk_init(dvrconfig);
@@ -796,10 +798,10 @@ void do_init()
     cap_init(dvrconfig);
     rec_init(dvrconfig);
     ptz_init(dvrconfig);
-    screen_init(dvrconfig);	
+    screen_init(dvrconfig);
     net_init(dvrconfig);
 
-    cap_start();	// start capture 
+    cap_start();	// start capture
 }
 
 void do_uninit()
@@ -807,7 +809,7 @@ void do_uninit()
 
     dvr_log("Start un-initializing.");
     cap_stop();		// stop capture
-    
+
     net_uninit();
     screen_uninit();
     ptz_uninit();
@@ -822,7 +824,7 @@ void do_uninit()
         dvr_log("Unsolved memory leak, request to restart system" );
         dio_setstate( DVR_FAILED ) ;
     }
-    
+
     event_uninit();
     time_uninit();
 
@@ -841,12 +843,12 @@ int main()
 
     // initial mutex
 //    memcpy( &dvr_mutex, &mutex_init, sizeof(mutex_init));
-    
+
     mem_init();
-    
+
     app_ostate = APPDOWN ;
     app_state = APPUP ;
-    
+
     while( app_state!=APPQUIT ) {
         if( app_state == APPUP ) {					// application up
             if( app_ostate != APPUP ) {
@@ -875,12 +877,12 @@ int main()
         }
         sig_check();
     }
-    
+
     if( app_ostate==APPUP ) {
         app_ostate=APPDOWN ;
         do_uninit();
     }
-    
+
     app_exit();
     mem_uninit ();
 

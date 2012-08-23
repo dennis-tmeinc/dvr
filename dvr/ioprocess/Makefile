@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR ioprocess app 
+# Makefile for Eagle32 DVR ioprocess app
 #
 
 include ../config
@@ -8,8 +8,8 @@ include $(PROJDIR)/arm_tool
 EXTHEADERS=../cfg.h ../dvrsvr/cfg.h ../dvrsvr/genclass.h
 EXTSOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp
 
-SOURCES=ioprocess.cpp diomap.cpp mcu.cpp netdbg.cpp gforce.cpp iomisc.cpp
-HEADERS=diomap.h netdbg.h mcu.h gforce.h iomisc.h
+SOURCES=ioprocess.cpp diomap.cpp mcu.cpp netdbg.cpp gforce.cpp iomisc.cpp yagf.cpp
+HEADERS=diomap.h netdbg.h mcu.h gforce.h iomisc.h yagf.h
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
@@ -19,7 +19,7 @@ else
 LDFLAGS= -lpthread -lstdc++ -lrt -Wl,-rpath,.
 endif
 
-CFLAGS=-I../dvrsvr -g -Wall
+CFLAGS+= -I../dvrsvr -Wall
 TARGET=ioprocess panelled devicepower buzzer iowait
 
 all: $(TARGET)
@@ -50,6 +50,7 @@ buzzer : buzzer.o diomap.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 
 clean :
 	rm -f *.o
+	rm -f $(OBJS)
 	rm -f $(TARGET)
 
 

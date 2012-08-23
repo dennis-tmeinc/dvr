@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR server app 
+# Makefile for Eagle32 DVR server app
 #
 
 include ../config
@@ -9,8 +9,8 @@ SOURCES=usbid.c
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
-CFLAGS=-Wall -g
-LDFLAGS= 
+CFLAGS+= -Wall
+LDFLAGS=
 
 all: usbid
 

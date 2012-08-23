@@ -1,5 +1,5 @@
 #
-# Makefile for Eagle32 DVR server app 
+# Makefile for Eagle32 DVR server app
 #
 include ../config
 include $(PROJDIR)/arm_tool
@@ -28,9 +28,9 @@ SOURCES=main.cpp \
 		dio.cpp \
 		md5.cpp \
 		screen.cpp
-		
+
 LDFLAGS= -lpthread -lstdc++ -lrt -Wl,-rpath,.
-		
+
 else
 SOURCES=main.cpp \
 		dvrtime.cpp \
@@ -54,11 +54,11 @@ SOURCES=main.cpp \
 		md5.cpp \
 		cppinitpatch.cpp \
 		draw.cpp
-		
+
 #LDFLAGS= -lpthread -lstdc++ -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib -Wl,-rpath,.
-LDFLAGS= -lpthread -lstdc++
-		
-endif	
+LDFLAGS= -lpthread -lstdc++ -lrt
+
+endif
 
 EXTRASOURCES=../ioprocess/diomap.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
 
@@ -94,46 +94,46 @@ HEADERS=dvr.h \
 		draw.h \
 		crypt.h \
 		dir.h \
-        ../ioprocess/diomap.h \
-        ../cfg.h
-        
+	../ioprocess/diomap.h \
+	../cfg.h
+
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
 # LIBRARY=libdio.so
 
-CCFLAGS= -Wall -g
+CFLAGS+= -Wall
 
 all : dvrsvr
 
 # dvrsvr : $(OBJS) $(LIBRARY)
 #dvrsvr : $(OBJS) ../fb/libfbdraw.so
-#	$(CC)  $(CCFLAGS) -o $@  $(OBJS) ../fb/libfbdraw.so $(LDFLAGS)
+#	$(CC)  $(CFLAGS) -o $@  $(OBJS) ../fb/libfbdraw.so $(LDFLAGS)
 #	cp dvrsvr  $(debug_folder)
 
 dvrsvr : $(OBJS) $(EXTRASOURCES)
-	$(CC)  $(CCFLAGS) -o $@  $^ $(LDFLAGS)
+	$(CC)  $(CFLAGS) -o $@  $^ $(LDFLAGS)
 	cp dvrsvr  $(debug_folder)
 
-../fb/libfbdraw.so : 
+strip: dvrsvr
+	$(STRIP) dvrsvr
+
+../fb/libfbdraw.so :
 	cd ../fb ; make
 
-test.s : test.cpp
-	$(CC)  -S -o $@  $^ 
-
 eaglesvr : $(EAGLESRS)
-	$(CC)  $(CCFLAGS) -o $@ $(EAGLESRS) ../fb/libfbdraw.so $(LDFLAGS)
+	$(CC)  $(CFLAGS) -o $@ $(EAGLESRS) ../fb/libfbdraw.so $(LDFLAGS)
 	cp eaglesvr  $(debug_folder)
 
 eagleinit : eagleinit.cpp
-	$(CC) $(CCFLAGS) -o $@ $< $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 	cp eagleinit  $(debug_folder)
 
 md5 : md5.cpp
-	$(CC) $(CCFLAGS) -o $@ $< $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 	cp md5  $(debug_folder)
 
 %.o : %.cpp $(HEADERS)
-	$(CC) $(CCFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 # libdio.so : dio.c
 # 	$(CC) -g -fPIC -c -Wall -o dio.o dio.c

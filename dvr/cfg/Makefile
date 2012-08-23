@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR ioprocess app 
+# Makefile for Eagle32 DVR ioprocess app
 #
 
 include ../config
@@ -7,16 +7,16 @@ include $(PROJDIR)/arm_tool
 
 SOURCES=cfg.cpp
 
-EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h 
+EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h
 EXTSOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp
 
 HEADERS=
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
-LDFLAGS= -lstdc++ 
+LDFLAGS= -lstdc++
 
-CFLAGS=-I../dvrsvr -g -Wall
+CFLAGS+=-I../dvrsvr -Wall
 
 all : cfg cfgpc
 
@@ -30,7 +30,7 @@ cfgpc : $(SOURCES) $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 %.o : %.cpp $(HEADERS) $(EXTHEADERS)
 	$(CC) -g -Wall -c $< -o $@
 
-clean :  
+clean :
 	rm -f *.o
 	rm -f cfg cfgpc
 

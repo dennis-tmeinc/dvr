@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR ioprocess app 
+# Makefile for Eagle32 DVR ioprocess app
 #
 
 include ../config
@@ -10,7 +10,7 @@ SOURCES=usbgenkey.c crypt.c
 HEADERS=
 
 OBJS =
-CFLAGS=-Wall -g
+CFLAGS+= -Wall
 LDFLAGS=
 
 all: usbgenkey usbcheck

@@ -1,16 +1,16 @@
 
-# Makefile for Eagle32 DVR ioprocess app 
+# Makefile for Eagle32 DVR ioprocess app
 #
 
 include ../config
 include $(PROJDIR)/arm_tool
 
-CFLAGS=-g
-LDFLAGS= 
+CFLAGS+= -Wall
+LDFLAGS=
 
 all: slaveip eaglehost
 
-slaveip: slaveip.c 
+slaveip: slaveip.c
 	$(CC) $(CFLAGS) -o $@ slaveip.c $(LDFLAGS)
 	cp slaveip  $(debug_folder)
 

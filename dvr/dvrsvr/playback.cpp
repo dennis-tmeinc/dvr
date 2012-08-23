@@ -48,13 +48,13 @@ int playback::seek( struct dvrtime * seekto )
         m_framebuf=NULL ;
         m_framesize=0 ;
     }
- 
+
     if( m_file.isopen() && m_file.seek( seekto ) ) {	// within current opened file?
         preread();
         goto seek_end ;
     }
     close();
-    
+
     bcdseekday = seekto->year*10000 + seekto->month*100 + seekto->day ;
     if( bcdseekday != m_day ) {			// seek to different day? update new day file list
         m_filelist.setsize(0);			// empty day file list
@@ -62,7 +62,7 @@ int playback::seek( struct dvrtime * seekto )
         // load new day file list
         disk_listday( m_filelist, seekto, m_channel );
     }
-    
+
     // seek inside m_day (m_filelist)
     for(m_curfile=0; m_curfile<m_filelist.size(); m_curfile++) {
         int    fl ;			// file length
@@ -82,19 +82,30 @@ int playback::seek( struct dvrtime * seekto )
             }
         }
     }
-    
+
     // seek beyond the day
     opennextfile();
     preread();
 
 seek_end:
+
+#if defined(EAGLE32) || defined(EAGLE34)
     if( m_file.isopen() ) {
         return m_file.gethdflag();
     }
     else {
         return 0 ;
-    }    
-} 
+    }
+#else
+    // for now EAGLE368
+    if (m_file.isopen() ) {
+        return m_file.isencrypt() ;
+    }
+    else {
+        return -1;
+    }
+#endif
+}
 
 // open next file on list, return 0 on no more file
 int playback::opennextfile()
@@ -105,7 +116,7 @@ int playback::opennextfile()
         m_file.close();
     }
     time_dvrtime_init( &dvrt, 2000);
-    
+
     while( !m_file.isopen() ) {
         m_curfile++;
         while( m_curfile>=m_filelist.size()) {			// end of day file
@@ -118,7 +129,7 @@ int playback::opennextfile()
                     dvrt.month = m_day%10000/100 ;
                     dvrt.day   = m_day%100 ;
                     m_filelist.setsize(0);						// empty day file list
-                    if( disk_listday( m_filelist, &dvrt, m_channel )>0 ) 
+                    if( disk_listday( m_filelist, &dvrt, m_channel )>0 )
                         break;
                 }
             }
@@ -144,11 +155,11 @@ void playback::readframe()
         m_framebuf=NULL ;
         m_framesize=0 ;
     }
-    
+
     // read frame();
     if( m_file.isopen() ) {
         while( (m_framesize=m_file.framesize())==0 ) {
-            // open next file 
+            // open next file
             if( opennextfile()==0 ) {		// end of stream data
                 return ;
             }
@@ -314,8 +325,8 @@ void playback::getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * 
     struct dayinfoitem di ;
     struct dayinfoitem di_x ;
     array <f264name> filelist ;
-    
-    di.ontime=0; 
+
+    di.ontime=0;
     di.offtime=0;
 
     disk_listday( filelist, pday, m_channel );
@@ -378,8 +389,8 @@ void playback::getlockinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime *
     struct dayinfoitem di ;
     struct dayinfoitem di_x ;
     array <f264name> filelist ;
-    
-    di.ontime=0; 
+
+    di.ontime=0;
     di.offtime=0;
 
     disk_listday( filelist, pday, m_channel );
@@ -406,9 +417,19 @@ void playback::getlockinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime *
             di.offtime=di_x.offtime ;
         }
     }
-    
+
     if( di.offtime>di.ontime ) {
         dayinfo.add(di);
+    }
+}
+
+int playback::fileheadersize()
+{
+    if( m_file.isopen() ) {
+        return m_file.headersize();
+    }
+    else {
+        return 0 ;     // default file header size
     }
 }
 
@@ -420,7 +441,7 @@ int playback::readfileheader(char *hdbuf, int hdsize)
     else {
         memcpy( hdbuf, cap_fileheader(0), hdsize );
         return hdsize ;
-    }    
+    }
 }
 
 void play_init(config &dvrconfig)

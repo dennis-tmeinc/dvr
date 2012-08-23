@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR ioprocess app 
+# Makefile for Eagle32 DVR ioprocess app
 #
 
 include ../config
@@ -20,7 +20,7 @@ else
 LDFLAGS= -lpthread -lstdc++ -lrt -Wl,-rpath,.
 endif
 
-CFLAGS=-I../dvrsvr -g -Wall
+CFLAGS+= -I../dvrsvr -Wall
 
 all : glog gpsdetect
 
@@ -33,7 +33,7 @@ gpsdetect : gpsdetect.cpp $(EXTHEADERS)
 	cp gpsdetect  $(debug_folder)
 
 %.o : %.cpp $(HEADERS) $(EXTHEADERS)
-	$(CC) -g -Wall -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean :
 	rm -f *.o

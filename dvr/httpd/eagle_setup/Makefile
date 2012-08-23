@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR web base setup app 
+# Makefile for Eagle32 DVR web base setup app
 #
 
 include ../../config
@@ -17,17 +17,17 @@ OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
 LDFLAGS= -lstdc++
 
-CFLAGS=-I../dvrsvr -g -Wall
+CFLAGS+= -I../dvrsvr -Wall
 
 TARGET= login\
-        pagevalue\
-        cfgupload\
-        firmwareupd\
-        mcufwupd\
-        mfid\
-        gangle.cgi\
-        getjpeg.cgi
-        
+	pagevalue\
+	cfgupload\
+	firmwareupd\
+	mcufwupd\
+	mfid\
+	gangle.cgi\
+	getjpeg.cgi
+
 
 all: $(TARGET)
 
@@ -75,7 +75,7 @@ eagle_setup : $(OBJS)
 	$(STRIP) $(debug_folder)/www/$@
 
 %.o : %.cpp $(HEADERS) $(EXTHEADERS)
-	$(CC) -g -Wall -c $< -o $@
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 clean :
 	rm -f $(TARGET)

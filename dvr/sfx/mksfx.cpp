@@ -11,7 +11,7 @@
 
 #define SFX_TAG (0xed3abd05)
 
-struct file_head {
+struct sfx_head {
     uint tag ;
     uint filesize ;
     uint filemode ;
@@ -27,7 +27,7 @@ int main(int argc, char * argv[])
     int executesize ;
     FILE * selfext ;
     FILE * listfile ;
-    struct file_head fhd ;
+    struct sfx_head fhd ;
     struct stat filestat ;
     unsigned char * buf ;
     int bufsize ;
@@ -36,17 +36,17 @@ int main(int argc, char * argv[])
     char ifilename[256] ;
     char ofilename[256] ;
     int  r ;
-    
+
     if( argc>1 ) {
         if( strcmp(argv[1], "-?")==0 ||
            strcmp(argv[1], "?" )==0 ||
            strcmp(argv[1], "-h" )==0 ||
            strcmp(argv[1], "-help" )==0 ) {
-               printf( "Usage : mksfx [sfx] [sfxlist] [outputfile]\n");
+               printf( "Usage : mksfx [sfx] [sfxlistfile] [outputfile]\n");
                return 1;
            }
     }
-    
+
     if( argc>=2 ) {
         sfxfile=argv[1] ;
     }
@@ -59,16 +59,16 @@ int main(int argc, char * argv[])
     else {
         strncpy( outfile, sfxfile, sizeof(outfile));
     }
-    
+
     buf = NULL ;
     bufsize=0 ;
-    selfext = fopen( sfxfile, "r" );
+    selfext = fopen( sfxfile, "rb" );
     executesize = 0 ;
     if( selfext ) {
         fseek( selfext, 0, SEEK_END );
         executesize = ftell( selfext );
         fseek( selfext, 0, SEEK_SET );
-        
+
         if( executesize>0 ) {
             buf = (unsigned char *)malloc( executesize );
             bufsize = fread( buf, 1, executesize, selfext ) ;
@@ -81,13 +81,13 @@ int main(int argc, char * argv[])
         }
         fclose( selfext );
     }
-    
-    selfext = fopen( outfile, "w" );
+
+    selfext = fopen( outfile, "wb" );
     if( selfext == NULL ) {
         printf("Can't create output file!\n");
         return 2;
     }
-    
+
     if( executesize>0 && buf ) {
         fwrite( buf, 1, executesize, selfext );
         free( buf );
@@ -96,14 +96,14 @@ int main(int argc, char * argv[])
         printf("No sfx file.\n");
         executesize=0;
     }
-    
+
     listfile = fopen( sfxlistfile, "r" );
     if( listfile == NULL ) {
         printf("Can't open sfxlist.\n");
         fclose( selfext );
         return 1;
     }
-    
+
     while( fgets( line, sizeof(line), listfile ) ) {
         r = sscanf(line, "%s %s", ifilename, ofilename ) ;
         if( r < 1 ) {
@@ -117,22 +117,23 @@ int main(int argc, char * argv[])
                 strcpy( ofilename, ifilename );
             }
         }
-        
-        if( strcmp(ifilename, ".")==0 ) {		// current directory
+
+        if( ifilename[0]=='#' || ifilename[0]==';' || strcmp(ifilename, ".")==0 ) {		// comment, or . (current directory)
             continue ;
         }
-        
+
         if( stat( ifilename, &filestat ) != 0 ) {
             printf("File error : %s\n", ifilename);
             continue ;
         }
-        
+
         fhd.tag=SFX_TAG ;
-        fhd.filesize = (uint) filestat.st_size ;
         fhd.filemode = (uint) filestat.st_mode ;
+        fhd.filesize = (uint) filestat.st_size ;
         fhd.namesize = strlen( ofilename );
         if(  S_ISDIR(filestat.st_mode) ) {
             fhd.compsize=0 ;
+            fhd.filesize=0 ;
             fwrite( &fhd, 1, sizeof(fhd), selfext );
             fwrite( ofilename, 1, fhd.namesize, selfext );
             printf("dir  : %s\n", ofilename );
@@ -167,13 +168,6 @@ int main(int argc, char * argv[])
                 }
                 free( lzmabuf );
                 free( buf );
-            }
-            else {
-                printf( "Error open file : %s\n", ifilename );
-                fhd.compsize=0 ;
-                fhd.filesize=0 ;
-                fwrite( &fhd, 1, sizeof(fhd), selfext );
-                fwrite( ofilename, 1, fhd.namesize, selfext );
             }
         }
     }

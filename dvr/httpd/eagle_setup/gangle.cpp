@@ -69,7 +69,8 @@ int main(int argc, char *argv[])
             gd=0.01 ;               // give it a smallest number, so no divided by zero error
         }
         angle=180.0*atan( gf/gd )/M_PI;
-        printf( "{\"gvalue_f\":%.2f,\"gvalue_d\":%.2f,\"gvalue_r\":%.2f,\"gvalue_angle\":%.0f}", gf, gd, gr, angle );
+        printf( "{\"gvalue_f\":%.2f,\"gvalue_d\":%.2f,\"gvalue_r\":%.2f,\"gvalue_angle\":%.0f}",
+                gf, gd, gr, angle );
         dio_munmap();
     }
     else {

@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR ioprocess app 
+# Makefile for Eagle32 DVR ioprocess app
 #
 
 include ../config
@@ -14,13 +14,13 @@ HEADERS=
 
 OBJS = $(patsubst %.c, %.o, $(SOURCES))
 
-#LDFLAGS= -lpthread -lstdc++ -L../dvrsvr/eagle32 -lsdk -ldadsp ../dvrsvr/eagle32/dsplink.lib 
+#LDFLAGS= -lpthread -lstdc++ -L../dvrsvr/eagle32 -lsdk -ldadsp ../dvrsvr/eagle32/dsplink.lib
 LDFLAGS= -lstdc++
 
 #CFLAGS=-I../dvrsvr -g -Wall
-CFLAGS=-g -Wall 
+CFLAGS += -Wall
 
-all : gentest
+target : test
 
 serialtest : $(OBJS) $(HEADERS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
@@ -30,7 +30,7 @@ gentest : gentest.cpp
 #	gcc $(CFLAGS) -o gentest gentest.cpp $(LDFLAGS)
 	$(CC) $(CFLAGS) -o gentest1 gentest.cpp $(LDFLAGS)
 	cp gentest1  $(debug_folder)
-	
+
 #gentest : gentest.cpp $(EXTHEADERS) $(EXTSOURCES)
 #	$(CPP) $(CFLAGS) -o $@ gentest.cpp $(EXTSOURCES) $(LDFLAGS)
 #	cp $@  $(debug_folder)
@@ -49,7 +49,6 @@ test : test.cpp
 	$(CC) $(CFLAGS) $(LDFLAGS) -o test test.cpp
 	cp test  $(debug_folder)/tttest
 
-
 fcptest : fcptest.cpp
 	$(CC) $(CFLAGS) $(LDFLAGS) -o fcptest fcptest.cpp
 	cp fcptest  $(debug_folder)/fcptest
@@ -57,11 +56,29 @@ fcptest : fcptest.cpp
 chroot : chroot.c
 	$(CC) -static -Wall -g -o chroot chroot.c
 
-%.o : %.c $(HEADERS) $(EXTHEADERS)
-	$(CC) -g -Wall -c $< -o $@
+localsocket : localsocket.cpp
+	$(CC) -Wall -g -o $@ $^
+
+localserver : localserver.cpp
+	$(CC) -Wall -g -o $@ $^
+
+local: localsocket localserver
+	cp localsocket $(debug_folder)
+	cp localserver $(debug_folder)
+
+atomictest: atomictest.c
+	$(CC) $(CFLAGS) -S $^
+	$(CC) -Wall  -o $@ atomictest.s
+	cp $@ $(debug_folder)
+
+%.o : %.cpp $(HEADERS) $(EXTHEADERS)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+%.s : %.cpp $(HEADERS) $(EXTHEADERS)
+	$(CC) $(CFLAGS) -S $< -o $@
 
 clean :
-	rm -f *.o
-	rm -f serialtest gentest diskspeed
+	rm -f *.o *.s
+	rm -f serialtest gentest diskspeed atomictest
 
 

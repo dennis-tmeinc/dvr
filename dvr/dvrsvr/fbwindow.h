@@ -7,27 +7,28 @@
 #include "draw.h"
 
 struct rect {
-	int x, y, w, h ;
+    int x, y, w, h ;
 } ;
 
 // recource is a BITMAP, it can be used as a cursor, a font, or a picture
 class resource {
+protected:
     struct BITMAP m_bmp ;
-    
+
 public:
     static char resource_dir[128] ;
 
     resource() {
         m_bmp.bits = NULL ;
     }
-    
+
     void close() {
         if( m_bmp.bits ) {
-			draw_closebmp( &m_bmp );
+            draw_closebmp( &m_bmp );
             m_bmp.bits = NULL ;
         }
     }
-    
+
     int open( char * filename ) {
         char filepath[256] ;
         close();
@@ -37,12 +38,12 @@ public:
         }
         return 0 ;
     }
-    
+
     resource( char * filename ) {
         m_bmp.bits = NULL ;
         open( filename );
     }
-    
+
     ~resource() {
         close();
     }
@@ -61,13 +62,13 @@ public:
 
     // return font width, when resource is a font file
     int fontwidth() {
-		return draw_fontwidth(&m_bmp);
-	}
-    
+        return draw_fontwidth(&m_bmp);
+    }
+
     // return font height, when resource is a font file
     int fontheight() {
-		return draw_fontheight(&m_bmp);
-	}
+        return draw_fontheight(&m_bmp);
+    }
 
     struct BITMAP * bitmap(){
         return &m_bmp ;
@@ -92,14 +93,14 @@ public:
     resource & operator = (resource & res) {
         return (*this = *(res.bitmap()));
     }
-    
+
 } ;
 
 class window {
 protected:
     int m_id ;					// window ID
     int m_alive ;		    	// window alive or dead
-    
+
     struct rect m_pos ;         // windows position relate to parent window
     int m_screen_x, m_screen_y ; // window's position relate to screen. only vaild during draw period.
     window * m_parent ;			// parent window
@@ -178,7 +179,7 @@ public:
     void destroy() {
         m_alive=0 ;
     }
-    
+
     void addchild(window * child)
     {
         window * topchild ;
@@ -417,7 +418,7 @@ public:
                 {
                     m_redraw = 1 ;
                 }
-                
+
                 if( m_redraw ) {
                     preparepaint(&mydrawarea);
                     paint();								        // paint window
@@ -567,70 +568,70 @@ public:
     }
 
     /*
-	struct BITMAP * openbitmap( char * filename ) {
-		struct BITMAP * bmp ;
-		bmp = new struct BITMAP ;
-		if( draw_openbmp( filename, bmp ) ) {
-			return bmp ;
-		}
-		else {
-			delete bmp ;
-			return NULL ;
-		}
-	}
-
-	void closebitmap( struct BITMAP * bmp ) {
-		if( bmp ) {
-			draw_closebmp( bmp );
-			delete bmp ;
-		}
-	}
-
-	void drawbitmap(struct BITMAP * bmp, int dx, int dy, int sx, int sy, int w, int h ) {
-		draw_bitmap( bmp, 
-					m_screen_x+dx, m_screen_y+dy, 
-					sx, sy, 
-					w, h ) ;
-	}
-
-    void stretchbitmap( struct BITMAP * bmp, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh ) 
-	{
-		draw_stretchbitmap( bmp, 
-							m_screen_x+dx, m_screen_y+dy, 
-							dw, dh, 
-							sx, sy, 
-							sw, sh ) ;
-	}
-
-    struct BITMAP * readbitmap( int x, int y, int w, int h ) {
-		struct BITMAP * bmp ;
-		bmp = new struct BITMAP ;
-		if( draw_readbitmap( bmp, m_screen_x+x, m_screen_y+y, w, h ) ) {
-			return bmp ;
-		}
-		else {
-			delete bmp ;
-			return NULL;
-		}
+    struct BITMAP * openbitmap( char * filename ) {
+        struct BITMAP * bmp ;
+        bmp = new struct BITMAP ;
+        if( draw_openbmp( filename, bmp ) ) {
+            return bmp ;
+        }
+        else {
+            delete bmp ;
+            return NULL ;
+        }
     }
 
-	int fontwidth( struct BITMAP * font ) {
-		return draw_fontwidth(font);
-	}
-	
-	int fontheight( struct BITMAP * font ) {
-		return draw_fontheight( font );
-	}
+    void closebitmap( struct BITMAP * bmp ) {
+        if( bmp ) {
+            draw_closebmp( bmp );
+            delete bmp ;
+        }
+    }
+
+    void drawbitmap(struct BITMAP * bmp, int dx, int dy, int sx, int sy, int w, int h ) {
+        draw_bitmap( bmp,
+                    m_screen_x+dx, m_screen_y+dy,
+                    sx, sy,
+                    w, h ) ;
+    }
+
+    void stretchbitmap( struct BITMAP * bmp, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh )
+    {
+        draw_stretchbitmap( bmp,
+                            m_screen_x+dx, m_screen_y+dy,
+                            dw, dh,
+                            sx, sy,
+                            sw, sh ) ;
+    }
+
+    struct BITMAP * readbitmap( int x, int y, int w, int h ) {
+        struct BITMAP * bmp ;
+        bmp = new struct BITMAP ;
+        if( draw_readbitmap( bmp, m_screen_x+x, m_screen_y+y, w, h ) ) {
+            return bmp ;
+        }
+        else {
+            delete bmp ;
+            return NULL;
+        }
+    }
+
+    int fontwidth( struct BITMAP * font ) {
+        return draw_fontwidth(font);
+    }
+
+    int fontheight( struct BITMAP * font ) {
+        return draw_fontheight( font );
+    }
 
     void drawtext( int dx, int dy, char * text, struct BITMAP * font )
-	{
-		draw_text( m_screen_x+dx, m_screen_y+dy, text, font );
-	}
+    {
+        draw_text( m_screen_x+dx, m_screen_y+dy, text, font );
+    }
 
-	void drawtextex( int dx, int dy, char * text, struct BITMAP * font, int fontw, int fonth)
-	{
-		draw_text_ex( m_screen_x+dx, m_screen_y+dy, text, font, fontw, fonth);
-	}
+    void drawtextex( int dx, int dy, char * text, struct BITMAP * font, int fontw, int fonth)
+    {
+        draw_text_ex( m_screen_x+dx, m_screen_y+dy, text, font, fontw, fonth);
+    }
 
     */
 
@@ -642,15 +643,15 @@ public:
             if( h<0 ) {
                 h=res.height();
             }
-		    draw_bitmap( res.bitmap(), 
-					m_screen_x+dx, m_screen_y+dy, 
-					sx, sy, 
-					w, h ) ;
+            draw_bitmap( res.bitmap(),
+                    m_screen_x+dx, m_screen_y+dy,
+                    sx, sy,
+                    w, h ) ;
         }
-	}
+    }
 
-	void stretchbitmap( resource & res, int dx, int dy, int dw, int dh, int sx=0, int sy=0, int sw=-1, int sh=-1 ) 
-	{
+    void stretchbitmap( resource & res, int dx, int dy, int dw, int dh, int sx=0, int sy=0, int sw=-1, int sh=-1 )
+    {
         if( res.valid() ) {
             if( sw<0 ) {
                 sw=res.width();
@@ -658,13 +659,13 @@ public:
             if( sh<0 ) {
                 sh=res.height();
             }
-            draw_stretchbitmap( res.bitmap(), 
-							m_screen_x+dx, m_screen_y+dy, 
-							dw, dh, 
-							sx, sy, 
-							sw, sh ) ;
+            draw_stretchbitmap( res.bitmap(),
+                            m_screen_x+dx, m_screen_y+dy,
+                            dw, dh,
+                            sx, sy,
+                            sw, sh ) ;
         }
-	}
+    }
 
     int readbitmap( resource & res, int x, int y, int w, int h ) {
         res.close();
@@ -672,44 +673,44 @@ public:
     }
 
     void drawtext( int dx, int dy, char * text, resource & font )
-	{
-		draw_text( m_screen_x+dx, m_screen_y+dy, text, font.bitmap() );
-	}
+    {
+        draw_text( m_screen_x+dx, m_screen_y+dy, text, font.bitmap() );
+    }
 
-	void drawtextex( int dx, int dy, char * text, resource & font, int fontw, int fonth)
-	{
-		draw_text_ex( m_screen_x+dx, m_screen_y+dy, text, font.bitmap(), fontw, fonth);
-	}
-    
-	// overrideable
+    void drawtextex( int dx, int dy, char * text, resource & font, int fontw, int fonth)
+    {
+        draw_text_ex( m_screen_x+dx, m_screen_y+dy, text, font.bitmap(), fontw, fonth);
+    }
+
+    // overrideable
 public:
-	virtual int show() {			// return old show status
-		if( m_show == 0 ) {
-			m_show = 1 ;
-			redraw() ;
-			return 0 ;
-		}
-		else {
-			return 1 ;
-		}
-	}
+    virtual int show() {			// return old show status
+        if( m_show == 0 ) {
+            m_show = 1 ;
+            redraw() ;
+            return 0 ;
+        }
+        else {
+            return 1 ;
+        }
+    }
 
-	virtual int hide() {			// return old show status
-		if( m_show ) {
-			if( m_parent ) {
+    virtual int hide() {			// return old show status
+        if( m_show ) {
+            if( m_parent ) {
 //				m_parent->invalidate( &m_pos ) ;
-				m_parent->redraw();
-			}
-			m_show = 0 ;
-			return 1 ;
-		}
-		else {
-			return 0 ;
-		}
-	}
+                m_parent->redraw();
+            }
+            m_show = 0 ;
+            return 1 ;
+        }
+        else {
+            return 0 ;
+        }
+    }
 
-	// process key event, return 1 if processed or return 0;
-	virtual int key(int keycode, int keydown) {
+    // process key event, return 1 if processed or return 0;
+    virtual int key(int keycode, int keydown) {
         int processed = onkey( keycode, keydown );			// issue onkey event
         if( processed == 0 && m_child ) {
             processed = m_child->key( keycode, keydown ) ;
@@ -717,40 +718,40 @@ public:
         if( processed == 0 && m_brother ) {
             processed = m_brother->key( keycode, keydown ) ;
         }
-		return processed ;
-	}
+        return processed ;
+    }
 
-	// processing command
-	void command( int id, void * param=NULL ) {
-		oncommand( id, param );
-	}
+    // processing command
+    void command( int id, void * param=NULL ) {
+        oncommand( id, param );
+    }
 
-	// event handler
+    // event handler
 protected:
-	virtual void paint() {						// paint window
-	}
+    virtual void paint() {						// paint window
+    }
 
-	virtual void oncommand( int id, void * param ) {	// children send command to parent
-	}
+    virtual void oncommand( int id, void * param ) {	// children send command to parent
+    }
 
     // buttons : low 4 bits=button status, high 4 bits=press/release
     virtual void onmouse( int x, int y, int buttons ) {		// mouse event
-	}
+    }
 
-	virtual void onmouseenter() {							// mouse pointer enter window
-	}
+    virtual void onmouseenter() {							// mouse pointer enter window
+    }
 
-	virtual void onmouseleave() {							// mouse pointer leave window
-	}
+    virtual void onmouseleave() {							// mouse pointer leave window
+    }
 
-	// keyboard or button input, return 1: processed (key event don't go to children), 0: no processed
-	virtual int onkey( int keycode, int keydown ) {		    // keyboard/keypad event
-		return 0 ;
-	}
-
-	virtual int onfocus( int focus ) {						// change fouse
+    // keyboard or button input, return 1: processed (key event don't go to children), 0: no processed
+    virtual int onkey( int keycode, int keydown ) {		    // keyboard/keypad event
         return 0 ;
-	}
+    }
+
+    virtual int onfocus( int focus ) {						// change fouse
+        return 0 ;
+    }
 
     // timer call back functions
     virtual void ontimer( int id ) {
@@ -762,20 +763,20 @@ class cursor : public window {
 protected:
     resource cursorbits ;
     resource savedbits ;
-	int    m_xhotspot, m_yhotspot ;
+    int    m_xhotspot, m_yhotspot ;
 public:
-	cursor(char * cursorfilename, int xhotspot=0, int yhotspot=0) :
-		window( NULL, 0, 0, 0, 8, 8 )
-	{
-		m_show = 0 ;
+    cursor(char * cursorfilename, int xhotspot=0, int yhotspot=0) :
+        window( NULL, 0, 0, 0, 8, 8 )
+    {
+        m_show = 0 ;
         setcursor( cursorfilename, xhotspot, yhotspot);
     }
 
-	~cursor() {
-		if( m_show != 0 ) {
-			hide();
-		}
-	}
+    ~cursor() {
+        if( m_show != 0 ) {
+            hide();
+        }
+    }
 
     void setcursor( char * cursorfile, int xhotspot=0, int yhotspot=0) {
         int oshow = m_show ;
@@ -784,133 +785,133 @@ public:
         }
         cursorbits.close();
         cursorbits.open(cursorfile);
-		if( cursorbits.valid() ) {
-			m_pos.w = cursorbits.width(); 
-			m_pos.h = cursorbits.height() ;
-		}
-		m_xhotspot = xhotspot ;
-		m_yhotspot = yhotspot ;
+        if( cursorbits.valid() ) {
+            m_pos.w = cursorbits.width();
+            m_pos.h = cursorbits.height() ;
+        }
+        m_xhotspot = xhotspot ;
+        m_yhotspot = yhotspot ;
         if( oshow ) {
             show();         // show new cursor
         }
     }
-        
-	void move( int x, int y )
-	{
-		int nx, ny ;
-		nx = x - m_xhotspot ;
-		ny = y - m_yhotspot ;
-		if( m_show ) {
-			if( nx!=m_pos.x || ny!=m_pos.y ) {
-				hide();
-				m_pos.x = nx ;
-				m_pos.y = ny ;
-				show();
-			}
-		}
-		else {
-			m_pos.x = nx ;
-			m_pos.y = ny ;
-		}
-	}
 
-	// overrideable
+    void move( int x, int y )
+    {
+        int nx, ny ;
+        nx = x - m_xhotspot ;
+        ny = y - m_yhotspot ;
+        if( m_show ) {
+            if( nx!=m_pos.x || ny!=m_pos.y ) {
+                hide();
+                m_pos.x = nx ;
+                m_pos.y = ny ;
+                show();
+            }
+        }
+        else {
+            m_pos.x = nx ;
+            m_pos.y = ny ;
+        }
+    }
+
+    // overrideable
 public:
-	virtual int show() {
-		if( m_show == 0 ) {
-			m_show = 1 ;
-			preparepaint();
-			readbitmap( savedbits, 0, 0, m_pos.w, m_pos.h );
+    virtual int show() {
+        if( m_show == 0 ) {
+            m_show = 1 ;
+            preparepaint();
+            readbitmap( savedbits, 0, 0, m_pos.w, m_pos.h );
             if( cursorbits.valid()) {
-				setpixelmode (DRAW_PIXELMODE_BLEND);
-				drawbitmap( cursorbits, 0, 0, 0, 0, m_pos.w, m_pos.h );
-			}
-			return 0;
-		}
-		else {
-			return 1 ;
-		}
-	}
+                setpixelmode (DRAW_PIXELMODE_BLEND);
+                drawbitmap( cursorbits, 0, 0, 0, 0, m_pos.w, m_pos.h );
+            }
+            return 0;
+        }
+        else {
+            return 1 ;
+        }
+    }
 
-	virtual int hide() {
-		if( m_show ) {
-			m_show = 0 ;
-			if( savedbits.valid() ) {
-				preparepaint();
-				setpixelmode (DRAW_PIXELMODE_COPY);
-				drawbitmap( savedbits, 0,0, 0, 0, 0, 0 );
+    virtual int hide() {
+        if( m_show ) {
+            m_show = 0 ;
+            if( savedbits.valid() ) {
+                preparepaint();
+                setpixelmode (DRAW_PIXELMODE_COPY);
+                drawbitmap( savedbits, 0,0, 0, 0, 0, 0 );
                 savedbits.close();
-			}
-			return 1 ;
-		}
-		else {
-			return 0;
-		}
-	}
+            }
+            return 1 ;
+        }
+        else {
+            return 0;
+        }
+    }
 
 };
 
 class button : public window {
 protected:
-	char * m_buttontext ;
-	int    m_state ;					// 0: released, 1: selected (mouse in), 2: pushed
+    char * m_buttontext ;
+    int    m_state ;					// 0: released, 1: selected (mouse in), 2: pushed
 public:
-	button( char * buttontext, window * parent, int id, int x, int y, int w, int h ) :
-		window( parent, id, x, y, w, h ) 
-	{
-		int textlen ;
-		textlen = strlen( buttontext );
-		m_buttontext = new char [textlen+1] ;
-		strcpy( m_buttontext, buttontext );
-		m_state=0 ;
-	}
-	~button()
-	{
-		delete m_buttontext ;
-	}
+    button( char * buttontext, window * parent, int id, int x, int y, int w, int h ) :
+        window( parent, id, x, y, w, h )
+    {
+        int textlen ;
+        textlen = strlen( buttontext );
+        m_buttontext = new char [textlen+1] ;
+        strcpy( m_buttontext, buttontext );
+        m_state=0 ;
+    }
+    ~button()
+    {
+        delete m_buttontext ;
+    }
 
-	// event handler
+    // event handler
 protected:
-	virtual void paint() {
-		setpixelmode (DRAW_PIXELMODE_COPY);
-		setcolor (COLOR(0xe0, 0xe0, 0xe0, 0xc0)) ;
-		drawrect(0, 0, m_pos.w, m_pos.h);
-		if( m_state == 0 ) {
-			setcolor (COLOR(0xe0, 0xe0, 0xe0, 0xc0)) ;
-		}
-		else if( m_state==1 ) {
-			setcolor( COLOR(128, 128, 200, 255 ) );
-		}
-		else {		// m_state==2
-			setcolor( COLOR(56, 200, 1, 255 ) );
-		}
-		fillrect (1, 1, m_pos.w-2, m_pos.h-2 );
+    virtual void paint() {
+        setpixelmode (DRAW_PIXELMODE_COPY);
+        setcolor (COLOR(0xe0, 0xe0, 0xe0, 0xc0)) ;
+        drawrect(0, 0, m_pos.w, m_pos.h);
+        if( m_state == 0 ) {
+            setcolor (COLOR(0xe0, 0xe0, 0xe0, 0xc0)) ;
+        }
+        else if( m_state==1 ) {
+            setcolor( COLOR(128, 128, 200, 255 ) );
+        }
+        else {		// m_state==2
+            setcolor( COLOR(56, 200, 1, 255 ) );
+        }
+        fillrect (1, 1, m_pos.w-2, m_pos.h-2 );
         resource font ( "mono18.font" );
-		if( font.valid() ) {
-			setpixelmode (DRAW_PIXELMODE_BLEND);
-			setcolor( COLOR(0, 0, 0, 0xff ));
-			int textwidth = strlen(m_buttontext) ;
-			textwidth *= font.fontwidth();
-			int textheight = font.fontheight();
-			int dx, dy ;
-			dx = (m_pos.w-textwidth)/2 ;				// calculate center position
-			dy = (m_pos.h-textheight)/2 ;
-			drawtext ( dx, dy, m_buttontext, font);
-		}
-	}
+        if( font.valid() ) {
+            setpixelmode (DRAW_PIXELMODE_BLEND);
+            setcolor( COLOR(0, 0, 0, 0xff ));
+            int textwidth = strlen(m_buttontext) ;
+            textwidth *= font.fontwidth();
+            int textheight = font.fontheight();
+            int dx, dy ;
+            dx = (m_pos.w-textwidth)/2 ;				// calculate center position
+            dy = (m_pos.h-textheight)/2 ;
+            drawtext ( dx, dy, m_buttontext, font);
+        }
+    }
 
-	virtual void onclick() {
-		if( m_parent ) {
-			m_parent->command(m_id);
-		}
-	}
+    virtual void onclick() {
+        if( m_parent ) {
+            m_parent->command(m_id);
+        }
+    }
 
     virtual void onmouseenter() {
         m_state=1;
         redraw();
     }
-    
-	virtual void onmouse( int x, int y, int buttons ) {
+
+    virtual void onmouse( int x, int y, int buttons ) {
         if( buttons & 0x10 ) {          // button press/release
             if( buttons & 1 ) {         // press
                 m_state=2 ;
@@ -921,13 +922,13 @@ protected:
             }
             redraw();
         }
-	}
+    }
 
-	virtual void onmouseleave() {
-		m_state=0;
-		redraw();
-	}
-};	
+    virtual void onmouseleave() {
+        m_state=0;
+        redraw();
+    }
+};
 
-#endif 	
+#endif
 //  __FBWINDOW_H__

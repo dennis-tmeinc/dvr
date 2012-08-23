@@ -77,7 +77,7 @@ for( i=1; i<=camera_num; i++ ) {
  name = "camera_"+i+"_signal_lost" ;
  document.write( "<td><input name=\""+name+"\" type=\"radio\" />Signal Lost " );
  name = "camera_"+i+"_recording" ;
- document.write( "<input name=\""+name+"\" type=\"radio\" >Recording " ); 
+ document.write( "<input name=\""+name+"\" type=\"radio\" >Recording " );
  name = "camera_"+i+"_motion" ;
  document.write( "<input name=\""+name+"\" type=\"radio\" />Motion " );
  document.write( "&nbsp;&nbsp;&nbsp;&nbsp;Bitrate: <span id=\"id_bitrate_"+i+"\"> </span> Kbps</td></tr>" );
@@ -205,26 +205,26 @@ function statusvalue( stvalue )
 
 function timefunc()
 {
-    var stime = new Date();
-    var diff = stime.getTime() - systime.getTime();
-    var dtime = new Date();
-    dtime.setTime( dvrtime+diff );
-    
-    document.getElementById("id_dvr_time").innerHTML=dtime.toDateString()+" "
-                                                     +dtime.toLocaleTimeString() + " " 
-                                                     +"(<!--#include file="timezone"-->)" ;
-    document.getElementById("id_local_time").innerHTML=stime.toDateString()+" "
-                                                     +stime.toLocaleTimeString() ;
-	if( synctime == 1 ) {
-		synctime = 0 ;
-        ajaxload( "POST", "cgi/dvrstatus.cgi?synctime="+stime.getTime(), statusvalue );
-	}	
-	else if( ++count%25 == 0 ) {
-        ajaxload( "POST", "cgi/dvrstatus.cgi", statusvalue );
-    }
-    else {
-        timer=setTimeout("timefunc()", 200);
-    }
+  var stime = new Date();
+  var diff = stime.getTime() - systime.getTime();
+  var dtime = new Date();
+  dtime.setTime( dvrtime+diff );
+
+  document.getElementById("id_dvr_time").innerHTML=dtime.toDateString()+" "
+						  +dtime.toLocaleTimeString() + " "
+						  +"(<!--#include file="timezone"-->)" ;
+  document.getElementById("id_local_time").innerHTML=stime.toDateString()+" "
+						    +stime.toLocaleTimeString() ;
+  if( synctime == 1 ) {
+    synctime = 0 ;
+    ajaxload( "POST", "cgi/dvrstatus.cgi?synctime="+stime.getTime(), statusvalue );
+  }
+  else if( ++count%25 == 0 ) {
+    ajaxload( "POST", "cgi/dvrstatus.cgi", statusvalue );
+  }
+  else {
+    timer=setTimeout("timefunc()", 200);
+  }
 }
 
 ajaxload( "POST", "cgi/dvrstatus.cgi", statusvalue );

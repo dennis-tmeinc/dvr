@@ -25,9 +25,9 @@ char * buf ;
 int app_quit=0 ;
 
 struct filet_struct {
-	FILE * filehandle ;
-	int del_file ;
-	int cur_file ;
+    FILE * filehandle ;
+    int del_file ;
+    int cur_file ;
     char filename[512] ;
 } * pfilet ;
 
@@ -52,7 +52,7 @@ int sync_dirty = 1000 ;
 // Parse /proc/meminfo
 void check_sync()
 {
-/*    
+/*
     int dirty = 0 ;
     FILE *fproc=NULL;
     char buf[256];
@@ -76,7 +76,7 @@ void check_sync()
 // return time in seconds from first call to this function
 double gettime()
 {
-	struct timeval tv ;
+    struct timeval tv ;
     gettimeofday( &tv, NULL );
     return (double)(unsigned long)tv.tv_sec + (double)(int)tv.tv_usec/1000000.0 ;
 }
@@ -88,7 +88,7 @@ int byterategen()
     static int bytesgen = 0 ;
     double b ;
     int i, gen ;
-    
+
     if( byterate<=0 ) {
         return (rand( 20000 )+5)&0xfffffc ;
     }
@@ -139,34 +139,34 @@ void count_total()
 {
     double ttsize = (double)total_m  + (double) total_b/1000000.0 ;
     double avg = ttsize / (prevtime - starttime );
-	printf("\nTime: %ds Total: %d MB Average: %.3f MB/s\n",
-		(int)(prevtime-starttime), total_m, avg );
+    printf("\nTime: %ds Total: %d MB Average: %.3f MB/s\n",
+        (int)(prevtime-starttime), total_m, avg );
 
 }
 
 void spdtest_file()
 {
-	int  wsize ;
+    int  wsize ;
     int  sum ;
-	FILE * handle = NULL ;
-	double thistime ;
+    FILE * handle = NULL ;
+    double thistime ;
 
-	sum = 0 ;
+    sum = 0 ;
 
     sync();
-    
-	// initial time
-    starttime=prevtime = gettime() ;
-    
-	handle = fopen( filename, "wb" );
-	if( buffersize>1024 ) {
-		setvbuf( handle, NULL, _IOFBF, buffersize );
-	}
-	if( handle==NULL ) {
-		return ;
-	}
 
-	while( app_quit==0 ) {
+    // initial time
+    starttime=prevtime = gettime() ;
+
+    handle = fopen( filename, "wb" );
+    if( buffersize>1024 ) {
+        setvbuf( handle, NULL, _IOFBF, buffersize );
+    }
+    if( handle==NULL ) {
+        return ;
+    }
+
+    while( app_quit==0 ) {
         wsize = byterategen() ;
         if( wsize>0 ) {
             buf = (char *)malloc( wsize );
@@ -175,87 +175,87 @@ void spdtest_file()
             if( filesync ) {
                 sync();
             }
-            
+
         }
-		if( wsize<=0 || ftell( handle )>filesize ) {
+        if( wsize<=0 || ftell( handle )>filesize ) {
             fflush( handle );
-			fseek( handle, 0, SEEK_SET );
+            fseek( handle, 0, SEEK_SET );
             wsize=0 ;
-		}
+        }
         sum+=wsize ;
 
         // counting
-		thistime = gettime(); 
-		if( (thistime-prevtime)>2.0) {
+        thistime = gettime();
+        if( (thistime-prevtime)>2.0) {
             count_speed( sum, thistime );
             sum = 0 ;
             check_sync();
         }
-	}
+    }
 
-	fclose( handle );
+    fclose( handle );
 
-	sync();
-	sync();
+    sync();
+    sync();
 
-	thistime = gettime();
+    thistime = gettime();
     count_speed( sum, thistime );
     count_total();
 
-	return ;
+    return ;
 }
 
-// return free disk space in percentage 
+// return free disk space in percentage
 int disk_freespace_percent(char *path)
 {
     struct statfs stfs;
-    
+
     if (statfs(path, &stfs) == 0) {
-		return stfs.f_bavail * 100 / stfs.f_blocks ;
+        return stfs.f_bavail * 100 / stfs.f_blocks ;
     }
-	return 0;
+    return 0;
 }
 
 void spdtest()
 {
-	int i;
-	char filename[256] ;
-	int  wsize ;
-	int  sum ;
-	double thistime ;
+    int i;
+    char filename[256] ;
+    int  wsize ;
+    int  sum ;
+    double thistime ;
 
-	pfilet = new struct filet_struct [filenumber] ;
+    pfilet = new struct filet_struct [filenumber] ;
 
-	for( i=0; i<filenumber; i++ ) {
-		pfilet[i].filehandle=NULL ;
-		pfilet[i].cur_file=0 ;
-		pfilet[i].del_file=0 ;
-	}
+    for( i=0; i<filenumber; i++ ) {
+        pfilet[i].filehandle=NULL ;
+        pfilet[i].cur_file=0 ;
+        pfilet[i].del_file=0 ;
+    }
 
-	sum = 0 ;
+    sum = 0 ;
 
-	sync();		// clear dirty buffers
+    sync();		// clear dirty buffers
 
-	// initial time
-	starttime = prevtime = gettime() ;
+    // initial time
+    starttime = prevtime = gettime() ;
 
-	sprintf(pfilet[0].filename, "%s_lock", prefix ) ;
-	pfilet[0].filehandle = fopen( pfilet[0].filename, "wb" );
-	fprintf(pfilet[0].filehandle, "%d", 1 );
-	fclose( pfilet[0].filehandle );
-	pfilet[0].filehandle = NULL ;
+    sprintf(pfilet[0].filename, "%s_lock", prefix ) ;
+    pfilet[0].filehandle = fopen( pfilet[0].filename, "wb" );
+    fprintf(pfilet[0].filehandle, "%d", 1 );
+    fclose( pfilet[0].filehandle );
+    pfilet[0].filehandle = NULL ;
 
-	while( app_quit==0 ) {
-		for( i=0; i<filenumber; i++ ) {
-			if( pfilet[i].filehandle==NULL ) {
-				pfilet[i].cur_file++ ;
-				sprintf(pfilet[i].filename, "%s_%d_%d", prefix, pfilet[i].cur_file, i) ;
-				pfilet[i].filehandle = fopen( pfilet[i].filename, "wb" );
-				if( pfilet[i].filehandle && buffersize>1024 ) {
+    while( app_quit==0 ) {
+        for( i=0; i<filenumber; i++ ) {
+            if( pfilet[i].filehandle==NULL ) {
+                pfilet[i].cur_file++ ;
+                sprintf(pfilet[i].filename, "%s_%d_%d", prefix, pfilet[i].cur_file, i) ;
+                pfilet[i].filehandle = fopen( pfilet[i].filename, "wb" );
+                if( pfilet[i].filehandle && buffersize>1024 ) {
 //					setvbuf( pfilet[i].filehandle, NULL, _IOFBF, buffersize );
-				}
-			}
-			wsize = 0 ;
+                }
+            }
+            wsize = 0 ;
             if( pfilet[i].filehandle ) {
                 wsize = byterategen() ;
                 wsize = buffersize ;
@@ -269,14 +269,14 @@ void spdtest()
                     }
                 }
 
-				sprintf(filename, "%s_lock", prefix ) ;
+                sprintf(filename, "%s_lock", prefix ) ;
 
-				if( disk_freespace_percent(filename)<freespace || wsize<=0 ) {
+                if( disk_freespace_percent(filename)<freespace || wsize<=0 ) {
                     if( pfilet[i].filehandle ) {
                         fclose( pfilet[i].filehandle ) ;
                         pfilet[i].filehandle=NULL ;
                     }
-                    // delete one file 
+                    // delete one file
                     if( pfilet[i].del_file<pfilet[i].cur_file ) {
                         pfilet[i].del_file++ ;
                         sprintf(filename, "%s_%d_%d", prefix, pfilet[i].del_file, i) ;
@@ -286,16 +286,16 @@ void spdtest()
                 }
             }
 
-            
-            if( pfilet[i].filehandle && ftell( pfilet[i].filehandle )>filesize ) {
-				fclose( pfilet[i].filehandle ) ;
-				pfilet[i].filehandle=NULL ;
-			}
 
-            
+            if( pfilet[i].filehandle && ftell( pfilet[i].filehandle )>filesize ) {
+                fclose( pfilet[i].filehandle ) ;
+                pfilet[i].filehandle=NULL ;
+            }
+
+
             sum+=wsize ;
             // counting
-            thistime = gettime(); 
+            thistime = gettime();
             if( (thistime-prevtime)>2) {
                 count_speed( sum, thistime );
                 sum = 0 ;
@@ -310,93 +310,93 @@ void spdtest()
 //		}
     }
 
-	// close files
-	for( i=0; i<filenumber; i++ ) {
-		if( pfilet[i].filehandle ) {
-			fclose( pfilet[i].filehandle ) ;
-		}
-	}
+    // close files
+    for( i=0; i<filenumber; i++ ) {
+        if( pfilet[i].filehandle ) {
+            fclose( pfilet[i].filehandle ) ;
+        }
+    }
 
-	// clean files
-	for( i=0; i<filenumber; i++ ) {
-		while( pfilet[i].del_file<pfilet[i].cur_file ) {
-			pfilet[i].del_file++ ;
-			sprintf(filename, "ftt_%d_%d", pfilet[i].del_file, i );
-			remove(filename);
-		}
-	}
-	delete [] pfilet ;
+    // clean files
+    for( i=0; i<filenumber; i++ ) {
+        while( pfilet[i].del_file<pfilet[i].cur_file ) {
+            pfilet[i].del_file++ ;
+            sprintf(filename, "ftt_%d_%d", pfilet[i].del_file, i );
+            remove(filename);
+        }
+    }
+    delete [] pfilet ;
 
-	sprintf(filename, "%s_lock", prefix ) ;
-	remove( filename );
-	
-	sync();
-	sync();
+    sprintf(filename, "%s_lock", prefix ) ;
+    remove( filename );
 
-	thistime = gettime();
+    sync();
+    sync();
+
+    thistime = gettime();
     count_speed( sum, thistime );
     count_total();
-	return ;
+    return ;
 }
 
 void ratetest()
 {
     int  wsize ;
     int  sum ;
-	double thistime ;
+    double thistime ;
 
-	sum = 0 ;
+    sum = 0 ;
 
-	// initial time
+    // initial time
     starttime=prevtime = gettime() ;
-    
-	while( app_quit==0 ) {
+
+    while( app_quit==0 ) {
         wsize = byterategen() ;
         sum+=wsize ;
 
         // counting
-		thistime = gettime(); 
-		if( (thistime-prevtime)>2.0) {
+        thistime = gettime();
+        if( (thistime-prevtime)>2.0) {
             count_speed( sum, thistime );
             sum = 0 ;
         }
-	}
+    }
 
     thistime = gettime();
     count_speed( sum, thistime );
     count_total();
 
-	return ;
+    return ;
 
 }
 
 void usage(char * appname)
 {
-	printf("Usage:\n"
-	       "  %s -f<filesize> -b<buffersize> -n<filenumber> -d<devicename|filename> -p<fileprefix> -r<byterate> -s<freespace> -c\n", appname );
-	return ;
-}	
+    printf("Usage:\n"
+           "  %s -f<filesize> -b<buffersize> -n<filenumber> -d<devicename|filename> -p<fileprefix> -r<byterate> -s<freespace> -c\n", appname );
+    return ;
+}
 
 int main(int argc, char * argv[])
 {
     int i;
 
     int testrate = 0 ;
-    
-	if( argc<2 ) {
-		usage( argv[0] );
-		return 1 ;
-	}
+
+    if( argc<2 ) {
+        usage( argv[0] );
+        return 1 ;
+    }
 
     for( i=1; i<argc; i++ ) {
         if( argv[i][0] == '-' ) {
             char unit ;
             switch( argv[i][1] ) {
-				case 'h' :
-					usage( argv[0] );
-					return 1 ;
+                case 'h' :
+                    usage( argv[0] );
+                    return 1 ;
 
-				case 'f' :
+                case 'f' :
                     unit = 'b' ;
                     sscanf(&(argv[i][2]), "%d%c", &filesize, &unit);
                     if( unit=='K' || unit=='k' ) {
@@ -443,7 +443,7 @@ int main(int argc, char * argv[])
                 case 'd' :
                     strcpy( filename, &(argv[i][2]) ) ;
                     break;
-                    
+
                 case 'c' :
                     filesync=1 ;
                     break;
@@ -451,7 +451,7 @@ int main(int argc, char * argv[])
                 case 'p' :
                     strcpy( prefix, &(argv[i][2]) ) ;
                     break;
-                    
+
                 case 'r' :
                     unit = 'b' ;
                     sscanf(&(argv[i][2]), "%d%c", &byterate, &unit);
@@ -471,11 +471,11 @@ int main(int argc, char * argv[])
                     sscanf(&(argv[i][2]), "%d", &sync_dirty);
                     break ;
 
-				case 's' :
-					sscanf(&(argv[i][2]), "%d", &freespace);
-					break ;
+                case 's' :
+                    sscanf(&(argv[i][2]), "%d", &freespace);
+                    break ;
 
-				case 'x' :
+                case 'x' :
                     testrate = 1 ;
                     break ;
 
@@ -486,21 +486,22 @@ int main(int argc, char * argv[])
         }
         else {
             break ;
-        }		
+        }
     }
-    
-	signal( SIGINT, sig_handler );
+
+    signal( SIGINT, sig_handler );
 
     if( testrate ) {
         ratetest();
     }
-	else if( filename[0] ) {
-		spdtest_file();
-	}
-	else {
-		spdtest();
-	}
+    else if( filename[0] ) {
+        spdtest_file();
+    }
+    else {
+        spdtest();
+    }
 
-	return 0;
+
+    return 0;
 }
 

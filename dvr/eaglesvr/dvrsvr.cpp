@@ -11,7 +11,7 @@ dvrsvr *dvrsvr::m_head = NULL;
 dvrsvr::dvrsvr(int fd)
 {
     pthread_mutex_init(&m_mutex, NULL);
-    
+
     m_sockfd = fd;
     m_shutdown = 0 ;
     m_fifo = NULL;
@@ -21,7 +21,8 @@ dvrsvr::dvrsvr(int fd)
     m_req.reqcode = 0;
     m_req.reqsize = 0;
     m_conntype = CONN_NORMAL;
-    m_fifosize=0;
+    m_fifosize=0 ;
+    m_fifodrop=1 ;
 
     m_fontcache=NULL ;
     // add into svr queue
@@ -53,10 +54,10 @@ dvrsvr::~dvrsvr()
     if( m_sockfd>0) {
         net_close(m_sockfd);
     }
-    
+
     cleanfifo();
     if( m_recvbuf ) {
-        mem_free( m_recvbuf ) ;
+        delete [] m_recvbuf ;
     }
     if( m_fontcache!=NULL ) {
         mem_free( m_fontcache );
@@ -94,7 +95,7 @@ int dvrsvr::read()
         m_recvloc += n;
         if (m_recvloc < m_recvlen)
             return 1 ;
-        
+
         m_recvlen = 0;
         if (m_req.reqsize > 0x100000 || m_req.reqsize < 0) {	// invalid req
             m_req.reqcode = 0;
@@ -102,7 +103,7 @@ int dvrsvr::read()
             return 0 ;
         }
         else if (m_req.reqsize>0 ){	// wait for extra data
-            m_recvbuf = (char *)mem_alloc(m_req.reqsize);
+            m_recvbuf = new char [m_req.reqsize];
             if (m_recvbuf == NULL) {
                 // no enough memory
                 down();             // indicate socket is down
@@ -132,12 +133,12 @@ int dvrsvr::read()
             return 1 ;
         }
     }
-    
+
     // req completed, process it
     onrequest();
 
     if (m_recvbuf != NULL) {
-        mem_free(m_recvbuf);
+        delete [] m_recvbuf ;
         m_recvbuf = NULL;
     }
     m_recvlen = m_recvloc = 0 ;
@@ -211,7 +212,11 @@ int dvrsvr::write()
             if( n<0 ) {
                 if(errno == EWOULDBLOCK ) {
                     res = 1 ;
+
+                    printf("would not finish 2 !\n");
+
                     break ;
+
                 }
                 else {
                     res = -1 ;          // other error!
@@ -231,55 +236,47 @@ int dvrsvr::write()
     return res ;
 }
 
+/*
 void dvrsvr::send_fifo(char *buf, int bufsize, int loc)
 {
     net_fifo *nfifo;
-    
+
     nfifo = new net_fifo ;
     nfifo->buf = (char *)mem_addref( buf, bufsize );
     nfifo->bufsize = bufsize;
     nfifo->loc = loc;
     nfifo->next = NULL;
-    
+
     if (m_fifo == NULL) {           // current fifo is empty
         m_fifo = m_fifotail = nfifo;
         m_fifosize = bufsize ;
-        net_trigger();
     } else {
         m_fifotail->next = nfifo ;
         m_fifotail = nfifo ;
         m_fifosize += bufsize ;
     }
 }
+*/
 
 void dvrsvr::Send(void *buf, int bufsize)
 {
     if( isdown() ) {
         return ;
     }
-    
     lock();
-    if ( m_fifo ) {
-        send_fifo((char *)buf, bufsize);
-    }
-    else {
-        int loc = 0 ;
-        int n ;
-        while( loc<bufsize ) {
-            n = ::send(m_sockfd, ((char *)buf)+loc, bufsize-loc, 0);
-            if( n<0 ) {
-                if( errno==EWOULDBLOCK ) {
-                    send_fifo(((char *)buf), bufsize, loc);
-                }
-                else {
-                    // network error or peer closed socket!
-                    down();         // mark socket down
-                }
-                break ;
-            }
-            loc+=n ;
+
+    int loc = 0 ;
+    while( loc<bufsize ) {
+        int n = ::send(m_sockfd, ((char *)buf)+loc, bufsize-loc, 0);
+        if( n<0 ) {
+            // network error or peer closed socket!
+            dvr_log("socket send error : %d", errno );
+            down();         // mark socket down
+            break ;
         }
+        loc+=n ;
     }
+
     unlock();
 }
 
@@ -292,16 +289,34 @@ int dvrsvr::onframe(cap_frame * pframe)
     }
     if( m_connchannel == pframe->channel ) {
         if (m_conntype == CONN_LIVESTREAM ) {
-            if( m_fifo && m_fifo->next ) {		// only allow two fifos (one frame)
-                m_fifodrop=1 ;
+            if ( pframe->frametype == FRAMETYPE_KEYVIDEO ) {
+                m_fifodrop = 0 ;
             }
-            else if ( m_fifodrop==0 || pframe->frametype == FRAMETYPE_KEYVIDEO ) {
-                m_fifodrop=0;
-                ans.anscode = ANSSTREAMDATA ;
-                ans.anssize = pframe->framesize ;
-                ans.data = pframe->frametype ;
-                Send(&ans, sizeof(struct dvr_ans));
-                Send(pframe->framedata, pframe->framesize);
+            if( m_fifodrop == 0 ) {
+                if( net_sendok(m_sockfd,0) ) {
+                    struct dvr_ans ans ;
+                    if( m_headersent == 0 ) {
+                        // postponed header. for eagle368 header available on this point
+                        int hlen = cap_channel[m_connchannel]->getheaderlen();
+                        if( hlen>0 ) {
+                            // file header as first data frame
+                            ans.anscode = ANSSTREAMDATA;
+                            ans.anssize = hlen ;
+                            ans.data = FRAMETYPE_264FILEHEADER ;
+                            Send( &ans, sizeof(ans));
+                            Send( cap_channel[m_connchannel]->getheader(), hlen );
+                        }
+                        m_headersent = 1 ;
+                    }
+                    ans.anscode = ANSSTREAMDATA ;
+                    ans.anssize = pframe->framesize ;
+                    ans.data = pframe->frametype ;
+                    Send(&ans, sizeof(ans));
+                    Send(pframe->framedata, pframe->framesize);
+                }
+                else {
+                    m_fifodrop = 1 ;
+                }
             }
             return 1;
         }
@@ -471,6 +486,12 @@ void dvrsvr::onrequest()
     case REQDRAWTEXTEX:
         ReqDrawTextEx();
         break;
+    case REQ5STARTCAPTURE:
+        ReqStartCapture();      // Eagle368, to call SystemStart
+        break;
+    case REQ5STOPCAPTURE:
+        ReqStopCapture();       // Eagle368, to call SystemStop
+        break;
     default:
         AnsError();
         break;
@@ -513,10 +534,13 @@ void dvrsvr::ReqRealTime()
     struct dvr_ans ans ;
     if (m_req.data >= 0 && m_req.data < cap_channels) {
         ans.anscode = ANSREALTIMEHEADER;
-        ans.data = m_req.data;
-        ans.anssize = sizeof(struct hd_file);
+        int channel = m_req.data ;
+        ans.data = channel ;
+        ans.anssize = cap_channel[channel]->getheaderlen();
         Send(&ans, sizeof(ans));
-        Send(cap_fileheader(m_req.data), sizeof(struct hd_file));
+        if( ans.anssize>0) {
+            Send( cap_channel[channel]->getheader(), ans.anssize ) ;
+        }
         m_conntype = CONN_REALTIME;
         m_connchannel = m_req.data;
         cap_channel[m_connchannel]->start();
@@ -624,7 +648,7 @@ void dvrsvr::GetChannelState()
         int mot ;
     } cs ;
     struct dvr_ans ans ;
-    
+
     ans.anscode = ANSGETCHANNELSTATE ;
     ans.anssize = sizeof( struct channelstate ) * cap_channels ;
     ans.data = cap_channels ;
@@ -672,28 +696,17 @@ struct ptz_cmd {
 //  m_req.data is stream channel
 void dvrsvr::ReqOpenLive()
 {
-    struct dvr_ans ans ;
-    int hlen ;
-
     if( m_req.data>=0 && m_req.data<cap_channels ) {
+        struct dvr_ans ans ;
         ans.anscode = ANSSTREAMOPEN;
         ans.anssize = 0;
         ans.data = 0 ;
         Send( &ans, sizeof(ans) );
-        hlen = cap_channel[m_req.data]->getheaderlen();
-        if( hlen>0 ) {
-            ans.anscode = ANSSTREAMDATA;
-            ans.anssize = sizeof(struct hd_file) ;
-            ans.data = FRAMETYPE_264FILEHEADER ;
-            Send( &ans, sizeof(ans));
-            Send( cap_channel[m_req.data]->getheader(), hlen );
-        }
         m_conntype = CONN_LIVESTREAM;
         m_connchannel = m_req.data;
         cap_channel[m_connchannel]->start();
-
+        m_headersent = 0 ;
         dvr_log( "Open Live channel %d", m_connchannel );
-
         return ;
     }
     AnsError();
@@ -850,7 +863,7 @@ void dvrsvr::Req2GetJPEG()
     AnsError();
 }
 
-// EagleSVR supports      
+// EagleSVR supports
 
 void dvrsvr::ReqScreenSetMode()
 {
@@ -1004,7 +1017,7 @@ void dvrsvr::ReqDrawPutPixel()
         int * param = (int *)m_recvbuf ;
 #ifdef EAGLE34
         draw_putpixel_eagle34( param[0], param[1], m_req.data );
-#else		
+#else
         draw_putpixel( param[0], param[1], m_req.data );
 #endif
     }
@@ -1187,3 +1200,24 @@ void dvrsvr::ReqDrawTextEx()
     }
 }
 
+// EAGLE368 Specific
+void dvrsvr::ReqStartCapture()
+{
+#ifdef EAGLE368
+    AnsOk();
+    eagle368_startcapture();
+#else
+    AnsError();
+#endif
+}
+
+// EAGLE368 Specific
+void dvrsvr::ReqStopCapture()
+{
+#ifdef EAGLE368
+    AnsOk();
+    eagle368_stopcapture();
+#else
+    AnsError();
+#endif
+}

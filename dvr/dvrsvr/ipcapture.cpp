@@ -6,35 +6,55 @@ ipeagle32_capture::ipeagle32_capture( int channel )
 {
     config dvrconfig(CFG_FILE);
     char cameraid[16] ;
-    
+
     m_sockfd = -1 ;
-    m_streamfd=-1 ;
     m_state = 0 ;
     m_streamthreadid = 0 ;
     m_type=CAP_TYPE_HIKIP;
     m_ipchannel = 0;
     m_enable=0;
-    
+
     m_timesynctimer = g_timetick + 1000000 ;    // to make sure camera time be update right away
     m_updtimer = 0 ;
 
     sprintf(cameraid, "camera%d", m_channel+1 );
-    
+
     m_ip = dvrconfig.getvalue( cameraid, "ip" );
     if( m_ip.length()==0 ) {
-		m_ip="127.0.0.1" ;				// default point to localhost
+        m_ip="127.0.0.1" ;				// default point to localhost
     }
     m_port = dvrconfig.getvalueint( cameraid, "port");
     if( m_port==0 ) {
         m_port = EAGLESVRPORT ;
     }
     m_ipchannel = dvrconfig.getvalueint( cameraid, "channel");
+
+    // shared memory over ip
+    m_shm_enabled = dvrconfig.getvalueint( cameraid, "shm");
+    if( m_shm_enabled ) {
+        // init shared memory
+        int shm_size = dvrconfig.getvalueint( cameraid, "shm_size");
+        if( shm_size< (2*1024*1024) ) {
+            shm_size = (2*1024*1024) ;          // minimum 2M
+        }
+        char shm_path[128] ;
+        sprintf( shm_path, "/cap%d", m_channel) ;
+//        unlink( shm_path ) ;
+        m_shm = mem_shm_init( shm_path, shm_size) ;
+    }
+
     m_enable = m_attr.Enable ;
 }
 
 ipeagle32_capture::~ipeagle32_capture()
 {
     stop();
+    if( m_shm_enabled && m_shm ) {
+        mem_shm_close( m_shm ) ;
+//        char shm_path[128] ;
+//        sprintf( shm_path, "/cap%d", m_channel) ;
+//        unlink( shm_path ) ;
+    }
 }
 
 /*
@@ -47,7 +67,7 @@ void ipeagle32_capture::streamthread()
     int i;
     int frametype ;
     int timeout=0 ;
-    
+
     capframe.channel=m_channel ;
     m_streamfd=0 ;
     while( m_state ) {
@@ -69,9 +89,9 @@ void ipeagle32_capture::streamthread()
         // recevie frames
         i = net_recvok(m_streamfd, 100000) ;
         if( i<0 ) {
-            break; 
+            break;
         }
-        else if ( i>0 ) {        
+        else if ( i>0 ) {
             hdframe.flag=0 ;
             if( net_recv (m_streamfd, &hdframe, sizeof(struct hd_frame))>0 ) {
                 if( hdframe.flag==1 ) {                                       // .264 frame
@@ -84,7 +104,7 @@ void ipeagle32_capture::streamthread()
                         capframe.frametype = FRAMETYPE_VIDEO ;
                     }
                     else if( frametype==3 && subframes==0 ) {  // key frame
-                        capframe.frametype = FRAMETYPE_KEYVIDEO ;               
+                        capframe.frametype = FRAMETYPE_KEYVIDEO ;
                     }
                     else {
                         capframe.frametype = FRAMETYPE_UNKNOWN ;
@@ -97,10 +117,10 @@ void ipeagle32_capture::streamthread()
                         break;
                     }
                     onframe( &capframe );
-                    mem_free( capframe.framedata );			
-                    
+                    mem_free( capframe.framedata );
+
                     capframe.frametype = FRAMETYPE_UNKNOWN ;
-                    
+
                     if( subframes>0 ) {
                         for( i=0; i<subframes; i++ ) {
                             net_recv( m_streamfd, &subframe, sizeof( struct hd_subframe ) );
@@ -114,7 +134,7 @@ void ipeagle32_capture::streamthread()
                             }
                         }
                     }
-                    
+
                     timeout=0 ;
                 }
                 else {
@@ -139,72 +159,104 @@ void ipeagle32_capture::streamthread()
 }
 */
 
-void ipeagle32_capture::streamthread()
+
+void ipeagle32_capture::streamthread_net()
 {
     struct cap_frame capframe ;
-    int i;
-    int timeout=0 ;
-    
-    capframe.channel=m_channel ;
-    m_streamfd=0 ;
-    while( m_state ) {
+    int recvok;
+    int recvact=g_timetick ;
 
-        if( m_streamfd<=0 ) {
-            usleep(20000);
-            m_streamfd = net_connect (m_ip, m_port) ;
-            if( m_streamfd > 0 ) {
-                if( dvr_openlive (m_streamfd, m_ipchannel)<=0 ) {
-                    closesocket( m_streamfd ) ;
-                    m_streamfd=0 ;
+    capframe.channel=m_channel ;
+    int streamfd = 0 ;
+    while( m_state ) {
+        if( streamfd<=0 ) {
+            usleep(100000);           // wait a bit, for EAGLE368 it should wait until all channels setting up
+            streamfd = net_connect (m_ip, m_port) ;
+            if( streamfd > 0 ) {
+                if( dvr_openlive (streamfd, m_ipchannel)<=0 ) {
+                    dvr_log("dvr openlive failed!");
+                    closesocket( streamfd ) ;
+                    streamfd=0 ;
                 }
             }
         }
-        if( m_streamfd<=0 ) {
+        if( streamfd<=0 ) {
             continue ;
         }
 
         // recevie frames
-        i = net_recvok(m_streamfd, 100000) ;
-        if( i<0 ) {
-            break; 
-        }
-        else if ( i>0 ) {        
+        recvok = net_recvok(streamfd, 100000) ;
+        if( recvok>0 ) {
             struct dvr_ans ans ;
-            if( net_recv (m_streamfd, &ans, sizeof(struct dvr_ans))>0 ) {
+            memset( &ans, 0, sizeof(ans));
+            if( net_recv (streamfd, &ans, sizeof(struct dvr_ans))>0 ) {
                 if( ans.anscode == ANSSTREAMDATA ) {
                     capframe.framesize = ans.anssize ;
                     capframe.frametype = ans.data ;
                     capframe.framedata=(char *)mem_alloc (capframe.framesize) ;
                     if( capframe.framedata ) {
-                        if( net_recv( m_streamfd, capframe.framedata, capframe.framesize )>0 ) {
+                        int nr = net_recv( streamfd, capframe.framedata, capframe.framesize ) ;
+                        if( nr>0 ) {
                             onframe(&capframe);
                         }
                         else {
-                            net_clean(m_streamfd);
+                            closesocket( streamfd );
+                            streamfd = 0 ;
                         }
                         mem_free(capframe.framedata);
                     }
                     else {
-                        net_clean(m_streamfd);
+                        dvr_log( "ipcapture:no enought memory!") ;
+                        closesocket( streamfd );
+                        streamfd = 0 ;
                     }
-                    timeout=0 ;
+                }
+                else {
+                    dvr_log( "ipcapture:error streaming header");
+                    closesocket( streamfd );
+                    streamfd = 0 ;
                 }
             }
             else {
-                closesocket( m_streamfd );
-                m_streamfd = 0 ;
+                dvr_log( "ipcapture:error recv ans");
+                closesocket( streamfd );
+                streamfd = 0 ;
+            }
+            recvact=g_timetick ;
+        }
+        else if( recvok==0) {       // recvok timeout
+            if( g_timetick-recvact>30000 ) {        // no active for 30 seconds?
+                dvr_log( "ipcapture:socket time out");
+                closesocket( streamfd );
+                streamfd = 0 ;
+                recvact=g_timetick ;
             }
         }
-        else {
-            if( ++timeout> 50 ) {
-                closesocket( m_streamfd );
-                m_streamfd = 0 ;
-            }
+        else {                      // error
+            break;
         }
     }
-    if( m_streamfd>0 ) {
-        closesocket(m_streamfd);
-        m_streamfd = 0 ;
+    if( streamfd>0 ) {
+        closesocket(streamfd);
+    }
+}
+
+// get live stream over sh mem
+void ipeagle32_capture::streamthread_shm()
+{
+    while( m_state ) {
+        sleep(1);
+    }
+}
+
+// get live stream over sh mem
+void ipeagle32_capture::streamthread()
+{
+    if( m_shm_enabled ) {
+        streamthread_shm();
+    }
+    else {
+        streamthread_net();
     }
 }
 
@@ -214,12 +266,22 @@ static void * ipeagle32_thread(void *param)
     return NULL ;
 }
 
-int ipeagle32_capture::connect()
+int ipeagle32_capture::channelsetup( int socket )
 {
     struct  DvrChannel_attr attr;
+    // set ip cam attr
+    attr = m_attr ;
+    attr.Enable = 1 ;
+    attr.RecMode = -1;					// No recording
+    dvr_setchannelsetup (socket, m_ipchannel, &attr) ;
+}
+
+
+int ipeagle32_capture::connect()
+{
     struct dvrtime dvrt ;
     char * tzenv ;
-    
+
     m_sockfd = net_connect (m_ip, m_port) ;
     if( m_sockfd<0 ) {
         return 0;
@@ -229,32 +291,26 @@ int ipeagle32_capture::connect()
     if( tzenv && strlen(tzenv)>0 ) {
         dvr_settimezone(m_sockfd, tzenv) ;
     }
-    
+
     time_utctime( &dvrt );
     dvr_adjtime(m_sockfd, &dvrt) ;
-    
-    // set ip cam attr
-    attr = m_attr ;
-    attr.Enable = 1 ;
-    attr.RecMode = -1;					// No recording
-    
-    dvr_setchannelsetup (m_sockfd, m_ipchannel, &attr) ;
-    
-    updateOSD();
-    
+
+    channelsetup( m_sockfd ) ;
+
     return 1 ;
 }
 
 void ipeagle32_capture::start()
 {
     if( m_enable ) {
-        stop();
-        if( connect() ) {
-            m_state=1 ;
-            pthread_create(&m_streamthreadid, NULL, ipeagle32_thread, this);
-            m_started = 1 ;
+        if( !m_started ) {
+            if( connect() ) {
+                m_state=1 ;
+                pthread_create(&m_streamthreadid, NULL, ipeagle32_thread, this);
+                m_started = 1 ;
+            }
         }
-    }		
+    }
 }
 
 void ipeagle32_capture::stop()
@@ -278,22 +334,19 @@ void ipeagle32_capture::setosd( struct hik_osd_type * posd )
     }
 }
 
-// periodic called
+// periodically called
 void ipeagle32_capture::update(int updosd)
 {
     if( !m_enable ) {
         return ;
     }
-    
+
     if( m_state==0 ) {
         start();
     }
-    
+
     if( m_sockfd<=0 ) {
-        if( m_streamfd>0 ) {
-            // re-connect
-            connect();
-        }
+        connect();
         return ;
     }
     else {
@@ -331,5 +384,23 @@ void ipeagle32_capture::update(int updosd)
     }
     if( m_state ) {
         capture::update( updosd );
+    }
+}
+
+// eagle368 specific
+int ipeagle32_capture::eagle368_startcapture()
+{
+    dvr_log("start eagle368!");
+    if( m_started && m_sockfd>0 ) {
+        dvr_startcapture(m_sockfd);
+    }
+}
+
+// eagle368 specific
+int ipeagle32_capture::eagle368_stopcapture()
+{
+    dvr_log("stop eagle368!");
+    if( m_started && m_sockfd>0 ) {
+        dvr_stopcapture(m_sockfd);
     }
 }

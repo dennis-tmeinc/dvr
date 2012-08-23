@@ -1,6 +1,6 @@
 /*
  file mcu.cpp,
-    communications to mcu 
+    communications to mcu
  */
 
 #include <stdio.h>
@@ -74,35 +74,35 @@ const struct baud_table_t {
 } ;
 
 // open serial port
-int serial_open(char * device, int buadrate) 
+int serial_open(char * device, int buadrate)
 {
     int hserial ;
     int i;
-   
+
     // check if serial device match stdin ?
     struct stat stdinstat ;
     struct stat devstat ;
     int r1, r2 ;
     r1 = fstat( 0, &stdinstat ) ;           // get stdin stat
     r2 = stat( device, &devstat ) ;
-    
+
     if( r1==0 && r2==0 && stdinstat.st_dev == devstat.st_dev && stdinstat.st_ino == devstat.st_ino ) { // matched stdin
         netdbg_print("Stdin match serail port!\n");
         hserial = dup(0);                   // duplicate stdin
- 		fcntl(hserial, F_SETFL, O_RDWR | O_NOCTTY );
+        fcntl(hserial, F_SETFL, O_RDWR | O_NOCTTY );
     }
     else {
        hserial = open( device, O_RDWR | O_NOCTTY );
     }
-   
+
     if( hserial > 0 ) {
-#ifdef EAGLE32        
+#ifdef EAGLE32
         if( strcmp( device, "/dev/ttyS1")==0 ) {    // this is hikvision specific serial port
             // Use Hikvision API to setup serial port (RS485)
             InitRS485(hserial, buadrate, DATAB8, STOPB1, NOPARITY, NOCTRL);
         }
-        else 
-#endif            
+        else
+#endif
         {
             struct termios tios ;
             speed_t baud_t ;
@@ -112,7 +112,7 @@ int serial_open(char * device, int buadrate)
             tios.c_iflag = IGNPAR;
             tios.c_oflag = 0;
             tios.c_lflag = 0;       // ICANON;
-            tios.c_cc[VMIN]=10;		// minimum char 
+            tios.c_cc[VMIN]=10;		// minimum char
             tios.c_cc[VTIME]=1;		// 0.1 sec time out
             baud_t = buadrate ;
             i=0 ;
@@ -125,7 +125,7 @@ int serial_open(char * device, int buadrate)
             }
             cfsetispeed(&tios, baud_t);
             cfsetospeed(&tios, baud_t);
-            
+
             tcflush(hserial, TCIFLUSH);
             tcsetattr(hserial, TCSANOW, &tios);
         }
@@ -134,7 +134,7 @@ int serial_open(char * device, int buadrate)
     return 0 ;
 }
 
-//  
+//
 int serial_dataready(int handle, int usdelay, int * usremain)
 {
     struct timeval timeout ;
@@ -163,7 +163,7 @@ int serial_dataready(int handle, int usdelay, int * usremain)
 #define MAXDEVICES  (8)
 int shandles[MAXDEVICES] ;
 
-// check serial port ready on multi ports  
+// check serial port ready on multi ports
 int serial_mready(int usdelay)
 {
     int i;
@@ -183,7 +183,7 @@ int serial_mready(int usdelay)
             }
         }
     }
-    
+
     if (select(maxh + 1, &fds, NULL, NULL, &timeout) > 0) {
         return 1 ;
     }
@@ -222,7 +222,7 @@ int mcu_read(char * sbuf, size_t bufsize, int wait, int interval)
 {
     size_t nread=0 ;
     if( mcu_dataready(wait) ) {
-		while( nread<bufsize && mcu_dataready(interval) ) {
+        while( nread<bufsize && mcu_dataready(interval) ) {
 #ifdef  MCU_DEBUG
             printf( "%02x ", (int) mcu_buffer[mcu_buffer_pointer] );
 #endif
@@ -230,9 +230,9 @@ int mcu_read(char * sbuf, size_t bufsize, int wait, int interval)
             nread++;
         }
 #ifdef  MCU_DEBUG
-		fflush(stdout);
+        fflush(stdout);
 #endif
-	}
+    }
     return nread ;
 }
 
@@ -244,7 +244,7 @@ int mcu_write(void * buf, int bufsize)
         for(i=0;i<bufsize;i++) {
             printf( "%02x ", (int)(((char *)buf)[i]) );
         }
-		fflush(stdout);
+        fflush(stdout);
 #endif
         return write( mcu_handle, buf, bufsize);
     }
@@ -257,7 +257,7 @@ void mcu_clear(int delay)
     int i;
 #ifdef MCU_DEBUG
     printf("clear: ");
-#endif  
+#endif
     char buf[100] ;
     for(i=0;i<100;i++) {
         if( mcu_read( buf, sizeof(buf), 0, 0 )==0 ) {
@@ -266,10 +266,10 @@ void mcu_clear(int delay)
     }
 #ifdef MCU_DEBUG
     printf("\n");
-#endif                
+#endif
 }
 
-unsigned char checksum( unsigned char * data, int datalen ) 
+unsigned char checksum( unsigned char * data, int datalen )
 {
     unsigned char ck=0;
     while( datalen-->0 ) {
@@ -280,7 +280,7 @@ unsigned char checksum( unsigned char * data, int datalen )
 
 // check data check sum
 // return 0: checksum correct
-char mcu_checksum( char * data ) 
+char mcu_checksum( char * data )
 {
     if( *data<6 || *data>60 ) {
         return (char)-1;
@@ -293,7 +293,7 @@ void mcu_calchecksum( char * data )
 {
     char ck = 0 ;
     char i = *data ;
-    
+
     while( --i>0 ) {
         ck-=*data++ ;
     }
@@ -303,12 +303,12 @@ void mcu_calchecksum( char * data )
 // send command to mcu
 // return 0 : failed
 //        >0 : success
-static int mcu_sendmsg( char * msg ) 
+static int mcu_sendmsg( char * msg )
 {
     mcu_calchecksum(msg );
 
 #ifdef  MCU_DEBUG
-// for debugging    
+// for debugging
     struct timeval tv ;
     gettimeofday(&tv, NULL);
     int r ;
@@ -316,12 +316,12 @@ static int mcu_sendmsg( char * msg )
     ptm = localtime(&tv.tv_sec);
     double sec ;
     sec = ptm->tm_sec + tv.tv_usec/1000000.0 ;
-    
+
     printf("%02d:%02d:%05.3f Send: ", ptm->tm_hour, ptm->tm_min, sec);
     r=mcu_write(msg, (int)(*msg));
     printf("\n");
     return r ;
-#else    
+#else
     return mcu_write(msg, (int)(*msg));
 #endif
 }
@@ -332,23 +332,23 @@ static int mcu_sendmsg( char * msg )
 int mcu_recvmsg(char * msgbuf, int bufsize)
 {
     int n;
-	
+
 #ifdef MCU_DEBUG
-    // for debugging 
+    // for debugging
     struct timeval tv ;
     gettimeofday(&tv, NULL);
     struct tm * ptm ;
     ptm = localtime(&tv.tv_sec);
     double sec ;
     sec = ptm->tm_sec + tv.tv_usec/1000000.0 ;
-    
+
     printf("%02d:%02d:%05.3f Recv: ", ptm->tm_hour, ptm->tm_min, sec);
-#endif    
-    
+#endif
+
     if( mcu_read(msgbuf, 1) ) {
         n=(int) msgbuf[0] ;
         if( n>=5 && n<bufsize ) {
-            n=mcu_read(&msgbuf[1], n-1)+1 ; 
+            n=mcu_read(&msgbuf[1], n-1)+1 ;
             if( n==(int)msgbuf[0] &&                   // correct size
                 msgbuf[1]==0 &&                 // correct target
                 mcu_checksum( msgbuf ) == 0 )   // correct checksum
@@ -367,7 +367,7 @@ int mcu_recvmsg(char * msgbuf, int bufsize)
     }
 
 #ifdef MCU_DEBUG
-    // for debugging 
+    // for debugging
     printf("** error! \n");
 #endif
     mcu_inputmissed = 1 ;
@@ -378,9 +378,9 @@ int mcu_recvmsg(char * msgbuf, int bufsize)
 // to receive a respondes message from mcu
 int mcu_recv( char * mcu_msg, int bufsize, int usdelay, int * usremain)
 {
-	int recvsize ;
+    int recvsize ;
     while( mcu_dataready(usdelay, &usdelay) ) {
-		recvsize = mcu_recvmsg(mcu_msg, bufsize) ;
+        recvsize = mcu_recvmsg(mcu_msg, bufsize) ;
         if( recvsize > 0 ) {
             if( mcu_msg[4]=='\x02' ) {             // is it an input message ?
                 mcu_checkinputbuf(mcu_msg) ;
@@ -407,30 +407,36 @@ int mcu_recv( char * mcu_msg, int bufsize, int usdelay, int * usremain)
     return 0 ;
 }
 
-// send command to mcu without waiting for responds
-int mcu_sendcmd(int cmd, int datalen, ...)
+// send command to mcu with variable argument
+int mcu_sendcmd_va( int target, int cmd, int datalen, va_list arg )
 {
     int i ;
-    va_list v ;
     char mcu_buf[datalen+10] ;
 
-	// validate command
-    if( datalen<0 || datalen>64 ) { 	// wrong command 
+    // validate command
+    if( datalen<0 || datalen>64 ) { 	// wrong command
         return 0 ;
     }
-	
+
     mcu_buf[0] = (char)(datalen+6) ;
-    mcu_buf[1] = (char)1 ;
-    mcu_buf[2] = (char)0 ;
+    mcu_buf[1] = (char)target ;
+    mcu_buf[2] = (char)ID_HOST ;
     mcu_buf[3] = (char)cmd ;
     mcu_buf[4] = (char)2 ;
 
-    va_start( v, datalen ) ;
     for( i=0 ; i<datalen ; i++ ) {
-        mcu_buf[5+i] = (char) va_arg( v, int );
+        mcu_buf[5+i] = (char) va_arg( arg, int );
     }
-    va_end(v);
     return mcu_sendmsg(mcu_buf) ;
+}
+
+
+// send command to mcu without waiting for responds
+int mcu_sendcmd(int cmd, int datalen, ...)
+{
+    va_list v ;
+    va_start( v, datalen ) ;
+    return mcu_sendcmd_va( ID_MCU, cmd, datalen, v ) ;
 }
 
 
@@ -438,26 +444,26 @@ int mcu_sendcmd(int cmd, int datalen, ...)
 // return size of bytes in responds
 static int mcu_waitrsp(char * rsp, int target, int cmd, int delay=MCU_CMD_DELAY)
 {
-	char rspbuf[MCU_MAX_MSGSIZE] ;
-	int recvsize  ;
-	if(rsp==NULL) {
-		rsp=rspbuf ;
-	}
+    char rspbuf[MCU_MAX_MSGSIZE] ;
+    int recvsize  ;
+    if(rsp==NULL) {
+        rsp=rspbuf ;
+    }
     while( delay>=0 ) {                          	// wait until delay time out
-        recvsize = mcu_recv(rsp, MCU_MAX_MSGSIZE, delay, &delay ) ;   
+        recvsize = mcu_recv(rsp, MCU_MAX_MSGSIZE, delay, &delay ) ;
         if( recvsize > 0 ) {     					// received a responds
             if( rsp[2]==(char)target &&         // resp from correct target (MCU)
                 rsp[3]==(char)cmd &&            // correct resp for CMD
                 rsp[4]==3 )                     // right responds
             {
-                return recvsize ;           
-            }                                  
-			else if( rsp[2]==(char)target &&    // resp from correct target (MCU)
+                return recvsize ;
+            }
+            else if( rsp[2]==(char)target &&    // resp from correct target (MCU)
                 rsp[3]==(char)0xff &&           // possible not-supported command
                 rsp[4]==3 )                     // it is responds
-			{
-				return 0 ;
-			}
+            {
+                return 0 ;
+            }
         }	     // ignor wrong resps and continue waiting
         else {
             break;
@@ -470,7 +476,7 @@ static int mcu_waitrsp(char * rsp, int target, int cmd, int delay=MCU_CMD_DELAY)
 // check mcu input
 // parameter
 //      wait - micro-seconds waiting
-// return 
+// return
 //		number of input message received.
 //      0: timeout (no message)
 //     -1: error
@@ -493,60 +499,65 @@ int mcu_input(int usdelay)
 }
 
 
-// Send command to mcu and check responds
-// return 
-//       size of response 
+// Send command to mcu and check responds, with variable argument
+// return
+//       size of response
 //       NULL if failed
-int mcu_cmd(char * rsp, int cmd, int datalen, ...)
+int mcu_cmd_va(int target, char * rsp, int cmd, int datalen, va_list arg)
 {
     int i ;
-    va_list v ;
-    char mcu_buf[datalen+10] ;
-    static int mcu_error ;
-
-	// validate command
-    if( datalen<0 || datalen>64 ) { 	// wrong command 
+    // validate command
+    if( datalen<0 || datalen>64 ) { 	// wrong command
         return 0 ;
     }
 
-    mcu_buf[0] = (char)(datalen+6) ;
-    mcu_buf[1] = (char)1 ;                      // target MCU
-    mcu_buf[2] = (char)0 ;						// source (HOST CPU)
-    mcu_buf[3] = (char)cmd ;
-    mcu_buf[4] = (char)2 ;
-
-    va_start( v, datalen ) ;
-    for( i=0 ; i<datalen ; i++ ) {
-        mcu_buf[5+i] = (char) va_arg( v, int );
-    }
-    va_end(v);
     i=3 ;
     while( i-->0 ) {
-        if(mcu_sendmsg(mcu_buf)) {
-			int rsize = mcu_waitrsp(rsp, 1, cmd) ;		// wait rsp from MCU
-            if( rsize > 0 ) {  
-                mcu_error = 0 ;
+        if( mcu_sendcmd_va( target, cmd, datalen, arg ) ) {
+            int rsize = mcu_waitrsp(rsp, target, cmd) ;		// wait rsp from MCU
+            if( rsize > 0 ) {
                 return rsize ;
             }
-			else if( rsize == 0 ) {
-				return 0 ;					// return error withou retry
-			}
+            else if( rsize == 0 ) {
+                return 0 ;					// return error withou retry
+            }
         }
 
 #ifdef MCU_DEBUG
         printf("Retry!!!\n" );
 #endif
+    }
+
+    return -1 ;
+}
+
+static int mcu_error ;
+
+// Send command to mcu and check responds
+// return
+//       size of response
+//       NULL if failed
+int mcu_cmd(char * rsp, int cmd, int datalen, ...)
+{
+    int res ;
+    va_list v ;
+    va_start( v, datalen );
+    res = mcu_cmd_va( ID_MCU, rsp, cmd, datalen, v );
+    if( res<0 ) {
         if( ++mcu_error>10 ) {
             sleep(1);
             mcu_restart();      // restart mcu port
             mcu_error=0 ;
         }
+        return 0;
     }
-
-    return 0 ;
+    else {
+        mcu_error=0 ;
+        return res ;
+    }
 }
 
-// response to mcu 
+// response to mcu
 void mcu_response(char * msg, int datalen, ... )
 {
     int i ;
@@ -554,7 +565,7 @@ void mcu_response(char * msg, int datalen, ... )
     char mcu_buf[datalen+10] ;
     mcu_buf[0] = datalen+6 ;
     mcu_buf[1] = msg[2] ;
-    mcu_buf[2] = 0 ;                // cpu
+    mcu_buf[2] = ID_HOST ;          // cpu
     mcu_buf[3] = msg[3] ;           // response to same command
     mcu_buf[4] = 3 ;                // response
     va_start( v, datalen ) ;
@@ -572,7 +583,7 @@ int mcu_reset()
 {
     int r ;
     char enteracommand[200] ;
-	mcu_clear(0);
+    mcu_clear(0);
     mcu_sendcmd( MCU_CMD_RESET ) ;
     r = mcu_read(enteracommand, sizeof(enteracommand)-1, 30000000, 3000000);
     if( r>10 ) {
@@ -588,7 +599,7 @@ int mcu_reset()
 // reboot mcu with responts (would send back response compaire to mcu_reset)
 int mcu_reboot()
 {
-	return mcu_cmd( NULL, MCU_CMD_REBOOT)>0 ;
+    return mcu_cmd( NULL, MCU_CMD_REBOOT)>0 ;
 }
 
 // return bcd value
@@ -600,7 +611,7 @@ static int getbcd(unsigned char c)
 // read MCU shutdown code
 int mcu_readcode()
 {
-	char v[MCU_MAX_MSGSIZE];
+    char v[MCU_MAX_MSGSIZE];
     if( mcu_cmd(v, MCU_CMD_READCODE)>0 ) {
         if( v[5]!=(unsigned char)0xff ) {
             struct tm ttm ;
@@ -655,7 +666,7 @@ time_t mcu_r_rtc( struct tm * ptm )
             ttm.tm_mday>=1 && ttm.tm_mday<=31 &&
             ttm.tm_hour>=0 && ttm.tm_hour<=24 &&
             ttm.tm_min>=0 && ttm.tm_min<=60 &&
-            ttm.tm_sec>=0 && ttm.tm_sec<=60 ) 
+            ttm.tm_sec>=0 && ttm.tm_sec<=60 )
         {
             tt = timegm( &ttm );
             if( (int)tt > 0 ) {
@@ -709,25 +720,25 @@ void mcu_led(int led, int flash)
 //      poweron: 0=poweroff, 1=poweron
 void mcu_devicepower(int device, int poweron )
 {
-	if( device<8 ) {
-		mcu_cmd(NULL, MCU_CMD_DEVICEPOWER, 2, device, poweron );
-	}
-	else if( device<=10 ) {
-		// (another set device power, 2011-05-05) 8: Wifi, 9: POE, 10: Radar
-		int cmd_devicepower[3] = { 
-			MCU_CMD_WIFIPOWER,
-			MCU_CMD_POEPOWER,
-			MCU_CMD_RADARPOWER } ;
-		mcu_cmd(NULL, cmd_devicepower[device-8], 1, poweron );
-	}
-	else if( device==11 ) {			// hard drive power
-		if( poweron ) {
-			mcu_hdpoweron();
-		}
-		else {
-			mcu_hdpoweroff();		// warning , this may turn off system power
-		}
-	}
+    if( device<8 ) {
+        mcu_cmd(NULL, MCU_CMD_DEVICEPOWER, 2, device, poweron );
+    }
+    else if( device<=10 ) {
+        // (another set device power, 2011-05-05) 8: Wifi, 9: POE, 10: Radar
+        int cmd_devicepower[3] = {
+            MCU_CMD_WIFIPOWER,
+            MCU_CMD_POEPOWER,
+            MCU_CMD_RADARPOWER } ;
+        mcu_cmd(NULL, cmd_devicepower[device-8], 1, poweron );
+    }
+    else if( device==11 ) {			// hard drive power
+        if( poweron ) {
+            mcu_hdpoweron();
+        }
+        else {
+            mcu_hdpoweroff();		// warning , this may turn off system power
+        }
+    }
 }
 
 int mcu_bootupready()
@@ -763,10 +774,10 @@ int mcu_bootupready()
 //       >0: size of version string (not include null char)
 int mcu_version(char * version)
 {
-	int versionlen ;
+    int versionlen ;
     char rsp[MCU_MAX_MSGSIZE] ;
     if( mcu_cmd(rsp, MCU_CMD_GETVERSION )>0 ) {
-		versionlen = rsp[0] - 6 ;
+        versionlen = rsp[0] - 6 ;
         memcpy( version, &rsp[5], versionlen );
         version[versionlen]=0 ;
         return versionlen ;
@@ -781,7 +792,7 @@ int mcu_doutput()
     unsigned int outputmapx ;
     int i ;
     unsigned int dout ;
-    
+
     if( outputmap == mcu_doutputmap ) return 1 ;
 
     outputmapx = (outputmap^output_inverted) ;
@@ -824,7 +835,7 @@ void mcu_initsensor2(int invert)
 // initialize sensor power on control (PW34)
 void mcu_sensorinvmap(int sensorinvmap)
 {
-	mcu_cmd(NULL, MCU_CMD_SENSORINVMAP,1, 0x80 | sensorinvmap );
+    mcu_cmd(NULL, MCU_CMD_SENSORINVMAP,1, 0x80 | sensorinvmap );
 }
 
 // return 1: success
@@ -833,14 +844,14 @@ int mcu_w_rtc(time_t tt)
 {
     struct tm t ;
     gmtime_r( &tt, &t);
-    if( mcu_cmd(NULL, MCU_CMD_WRITERTC, 7, 
+    if( mcu_cmd(NULL, MCU_CMD_WRITERTC, 7,
                 bcd( t.tm_sec ),
                 bcd( t.tm_min ),
                 bcd( t.tm_hour ),
                 bcd( t.tm_wday ),
                 bcd( t.tm_mday ),
                 bcd( t.tm_mon + 1 ),
-                bcd( t.tm_year ) ) ) 
+                bcd( t.tm_year ) ) )
     {
         return 1 ;
     }
@@ -850,18 +861,18 @@ int mcu_w_rtc(time_t tt)
 // set more mcu power off delay (keep power alive), (called every few seconds)
 void mcu_poweroffdelay(int delay)
 {
-	int rsize ;
+    int rsize ;
     int inc=1 ;
     char rsp[MCU_MAX_MSGSIZE] ;
-	rsize = mcu_cmd(rsp, MCU_CMD_POWEROFFDELAY, 2, 0, 0 );
+    rsize = mcu_cmd(rsp, MCU_CMD_POWEROFFDELAY, 2, 0, 0 );
     if( rsize>0 ) {
-		int remaintime = (int)(((unsigned)(rsp[5]))*256+((unsigned)rsp[6])) ;
+        int remaintime = (int)(((unsigned)(rsp[5]))*256+((unsigned)rsp[6])) ;
         netdbg_print("Mcu power remain %d seconds\n", remaintime );
-		if( remaintime < delay ) {
-			inc = delay-remaintime ;
-	        mcu_cmd(rsp, MCU_CMD_POWEROFFDELAY, 2, inc/256, inc%256 );
-	        netdbg_print("Mcu power increase %d seconds\n", inc );
-		}
+        if( remaintime < delay ) {
+            inc = delay-remaintime ;
+            mcu_cmd(rsp, MCU_CMD_POWEROFFDELAY, 2, inc/256, inc%256 );
+            netdbg_print("Mcu power increase %d seconds\n", inc );
+        }
     }
 }
 
@@ -904,7 +915,7 @@ int mcu_watchdogkick()
 // get io board temperature
 int mcu_iotemperature()
 {
-	char rsp[MCU_MAX_MSGSIZE] ;
+    char rsp[MCU_MAX_MSGSIZE] ;
     if( mcu_cmd(rsp, MCU_CMD_IOTEMPERATURE) > 0 ) {
         return (int)(signed char)rsp[5] ;
     }
@@ -914,7 +925,7 @@ int mcu_iotemperature()
 // get hd temperature
 int mcu_hdtemperature()
 {
-	char rsp[MCU_MAX_MSGSIZE] ;
+    char rsp[MCU_MAX_MSGSIZE] ;
     if( mcu_cmd(rsp, MCU_CMD_HDTEMPERATURE)>0 ) {
         return (int)(signed char)rsp[5] ;
     }
@@ -934,7 +945,7 @@ void mcu_hdpoweroff()
 
 // update mcu firmware
 // return 1: success, 0: failed
-int mcu_update_firmware( char * firmwarefile) 
+int mcu_update_firmware( char * firmwarefile)
 {
     int res = 0 ;
     FILE * fwfile ;
@@ -960,21 +971,21 @@ int mcu_update_firmware( char * firmwarefile)
         rewind(fwprogfile);
         fflush(fwprogfile);
     }
-    
+
     fwfile=fopen(firmwarefile, "rb");
 
     if( fwmsgfile ) {
         fprintf(fwmsgfile, "Verify mcu firmware file ......" );
         fflush( fwmsgfile );
     }
-    
-	// check firmware file is valid
-	if( fwfile ) {
-		// check valid file contents. 
-		if( fgets( responds, 200, fwfile ))
-		{
+
+    // check firmware file is valid
+    if( fwfile ) {
+        // check valid file contents.
+        if( fgets( responds, 200, fwfile ))
+        {
             // example of HEX file line ":02EEFE00382AB0"
-			if( responds[0]==':' ) {
+            if( responds[0]==':' ) {
                 unsigned int l=0 ;
                 unsigned int sum=0;
                 unsigned int s ;
@@ -993,34 +1004,34 @@ int mcu_update_firmware( char * firmwarefile)
                 if( (sum&0xff)!=0 ) {
                     res=0 ;
                 }
-			}
-		}
-	}
+            }
+        }
+    }
 
-	if( res==0 ) {
-		// invalid file
-		if( fwfile) fclose( fwfile );
-		netdbg_print("Invalid mcu firmware file.\n");
+    if( res==0 ) {
+        // invalid file
+        if( fwfile) fclose( fwfile );
+        netdbg_print("Invalid mcu firmware file.\n");
         if( fwmsgfile ) {
             fprintf(fwmsgfile, "Failed!\r\n");
             fflush( fwmsgfile );
             fclose( fwmsgfile );
         }
         return 0 ;
-	}
-	res=0;
+    }
+    res=0;
 
     if( fwmsgfile ) {
         fprintf(fwmsgfile, "OK.\r\n");
         fflush( fwmsgfile );
     }
-    
-	// rewind
-	fseek( fwfile, 0, SEEK_SET );
-	
-    // 
+
+    // rewind
+    fseek( fwfile, 0, SEEK_SET );
+
+    //
     netdbg_print("Start update MCU firmware: %s\n", firmwarefile);
-    
+
     // reset mcu
     netdbg_print("Reset MCU.\n");
     if( fwmsgfile ) {
@@ -1028,44 +1039,44 @@ int mcu_update_firmware( char * firmwarefile)
         fflush( fwmsgfile );
     }
 
-	if( mcu_reset()==0 ) {              // reset failed.
-		netdbg_print("Failed\n");
-		if( fwmsgfile ) {
-			fprintf(fwmsgfile, "Failed!\r\n");
-			fflush( fwmsgfile );
-			fclose( fwmsgfile );
-		}        
-		return 0;
-	}
-	
+    if( mcu_reset()==0 ) {              // reset failed.
+        netdbg_print("Failed\n");
+        if( fwmsgfile ) {
+            fprintf(fwmsgfile, "Failed!\r\n");
+            fflush( fwmsgfile );
+            fclose( fwmsgfile );
+        }
+        return 0;
+    }
+
     netdbg_print("Done.\n");
     if( fwmsgfile ) {
         fprintf(fwmsgfile, "OK.\r\n");
         fflush( fwmsgfile );
     }
-    
+
     // clean out serial buffer
     memset( responds, 0, sizeof(responds)) ;
     mcu_write( responds, sizeof(responds)) ;
     mcu_clear(1000000);
-	
+
     netdbg_print("Erasing.\n");
     if( fwmsgfile ) {
         fprintf(fwmsgfile, "Erasing MCU......");
         fflush( fwmsgfile );
     }
-    
+
     rd=0 ;
     if( mcu_write( cmd_updatefirmware, 5 ) ) {
         rd=mcu_read( responds, sizeof(responds), 60000000, 500000 ) ;
     }
-    
-    if( rd>=5 && 
-       responds[rd-5]==0x05 && 
-       responds[rd-4]==0x0 && 
-       responds[rd-3]==0x01 && 
-       responds[rd-2]==0x01 && 
-       responds[rd-1]==0x03 ) 
+
+    if( rd>=5 &&
+       responds[rd-5]==0x05 &&
+       responds[rd-4]==0x0 &&
+       responds[rd-3]==0x01 &&
+       responds[rd-2]==0x01 &&
+       responds[rd-1]==0x03 )
     {
         // ok ;
         netdbg_print("Done.\n");
@@ -1077,7 +1088,7 @@ int mcu_update_firmware( char * firmwarefile)
             fprintf(fwmsgfile, "Failed!\r\n");
             fflush( fwmsgfile );
             fclose( fwmsgfile );
-        }        
+        }
         return 0;                    // can't start fw update
     }
 
@@ -1092,7 +1103,7 @@ int mcu_update_firmware( char * firmwarefile)
         fflush( fwmsgfile );
     }
 
-    // send firmware 
+    // send firmware
     fseek( fwfile, 0, SEEK_END );
     int mcufilelen = ftell( fwfile );
     if( mcufilelen < 1000 ) {
@@ -1100,15 +1111,15 @@ int mcu_update_firmware( char * firmwarefile)
             fprintf(fwmsgfile, "Error in file!\r\n");
             fflush( fwmsgfile );
             fclose( fwmsgfile );
-        }        
+        }
         return 0;                    // can't start fw update
     }
     int proglen = 0 ;
     fseek( fwfile, 0, SEEK_SET );
-    
+
     res = 0 ;
     while( (c=fgetc( fwfile ))!=EOF ) {
-        if( mcu_write( &c, 1)!=1 ) 
+        if( mcu_write( &c, 1)!=1 )
             break;
         if( c=='\n' ) {
             usleep( mcu_program_delay ) ;
@@ -1124,36 +1135,36 @@ int mcu_update_firmware( char * firmwarefile)
         if( c=='\n' && mcu_dataready (0) ) {
             rd = mcu_read(responds, sizeof(responds), 200000, 200000 );
             if( rd>=5 &&
-               responds[0]==0x05 && 
-               responds[1]==0x0 && 
-               responds[2]==0x01 && 
-               responds[3]==0x03 && 
+               responds[0]==0x05 &&
+               responds[1]==0x0 &&
+               responds[2]==0x01 &&
+               responds[3]==0x03 &&
                responds[4]==0x02 ) {
                    res=1 ;
                     break;                  // program done.
             }
             else if( rd>=5 &&
-               responds[rd-5]==0x05 && 
-               responds[rd-4]==0x0 && 
-               responds[rd-3]==0x01 && 
-               responds[rd-2]==0x03 && 
+               responds[rd-5]==0x05 &&
+               responds[rd-4]==0x0 &&
+               responds[rd-3]==0x01 &&
+               responds[rd-2]==0x03 &&
                responds[rd-1]==0x02 ) {
                    res=1 ;
                     break;                  // program done.
             }
             else if( rd>=6 &&
-               responds[0]==0x06 && 
-               responds[1]==0x0 && 
-               responds[2]==0x01 && 
-               responds[3]==0x01 && 
+               responds[0]==0x06 &&
+               responds[1]==0x0 &&
+               responds[2]==0x01 &&
+               responds[3]==0x01 &&
                responds[4]==0x03 ) {
                     break;                  // receive error report
             }
             else if( rd>=6 &&
-               responds[rd-6]==0x06 && 
-               responds[rd-5]==0x0 && 
-               responds[rd-4]==0x01 && 
-               responds[rd-3]==0x01 && 
+               responds[rd-6]==0x06 &&
+               responds[rd-5]==0x0 &&
+               responds[rd-4]==0x01 &&
+               responds[rd-3]==0x01 &&
                responds[rd-2]==0x03 ) {
                     break;                  // receive error report
             }
@@ -1166,20 +1177,20 @@ int mcu_update_firmware( char * firmwarefile)
     if( res==0 ) {
         rd = mcu_read(responds, sizeof(responds), 10000000, 200000 );
         if( rd>=5 &&
-            responds[0]==0x05 && 
-            responds[1]==0x0 && 
-            responds[2]==0x01 && 
-            responds[3]==0x03 && 
-            responds[4]==0x02 ) 
+            responds[0]==0x05 &&
+            responds[1]==0x0 &&
+            responds[2]==0x01 &&
+            responds[3]==0x03 &&
+            responds[4]==0x02 )
         {
             res=1 ;
         }
         else if( rd>=5 &&
-            responds[rd-5]==0x05 && 
-            responds[rd-4]==0x0 && 
-            responds[rd-3]==0x01 && 
-            responds[rd-2]==0x03 && 
-            responds[rd-1]==0x02 ) 
+            responds[rd-5]==0x05 &&
+            responds[rd-4]==0x0 &&
+            responds[rd-3]==0x01 &&
+            responds[rd-2]==0x03 &&
+            responds[rd-1]==0x02 )
         {
             res=1 ;
         }
@@ -1189,7 +1200,7 @@ int mcu_update_firmware( char * firmwarefile)
         if( fwprogfile ) {
             fprintf( fwprogfile, "100"  );
             fflush( fwprogfile );
-        }        
+        }
         if( fwmsgfile ) {
             fprintf(fwmsgfile, "Done.\n");
             fprintf(fwmsgfile, "Please reset the unit.\n");
@@ -1217,50 +1228,25 @@ int mcu_update_firmware( char * firmwarefile)
 
 int mcu_pwii_cdcfailed ;
 
-// Send cmd to pwii and check responds
+// Send command to pwii and check responds
+// return
+//       size of response
+//       0 if failed
 int mcu_pwii_cmd(char * rsp, int cmd, int datalen, ...)
 {
-    int i ;
+    int res ;
     va_list v ;
-    char mcu_buf[datalen+10] ;
-
-	if( mcu_pwii_cdcfailed ) {
-		return 0 ;
-	}
-	
-    mcu_buf[0] = (char)(datalen+6) ;
-    mcu_buf[1] = (char)5 ;                      // target PWII
-    mcu_buf[2] = (char)0 ;
-    mcu_buf[3] = (char)cmd ;
-    mcu_buf[4] = (char)2 ;
-
-    va_start( v, datalen ) ;
-    for( i=0 ; i<datalen ; i++ ) {
-        mcu_buf[5+i] = (char) va_arg( v, int );
+    if( mcu_pwii_cdcfailed ) {  // don't retry on failed cdc, could be not connected
+        return 0 ;
     }
-    va_end(v);
-    i=3 ;
-    while( i-->0 ) {
-        if(mcu_sendmsg(mcu_buf)) {
-            int rsize = mcu_waitrsp(rsp, 5, cmd) ;         // wait rsp from PWII
-            if( rsize>0 ) {
-                return rsize ;
-            }
-			else if( rsize==0 ) {							// unsupported cmd
-				return 0 ;
-			}
-        }
-
-#ifdef MCU_DEBUG
-        printf("Retry!!!\n" );
-#endif
-
+    va_start( v, datalen );
+    res = mcu_cmd_va( ID_PWII, rsp, cmd, datalen, v );
+    if( res<=0 ) {
+        dvr_log( "CDC communication lost!" ) ;
+        mcu_pwii_cdcfailed = 1 ;
+        return 0 ;
     }
-
-	dvr_log( "CDC communication lost!" ) ;
-	mcu_pwii_cdcfailed = 1 ;
-
-    return -1 ;		// error!
+    return res ;
 }
 
 int mcu_pwii_bootupready()
@@ -1268,7 +1254,7 @@ int mcu_pwii_bootupready()
     if( mcu_pwii_cmd(NULL, PWII_CMD_BOOTUPREADY)>0 ) {
         return 1 ;
     }
-	mcu_pwii_cdcfailed = 1 ;	
+    mcu_pwii_cdcfailed = 1 ;
     return 0 ;
 }
 
@@ -1277,10 +1263,10 @@ int mcu_pwii_bootupready()
 //       >0: size of version string (not include null char)
 int mcu_pwii_version(char * version)
 {
-	int versionlen ;
-	char rsp[MCU_MAX_MSGSIZE] ;
+    int versionlen ;
+    char rsp[MCU_MAX_MSGSIZE] ;
     if( mcu_pwii_cmd(rsp, PWII_CMD_VERSION)>0 ) {
-		versionlen = rsp[0]-6 ;
+        versionlen = rsp[0]-6 ;
         memcpy( version, &rsp[5], versionlen );
         version[versionlen]=0 ;
         return versionlen;
@@ -1291,7 +1277,7 @@ int mcu_pwii_version(char * version)
 unsigned int mcu_pwii_ouputstatus()
 {
     unsigned int outputmap = 0 ;
-	char rsp[MCU_MAX_MSGSIZE] ;
+    char rsp[MCU_MAX_MSGSIZE] ;
     if( mcu_pwii_cmd(rsp, PWII_CMD_OUTPUTSTATUS, 2, 0, 0 )>0 ) {
         if( rsp[6] & 1 ) outputmap|=PWII_LED_C1 ;        // C1 LED
         if( rsp[6] & 2 ) outputmap|=PWII_LED_C2 ;        // C2 LED
@@ -1300,7 +1286,7 @@ unsigned int mcu_pwii_ouputstatus()
         if( rsp[6] & 0x20 ) outputmap|=PWII_LED_POWER ;      // POWER LED
         if( rsp[6] & 0x40 ) outputmap|=PWII_LED_BO ;  	 	 // BO_LED
         if( rsp[6] & 0x80 ) outputmap|=PWII_LED_BACKLIGHT ;  // Backlight LED
-        
+
         if( rsp[5] & 1 ) outputmap|=PWII_POWER_LCD ;      // LCD POWER
         if( rsp[5] & 2 ) outputmap|=PWII_POWER_GPS ;      // GPS POWER
         if( rsp[5] & 4 ) outputmap|=PWII_POWER_RF900 ;    // RF900 POWER
@@ -1312,11 +1298,11 @@ unsigned int mcu_pwii_ouputstatus()
 // return 0: speaker off, 1: speaker on
 int mcu_pwii_speakervolume()
 {
-	char rsp[MCU_MAX_MSGSIZE] ;
+    char rsp[MCU_MAX_MSGSIZE] ;
     if( mcu_pwii_cmd(rsp, PWII_CMD_SPEAKERVOLUME, 0 )>0 ) {
-		return rsp[5] ;
-	}
-	return 0 ;
+        return rsp[5] ;
+    }
+    return 0 ;
 }
 
 #endif          // PWII_APP
@@ -1338,7 +1324,7 @@ void  mcu_restart()
 }
 
 // initialize serial port
-void mcu_init( config & dvrconfig ) 
+void mcu_init( config & dvrconfig )
 {
     string v ;
     double dv ;
@@ -1353,7 +1339,7 @@ void mcu_init( config & dvrconfig )
     if( mcu_baud<2400 || mcu_baud>115200 ) {
             mcu_baud=DEFSERIALBAUD ;
     }
-    
+
     if( mcu_handle > 0 ) {
         close( mcu_handle );
         mcu_handle = 0 ;
@@ -1364,9 +1350,9 @@ void mcu_init( config & dvrconfig )
         // even no serail port, we still let process run
         netdbg_print("Can not open serial port %s.\n", mcu_dev);
     }
-    
+
     output_inverted = 0 ;
-    
+
     for( i=0; i<32 ; i++ ) {
         char outinvkey[50] ;
         sprintf(outinvkey, "output%d_inverted", i+1);
@@ -1389,7 +1375,7 @@ void mcu_init( config & dvrconfig )
     else {
         mcu_program_delay = 20000 ;
     }
-    
+
     // boot mcu (power processor)
     if( mcu_bootupready () ) {
         // get MCU version
@@ -1401,30 +1387,30 @@ void mcu_init( config & dvrconfig )
                 fprintf( mcuversionfile, "%s", mcu_firmware_version );
                 fclose( mcuversionfile );
             }
-        }        
+        }
     }
     else {
         dvr_log("MCU failed.");
     }
 
 #ifdef TVS_APP
-    // setup GP2 polarity for TVS 
+    // setup GP2 polarity for TVS
     mcu_initsensor2(dvrconfig.getvalueint( "sensor2", "inverted" ));
 #endif
 
-	
+
 #ifdef PWII_APP
-	// initialize sensor power on control ( just to set inverted bits )
-	int invmap=0 ;
-	for( i=0; i<7; i++ ) {		// maximum 7 bits
-		char sensorname[10] ;
-		sprintf( sensorname, "sensor%d", i+1 );
-		if( dvrconfig.getvalueint( sensorname, "inverted" ) ) {
-			invmap |= 1<<i ;
-		}
-	}
-	mcu_sensorinvmap( invmap );
-#endif // PWII_APP   
+    // initialize sensor power on control ( just to set inverted bits )
+    int invmap=0 ;
+    for( i=0; i<7; i++ ) {		// maximum 7 bits
+        char sensorname[10] ;
+        sprintf( sensorname, "sensor%d", i+1 );
+        if( dvrconfig.getvalueint( sensorname, "inverted" ) ) {
+            invmap |= 1<<i ;
+        }
+    }
+    mcu_sensorinvmap( invmap );
+#endif // PWII_APP
 }
 
 void mcu_finish()

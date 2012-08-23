@@ -13,7 +13,7 @@
 
 #define SFX_TAG (0xed3abd05)
 
-struct file_head {
+struct sfx_head {
     uint tag ;
     uint filesize ;
     uint filemode ;
@@ -24,26 +24,28 @@ struct file_head {
 int extract( const char * sfxfile )
 {
     int executesize ;
-    struct file_head fhd ;
+    struct sfx_head fhd ;
 
     FILE * fp ;
     FILE * fp_file ;
     unsigned char * bufcomp ;
     unsigned char * buffile ;
     char filename[256] ;
-    
+
     fp = fopen( sfxfile, "r" );
     if( fp==NULL ) {
         printf("Can't open sfx.\n");
         return 1;
     }
-    
+
     fseek( fp, -16, SEEK_END );
     if( fscanf( fp, "%d", &executesize )<1 ) {
-        printf("Error sfx format.\n" );
-        return 1;
-    } ;
-    
+        executesize = 0 ;
+    }
+    if(executesize<0||executesize>100000){
+        executesize=0 ;
+    }
+
     fseek( fp, executesize, SEEK_SET );
     while( fread( &fhd, 1, sizeof( fhd), fp ) == sizeof( fhd ) ) {
         if( fhd.tag != SFX_TAG || fhd.namesize<=0 || fhd.namesize>=sizeof(filename) ) {
@@ -81,7 +83,7 @@ int extract( const char * sfxfile )
             printf("file:%s\n", filename );
         }
     }
-    
+
     fclose( fp );
     printf("Finish.\n");
     return 0;

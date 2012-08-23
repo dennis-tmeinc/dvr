@@ -1,0 +1,158 @@
+#!/bin/sh
+
+if [ $# -lt 1 ]; then
+  echo 'Usage mkdeplay <APPID> '
+  exit 1
+fi
+
+DEPROOT=$PWD
+APPROOT=${DEPROOT}/../..
+PATH=${APPROOT}/deploy/util:${PATH}
+
+if [ -f ${APPROOT}/release ] ; then
+RELEASE=`cat ${APPROOT}/release`
+else
+RELEASE=`date +%y.%m%d.%H`
+fi
+
+OUTPUTDIR=${DEPROOT}/${RELEASE}
+
+appid=$1
+special=""
+special=$2
+
+if [ ${appid} = "clean" ]; then
+
+#clear utilities
+    rm -f cfgpc mksfx sfx
+
+# clean host www files
+    cd ${DEPROOT}/host/dvr/www
+    rm -f -r cgi
+    rm -f eaglehttpd
+
+# clean host firmware filesa
+    cd ${DEPROOT}/host/dvr
+    rm -f httpd.sfx firmwareid
+    rm -f dvrsvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg
+
+    cd ${DEPROOT}/host/ID
+    rm -f BOARDNUM APPID BOARDID
+
+    exit 0
+fi
+
+www_depfile=${DEPROOT}/www_depfile
+
+if [ $appid = "clean" ]; then
+    if [ -f ${www_depfile} ]; then
+	rm ${www_depfile}
+    fi
+    exit 0
+fi
+
+mkdir ${OUTPUTDIR}
+
+slvfirmwareid=PWZEUS3.1.0.${RELEASE}
+
+firmwareid=${appid}.1.0.${RELEASE}
+echo "Firmware ID: " $firmwareid
+
+#copy utilities
+cd ${DEPROOT}
+cp -v ${APPROOT}/cfg/cfgpc .
+cp -v ${APPROOT}/sfx/mksfx .
+cp -v ${APPROOT}/sfx/sfx .
+
+# modify default settings
+#${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/defconf set glog tab102b_enable 0
+
+${STRIP} sfx
+
+# makeing host board deploy firmware
+
+echo "Build http files"
+cd ${DEPROOT}/host/dvr/www
+if [ ! -d cgi ] ; then
+    mkdir cgi
+fi
+cp -v ${APPROOT}/httpd/eaglehttpd .
+cp -v ${APPROOT}/ssl/programs/ssl/ssl_server .
+${STRIP} eaglehttpd ssl_server
+
+cd cgi
+echo "Copy cgi files"
+cp -v ${APPROOT}/httpd/cfgdown/cfgdown.cgi .
+cp -v ${APPROOT}/httpd/cfgdown/cfgreport .
+cp -v ${APPROOT}/httpd/cfgdown/dvrstatus.cgi .
+cp -v ${APPROOT}/httpd/cfgdown/gcal.cgi .
+
+cp -v ${APPROOT}/httpd/eagle_setup/cfgupload .
+cp -v ${APPROOT}/httpd/eagle_setup/firmwareupd .
+cp -v ${APPROOT}/httpd/eagle_setup/login .
+cp -v ${APPROOT}/httpd/eagle_setup/mcufwupd .
+cp -v ${APPROOT}/httpd/eagle_setup/mfid .
+cp -v ${APPROOT}/httpd/eagle_setup/pagevalue .
+cp -v ${APPROOT}/httpd/eagle_setup/gangle.cgi .
+cp -v ${APPROOT}/httpd/eagle_setup/getjpeg.cgi .
+
+cp -v ${APPROOT}/httpd/getsetup/applysetup .
+cp -v ${APPROOT}/httpd/getsetup/getsetup .
+
+for f in * ; do ${STRIP} $f ; done
+cd ..
+
+${DEPROOT}/mksfx ${DEPROOT}/sfx wwwlist ../httpd.sfx
+chmod a+x ../httpd.sfx
+
+if [ ! -d ${DEPROOT}/host/ID ] ; then
+  mkdir ${DEPROOT}/host/ID
+fi
+
+cd ${DEPROOT}/host/ID
+echo 1 > BOARDNUM
+echo ${appid} > APPID
+echo 1 > BOARDID
+
+echo Building Host deploy firmware.
+cd ${DEPROOT}/host/dvr
+echo copy dvr host files
+cp -v ${APPROOT}/dvrsvr/dvrsvr .
+cp -v ${APPROOT}/eaglesvr/eaglesvr .
+cp -v ${APPROOT}/dvrtime/dvrtime .
+cp -v ${APPROOT}/eaglehost/eaglehost .
+cp -v ${APPROOT}/glog/glog .
+cp -v ${APPROOT}/ioprocess/ioprocess .
+cp -v ${APPROOT}/ioprocess/iowait .
+cp -v ${APPROOT}/ioprocess/devicepower  .
+cp -v ${APPROOT}/ioprocess/panelled  .
+cp -v ${APPROOT}/ioprocess/buzzer  .
+cp -v ${APPROOT}/tdev/tdevd .
+cp -v ${APPROOT}/tdev/tdevmount .
+cp -v ${APPROOT}/usbgenkey/usbcheck .
+cp -v ${APPROOT}/tmeft/tmefile .
+cp -v ${APPROOT}/volumeid/md5check .
+cp -v ${APPROOT}/volumeid/volumeid .
+cp -v ${APPROOT}/cfg/cfg .
+cp -v ${APPROOT}/dhcp/udhcpc .
+cp -v ${APPROOT}/lpc21isp/lpc21isp .
+
+${STRIP} dvrsvr eaglesvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg lpc21isp
+cd ${DEPROOT}/host
+
+# copy dos fs tools
+cp -v ${APPROOT}/dosfstools/dosfstools-3.0.12/mkdosfs .
+cp -v ${APPROOT}/dosfstools/dosfstools-3.0.12/dosfsck .
+cp -v ${APPROOT}/dosfstools/dosfstools-3.0.12/dosfslabel .
+
+
+echo ${firmwareid} > dvr/firmwareid
+${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.dep ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW
+chmod a+x ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW
+
+echo Building Host update firmware
+${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.upd ${OUTPUTDIR}/HOST_${firmwareid}.FW
+chmod a+x ${OUTPUTDIR}/HOST_${firmwareid}.FW
+
+echo Finish!
+

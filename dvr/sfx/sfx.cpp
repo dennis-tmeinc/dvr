@@ -1,18 +1,15 @@
 #include <unistd.h>
 #include <stdio.h>
 
-char   defaultrun[] = "./sfxrun" ;
-
 int extract( const char * filename );
 
 int main(int argc, char * argv[])
 {
+    char * sfxrun = "./sfxrun" ;
     int res = extract( "/proc/self/exe" ) ;
     if( argc>1 ) {
-        execl( argv[1], argv[1], NULL );
+        sfxrun = argv[1] ;
     }
-    else {
-        execl(defaultrun, defaultrun, NULL );
-    }
+    execl(sfxrun, sfxrun, NULL );
     return res ;
 }

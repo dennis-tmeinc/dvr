@@ -1,5 +1,5 @@
 #
-# Makefile for Eagle32 DVR server app 
+# Makefile for Eagle32 DVR server app
 #
 include ../config
 include $(PROJDIR)/arm_tool
@@ -10,41 +10,51 @@ SOURCES=eaglesvr.cpp \
 		netsvr.cpp \
 		capture.cpp \
 		draw.cpp \
-		eaglecapture.cpp \
 		screen.cpp \
-		../dvrsvr/cppinitpatch.cpp \
 		../dvrsvr/memory.cpp \
 		../dvrsvr/string.cpp \
 		../lzmasdk/dec.cpp \
 		../lzmasdk/LzmaDec.c
-		
-LDFLAGS=  -lstdc++ -lpthread -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib
+
+LDFLAGS=  -lpthread -lstdc++ -Wl,-rpath,.
 
 HEADERS=eaglesvr.h \
 		draw.h \
 		../dvrsvr/genclass.h \
 		../dvrsvr/dvrprotocol.h \
-        ../cfg.h
-        
+		../dvrsvr/memory.h \
+	../cfg.h
+
+ifeq ($(EAGLE),zeus3)
+SOURCES += eagle368.cpp
+LDFLAGS += -L./eagle368 -leagle368dvr -lrt
+else
+# eagle34 or eagle32
+SOURCES += eaglecapture.cpp
+ifeq ($(EAGLE),eagle34)
+SOURCES += ../dvrsvr/cppinitpatch.cpp
+endif
+LDFLAGS += -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib
+endif
+
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
-CCFLAGS= -Wall -g
+CFLAGS+= -Wall -DSUPPORT_UNIXSOCKET
 
 # dvrsvr : $(OBJS) $(LIBRARY)
 #dvrsvr : $(OBJS) ../fb/libfbdraw.so
-#	$(CC)  $(CCFLAGS) -o $@  $(OBJS) ../fb/libfbdraw.so $(LDFLAGS)
+#	$(CC)  $(CFLAGS) -o $@  $(OBJS) ../fb/libfbdraw.so $(LDFLAGS)
 #	cp dvrsvr  $(debug_folder)
 
-eaglesvr : $(SOURCES) $(HEADERS)
-	$(CC)  $(CCFLAGS) -o $@  $(SOURCES) $(LDFLAGS)
+eaglesvr : $(OBJS) $(HEADERS)
+	$(CC)  $(CFLAGS) -o $@  $(SOURCES) $(LDFLAGS)
 	cp $@  $(debug_folder)
 
 %.o : %.cpp $(HEADERS)
-	$(CC) $(CCFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
-# libdio.so : dio.c
-# 	$(CC) -g -fPIC -c -Wall -o dio.o dio.c
-# 	$(CC) -g -shared -lpthread -Wl,-soname,libdio.so -o $@ dio.o -lc
+strip : eaglesvr
+	$(STRIP)  eaglesvr
 
 clean :
 	rm -f *.o

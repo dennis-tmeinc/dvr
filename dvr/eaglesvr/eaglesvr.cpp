@@ -8,27 +8,7 @@ int app_state;				// APPQUIT, APPUP, APPDOWN, APPRESTART
 
 int g_lowmemory ;
 
-void * operator new (size_t size)
-{
-    return malloc(size);
-}
-
-void * operator new[](size_t size)
-{
-    return malloc(size);
-}
-
-void operator delete (void * buf)
-{
-    free(buf);
-}
-
-void operator delete [] (void * buf)
-{
-    free(buf);
-}
-
-// get a random number 
+// get a random number
 unsigned dvr_random()
 {
     FILE * fd ;
@@ -41,8 +21,8 @@ unsigned dvr_random()
     return ran ;
 }
 
-// write log to log file. 
-// return 
+// write log to log file.
+// return
 //       1: log to recording hd
 //       0: log to temperary file
 int dvr_log(char *fmt, ...)
@@ -58,7 +38,7 @@ int dvr_log(char *fmt, ...)
 
 int dvr_getsystemsetup(struct system_stru * psys)
 {
-	memset( psys, 0, sizeof(struct system_stru) );
+    memset( psys, 0, sizeof(struct system_stru) );
     strcpy(  psys->productid, "EAGLE");
     strncpy(psys->ServerName, (char *)g_servername, sizeof(psys->ServerName));
     psys->cameranum = cap_channels;
@@ -87,8 +67,8 @@ void sig_check()
     if( sigmap == 0 ) {
         return ;
     }
-    
-    if( sigmap & (1<<SIGTERM) ) 
+
+    if( sigmap & (1<<SIGTERM) )
     {
         dvr_log("Signal <SIGTERM> captured.");
 #ifdef EAGLE34
@@ -97,30 +77,30 @@ void sig_check()
         app_state = APPQUIT ;
 #endif	// EAGLE34
     }
-    else if( sigmap & (1<<SIGQUIT) ) 
+    else if( sigmap & (1<<SIGQUIT) )
     {
         dvr_log("Signal <SIGQUIT> captured.");
         app_state = APPQUIT ;
     }
-    else if( sigmap & (1<<SIGINT) ) 
+    else if( sigmap & (1<<SIGINT) )
     {
         dvr_log("Signal <SIGINT> captured.");
         app_state = APPQUIT ;
     }
-    else if( sigmap & (1<<SIGUSR2) ) 
+    else if( sigmap & (1<<SIGUSR2) )
     {
         app_state = APPRESTART ;
     }
-    else if( sigmap & (1<<SIGUSR1) ) 
+    else if( sigmap & (1<<SIGUSR1) )
     {
         app_state = APPDOWN ;
     }
-    
-    if( sigmap & (1<<SIGPIPE) ) 
+
+    if( sigmap & (1<<SIGPIPE) )
     {
         dvr_log("Signal <SIGPIPE> captured.");
     }
-    
+
     if( app_signal_ex ) {
         dvr_log("Signal %d captured.", app_signal_ex );
         app_signal_ex=0 ;
@@ -134,7 +114,7 @@ void app_init()
     static int app_start=0;
 
     FILE * fid = NULL ;
-    
+
     // make var directory ("/var/dvr") if it is not there.
     mkdir( VAR_DIR, 0777 );
 
@@ -171,10 +151,10 @@ void do_init()
     dvr_log("Start initializing.");
 
     app_init();
-    
+
     time_init();
     cap_init();
-    screen_init();	
+    screen_init();
     net_init();
 
 //    cap_start();	// let ip cam to start the channel
@@ -185,17 +165,17 @@ void do_uninit()
 
     dvr_log("Start un-initializing.");
     cap_stop();		// stop capture
-    
+
     net_uninit();
     screen_uninit();
     cap_uninit();
     time_uninit();
 
-	// at this point, memory pool should be clean
+    // at this point, memory pool should be clean
     if( g_memused > 100 ) {
         dvr_log("Possible memory leak detected.");
     }
-    
+
 }
 
 
@@ -205,12 +185,12 @@ int main()
 
     // initial mutex
     memcpy( &dvr_mutex, &mutex_init, sizeof(mutex_init));
-    
+
     mem_init();
-    
+
     app_ostate = APPDOWN ;
     app_state = APPUP ;
-    
+
     while( app_state!=APPQUIT ) {
         if( app_state == APPUP ) {					// application up
             if( app_ostate != APPUP ) {
@@ -218,7 +198,10 @@ int main()
                 app_ostate = APPUP ;
             }
             time_tick();
-            net_wait(1000);
+            net_wait(1000) ;
+#ifdef EAGLE368
+            eagle_idle();
+#endif
         }
         else if (app_state == APPDOWN ) {			// application down
             if( app_ostate == APPUP ) {
@@ -236,18 +219,17 @@ int main()
         }
         sig_check();
     }
-    
+
     if( app_ostate==APPUP ) {
         app_ostate=APPDOWN ;
         do_uninit();
     }
-    
+
     app_exit();
     mem_uninit ();
+    // try un-init eagle board
+    eagle_finish();
 
     pthread_mutex_destroy(&dvr_mutex);
-
-    // try un-init eagle board
-    eagle32_finish();
     return 0 ;
 }

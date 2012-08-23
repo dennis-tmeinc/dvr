@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>   
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -12,6 +12,15 @@
 #include <time.h>
 
 #define SFX_TAG (0xed3abd05)
+
+struct sfx_head {
+    uint tag ;
+    uint filesize ;
+    uint filemode ;
+    uint namesize ;
+    uint compsize ;
+} ;
+
 
 // firware update page
 int main()
@@ -29,13 +38,7 @@ int main()
         fseek( firmwarefile, -16, SEEK_END );
         if( fscanf( firmwarefile, "%d", &executesize )==1 ) {
             if( executesize<(int)ftell(firmwarefile) && executesize>0 ) {
-                struct file_head {
-                    uint tag ;
-                    uint filesize ;
-                    uint filemode ;
-                    uint namesize ;
-                    uint compsize ;
-                } fhd ;
+                struct sfx_head fhd ;
                 char filename[256] ;
 
                 fseek( firmwarefile, executesize, SEEK_SET );
@@ -54,24 +57,24 @@ int main()
                     fseek(firmwarefile, fhd.compsize, SEEK_CUR );
                 }
             }
-        } 
-        
+        }
+
         fclose( firmwarefile );
     }
 
     char updmsgfile[128] ;
-    sprintf( updmsgfile, "%s/fwupdmsg", getenv("DOCUMENT_ROOT") ); 
+    sprintf( updmsgfile, "%s/fwupdmsg", getenv("DOCUMENT_ROOT") );
     setenv( "FWUPDMSG", updmsgfile, 1 );
     firmwarefile=fopen(updmsgfile, "w");
     if( firmwarefile ) {
         fprintf(firmwarefile,"\n");
         fclose( firmwarefile );
     }
-    
+
     if( firmwareok ) {
         // install the firmware
         printf( "Start Updating firmware! Please wait......" );
-        
+
         link( firmwarefilename, "firmware_x" );
         if( fork()==0 ) {
 
@@ -80,7 +83,7 @@ int main()
                 fprintf(firmwarefile,"Prepare new firmware...\n");
                 fclose( firmwarefile );
             }
-            
+
             // disable stdin , stdout
             int fd = open("/dev/null", O_RDWR );
             dup2(fd, 0);                 // set dummy stdin stdout, also close old stdin (socket)

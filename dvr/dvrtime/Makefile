@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR server app 
+# Makefile for Eagle32 DVR server app
 #
 
 include ../config
@@ -10,10 +10,10 @@ SOURCES=dvrtime.cpp
 HEADERS=
 
 EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h ../ioprocess/diomap.h
-EXTSOURCES=../ioprocess/diomap.cpp ../dvrsvr/config.cpp ../dvrsvr/string.cpp 
+EXTSOURCES=../ioprocess/diomap.cpp ../dvrsvr/config.cpp ../dvrsvr/string.cpp
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
-CFLAGS=-I../dvrsvr -g -Wall
+CFLAGS+=-I../dvrsvr -Wall
 LDFLAGS= -lstdc++
 
 dvrtime : $(SOURCES) $(EXTSOURCES) $(EXTHEADERS)

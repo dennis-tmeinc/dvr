@@ -1,5 +1,5 @@
 
-# Makefile for Eagle32 DVR ioprocess app 
+# Makefile for Eagle32 DVR ioprocess app
 #
 
 include ../config
@@ -16,7 +16,7 @@ OBJS = $(patsubst %.c, %.o, $(SOURCES))
 
 LDFLAGS=
 
-CFLAGS=-I../dvrsvr -g -Wall
+CFLAGS+= -I../dvrsvr -Wall
 
 all: volumeid md5check
 
@@ -29,7 +29,7 @@ md5check :  md5check.cpp ../dvrsvr/md5.cpp $(EXTSOURCES) $(HEADERS) $(EXTHEADERS
 	cp md5check ~/nfsroot/eagletest
 
 %.o : %.c $(HEADERS) $(EXTHEADERS)
-	$(CC) -g -Wall -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean :
 	rm -f *.o
