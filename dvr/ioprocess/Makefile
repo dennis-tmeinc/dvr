@@ -5,11 +5,11 @@
 include ../config
 include $(PROJDIR)/arm_tool
 
-EXTHEADERS=../cfg.h ../dvrsvr/cfg.h ../dvrsvr/genclass.h
+EXTHEADERS=../cfg.h ../dvrsvr/config.h ../dvrsvr/genclass.h
 EXTSOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp
 
-SOURCES=ioprocess.cpp diomap.cpp mcu.cpp netdbg.cpp gforce.cpp iomisc.cpp yagf.cpp
-HEADERS=diomap.h netdbg.h mcu.h gforce.h iomisc.h yagf.h
+SOURCES=ioprocess.cpp diomap.cpp mcu.cpp cdc.cpp netdbg.cpp gforce.cpp iomisc.cpp yagf.cpp
+HEADERS=diomap.h netdbg.h mcu.h cdc.h gforce.h iomisc.h yagf.h
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
@@ -28,7 +28,6 @@ ioprocess : $(OBJS) $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(EXTSOURCES) $(LDFLAGS) -lm
 	cp $@  $(debug_folder)
 
-
 panelled : panelled.o diomap.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ panelled.o diomap.o $(EXTSOURCES) $(LDFLAGS)
 	cp $@  $(debug_folder)
@@ -43,6 +42,10 @@ iowait : iowait.o diomap.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 
 buzzer : buzzer.o diomap.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ buzzer.o diomap.o $(EXTSOURCES) $(LDFLAGS)
+	cp $@  $(debug_folder)
+
+iodebug : $(SOURCES) $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
+	$(CC) $(CFLAGS) -DMCU_DEBUG -o $@ $(SOURCES) $(EXTSOURCES) $(LDFLAGS) -lm
 	cp $@  $(debug_folder)
 
 %.o : %.cpp $(HEADERS) $(EXTHEADERS)

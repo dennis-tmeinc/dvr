@@ -35,11 +35,12 @@ void mem_init();
 void mem_uninit();
 
 // shared memory support
-void * mem_shm_init(char * shm_file, int shmsize);
-void * mem_shm_share(char * shm_file);
-void mem_shm_close( void * shmem);
-void * mem_shm_alloc(void * shmem, int size);
-void * mem_shm_addref(void * shmem, void * pmem, int size);
-void mem_shm_free(void * shmem, void * pmem);
+void * mem_shm_init(const char * shm_file, int shm_size);
+void * mem_shm_share(const char * shm_file);
+char * mem_shm_filename();
+void mem_shm_close();
+void * mem_shm_alloc(int size);
+int mem_shm_index(void * pmem);
+void * mem_shm_byindex(int index);
 
 #endif      // __MEMORY_H__

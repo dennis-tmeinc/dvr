@@ -21,14 +21,81 @@
 #include "../cfg.h"
 
 #include "../dvrsvr/genclass.h"
-#include "../dvrsvr/cfg.h"
+#include "../dvrsvr/config.h"
 #include "netdbg.h"
 #include "mcu.h"
+#include "cdc.h"
 #include "diomap.h"
+#include "iomisc.h"
+#include "gforce.h"
+#include "yagf.h"
 
 #ifdef EAGLE32
 #include "../eaglesvr/eagle34/davinci_sdk.h"
 #endif
+
+// input pin maping
+#ifdef MDVR_APP
+#define HDINSERTED	(0x40)
+#define HDKEYLOCK	(0x80)
+#define MAXINPUT    (12)
+unsigned int input_map_table [MAXINPUT] = {
+    1,          // bit 0
+    (1<<1),     // bit 1
+    (1<<2),     // bit 2
+    (1<<3),     // bit 3
+    (1<<4),     // bit 4
+    (1<<5),     // bit 5
+    (1<<10),    // bit 6
+    (1<<11),    // bit 7
+    (1<<12),    // bit 8
+    (1<<13),    // bit 9
+    (1<<14),    // bit 10
+    (1<<15)     // bit 11
+} ;
+#endif  // MDVR_APP
+
+#ifdef TVS_APP
+#define HDINSERTED	(0x40)
+#define HDKEYLOCK	(0x80)
+#define MAXINPUT    (12)
+unsigned int input_map_table [MAXINPUT] = {
+    1,          // bit 0
+    (1<<1),     // bit 1
+    (1<<2),     // bit 2
+    (1<<3),     // bit 3
+    (1<<4),     // bit 4
+    (1<<5),     // bit 5
+    (1<<10),    // bit 6
+    (1<<11),    // bit 7
+    (1<<12),    // bit 8
+    (1<<13),    // bit 9
+    (1<<14),    // bit 10
+    (1<<15)     // bit 11
+} ;
+#endif  // TVS_APP
+
+#ifdef PWII_APP
+#define HDINSERTED      (1<<6)
+#define HDKEYLOCK       (1<<7)
+#define PWII_MIC        (1<<11)
+#define MAXINPUT    (12)
+unsigned int input_map_table [MAXINPUT] = {
+    1,          // bit 0
+    (1<<1),     // bit 1
+    (1<<2),     // bit 2
+    (1<<3),     // bit 3
+    (1<<4),     // bit 4
+    (1<<5),     // bit 5
+    (1<<10),    // bit 6
+    (1<<8),     // bit 7
+    (1<<12),    // bit 8
+    (1<<13),    // bit 9
+    (1<<14),    // bit 10
+    (1<<15),    // bit 11
+} ;
+#endif  // PWII_APP
+
 
 // functions from ioprocess.cpp
 int dvr_log(char *fmt, ...);
@@ -326,6 +393,94 @@ static int mcu_sendmsg( char * msg )
 #endif
 }
 
+
+// map digital inputs
+void mcu_dinput_map(char * ibuf)
+{
+    unsigned int imap1, imap2 ;
+    int i;
+
+    dio_lock();
+    // get digital input map
+    imap1 = (unsigned char)ibuf[5]+256*(unsigned int)(unsigned char)ibuf[6] ;
+    imap2 = 0 ;
+    for( i=0; i<MAXINPUT; i++ ) {
+        if( imap1 & input_map_table[i] )
+            imap2 |= (1<<i) ;
+    }
+
+    p_dio_mmap->inputmap = imap2;
+    // hdlock = (imap1 & (HDINSERTED|HDKEYLOCK) )==0 ;	// HD plugged in and locked
+    hdlock = (imap1 & (HDKEYLOCK) )==0 ;	                // HD plugged in and locked
+    hdinserted = (imap1 & HDINSERTED)==0 ;  // HD inserted
+
+#ifdef      PWII_APP
+    if( imap1 & PWII_MIC ) {
+        p_dio_mmap->pwii_output &= ~PWII_LED_MIC ;      // turn off bit2 , MIC LED
+    }
+    else {
+        p_dio_mmap->pwii_output |= PWII_LED_MIC ;      // turn on bit2 , MIC LED
+    }
+#endif      // PWII_APP
+
+    dio_unlock();
+}
+
+void mcu_mcuinput(char * ibuf)
+{
+    switch( ibuf[3] ) {
+    case MCU_INPUT_DIO :                    // digital input event
+        mcu_response( ibuf );
+        mcu_dinput_map(ibuf);
+        break;
+
+    case MCU_INPUT_IGNITIONOFF :            // ignition off event
+        mcu_response( ibuf, 2, 0, 0 );      // response with two 0 data
+        p_dio_mmap->poweroff = 1 ;          // send power off message to DVR
+        dvr_log("Ignition off");
+        break;
+
+    case MCU_INPUT_IGNITIONON :	// ignition on event
+        mcu_response( ibuf, 1, watchdogenabled  );      // response with watchdog enable flag
+        p_dio_mmap->poweroff = 0 ;						// send power on message to DVR
+        dvr_log("Ignition on");
+        break ;
+
+    case MCU_INPUT_GSENSOR :                  // g sensor Accelerometer data
+        mcu_response( ibuf );
+        gforce_log( (int)(signed char)ibuf[5], (int)(signed char)ibuf[6], (int)(signed char)ibuf[7]) ;
+        break;
+
+    default :
+        netdbg_print("Unknown message from MCU.\n");
+        break;
+    }
+
+}
+
+// MCU inputs (IO, or buttons)
+int mcu_checkinputbuf(char * ibuf)
+{
+    if( ibuf[4]=='\x02' && ibuf[2]==ID_MCU ) {  // mcu initiated message ?
+        mcu_mcuinput(ibuf);
+    }
+#ifdef PWII_APP
+    else if( ibuf[4]=='\x02' && ibuf[2]==ID_CDC )       // input from MCU5 (MR. Henry?)
+    {
+        mcu_pwii_input(ibuf);
+    }
+#endif    // PWII_APP
+
+#ifdef SUPPORT_YAGF
+    else if( ibuf[4]=='\x02' && ibuf[2]==ID_YAGF )       // input from YAGF
+    {
+        yagf_input( ibuf );
+    }
+#endif
+
+    return 0 ;
+}
+
 // receive one data package from mcu
 // return : received msg
 //          NULL : failed
@@ -430,7 +585,6 @@ int mcu_sendcmd_va( int target, int cmd, int datalen, va_list arg )
     return mcu_sendmsg(mcu_buf) ;
 }
 
-
 // send command to mcu without waiting for responds
 int mcu_sendcmd(int cmd, int datalen, ...)
 {
@@ -502,7 +656,7 @@ int mcu_input(int usdelay)
 // Send command to mcu and check responds, with variable argument
 // return
 //       size of response
-//       NULL if failed
+//       0 if failed
 int mcu_cmd_va(int target, char * rsp, int cmd, int datalen, va_list arg)
 {
     int i ;
@@ -519,7 +673,7 @@ int mcu_cmd_va(int target, char * rsp, int cmd, int datalen, va_list arg)
                 return rsize ;
             }
             else if( rsize == 0 ) {
-                return 0 ;					// return error withou retry
+                return 0 ;					// return error without retry
             }
         }
 
@@ -528,7 +682,7 @@ int mcu_cmd_va(int target, char * rsp, int cmd, int datalen, va_list arg)
 #endif
     }
 
-    return -1 ;
+    return 0 ;
 }
 
 static int mcu_error ;
@@ -785,7 +939,6 @@ int mcu_version(char * version)
     return 0 ;
 }
 
-
 int mcu_doutput()
 {
     unsigned int outputmap = p_dio_mmap->outputmap ;
@@ -816,7 +969,7 @@ int mcu_dinput()
 {
     char rsp[MCU_MAX_MSGSIZE] ;
     if( mcu_cmd(rsp, MCU_CMD_DIGITALINPUT )>0 ) {
-        mcu_dinput_help(rsp);
+        mcu_dinput_map(rsp);
         return 1 ;
     }
     return 0 ;
@@ -1223,90 +1376,22 @@ int mcu_update_firmware( char * firmwarefile)
     return res ;
 }
 
-
 #ifdef PWII_APP
 
-int mcu_pwii_cdcfailed ;
-
-// Send command to pwii and check responds
-// return
-//       size of response
-//       0 if failed
-int mcu_pwii_cmd(char * rsp, int cmd, int datalen, ...)
+// zoom in/out front camera
+void mcu_camera_zoom( int zoomin )
 {
-    int res ;
-    va_list v ;
-    if( mcu_pwii_cdcfailed ) {  // don't retry on failed cdc, could be not connected
-        return 0 ;
+    if( zoomin != 0 ) {
+        zoomcam_zoomin();
+        mcu_cmd(NULL, MCU_CMD_CAMERA_ZOOMIN ) ;
     }
-    va_start( v, datalen );
-    res = mcu_cmd_va( ID_PWII, rsp, cmd, datalen, v );
-    if( res<=0 ) {
-        dvr_log( "CDC communication lost!" ) ;
-        mcu_pwii_cdcfailed = 1 ;
-        return 0 ;
+    else {
+        zoomcam_zoomout();
+        mcu_cmd(NULL, MCU_CMD_CAMERA_ZOOMOUT ) ;
     }
-    return res ;
 }
 
-int mcu_pwii_bootupready()
-{
-    if( mcu_pwii_cmd(NULL, PWII_CMD_BOOTUPREADY)>0 ) {
-        return 1 ;
-    }
-    mcu_pwii_cdcfailed = 1 ;
-    return 0 ;
-}
-
-// get pwii MCU firmware version.
-// return 0: failed
-//       >0: size of version string (not include null char)
-int mcu_pwii_version(char * version)
-{
-    int versionlen ;
-    char rsp[MCU_MAX_MSGSIZE] ;
-    if( mcu_pwii_cmd(rsp, PWII_CMD_VERSION)>0 ) {
-        versionlen = rsp[0]-6 ;
-        memcpy( version, &rsp[5], versionlen );
-        version[versionlen]=0 ;
-        return versionlen;
-    }
-    return 0 ;
-}
-
-unsigned int mcu_pwii_ouputstatus()
-{
-    unsigned int outputmap = 0 ;
-    char rsp[MCU_MAX_MSGSIZE] ;
-    if( mcu_pwii_cmd(rsp, PWII_CMD_OUTPUTSTATUS, 2, 0, 0 )>0 ) {
-        if( rsp[6] & 1 ) outputmap|=PWII_LED_C1 ;        // C1 LED
-        if( rsp[6] & 2 ) outputmap|=PWII_LED_C2 ;        // C2 LED
-        if( rsp[6] & 4 ) outputmap|=PWII_LED_MIC ;           // MIC
-        if( rsp[6] & 0x10 ) outputmap|=PWII_LED_ERROR ;      // Error
-        if( rsp[6] & 0x20 ) outputmap|=PWII_LED_POWER ;      // POWER LED
-        if( rsp[6] & 0x40 ) outputmap|=PWII_LED_BO ;  	 	 // BO_LED
-        if( rsp[6] & 0x80 ) outputmap|=PWII_LED_BACKLIGHT ;  // Backlight LED
-
-        if( rsp[5] & 1 ) outputmap|=PWII_POWER_LCD ;      // LCD POWER
-        if( rsp[5] & 2 ) outputmap|=PWII_POWER_GPS ;      // GPS POWER
-        if( rsp[5] & 4 ) outputmap|=PWII_POWER_RF900 ;    // RF900 POWER
-    }
-    return outputmap ;
-}
-
-// Check CDC speaker volume
-// return 0: speaker off, 1: speaker on
-int mcu_pwii_speakervolume()
-{
-    char rsp[MCU_MAX_MSGSIZE] ;
-    if( mcu_pwii_cmd(rsp, PWII_CMD_SPEAKERVOLUME, 0 )>0 ) {
-        return rsp[5] ;
-    }
-    return 0 ;
-}
-
-#endif          // PWII_APP
-
+#endif
 
 // restart mcu port, some times serial port die
 void  mcu_restart()

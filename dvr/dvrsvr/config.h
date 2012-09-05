@@ -1,6 +1,6 @@
 
-#ifndef __cfg_h__
-#define __cfg_h__
+#ifndef __config_h__
+#define __config_h__
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -47,4 +47,4 @@ public:
     void save();
 };
 
-#endif                                                  // __cfg_h__
+#endif                                                  // __config_h__

@@ -1,5 +1,5 @@
 
-// GPS LOGING 
+// GPS LOGING
 
 #include <sys/mman.h>
 #include <sys/vfs.h>
@@ -33,7 +33,7 @@
 
 #include "../eaglesvr/eagle32/davinci_sdk.h"
 #include "../dvrsvr/genclass.h"
-#include "../dvrsvr/cfg.h"
+#include "../dvrsvr/config.h"
 #include "../dvrsvr/dir.h"
 #include "../ioprocess/diomap.h"
 
@@ -72,7 +72,7 @@ string dvrcurdisk;
 int glog_ok=0 ;                 // logging success.
 int glog_timer=0;
 
-#define PORTNUM (2) 
+#define PORTNUM (2)
 
 int mhandles[PORTNUM]={-1,-1} ;
 #define gps_port_handle ( mhandles[0] )
@@ -189,14 +189,14 @@ int serial_open(int * handle, char * serial_dev, int serial_baudrate )
     if( serial_handle > 0 ) {
         return serial_handle ;		// opened already
     }
-    
+
     // check if serial device is stdin ?
     struct stat stdinstat ;
     struct stat devstat ;
     int r1, r2 ;
     r1 = fstat( 0, &stdinstat ) ; // get stdin stat
     r2 = stat( serial_dev, &devstat ) ;
-    
+
     if( r1==0 && r2==0 && stdinstat.st_dev == devstat.st_dev && stdinstat.st_ino == devstat.st_ino ) { // matched stdin
         netdbg_print("Stdin match serail port!\n");
         serial_handle = dup(0);     // duplicate stdin
@@ -212,7 +212,7 @@ int serial_open(int * handle, char * serial_dev, int serial_baudrate )
         serial_handle = open( serial_dev, O_RDWR | O_NOCTTY );
 */
     }
-    
+
     if( serial_handle >= 0 ) {
         struct termios tios ;
         speed_t baud_t ;
@@ -379,7 +379,7 @@ unsigned char gps_calcchecksum( char * line )
         sum^=(unsigned char)line[i] ;
     }
     return 0 ;
-} 
+}
 
 // set SiRF sentense rate
 void gps_setsirfrate(int sentense, int rate)
@@ -408,7 +408,7 @@ char * gps_readline()
     static char gpsline[300] ;
     static int  gpslineidx ;
     char c ;
-    
+
     if( gps_port_disable ) {                // gps disabled ?
         return NULL;
     }
@@ -609,9 +609,9 @@ FILE * gps_logopen(struct tm *t)
                     gpslogfilename[0]=0 ;
                 }
             }
-            
+
             if( gpslogfilename[0]==0 ) {
-                
+
                 FILE * diskfile = fopen( dvrcurdisk, "r");
                 if( diskfile ) {
                     r=fread( curdisk, 1, 255, diskfile );
@@ -631,7 +631,7 @@ FILE * gps_logopen(struct tm *t)
                 }
             }
         }
-        
+
         if( gpslogfilename[0] != 0 ) {
             gps_logfile = fopen( gpslogfilename, "a" );
         }
@@ -644,7 +644,7 @@ FILE * gps_logopen(struct tm *t)
                         (int)t->tm_year+1900,
                         (int)t->tm_mon+1,
                         (int)t->tm_mday );
-                
+
                 for( i=0; i<MAXSENSORNUM && i<p_dio_mmap->inputnum; i++ ) {
                     fprintf(gps_logfile, ",%s", (char *)sensorname[i] );
                 }
@@ -665,18 +665,18 @@ int gps_logprintf(int logid, char * fmt, ...)
 {
     FILE * logfile ;
     va_list ap ;
-    
+
     struct tm t ;
     time_t tt ;
-    
+
     tt=time(NULL);
     localtime_r(&tt, &t);
-    
+
     // no record before 2005
     if( t.tm_year < 105 || t.tm_year>150 ) {
         return 0 ;
     }
-    
+
     //    log_lock();
 
     int iomode = p_dio_mmap->iomode ;
@@ -688,15 +688,15 @@ int gps_logprintf(int logid, char * fmt, ...)
         //        log_unlock();
         return 0 ;
     }
-    
+
     logfile = gps_logopen(&t);
-    
+
     if( logfile==NULL ) {
         //        log_unlock();
         glog_ok=0 ;
         return 0;
     }
-    
+
     fprintf(logfile, "%02d,%02d:%02d:%02d,%09.6f%c%010.6f%c%.1fD%06.2f",
             logid,
             (int)t.tm_hour,
@@ -736,7 +736,7 @@ int	gps_log()
     static int stop = 0 ;
     //    static float disttime = 0 ;
     //    static float dist=0 ;
-    
+
     float ti ;
     float tdiff ;
     int log = 0 ;
@@ -744,7 +744,7 @@ int	gps_log()
     ti = 3600.0 * validgpsdata.hour +
          60.0 * validgpsdata.minute +
          validgpsdata.second ;
-    
+
     //    dist+=gpsdata->speed * (1.852/3.6) * (ti-disttime) ;
     //    disttime=ti ;
     tdiff = ti-logtime ;
@@ -873,15 +873,15 @@ int	sensor_log()
     unsigned int imap = p_dio_mmap->inputmap ;
 
     int sensorid = 3 ;			// start from 03
-    
+
     double btime ;
     struct timeval tv ;
     gettimeofday( &tv, NULL);
     btime = ((double)(unsigned long)tv.tv_sec) + (double)(tv.tv_usec)/1000000.0 ;
-    
+
     for( i=0; i<p_dio_mmap->inputnum; i++ ) {
         int sv ;
-        
+
         // sensor debouncing
         sv = (( imap & (1<<i) )!=0) ;
         if( sensor_invert[i] ) {
@@ -894,7 +894,7 @@ int	sensor_log()
                 sensor_value[i]=sv ;
             }
         }
-        
+
         if( sv != sensorbouncevalue[i] ) {  // sensor value bouncing
             sensorbouncetime[i]=btime ;
             sensorbouncevalue[i] = sv ;
@@ -924,10 +924,10 @@ int	sensor_log()
         }
     }
 
-#ifdef PWII_APP   
+#ifdef PWII_APP
     static char st_pwii_VRI[128] ;
     int log_vri=0 ;
-    
+
     dio_lock();
     if( p_dio_mmap->pwii_VRI[0] && strcmp(st_pwii_VRI, p_dio_mmap->pwii_VRI)!=0 ) {
         strncpy(st_pwii_VRI, p_dio_mmap->pwii_VRI, sizeof( st_pwii_VRI )-1);
@@ -955,7 +955,7 @@ int	sensor_log()
             if( gps_logprintf( (pwii_buttons&0x800)? 26:27, "" ) );
         }
     }
-#endif    
+#endif
 
     return 1;
 }
@@ -1011,7 +1011,7 @@ int tab102b_read(unsigned char * buf, int bufsize, int ustimeout=0)
 
 // check data check sum
 // return 0: checksum correct
-int tab102b_checksun( unsigned char * data ) 
+int tab102b_checksun( unsigned char * data )
 {
     unsigned char ck;
     int i ;
@@ -1051,10 +1051,10 @@ int tab102b_senddata( unsigned char * data )
     float sec ;
     sec = ptm->tm_sec + tv.tv_usec/1000000.0 ;
     netdbg_print("%02d:%02d:%02.3f", ptm->tm_hour, ptm->tm_min, sec);
-#endif    
+#endif
     netdbg_print("tab102b send %d bytes\n", (int)*data );
     return tab102b_write(data, (int)*data);
-} 
+}
 
 int tab102b_recvmsg( unsigned char * data, int size )
 {
@@ -1073,7 +1073,7 @@ int tab102b_recvmsg( unsigned char * data, int size )
             double sec ;
             sec = ptm->tm_sec + tv.tv_usec/1000000.0 ;
             netdbg_print("%02d:%02d:%02.3f", ptm->tm_hour, ptm->tm_min, sec);
-#endif    
+#endif
             netdbg_print("tab102b recv %d bytes", n);
             if( n==*data &&
                 data[1]==0 &&
@@ -1093,7 +1093,7 @@ int tab102b_x_0g, tab102b_y_0g, tab102b_z_0g, tab102b_st ;
 void tab102b_log( int x, int y, int z)
 {
     float x_v, y_v, z_v ;
-    
+
     x_v = (x-tab102b_x_0g) * (3.3/1024.0/0.12) ;
     y_v = (y-tab102b_y_0g) * (3.3/1024.0/0.12) ;
     z_v = (z-tab102b_z_0g) * (3.3/1024.0/0.12) ;
@@ -1118,7 +1118,7 @@ void tab102b_log( int x, int y, int z)
 void tab102b_checkinput(unsigned char * ibuf)
 {
     int x, y, z ;
-    
+
     switch( ibuf[3] ) {
     case '\x1e' :                   // tab102b peak data
         x = 256*ibuf[5] + ibuf[6] ;
@@ -1126,7 +1126,7 @@ void tab102b_checkinput(unsigned char * ibuf)
         z = 256*ibuf[9] + ibuf[10] ;
         tab102b_log( x, y, z );
         break;
-        
+
     default :
         // ignor other input messages
         break;
@@ -1143,7 +1143,7 @@ int tab102b_response( unsigned char * recv, int size, int usdelay )
     if( size<5 ) {				// minimum packge size?
         return 0 ;
     }
-    
+
     while( tab102b_dataready(usdelay) ) {
         n = tab102b_recvmsg (recv, size) ;
         if( n>0 ) {
@@ -1191,7 +1191,7 @@ int tab102b_cmd_sync_rtc()
     // build rtc
     struct tm t ;
     time_t tt ;
-    
+
     tt=time(NULL);
     localtime_r(&tt, &t);
     cmd_sync_rtc[5]= bcd_v(t.tm_sec) ;
@@ -1201,7 +1201,7 @@ int tab102b_cmd_sync_rtc()
     cmd_sync_rtc[9]= bcd_v(t.tm_mday) ;
     cmd_sync_rtc[10]=bcd_v(t.tm_mon+1) ;
     cmd_sync_rtc[11]=bcd_v(t.tm_year-100) ;        // need convert to bcd???
-    
+
     for( retry=0; retry<10; retry++) {
         tab102b_senddata( cmd_sync_rtc );
 
@@ -1209,7 +1209,7 @@ int tab102b_cmd_sync_rtc()
             break;
         }
     }
-    
+
     return 1;
 }
 
@@ -1225,7 +1225,7 @@ int tab102b_datauploadconfirmation(int res)
     if( tab102b_response( response, sizeof(response))>0 ) {
         return 1 ;
     }
-    
+
     return 0;
 }
 
@@ -1278,17 +1278,17 @@ int tab102b_cmd_req_data()
     unsigned char * udatabuf ;
     static unsigned char cmd_req_data[8]="\x06\x04\x00\x19\x02\xcc" ;
     unsigned char response[40] ;
-    
+
     if( tab102b_data_enable == 0 ) {
         return 0 ;
     }
-    
+
     if( tab102b_open()<0 ) {
         return 0;
     }
 
     tab102b_senddata( cmd_req_data );
-    
+
     if( tab102b_response( response, sizeof(response))>0 ) {
         if( response[3]=='\x19' ) {             // data response?
             datalength = 0x1000000 * response[5] + 0x10000* response[6] + 0x100 * response[7] + response[8] ;
@@ -1332,7 +1332,7 @@ int tab102b_cmd_req_data()
     if( app_state ) {
         tab102b_datauploadconfirmation(res);
     }
-    
+
     return res;
 }
 
@@ -1345,7 +1345,7 @@ int tab102b_cmd_get_0g()
     }
 
     tab102b_senddata( cmd_get_0g );
-    
+
     if( tab102b_response( response, sizeof(response))>0 ) {
         if( response[3]=='\x18' ) {             // data response?
             tab102b_x_0g = 0x100*response[5] + response[6] ;
@@ -1354,7 +1354,7 @@ int tab102b_cmd_get_0g()
             tab102b_st   = response[11] ;
         }
     }
-    
+
     return 1;
 }
 
@@ -1386,7 +1386,7 @@ int tab102b_cmd_enablepeak()
     }
 
     tab102b_senddata( cmd_enablepeak );
-    
+
     if( tab102b_response( response, sizeof(response))>0 ) {
         return 1 ;
     }
@@ -1402,7 +1402,7 @@ int tab102b_cmd_disablepeak()
     }
 
     tab102b_senddata( cmd_disablepeak );
-    
+
     if( tab102b_response( response, sizeof(response))>0 ) {
         return 1 ;
     }
@@ -1495,7 +1495,7 @@ void tab102b_check()
 //pthread_t sensorthreadid=0 ;
 //pthread_t tab102b_threadid=0 ;
 
-// return 
+// return
 //        0 : failed
 //        1 : success
 int appinit()
@@ -1555,13 +1555,13 @@ int appinit()
         gps_port_baudrate=i ;
     }
     gps_resetsirf = 0 ;              // reset
-    
+
     // get tab102b serial port setting
     serialport = dvrconfig.getvalue( "glog", "tab102b_port");
     if( serialport.length()>0 ) {
         strcpy( tab102b_port_dev, serialport );
     }
-    
+
     i = dvrconfig.getvalueint("glog", "tab102b_baudrate");
     if( i>=1200 && i<=115200 ) {
         tab102b_port_baudrate=i ;
@@ -1600,7 +1600,7 @@ int appinit()
     if( tstr.length()>0 ) {
         sscanf(tstr, "%f", &degree1km );
     }
-    
+
     tstr = dvrconfig.getvalue( "glog", "dist_max");
     if( tstr.length()>0 ) {
         sscanf( tstr, "%f", &max_distance );
@@ -1610,7 +1610,7 @@ int appinit()
     }
     // convert distance to degrees
     max_distance *= degree1km/1000.0;
-    
+
     for( i=0; i<SPEEDTABLESIZE; i++ ) {
         char iname[200] ;
         sprintf( iname, "speed%d", i);
@@ -1632,7 +1632,7 @@ int appinit()
             break;
         }
     }
-    
+
     tstr = dvrconfig.getvalue( "glog", "inputdebounce");
     if( tstr.length()>0 ) {
         sscanf( tstr, "%d", &inputdebounce );
@@ -1651,9 +1651,9 @@ int appinit()
         sensorname[i] = dvrconfig.getvalue(sec, "name");
         sensor_invert[i] = dvrconfig.getvalueint(sec, "inverted");
     }
-    
+
     gpslogfilename[0]=0 ;
-    
+
     pidf = fopen( pidfile, "w" );
     if( pidf ) {
         fprintf(pidf, "%d", (int)getpid() );
@@ -1662,7 +1662,7 @@ int appinit()
 
     // create sensor log thread
     //    pthread_create(&sensorthreadid, NULL, sensorlog_thread, NULL);
-    
+
     netdbg_print( "GPS logging process started!\n");
 
     // init tab102b
@@ -1684,7 +1684,7 @@ void appfinish()
     //        pthread_join( sensorthreadid, NULL );
     //    }
     //    sensorthreadid = 0 ;
-    
+
     //    if( tab102b_threadid!=0 ) {
     //        pthread_join( tab102b_threadid, NULL );
     //    }
@@ -1692,7 +1692,7 @@ void appfinish()
     tab102b_done();
     // stop gps
     gps_done();
-    
+
     // clean up shared memory
     dio_lock();
     p_dio_mmap->gps_valid = 0 ;
@@ -1704,12 +1704,12 @@ void appfinish()
     p_dio_mmap->glogpid=0;
     p_dio_mmap->usage--;
     dio_unlock();
-    
+
     dio_munmap();
 
     // delete pid file
     unlink( pidfile );
-    
+
     netdbg_print( "GPS logging process ended!\n");
     netdbg_finish();
 }
@@ -1728,9 +1728,9 @@ int main()
     if( appinit()==0 ) {
         return 1;
     }
-    
+
     glog_poweroff = 1 ;         // start from power off
-    
+
     while( app_state ) {
 
         if( app_state==1 &&
@@ -1754,7 +1754,7 @@ int main()
             gps_done();
             usleep( 500000 ) ;
         }
-        
+
         if( sigcap ) {
             int cap = sigcap ;
             sigcap=0;
@@ -1771,7 +1771,7 @@ int main()
             }
         }
     }
-    
+
     appfinish();
 
     return 0;

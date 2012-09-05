@@ -27,7 +27,7 @@ HEADERS=eaglesvr.h \
 
 ifeq ($(EAGLE),zeus3)
 SOURCES += eagle368.cpp
-LDFLAGS += -L./eagle368 -leagle368dvr -lrt
+LDFLAGS += eagle368/libeagle368dvr.so -lrt
 else
 # eagle34 or eagle32
 SOURCES += eaglecapture.cpp

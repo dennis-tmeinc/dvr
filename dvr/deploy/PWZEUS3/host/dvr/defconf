@@ -46,6 +46,7 @@ playbackdir=/var/dvr/disks
 
 # where are archive files
 archivedir=/var/dvr/arch
+arch_mincpuusage = 80
 
 #minimum free disk space
 # last letter: M=megabytes, K=kilobytes, B=bytes

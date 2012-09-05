@@ -38,6 +38,8 @@ struct mem_block {
 #define MEM_TAG_FREE   (0x5348fd20)
 #define MEM_SHARE_FIRSTBLOCK (8)
 
+#define MEM_ISALIGN( m )    (((int)(m)&3)==0)
+
 static pthread_mutex_t mem_mutex;
 inline void mem_lock()
 {
@@ -76,6 +78,27 @@ void mem_available()
 }
 
 // copy aligned 32 bit memory.
+void mem_cpy32( void  *dest, const void *src, size_t count)
+{
+    if( ((unsigned long)dest&3)==0 &&
+        ((unsigned long)src&3)==0 )
+    {
+        unsigned long * ldest = (unsigned long *)dest ;
+        unsigned long * lsrc = (unsigned long *)src ;
+
+        count = (count+sizeof(unsigned long)-1)/sizeof(unsigned long) ;
+        while (count-->0) {
+            *ldest++ = *lsrc++ ;
+        }
+    }
+    else {
+        // memory not aligned
+        memcpy(dest,src,count);
+    }
+}
+
+
+/*
 void mem_cpy32(void *dest, const void *src, size_t count)
 {
     if( ((unsigned long)dest&3)==0 &&
@@ -98,117 +121,48 @@ void mem_cpy32(void *dest, const void *src, size_t count)
         memcpy(dest,src,count);
     }
 }
+*/
 
-void *mem_alloc(int size)
-{
-    if (size < 4) {
-        size = 4 ;
-    }
-    int * m = (int *)malloc( size+MEM_HEADERSIZE * sizeof(int)) ;
-    if( m ) {
-        m+=MEM_HEADERSIZE ;
-        MEM_TAG(m) = MEM_TAG_LOCAL ;
-        MEM_ID(m) = (int)m ;
-        MEM_REFCOUNT(m) = 1 ;
-        g_memused++ ;
-        return (void *)m ;
-    }
-    return NULL ;
-}
+// shared memory management
 
-// check if this memory is allocated by mem_alloc
-static int mem_check(void *pmem)
-{
-    if ( (((unsigned long)pmem)&3)!=0  || pmem==NULL )
-        return 0;
-    if( MEM_TAG(pmem)==MEM_TAG_LOCAL && MEM_ID(pmem) == (int)pmem ) {
-        return 1 ;
-    }
-    else {
-        return 0 ;
-    }
-}
-
-void mem_free(void *pmem)
-{
-    if( mem_check( pmem ) ) {
-        mem_lock();
-        if( --MEM_REFCOUNT(pmem) <= 0 ) {
-            MEM_TAG( pmem ) = MEM_TAG_FREE ;
-            free(MEM_HEADER(pmem)) ;
-            g_memused-- ;			// for debugging
-        }
-        mem_unlock();
-    }
-}
-
-void *mem_addref(void *pmem, int size)
-{
-    if( mem_check( pmem ) ) {
-        mem_lock();
-        MEM_REFCOUNT(pmem)++ ;
-        mem_unlock();
-        return pmem ;
-    }
-    else {
-        void * nmem = mem_alloc( size ) ;
-        mem_cpy32( nmem, pmem, size );
-        return nmem ;
-    }
-}
-
-int mem_refcount(void *pmem)
-{
-    if( mem_check(pmem) ) {
-        return MEM_REFCOUNT(pmem) ;
-    }
-    else {
-        return 0;
-    }
-}
-
-void mem_init()
-{
-    // initial mutex
-    pthread_mutex_init(&mem_mutex, NULL);
-    mem_available();
-    return;
-}
-
-void mem_uninit()
-{
-    pthread_mutex_destroy(&mem_mutex);
-    return ;
-}
-
+static int * shmem ;                    // shared memory heap
+static char  shmem_file[100] ;
 
 // shared heap support
-static inline void mem_shm_lock(void * shmem)
+static inline void mem_shm_lock()
 {
-    while( arm_atomic_swap(1, (int *)shmem) ) {
+    while( arm_atomic_swap(1, shmem) ) {
         sched_yield();
     }
 }
 
-static void mem_shm_unlock(void * shmem)
+static inline void mem_shm_unlock()
 {
-    *((int *)shmem)=0 ;         // 32bit int assignment is atomic already
+    *shmem=0 ;         // 32bit int assignment is atomic already
 }
 
-void * mem_shm_init(char * shm_file, int shmsize)
+char * mem_shm_filename()
 {
-    // init shared memory
-    void * sharedmem = NULL ;
+    return shmem_file ;
+}
+
+void * mem_shm_init(const char * shm_file, int shm_size )
+{
+    if( shmem ) {
+        return (void *)shmem ;
+    }
+
+    strcpy( shmem_file, shm_file );
+
     int shm_fd = open(shm_file, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR );
     if( shm_fd>0 ) {
-        shmsize &= 0x3ffffff0 ;
-        ftruncate(shm_fd, shmsize);
-        sharedmem = (char *)mmap(0, shmsize, PROT_READ|PROT_WRITE, MAP_SHARED, shm_fd, 0);
-        if( sharedmem ) {
+        shm_size &= 0x3ffffff0 ;
+        ftruncate(shm_fd, shm_size);
+        shmem = (int *)mmap(0, shm_size, PROT_READ|PROT_WRITE, MAP_SHARED, shm_fd, 0);
+        if( shmem ) {
             // init heap
-            int * shmem = (int *)sharedmem ;
             shmem[0] = 0 ;                            // lock
-            shmem[1] = shmsize/sizeof(int) ;          // total heap size in numbers of int
+            shmem[1] = shm_size/sizeof(int) ;          // total heap size in numbers of int
 
             // init first empty block
             int * fblk = shmem+MEM_SHARE_FIRSTBLOCK ;
@@ -218,59 +172,64 @@ void * mem_shm_init(char * shm_file, int shmsize)
         }
         close( shm_fd ) ;
     }
-    return sharedmem ;
+    return (void *)shmem ;
 }
 
-void * mem_shm_share(char * shm_file)
+void * mem_shm_share(const char * shm_file)
 {
+    if( shmem ) {
+        return (void *)shmem ;
+    }
+
+    strcpy( shmem_file, shm_file );
+
     // init shared memory
-    void * sharedmem = NULL ;
     int shm_fd = open(shm_file, O_RDWR );
     if( shm_fd>0 ) {
-        sharedmem = (void *)mmap(0, 4096, PROT_READ|PROT_WRITE, MAP_SHARED, shm_fd, 0); // map first page for testing
-        if(sharedmem ) {
-            int * shmem = (int *)sharedmem ;
+        shmem = (int *)mmap(0, 16, PROT_READ|PROT_WRITE, MAP_SHARED, shm_fd, 0); // map first page for testing
+        if(shmem ) {
             int shsize = shmem[1]*sizeof(int) ;
             if( shsize>100000 && shsize<20000000 &&
                 ( MEM_TAG(shmem+MEM_SHARE_FIRSTBLOCK)==MEM_TAG_FREE || MEM_TAG(shmem+MEM_SHARE_FIRSTBLOCK)==MEM_TAG_SHARE ) )
             {
-                munmap(sharedmem, 4096);
-                sharedmem = (void *)mmap(0, shsize, PROT_READ|PROT_WRITE, MAP_SHARED, shm_fd, 0);
+                munmap(shmem, 16);
+                shmem = (int *)mmap(0, shsize, PROT_READ|PROT_WRITE, MAP_SHARED, shm_fd, 0);
                 close( shm_fd ) ;
-                return sharedmem ;
+
+                printf("Shared memory : %s : %d\n", shm_file, shsize) ;
+
+                return (void *)shmem ;
             }
-            munmap(sharedmem, 4096);
+            munmap(shmem, 4096);
         }
         close( shm_fd ) ;
     }
+    shmem=NULL ;
     return NULL ;
 }
 
-void mem_shm_close( void * shmem)
+void mem_shm_close()
 {
-    munmap(shmem, ((int *)shmem)[1]*sizeof(int));
+    if( shmem ) {
+        munmap(shmem, ((int *)shmem)[1]*sizeof(int));
+        shmem=NULL ;
+    }
 }
 
-// check if this memory is allock by mem_alloc
-static int mem_shm_check(void *pmem)
-{
-    if (pmem == NULL || (((unsigned long)pmem)&3)!=0 )
-        return 0;
-    return ( MEM_TAG(pmem) == MEM_TAG_SHARE ) ;
-}
-
-void * mem_shm_alloc(void * shmem, int size)
+void * mem_shm_alloc(int size)
 {
     // init heap
-    int * psh = (int *)shmem ;
-    mem_shm_lock( shmem ) ;
+    if( shmem==NULL ) {
+        return NULL ;
+    }
+    mem_shm_lock() ;
 
     // adjust size to number of int
     size = size/sizeof(int)+1  ;
 
     int * nextblock ;
-    int * block = psh + MEM_SHARE_FIRSTBLOCK ;
-    int * eblock = psh + psh[1] - MEM_HEADERSIZE ;      // (-MEM_HEADERSIZE) to leave a bit more room at the end
+    int * block = shmem + MEM_SHARE_FIRSTBLOCK ;
+    int * eblock = shmem + shmem[1] - MEM_HEADERSIZE ;      // (-MEM_HEADERSIZE) to leave a bit more room at the end
 
     while( block < eblock ) {
         if( MEM_TAG( block ) == MEM_TAG_FREE ){
@@ -289,7 +248,7 @@ void * mem_shm_alloc(void * shmem, int size)
                 MEM_TAG( block ) = MEM_TAG_SHARE ;
                 MEM_REFCOUNT( block ) = 1 ;                 // refs = 1
 
-                mem_shm_unlock(shmem);
+                mem_shm_unlock();
                 return (void *) block ;                     // success
             }
 
@@ -315,35 +274,118 @@ void * mem_shm_alloc(void * shmem, int size)
         }
     }
 
-    mem_shm_unlock(shmem);
+    mem_shm_unlock();
     return NULL ;
 
 }
 
-void * mem_shm_addref(void * shmem, void * pmem, int size)
+int mem_shm_index(void * pmem)
 {
-    if( mem_shm_check( pmem ) ) {
-        mem_shm_lock( shmem );
-        ++ MEM_REFCOUNT( pmem );
-        mem_shm_unlock( shmem );
-        return pmem ;
-    }
-    else {
-        void * nmem = mem_shm_alloc(shmem, size ) ;
-        mem_cpy32( nmem, pmem, size );
-        return nmem ;
-    }
+    return (int *)pmem - shmem ;
 }
 
-void mem_shm_free(void * shmem, void * pmem)
+void * mem_shm_byindex(int index)
 {
-    if( mem_shm_check( pmem ) ) {
-        mem_shm_lock( shmem ) ;
+    if( index>=MEM_SHARE_FIRSTBLOCK && index<shmem[1] ) {
+        int * p = &shmem[index] ;
+        if( MEM_TAG(p) == MEM_TAG_SHARE ) {
+            return p;
+        }
+    }
+    return NULL ;
+}
+
+
+// local memory management
+
+void *mem_alloc(int size)
+{
+    size = size/sizeof(int) + 1 ;
+    int * m = (int *)malloc( (size+MEM_HEADERSIZE) * sizeof(int)) ;
+    if( m ) {
+        m+=MEM_HEADERSIZE ;
+        MEM_TAG(m) = MEM_TAG_LOCAL ;
+        MEM_ID(m) = (int)m ;
+        MEM_REFCOUNT(m) = 1 ;
+        g_memused++ ;
+        return (void *)m ;
+    }
+    return NULL ;
+}
+
+// check if this memory is allocated by mem_alloc
+static inline int mem_check(void *pmem)
+{
+    return ( MEM_TAG(pmem)==MEM_TAG_LOCAL && MEM_ID(pmem) == (int)pmem ) ;
+}
+
+// free memory ( local and shared )
+void mem_free(void *pmem)
+{
+    if( MEM_TAG(pmem) == MEM_TAG_LOCAL &&  MEM_ID(pmem) == (int)pmem   ) {
+        // free local memory
+        mem_lock();
+        if( --MEM_REFCOUNT(pmem) <= 0 ) {
+            MEM_TAG( pmem ) = MEM_TAG_FREE ;
+            free(MEM_HEADER(pmem)) ;
+            g_memused-- ;			// for debugging
+        }
+        mem_unlock();
+    }
+    else if( MEM_TAG(pmem)==MEM_TAG_SHARE ) {
+        // free shared memory
+        mem_shm_lock() ;
         if( -- MEM_REFCOUNT( pmem ) <= 0 ) {
             MEM_TAG( pmem ) = MEM_TAG_FREE ;
         }
-        mem_shm_unlock( shmem ) ;
+        mem_shm_unlock() ;
     }
+}
+
+// add memory reference count. (local and shared)
+void *mem_addref(void *pmem, int size)
+{
+    if(  MEM_TAG(pmem)==MEM_TAG_LOCAL && MEM_ID(pmem) == (int)pmem  ) {       // is local ?
+        mem_lock();
+        MEM_REFCOUNT(pmem)++ ;
+        mem_unlock();
+        return pmem ;
+    }
+    else if( MEM_TAG(pmem) == MEM_TAG_SHARE ) {
+        mem_shm_lock() ;
+        MEM_REFCOUNT(pmem)++ ;
+        mem_shm_unlock() ;
+        return pmem ;
+    }
+    void * nmem = mem_alloc( size ) ;
+    mem_cpy32( nmem, pmem, size );
+    return nmem ;
+}
+
+int mem_refcount(void *pmem)
+{
+    if( MEM_TAG(pmem)==MEM_TAG_LOCAL || MEM_TAG(pmem)==MEM_TAG_SHARE ) {
+        return MEM_REFCOUNT(pmem) ;
+    }
+    else {
+        return 0;
+    }
+}
+
+void mem_init()
+{
+    // initial mutex
+    pthread_mutex_init(&mem_mutex, NULL);
+    mem_available();
+    shmem = NULL ;
+    return;
+}
+
+void mem_uninit()
+{
+    mem_shm_close();
+    pthread_mutex_destroy(&mem_mutex);
+    return ;
 }
 
 

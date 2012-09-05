@@ -2,8 +2,8 @@
 # reconfigure wifi
 if [ -f /var/dvr/wifidev ] ; then
   interface=`cat /var/dvr/wifidev`
-  if [ -d /sys/class/net/${interface} ] ; then 
-      /bin/ifconfig ${interface} down 
-      /bin/rmmod rt73
+  if [ -d /sys/class/net/${interface} ] ; then
+      /bin/ifconfig ${interface} down
+      /sbin/rmmod rt73
   fi
 fi

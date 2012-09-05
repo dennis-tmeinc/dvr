@@ -3,4 +3,4 @@
 # reconfigure wifi
 /davinci/dvr/wifi_down
 sleep 1
-/bin/insmod /davinci/rt73.ko
+/sbin/insmod /davinci/rt73.ko

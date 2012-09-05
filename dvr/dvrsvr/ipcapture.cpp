@@ -29,18 +29,27 @@ ipeagle32_capture::ipeagle32_capture( int channel )
     }
     m_ipchannel = dvrconfig.getvalueint( cameraid, "channel");
 
-    // shared memory over ip
+    // init shared memory
     m_shm_enabled = dvrconfig.getvalueint( cameraid, "shm");
     if( m_shm_enabled ) {
-        // init shared memory
-        int shm_size = dvrconfig.getvalueint( cameraid, "shm_size");
-        if( shm_size< (2*1024*1024) ) {
-            shm_size = (2*1024*1024) ;          // minimum 2M
+        void * shmtest = mem_shm_alloc(20) ;
+        if( shmtest ) {             // shm initialized ?
+            mem_free( shmtest );
         }
-        char shm_path[128] ;
-        sprintf( shm_path, "/cap%d", m_channel) ;
-//        unlink( shm_path ) ;
-        m_shm = mem_shm_init( shm_path, shm_size) ;
+        else {
+            // init shared memory
+            int shm_size = dvrconfig.getvalueint( "system", "shm_size");
+            if( shm_size< (1*1024*1024) ) {         // minimum 1M
+                shm_size = (4*1024*1024) ;          // default 4M
+            }
+            const char * shm_file = dvrconfig.getvalue("system", "shm_file") ;
+            if( shm_file == NULL || shm_file[0]==0 ) {
+                shm_file = "/tmp/dvrshare" ;
+            }
+
+            dvr_log("Init shared memory %s size:%d", shm_file, shm_size);
+            mem_shm_init(shm_file, shm_size);
+        }
     }
 
     m_enable = m_attr.Enable ;
@@ -49,12 +58,6 @@ ipeagle32_capture::ipeagle32_capture( int channel )
 ipeagle32_capture::~ipeagle32_capture()
 {
     stop();
-    if( m_shm_enabled && m_shm ) {
-        mem_shm_close( m_shm ) ;
-//        char shm_path[128] ;
-//        sprintf( shm_path, "/cap%d", m_channel) ;
-//        unlink( shm_path ) ;
-    }
 }
 
 /*
@@ -174,6 +177,89 @@ void ipeagle32_capture::streamthread_net()
             streamfd = net_connect (m_ip, m_port) ;
             if( streamfd > 0 ) {
                 if( dvr_openlive (streamfd, m_ipchannel)<=0 ) {
+//                    dvr_log("dvr openlive failed!");
+                    closesocket( streamfd ) ;
+                    streamfd=0 ;
+                }
+            }
+        }
+        if( streamfd<=0 ) {
+            continue ;
+        }
+
+        // recevie frames
+        recvok = net_recvok(streamfd, 100000) ;
+        if( recvok>0 ) {
+            struct dvr_ans ans ;
+            if( net_recv (streamfd, &ans, sizeof(struct dvr_ans))>0 ) {
+                if( ans.anscode == ANSSTREAMDATA ) {
+                    capframe.framesize = ans.anssize ;
+                    capframe.frametype = ans.data ;
+                    capframe.framedata=(char *)mem_alloc (capframe.framesize) ;
+                    if( capframe.framedata ) {
+                        int nr = net_recv( streamfd, capframe.framedata, capframe.framesize ) ;
+                        if( nr>0 ) {
+                            onframe(&capframe);
+                        }
+                        else {
+                            closesocket( streamfd );
+                            streamfd = 0 ;
+                        }
+                        mem_free(capframe.framedata);
+                    }
+                    else {
+                        dvr_log( "ipcapture:no enought memory!") ;
+                        closesocket( streamfd );
+                        streamfd = 0 ;
+                    }
+                }
+                else {
+                    dvr_log( "ipcapture:error streaming header");
+                    closesocket( streamfd );
+                    streamfd = 0 ;
+                }
+            }
+            else {
+                dvr_log( "ipcapture:error recv ans");
+                closesocket( streamfd );
+                streamfd = 0 ;
+            }
+            recvact=g_timetick ;
+        }
+        else if( recvok==0) {       // recvok timeout
+            if( g_timetick-recvact>30000 ) {        // no active for 30 seconds?
+//                dvr_log( "ipcapture:socket time out");
+                closesocket( streamfd );
+                streamfd = 0 ;
+                recvact=g_timetick ;
+            }
+        }
+        else {                      // error
+            break;
+        }
+    }
+    if( streamfd>0 ) {
+        closesocket(streamfd);
+    }
+}
+
+// get live stream over sh mem
+void ipeagle32_capture::streamthread_shm()
+{
+    int dvr_openliveshm(int sockfd, int channel) ;
+
+    struct cap_frame capframe ;
+    int recvok;
+    int recvact=g_timetick ;
+
+    capframe.channel=m_channel ;
+    int streamfd = 0 ;
+    while( m_state ) {
+        if( streamfd<=0 ) {
+            usleep(100000);           // wait a bit, for EAGLE368 it should wait until all channels setting up
+            streamfd = net_connect (m_ip, m_port) ;
+            if( streamfd > 0 ) {
+                if( dvr_openliveshm (streamfd, m_ipchannel)<=0 ) {
                     dvr_log("dvr openlive failed!");
                     closesocket( streamfd ) ;
                     streamfd=0 ;
@@ -190,7 +276,30 @@ void ipeagle32_capture::streamthread_net()
             struct dvr_ans ans ;
             memset( &ans, 0, sizeof(ans));
             if( net_recv (streamfd, &ans, sizeof(struct dvr_ans))>0 ) {
-                if( ans.anscode == ANSSTREAMDATA ) {
+                if( ans.anscode == ANSSTREAMDATASHM ) {
+                    int frameinfo[10] ;
+                    if( ans.anssize>0 ) {
+                        net_recv(streamfd, frameinfo, ans.anssize ) ;
+                    }
+                    capframe.framesize = frameinfo[1] ;
+                    capframe.frametype = ans.data ;
+                    char * framedata =(char *)mem_shm_byindex( frameinfo[0] ) ;
+                    if( framedata ) {
+                        capframe.framedata = (char *)mem_alloc(capframe.framesize) ;
+                        if( capframe.framedata ) {
+                            mem_cpy32(capframe.framedata,framedata,capframe.framesize);
+                            onframe(&capframe);
+                            mem_free(capframe.framedata);
+                        }
+                        mem_free(framedata);
+                    }
+                    else {
+                        dvr_log( "ipcapture:shared memory error!") ;
+                        closesocket( streamfd );
+                        streamfd = 0 ;
+                    }
+                }
+                else if( ans.anscode == ANSSTREAMDATA ) {
                     capframe.framesize = ans.anssize ;
                     capframe.frametype = ans.data ;
                     capframe.framedata=(char *)mem_alloc (capframe.framesize) ;
@@ -242,14 +351,6 @@ void ipeagle32_capture::streamthread_net()
 }
 
 // get live stream over sh mem
-void ipeagle32_capture::streamthread_shm()
-{
-    while( m_state ) {
-        sleep(1);
-    }
-}
-
-// get live stream over sh mem
 void ipeagle32_capture::streamthread()
 {
     if( m_shm_enabled ) {
@@ -296,6 +397,18 @@ int ipeagle32_capture::connect()
     dvr_adjtime(m_sockfd, &dvrt) ;
 
     channelsetup( m_sockfd ) ;
+
+    if( m_shm_enabled ) {
+        void * shmtest = mem_shm_alloc(20) ;
+        if( shmtest ) {             // shm initialized ?
+            mem_free( shmtest );
+            //
+            dvr_shm_init( m_sockfd, mem_shm_filename() ) ;
+        }
+        else {
+            m_shm_enabled = 0 ;
+        }
+    }
 
     return 1 ;
 }

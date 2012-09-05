@@ -371,8 +371,6 @@ int net_wait(int timeout_ms)
         else if (FD_ISSET(unixfd, &readfds)) {
             fd = accept(unixfd, NULL, NULL);
             if (fd > 0) {
-//                flag=fcntl(fd, F_GETFL, NULL);
-//                fcntl(fd, F_SETFL, flag|O_NONBLOCK);		// work on non-block mode
                 net_lock();
                 pconn =	new dvrsvr(fd);
                 net_unlock();

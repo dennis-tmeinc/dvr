@@ -178,7 +178,6 @@ void do_uninit()
 
 }
 
-
 int main()
 {
     int app_ostate;				// application status. ( APPUP, APPDOWN )

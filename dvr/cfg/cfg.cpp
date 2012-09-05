@@ -17,7 +17,7 @@
 
 #include "../cfg.h"
 #include "../dvrsvr/genclass.h"
-#include "../dvrsvr/cfg.h"
+#include "../dvrsvr/config.h"
 
 char dvrconfigfile[] = CFG_FILE ;
 
@@ -34,7 +34,7 @@ int main( int argc, char * argv[] )
     string key ;
     string value ;
     string str ;
-    
+
     for(i=1; i<10; i++) {
         if( argv[i] && argv[i][0]=='-' ) { // a options
             if( argv[i][1]=='f' || argv[i][1]=='F' ) {
@@ -48,7 +48,7 @@ int main( int argc, char * argv[] )
     if( filename.length()<=0 ) {
         filename=dvrconfigfile ;
     }
-    
+
     if( argv[i] ) {
         cmd = argv[i] ;
         if( argv[i+1] ) {
@@ -69,7 +69,7 @@ int main( int argc, char * argv[] )
         }
     }
 
-	config dvrconfig(filename);
+    config dvrconfig(filename);
 
     if( strcasecmp(cmd, "get")==0 ) {
         str=dvrconfig.getvalue( section, key);
@@ -101,7 +101,7 @@ int main( int argc, char * argv[] )
             en_key.line=0;
             while( (key=dvrconfig.enumkey( section, &en_key ))!=NULL ){
                 char * v = dvrconfig.getvalue( section, key );
-                printf("%s = %s\n", key, v ); 
+                printf("%s = %s\n", key, v );
             }
         }
         return 0 ;

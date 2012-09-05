@@ -18,7 +18,7 @@
 #include "../cfg.h"
 
 #include "../dvrsvr/genclass.h"
-#include "../dvrsvr/cfg.h"
+#include "../dvrsvr/config.h"
 #include "netdbg.h"
 #include "mcu.h"
 #include "gforce.h"

@@ -7,7 +7,7 @@ include $(PROJDIR)/arm_tool
 
 SOURCES=cfg.cpp
 
-EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h
+EXTHEADERS=../dvrsvr/config.h ../dvrsvr/genclass.h
 EXTSOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp
 
 HEADERS=

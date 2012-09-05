@@ -53,7 +53,7 @@ class videoscreen {
 public:
     videoscreen(int channel) {
         m_channel=channel ;
-        m_playmode=SCREEN_PLAYMODE_LIVE ;			// assume it is in liveview mode after capture card initialized
+        m_playmode=SCREEN_PLAYMODE_STOP ;			// assume it is stopped
         m_decodehandle = -1 ;	// no decode handle
         m_decodespeed = DECODE_SPEED_NORMAL ;
         stop();					// stop decoder
@@ -63,9 +63,14 @@ public:
     }
 
     void startliveview() {
-        stop();
+        if( m_playmode == SCREEN_PLAYMODE_LIVE ) {
+            return ;        // already live mode
+        }
+        else if( m_playmode == SCREEN_PLAYMODE_DECODE ) {
+            stop();
+        }
 
-        dvr_log( "Screen channle %d start liveview.", m_channel );
+        dvr_log( "Screen start live channel %d.", m_channel );
 
 #ifdef EAGLE368
         SetPreviewScreen(m_channel,1);                      // third  parameter turn on/off specified channel
@@ -109,7 +114,7 @@ public:
             dvr_log( "Screen channle %d stop decode.", m_channel );
 
         }
-        else {
+        else if( m_playmode==SCREEN_PLAYMODE_LIVE ) {
             // stop live view
 #if defined(EAGLE32) || defined( EAGLE34 )
             SetPreviewScreen(MAIN_OUTPUT,m_channel+1,0);          // third  parameter turn on/off specified channel
@@ -119,22 +124,21 @@ public:
             SetPreviewScreen(m_channel,0);
             SetPreviewAudio(m_channel,0);
 #endif
-            dvr_log( "Screen channle %d stop live view.", m_channel );
-
+            dvr_log( "Screen stop live channel %d.", m_channel );
         }
         m_playmode = SCREEN_PLAYMODE_STOP ;
     }
 
     // 1: turn audio on, 0: turn audio off
     void setaudio( int onoff ) {
-        if( m_playmode==1 ) {
+        if( m_playmode==SCREEN_PLAYMODE_LIVE ) {
 #ifdef EAGLE368
             SetPreviewAudio(m_channel, onoff );
 #else
             SetPreviewAudio(MAIN_OUTPUT,m_channel+1, onoff );
 #endif
         }
-        else if( m_playmode==2 ) {
+        else if( m_playmode==SCREEN_PLAYMODE_DECODE ) {
 #if defined(EAGLE32) || defined( EAGLE34 )
             SetDecodeAudio(MAIN_OUTPUT,m_channel+1, onoff );
 #endif
@@ -200,20 +204,28 @@ void screen_setmode( int videostd, int screennum, unsigned char * displayorder )
     // clear display
     ClrDisplayParams(MAIN_OUTPUT,0);
     res=SetDisplayParams(MAIN_OUTPUT, ScreenNum);       //  set screen format, support 1 , 2, 4 (2x2), 6 (3x3), 8 (?), 9 (3x3 ), 16 (4x4)
-    res=SetDisplayOrder(MAIN_OUTPUT, displayorder );    // select screen channel order, also turn on all preview channels
+
+    unsigned char idisplayorder[16] ;
+    for(i=0; i<16; i++) {
+        if( displayorder ) {
+            idisplayorder[i] = displayorder[i] ;
+        }
+        else {
+            idisplayorder[i]=i ;
+        }
+    }
+    res=SetDisplayOrder(MAIN_OUTPUT, idisplayorder );    // select screen channel order, also turn on all preview channels
+
+    for( i=0; i<ScreenNum; i++ ) {
+        screen_vs[i]->startliveview();
+    }
+
 #endif
 
 #ifdef EAGLE368
     SetDisplayParams(ScreenNum);
 #endif
 
-    if( screen_vs ) {
-        for( i=0; i<cap_channels; i++ ) {
-            if( screen_vs[i] ) {
-                screen_vs[i]->stop();
-            }
-        }
-    }
     // select Video output format to NTSC and initial drawing surface
     draw_init(ScreenStandard);
 }
@@ -222,16 +234,12 @@ void screen_setmode( int videostd, int screennum, unsigned char * displayorder )
 void screen_init()
 {
     int i;
-    unsigned char displayorder[16] ;
-    for(i=0; i<16; i++) {
-        displayorder[i]=i ;
-    }
-    screen_setmode( STANDARD_NTSC, 1, displayorder );
-
     screen_vs = new videoscreen * [cap_channels] ;
     for( i=0; i<cap_channels; i++ ) {
         screen_vs[i]=new videoscreen(i);
     }
+    screen_setmode( STANDARD_NTSC, 1, NULL );
+
 }
 
 // screen finish, clean up
@@ -253,6 +261,8 @@ void screen_uninit()
 
 void screen_live( int channel )
 {
+    dvr_log("screen_live channel %d", channel ) ;
+
     if( ScreenNum==1 ) {        // single screen
         int ch ;
         for (ch=0; ch<cap_channels; ch++ ) {
@@ -270,6 +280,8 @@ void screen_live( int channel )
 
 void screen_playback( int channel, int speed )
 {
+    dvr_log("screen_playback channel %d", channel ) ;
+
     if( ScreenNum==1 ) {        // single screen
         int ch ;
         for (ch=0; ch<cap_channels; ch++ ) {
@@ -301,6 +313,7 @@ void screen_playbackinput( int channel, void * buffer, int bufsize )
 
 void screen_stop( int channel )
 {
+    dvr_log( "screen_stop channel %d", channel);
     if( channel>=0 && channel<cap_channels ) {
         screen_vs[channel]->stop();
     }

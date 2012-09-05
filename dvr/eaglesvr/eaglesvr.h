@@ -33,7 +33,7 @@
 #include "../cfg.h"
 #include "../dvrsvr/dvrprotocol.h"
 #include "../dvrsvr/genclass.h"
-#include "../dvrsvr/cfg.h"
+#include "../dvrsvr/config.h"
 
 // dvr memory allocation
 #include "../dvrsvr/memory.h"
@@ -402,7 +402,9 @@ int net_onframe(cap_frame * pframe);
 void net_init();
 void net_uninit();
 
-enum conn_type { CONN_NORMAL = 0, CONN_REALTIME, CONN_LIVESTREAM };
+extern void * net_shm_heap ;
+
+enum conn_type { CONN_NORMAL = 0, CONN_REALTIME, CONN_LIVESTREAM, CONN_LIVESTREAM2 };
 
 class dvrsvr {
 protected:
@@ -478,27 +480,29 @@ public:
     // request handlers
     void onrequest();
 
-    virtual void ReqRealTime();
-    virtual void ChannelInfo();
-    virtual void DvrServerName();
-    virtual void GetSystemSetup();
-    virtual void GetChannelSetup();
-    virtual void SetChannelSetup();
-    virtual void HostName();
-    virtual void GetChannelState();
-    virtual void GetVersion();
-    virtual void ReqEcho();
-    virtual void ReqOpenLive();
-    virtual void Req2SetLocalTime();
-    virtual void Req2GetLocalTime();
-    virtual void Req2AdjTime();
-    virtual void Req2SetSystemTime();
-    virtual void Req2GetSystemTime();
-    virtual void Req2SetTimeZone();
-    virtual void ReqSetHikOSD();
-    virtual void Req2GetChState();
-    virtual void Req2GetStreamBytes();
-    virtual void Req2GetJPEG();
+    void ReqRealTime();
+    void ChannelInfo();
+    void DvrServerName();
+    void GetSystemSetup();
+    void GetChannelSetup();
+    void SetChannelSetup();
+    void HostName();
+    void GetChannelState();
+    void GetVersion();
+    void ReqEcho();
+    void ReqOpenLive();
+    void ReqOpenLiveShm();
+    void ReqInitShm();
+    void Req2SetLocalTime();
+    void Req2GetLocalTime();
+    void Req2AdjTime();
+    void Req2SetSystemTime();
+    void Req2GetSystemTime();
+    void Req2SetTimeZone();
+    void ReqSetHikOSD();
+    void Req2GetChState();
+    void Req2GetStreamBytes();
+    void Req2GetJPEG();
 
     // EagleSVR supports
     void ReqScreenSetMode();

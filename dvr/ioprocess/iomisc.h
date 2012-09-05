@@ -10,9 +10,12 @@
 #include "diomap.h"
 
 extern unsigned int runtime ;
+extern int hdlock ;								// HD lock status
+extern int hdinserted ;
+
 
 int dvr_log(char *fmt, ...);
-// set onboard rtc 
+// set onboard rtc
 void rtc_set(time_t utctime);
 
 void buzzer(int times, int ontime, int offtime);

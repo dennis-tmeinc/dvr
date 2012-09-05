@@ -18,9 +18,10 @@
 
 #include "../eaglesvr/eagle32/davinci_sdk.h"
 #include "../dvrsvr/genclass.h"
-#include "../dvrsvr/cfg.h"
+#include "../dvrsvr/config.h"
 #include "netdbg.h"
 #include "mcu.h"
+#include "cdc.h"
 #include "gforce.h"
 #include "diomap.h"
 #include "iomisc.h"
@@ -34,74 +35,6 @@ int hd_timeout = 120 ;       // hard drive ready timeout
 unsigned int runtime ;
 int disable_wifiupload ;	// disable wifi uploading
 int disable_archive ;		// disable archiving to arch disk
-
-#define RECVBUFSIZE (50)
-
-// input pin maping
-#ifdef MDVR_APP
-#define MAXINPUT    (12)
-#define HDINSERTED	(0x40)
-#define HDKEYLOCK	(0x80)
-unsigned int input_map_table [MAXINPUT] = {
-    1,          // bit 0
-    (1<<1),     // bit 1
-    (1<<2),     // bit 2
-    (1<<3),     // bit 3
-    (1<<4),     // bit 4
-    (1<<5),     // bit 5
-    (1<<10),    // bit 6
-    (1<<11),    // bit 7
-    (1<<12),    // bit 8
-    (1<<13),    // bit 9
-    (1<<14),    // bit 10
-    (1<<15)     // bit 11
-} ;
-
-#endif  // MDVR_APP
-
-#ifdef TVS_APP
-#define MAXINPUT    (12)
-#define HDINSERTED	(0x40)
-#define HDKEYLOCK	(0x80)
-unsigned int input_map_table [MAXINPUT] = {
-    1,          // bit 0
-    (1<<1),     // bit 1
-    (1<<2),     // bit 2
-    (1<<3),     // bit 3
-    (1<<4),     // bit 4
-    (1<<5),     // bit 5
-    (1<<10),    // bit 6
-    (1<<11),    // bit 7
-    (1<<12),    // bit 8
-    (1<<13),    // bit 9
-    (1<<14),    // bit 10
-    (1<<15)     // bit 11
-} ;
-
-#endif  // TVS_APP
-
-#ifdef PWII_APP
-#define MAXINPUT        (12)
-#define HDINSERTED      (1<<6)
-#define HDKEYLOCK       (1<<7)
-#define PWII_MIC        (1<<11)
-unsigned int input_map_table [MAXINPUT] = {
-    1,          // bit 0
-    (1<<1),     // bit 1
-    (1<<2),     // bit 2
-    (1<<3),     // bit 3
-    (1<<4),     // bit 4
-    (1<<5),     // bit 5
-    (1<<10),    // bit 6
-    (1<<8),     // bit 7
-    (1<<12),    // bit 8
-    (1<<13),    // bit 9
-    (1<<14),    // bit 10
-    (1<<15),    // bit 11
-} ;
-
-#endif  // PWII_APP
-
 
 int hdlock=0 ;								// HD lock status
 int hdinserted=0 ;
@@ -121,12 +54,6 @@ char temp_logfile[128] ;
 int watchdogenabled=0 ;
 int watchdogtimeout=30 ;
 int gpsvalid = 0 ;
-
-#ifdef PWII_APP
-int pwii_tracemark_inverted=0 ;
-int pwii_rear_ch ;
-int pwii_front_ch ;
-#endif
 
 unsigned int panelled=0 ;
 unsigned int devicepower=0;
@@ -208,363 +135,6 @@ unsigned int getruntime()
     struct timespec tp ;
     clock_gettime(CLOCK_MONOTONIC, &tp );
     return (unsigned int)(tp.tv_sec-starttime)*1000 + tp.tv_nsec/1000000 ;
-}
-
-#ifdef PWII_APP
-
-// Set C1/C2 LED and set external mic
-void mcu_pwii_setc1c2()
-{
-    // C1 LED (front)
-    dio_lock();
-    if( p_dio_mmap->camera_status[pwii_front_ch] & 2 ) {         // front camera recording?
-        if( (p_dio_mmap->pwii_output & PWII_LED_C1 ) == 0 ) {
-            p_dio_mmap->pwii_output |= PWII_LED_C1 ;
-            // turn on zoomcamera led
-            zoomcam_led(1) ;
-            // turn on mic
-            dio_unlock();
-            mcu_cmd(NULL, MCU_CMD_MICON) ;
-            dio_lock();
-        }
-    }
-    else {
-        if( (p_dio_mmap->pwii_output & PWII_LED_C1) != 0 ) {
-            p_dio_mmap->pwii_output &= (~PWII_LED_C1) ;
-            // turn off zoomcamera led
-            zoomcam_led(0) ;
-            // turn off mic
-            dio_unlock();
-            mcu_cmd(NULL, MCU_CMD_MICOFF);
-            dio_lock();
-        }
-    }
-
-    // C2 LED
-    if( p_dio_mmap->camera_status[pwii_rear_ch] & 2 ) {         // rear camera recording?
-        p_dio_mmap->pwii_output |= PWII_LED_C2 ;
-    }
-    else {
-        p_dio_mmap->pwii_output &= (~PWII_LED_C2) ;
-    }
-    dio_unlock();
-}
-
-static unsigned int pwii_outs = 0 ;
-
-// update PWII outputs, include leds and powers
-void mcu_pwii_output()
-{
-    unsigned int xouts ;
-
-    if( (p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY)
-        && (p_dio_mmap->pwii_output & PWII_POWER_BLACKOUT) )
-    {
-        dio_lock();
-        p_dio_mmap->pwii_output &= ~(
-                                       PWII_LED_POWER |
-                                       PWII_LED_C1 |
-                                       PWII_LED_C2 |
-                                       PWII_LED_MIC |
-                                       PWII_LED_ERROR |
-                                       PWII_POWER_LCD ) ;
-        dio_unlock();
-    }
-    else {
-        mcu_pwii_setc1c2()  ;       // check c1 c2 led.
-    }
-
-    xouts = pwii_outs ^ p_dio_mmap->pwii_output ;
-
-    if( xouts ) {
-        pwii_outs ^= xouts ;
-        if( xouts & PWII_POWER_BLACKOUT ) {         // Black out bit
-            mcu_pwii_cmd(NULL, PWII_CMD_STANDBY, 1, (pwii_outs&PWII_POWER_BLACKOUT)!=0 );
-            if( (pwii_outs&PWII_POWER_BLACKOUT)==0 ) {
-                p_dio_mmap->pwii_output |= PWII_LED_POWER ;			// out of blackout also turn on POWER LED
-            }
-        }
-
-        if( xouts & PWII_LED_POWER ) {
-            // BIT 4: POWER LED
-            mcu_pwii_cmd(NULL, PWII_CMD_LEDPOWER, 1, ((pwii_outs&PWII_LED_POWER)!=0) );
-        }
-
-        if( xouts & PWII_LED_C1 ) {
-            mcu_pwii_cmd(NULL, PWII_CMD_C1, 1, ((pwii_outs&PWII_LED_C1)!=0) );
-        }
-
-        if( xouts & PWII_LED_C2 ) {
-            mcu_pwii_cmd(NULL, PWII_CMD_C2, 1, ((pwii_outs&PWII_LED_C2)!=0) );
-        }
-
-        if( xouts & PWII_LED_MIC ) {
-            mcu_pwii_cmd(NULL, PWII_CMD_LEDMIC, 1, ((pwii_outs&PWII_LED_MIC)!=0) );
-        }
-
-        if( xouts & PWII_LP_ZOOMIN ) {
-            mcu_camera_zoom( pwii_outs & PWII_LP_ZOOMIN ) ;
-        }
-
-        if( xouts & PWII_LED_ERROR ) {           // bit 3: ERROR LED
-            if((pwii_outs&PWII_LED_ERROR)!=0) {
-                if( p_dio_mmap->pwii_error_LED_flash_timer>0 ) {
-                    mcu_pwii_cmd(NULL, PWII_CMD_LEDERROR, 2, 2, p_dio_mmap->pwii_error_LED_flash_timer );
-                }
-                else {
-                    mcu_pwii_cmd(NULL, PWII_CMD_LEDERROR, 2, 1, 0 );
-                }
-            }
-            else {
-                mcu_pwii_cmd(NULL, PWII_CMD_LEDERROR, 2, 0, 0 );
-            }
-        }
-
-        if( xouts & PWII_POWER_LCD ) {          	// LCD  power
-            mcu_pwii_cmd(NULL, PWII_CMD_LCD, 1, ((pwii_outs&PWII_POWER_LCD)!=0) );
-        }
-
-        if( xouts & PWII_POWER_ANTENNA ) {          // BIT 8: GPS antenna power
-            mcu_pwii_cmd(NULL, PWII_CMD_POWER_GPSANT, 1, ((pwii_outs&PWII_POWER_ANTENNA)!=0) );
-        }
-
-        if( xouts & PWII_POWER_GPS ) {         // BIT 9: GPS POWER
-            mcu_pwii_cmd(NULL, PWII_CMD_POWER_GPS, 1, ((pwii_outs&PWII_POWER_GPS)!=0) );
-        }
-
-        if( xouts & PWII_POWER_RF900 ) {          // BIT 10: RF900 POWER
-            mcu_pwii_cmd(NULL, PWII_CMD_POWER_RF900, 1, ((pwii_outs&PWII_POWER_RF900)!=0) );
-        }
-
-        if( xouts & PWII_POWER_WIFI ) {          // BIT 13: WIFI power
-            mcu_pwii_cmd(NULL, PWII_CMD_POWER_WIFI, 1, ((pwii_outs&PWII_POWER_WIFI)!=0) );
-        }
-    }
-}
-
-unsigned int pwii_keytime ;
-unsigned int pwii_keyreltime ;
-
-// auto release keys REC, C2, TM
-void pwii_keyautorelease()
-{
-    void mode_poweroff();
-    if( p_dio_mmap->pwii_buttons != 0 ) {
-        if( (runtime-pwii_keytime) > pwii_keyreltime ) {
-            p_dio_mmap->pwii_buttons = 0 ;
-            p_dio_mmap->iomsg[0]=0 ;
-        }
-        if( p_dio_mmap->poweroff && (p_dio_mmap->pwii_buttons & PWII_BT_POWER) ) {
-            if( (runtime-pwii_keytime) > 3000 ) {			// POWER/ST button pressed for 3 seconds
-                mode_poweroff();
-                pwii_keytime=runtime ;
-            }
-        }
-    }
-}
-
-void mcu_pwii_init()
-{
-    pwii_outs = mcu_pwii_ouputstatus() ;
-    p_dio_mmap->pwii_output =
-            PWII_LED_POWER |
-            PWII_POWER_ANTENNA |
-            PWII_POWER_GPS |
-            PWII_POWER_RF900 |
-            PWII_POWER_LCD ;
-}
-
-// zoom in/out front camera
-void mcu_camera_zoom( int zoomin )
-{
-    if( zoomin != 0 ) {
-        zoomcam_zoomin();
-        mcu_cmd(NULL, MCU_CMD_CAMERA_ZOOMIN ) ;
-    }
-    else {
-        zoomcam_zoomout();
-        mcu_cmd(NULL, MCU_CMD_CAMERA_ZOOMOUT ) ;
-    }
-}
-
-#endif  // PWII_APP
-
-void mcu_dinput_help(char * ibuf)
-{
-    unsigned int imap1, imap2 ;
-    int i;
-
-    dio_lock();
-    // get digital input map
-    imap1 = (unsigned char)ibuf[5]+256*(unsigned int)(unsigned char)ibuf[6] ;
-    imap2 = 0 ;
-    for( i=0; i<MAXINPUT; i++ ) {
-        if( imap1 & input_map_table[i] )
-            imap2 |= (1<<i) ;
-    }
-
-    p_dio_mmap->inputmap = imap2;
-    // hdlock = (imap1 & (HDINSERTED|HDKEYLOCK) )==0 ;	// HD plugged in and locked
-    hdlock = (imap1 & (HDKEYLOCK) )==0 ;	                // HD plugged in and locked
-    hdinserted = (imap1 & HDINSERTED)==0 ;  // HD inserted
-
-#ifdef      PWII_APP
-    if( imap1 & PWII_MIC ) {
-        p_dio_mmap->pwii_output &= ~PWII_LED_MIC ;      // turn off bit2 , MIC LED
-    }
-    else {
-        p_dio_mmap->pwii_output |= PWII_LED_MIC ;      // turn on bit2 , MIC LED
-    }
-#endif      // PWII_APP
-
-    dio_unlock();
-}
-
-int mcu_checkinputbuf(char * ibuf)
-{
-    if( ibuf[4]=='\x02' && ibuf[2]=='\x01' ) {  // mcu initiated message ?
-        switch( ibuf[3] ) {
-        case MCU_INPUT_DIO :                    // digital input event
-            mcu_response( ibuf );
-            mcu_dinput_help(ibuf);
-            break;
-
-        case MCU_INPUT_IGNITIONOFF :            // ignition off event
-            mcu_response( ibuf, 2, 0, 0 );      // response with two 0 data
-            p_dio_mmap->poweroff = 1 ;          // send power off message to DVR
-            dvr_log("Ignition off");
-            break;
-
-        case MCU_INPUT_IGNITIONON :	// ignition on event
-            mcu_response( ibuf, 1, watchdogenabled  );      // response with watchdog enable flag
-            p_dio_mmap->poweroff = 0 ;						// send power on message to DVR
-            dvr_log("Ignition on");
-            break ;
-
-        case MCU_INPUT_GSENSOR :                  // g sensor Accelerometer data
-            mcu_response( ibuf );
-            gforce_log( (int)(signed char)ibuf[5], (int)(signed char)ibuf[6], (int)(signed char)ibuf[7]) ;
-            break;
-
-        default :
-            netdbg_print("Unknown message from MCU.\n");
-            break;
-        }
-    }
-
-#ifdef PWII_APP
-
-    else if( ibuf[4]=='\x02' && ibuf[2]=='\x05' )       // input from MCU5 (MR. Henry?)
-    {
-        mcu_pwii_cdcfailed = 0 ;                        // clear pwii cdc error!
-        pwii_keytime = runtime ;
-        pwii_keyreltime = 20000 ;         		// all keys will be auto-released in 20 sec, or set bellow
-        switch( ibuf[3] ) {
-        case PWII_INPUT_REC :                        // Front Camera (REC) button
-            p_dio_mmap->pwii_buttons = PWII_BT_C1 ;  // bit 8: front camera
-            pwii_keyreltime = 1000 ;         		// auto release in 1 sec
-            if( (p_dio_mmap->pwii_output&PWII_POWER_STANDBY)==0 ) {       // not in standby mode
-                mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&PWII_LED_C1)!=0) );  // bit 0: c1 led
-            }
-            else {
-                mcu_response( ibuf, 1, 0 );  // bit 0: c1 led
-            }
-            break;
-
-        case PWII_INPUT_C2 :                         // Back Seat Camera (C2) Starts/Stops Recording
-            p_dio_mmap->pwii_buttons = PWII_BT_C2 ;      // bit 9: back camera
-            pwii_keyreltime = 1000 ;         			// auto release in 1 sec
-            if( (p_dio_mmap->pwii_output&PWII_POWER_STANDBY)==0 ) {       // not in standby mode
-                mcu_response( ibuf, 1, ((p_dio_mmap->pwii_output&PWII_LED_C2)!=0) );  // bit 1: c2 led
-            }
-            else {
-                mcu_response( ibuf, 1, 0 );  // bit 0: c1 led
-            }
-            break;
-
-        case PWII_INPUT_TM :                                 // TM Button
-            if( ibuf[5] ) {
-                p_dio_mmap->pwii_buttons = PWII_BT_TM ;     // bit 10: tm button
-            }
-            else {
-                pwii_keyreltime = 500 ;         	// extend TM key release 0.5 second. (allow dvrsvr to response)
-            }
-            mcu_response( ibuf );
-
-            break;
-
-        case PWII_INPUT_LP :                                 // LP button
-            mcu_response( ibuf );
-            if( ibuf[5] ) {
-                p_dio_mmap->pwii_buttons = PWII_BT_LP ;     // bit 11: LP button
-            }
-            else {
-                pwii_keyreltime = 500 ;         	// extend LP key release 0.5 second.
-            }
-            break;
-
-        case PWII_INPUT_BO :                                 // BIT 12:  blackout, 1: pressed, 0: released, auto release
-            if( ibuf[5] ) {
-                p_dio_mmap->pwii_buttons = PWII_BT_BO ;    // bit 12: blackout
-            }
-            else {
-                p_dio_mmap->pwii_buttons = 0 ;
-            }
-            mcu_response( ibuf );
-            break;
-
-        case PWII_INPUT_MEDIA :                              // Video play Control
-            p_dio_mmap->pwii_buttons = (unsigned char) (~ibuf[5]) ;
-            mcu_response( ibuf );
-            break;
-
-        case PWII_INPUT_BOOTUP :                         // CDC ask for boot up ready
-            mcu_response( ibuf, 1, 1  );                 // possitive response
-
-            mcu_pwii_bootupready() ;					//  re-send boot up event. (Have to do this, because possitive response do not work on newer CDC
-
-            pwii_outs = mcu_pwii_ouputstatus();
-
-            dvr_log("CDC Plug-in Event!");
-
-            break;
-
-        case PWII_INPUT_SPEAKERSTATUS :
-            mcu_response( ibuf );                 		// possitive response
-            if( ibuf[5] ) {
-                p_dio_mmap->pwii_buttons = PWII_BT_SPKON ;
-
-                dvr_log("Speaker On Event!");
-
-            }
-            else {
-                p_dio_mmap->pwii_buttons = PWII_BT_SPKMUTE ;
-
-                dvr_log("Speaker Mute Event!" );
-
-            }
-            pwii_keyreltime = 3000 ;         			// auto release in 3 sec
-            mcu_response( ibuf );                 		// possitive response
-
-            break;
-
-        default :
-            netdbg_print("Unknown message from PWII MCU.\n");
-            break;
-
-        }
-    }
-
-#endif    // PWII_APP
-
-#ifdef SUPPORT_YAGF
-    else if( ibuf[4]=='\x02' && ibuf[2]==ID_YAGF )       // input from YAGF
-    {
-        yagf_input( ibuf );
-    }
-#endif
-
-    return 0 ;
 }
 
 // execute setnetwork script to recover network interface.
@@ -660,17 +230,17 @@ static int buzzer_offtime ;
 
 void buzzer(int times, int ontime, int offtime)
 {
-    if( times>=buzzer_count ) {
-        buzzer_timer = getruntime();
-        buzzer_count = times ;
-        buzzer_on = 0 ;
-        buzzer_ontime = ontime ;
-        buzzer_offtime = offtime ;
-    }
+    dio_lock();
+    buzzer_timer = getruntime();
+    buzzer_count = times ;
+    buzzer_on = 0 ;
+    buzzer_ontime = ontime ;
+    buzzer_offtime = offtime ;
+    dio_unlock();
 }
 
 // run buzzer, runtime: runtime in ms
-void buzzer_run( int runtime )
+static void buzzer_run( int runtime )
 {
     dio_lock();
     if( buzzer_count>0 && (runtime - buzzer_timer)>=0 ) {
@@ -1503,6 +1073,7 @@ int main(int argc, char * argv[])
                     else {
                         p_dio_mmap->devicepower=DEVICE_POWER_STANDBY ;   // turn off all devices power as standby mode
                         if( disk_mounted ) {
+                            dvr_log("Unmount disks on standby mode.") ;
                             umountdisks();
                         }
                     }
@@ -1713,6 +1284,7 @@ int main(int argc, char * argv[])
                         hdkeybounce++ ;
                         sync();
                         // umount disks
+                        dvr_log( "HDD key off, unmount disks.");
                         system(APP_DIR"/umountdisks") ;
                     }
                 }

@@ -89,7 +89,7 @@ EAGLESRS=eaglesvr.cpp \
 HEADERS=dvr.h \
 		dvrprotocol.h \
 		genclass.h \
-		cfg.h \
+		config.h \
 		fbwindow.h \
 		draw.h \
 		crypt.h \

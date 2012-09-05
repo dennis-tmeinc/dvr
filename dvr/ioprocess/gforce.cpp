@@ -63,7 +63,7 @@ Vihecle direction :
 #include "../cfg.h"
 
 #include "../dvrsvr/genclass.h"
-#include "../dvrsvr/cfg.h"
+#include "../dvrsvr/config.h"
 #include "netdbg.h"
 #include "mcu.h"
 #include "diomap.h"
@@ -441,7 +441,7 @@ int gforce_getcrashdata()
             nbytes = mcu_read((char *)gforce_crashdata, bufsize, 1000000, 1000000 );
             netdbg_print("gforce upload, read: %d bytes\n", nbytes );
 
-            //            if (nbytes >= uploadSize + UPLOAD_ACK_SIZE + 8) {
+            //  if (nbytes >= uploadSize + UPLOAD_ACK_SIZE + 8) {
             if (nbytes >= uploadSize) {
                 if (checksum(gforce_crashdata, nbytes)==0) {
                     success=1 ;

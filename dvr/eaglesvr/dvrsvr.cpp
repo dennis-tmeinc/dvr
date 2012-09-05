@@ -60,7 +60,7 @@ dvrsvr::~dvrsvr()
         delete [] m_recvbuf ;
     }
     if( m_fontcache!=NULL ) {
-        mem_free( m_fontcache );
+        free( m_fontcache );
     }
     unlock();
 
@@ -288,7 +288,54 @@ int dvrsvr::onframe(cap_frame * pframe)
         return 0;
     }
     if( m_connchannel == pframe->channel ) {
-        if (m_conntype == CONN_LIVESTREAM ) {
+        if (m_conntype == CONN_LIVESTREAM2 ) {
+            if ( pframe->frametype == FRAMETYPE_KEYVIDEO ) {
+                m_fifodrop = 0 ;
+            }
+            if( m_fifodrop == 0 ) {
+                if( net_sendok(m_sockfd,0) ) {
+                    struct dvr_ans ans ;
+                    if( m_headersent == 0 ) {
+                        // postponed header. for eagle368 header available on this point
+                        int hlen = cap_channel[m_connchannel]->getheaderlen();
+                        if( hlen>0 ) {
+                            // file header as first data frame
+                            ans.anscode = ANSSTREAMDATA;
+                            ans.anssize = hlen ;
+                            ans.data = FRAMETYPE_264FILEHEADER ;
+                            Send( &ans, sizeof(ans));
+                            Send( cap_channel[m_connchannel]->getheader(), hlen );
+                        }
+                        m_headersent = 1 ;
+                    }
+                    int * pshm = (int *)mem_shm_alloc( pframe->framesize ) ;
+                    if( pshm ) {
+                        int frameinfo[2] ;
+                        mem_cpy32( pshm, pframe->framedata, pframe->framesize  );
+                        frameinfo[0] = mem_shm_index( pshm ) ;
+                        frameinfo[1] = pframe->framesize ;
+                        ans.anscode = ANSSTREAMDATASHM ;
+                        ans.anssize = sizeof(frameinfo) ;
+                        ans.data = pframe->frametype ;
+                        Send(&ans, sizeof(ans));
+                        Send(frameinfo, ans.anssize );
+                    }
+                    else {     // no shared memory available
+                        // send through socket
+                        ans.anscode = ANSSTREAMDATA ;
+                        ans.anssize = pframe->framesize ;
+                        ans.data = pframe->frametype ;
+                        Send(&ans, sizeof(ans));
+                        Send(pframe->framedata, pframe->framesize);
+                    }
+                }
+                else {
+                    m_fifodrop = 1 ;
+                }
+            }
+            return 1;
+        }
+        else if (m_conntype == CONN_LIVESTREAM ) {
             if ( pframe->frametype == FRAMETYPE_KEYVIDEO ) {
                 m_fifodrop = 0 ;
             }
@@ -375,6 +422,12 @@ void dvrsvr::onrequest()
         break;
     case REQOPENLIVE:
         ReqOpenLive();
+        break;
+    case REQOPENLIVESHM:
+        ReqOpenLiveShm();
+        break;
+    case REQINITSHM:
+        ReqInitShm();
         break;
     case REQ2ADJTIME:
         Req2AdjTime();
@@ -496,6 +549,23 @@ void dvrsvr::onrequest()
         AnsError();
         break;
     }
+}
+
+// Init local shared memory
+int dvr_shm_init(int sockfd, char * shmfile )
+{
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQINITSHM ;
+    req.data = 0 ;
+    req.reqsize=strlen(shmfile)+1 ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd,shmfile,req.reqsize);
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        return ( ans.anscode==ANSOK ) ;
+    }
+    return FALSE ;
 }
 
 
@@ -711,6 +781,42 @@ void dvrsvr::ReqOpenLive()
     }
     AnsError();
 }
+
+// Open live stream over shared memory
+//  m_req.data is stream channel
+void dvrsvr::ReqOpenLiveShm()
+{
+    if( m_req.data>=0 && m_req.data<cap_channels ) {
+        struct dvr_ans ans ;
+        ans.anscode = ANSSTREAMOPEN;
+        ans.anssize = 0;
+        ans.data = 0 ;
+        Send( &ans, sizeof(ans) );
+        m_conntype = CONN_LIVESTREAM2;
+        m_connchannel = m_req.data;
+        cap_channel[m_connchannel]->start();
+        m_headersent = 0 ;
+        dvr_log( "Open Live channel (shm) %d", m_connchannel );
+        return ;
+    }
+    AnsError();
+}
+
+// Request to open shared memory
+void dvrsvr::ReqInitShm()
+{
+    if( m_recvlen>0 && m_recvbuf ) {
+        struct dvr_ans ans ;
+        ans.anscode = ANSOK;
+        ans.anssize = 0;
+        ans.data = 0 ;
+        Send( &ans, sizeof(ans) );
+        mem_shm_share( (const char *) m_recvbuf ) ;
+        return ;
+    }
+    AnsError();
+}
+
 
 void dvrsvr::Req2AdjTime()
 {
@@ -1156,18 +1262,21 @@ void dvrsvr::ReqDrawSetFont()
     if( m_req.reqsize==0 && m_req.data==0 ) {	// remove font
         AnsOk();
         if(m_fontcache ) {
-            mem_free( m_fontcache );
+            free( m_fontcache );
             m_fontcache=NULL ;
         }
     }
     else if( m_req.reqsize>(int)sizeof(struct BITMAP) ) { 	// BITMAP
         AnsOk();
         if(m_fontcache ) {
-            mem_free( m_fontcache );
+            free( m_fontcache );
             m_fontcache=NULL ;
         }
-        m_fontcache = (struct BITMAP *)mem_addref(m_recvbuf, m_req.reqsize);
-        m_fontcache->bits = ((UINT8 *)m_fontcache)+sizeof(BITMAP) ;		// replace bits
+        m_fontcache = (struct BITMAP *)malloc(m_req.reqsize);
+        if(m_fontcache) {
+            memcpy(m_fontcache,m_recvbuf,m_req.reqsize) ;
+            m_fontcache->bits = ((UINT8 *)m_fontcache)+sizeof(BITMAP) ;		// replace bits
+        }
     }
     else {
         AnsError();
@@ -1199,6 +1308,7 @@ void dvrsvr::ReqDrawTextEx()
         AnsError();
     }
 }
+
 
 // EAGLE368 Specific
 void dvrsvr::ReqStartCapture()

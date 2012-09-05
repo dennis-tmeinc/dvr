@@ -23,7 +23,7 @@
 // we need to excess environment
 extern char **environ ;
 
-static char * mime_type[][2] = 
+static char * mime_type[][2] =
 {
     {"html", "text/html; charset=UTF-8"},
     {"htm", "text/html; charset=UTF-8"},
@@ -193,7 +193,7 @@ char * getquery( const char * qname )
             }
         }
     }
-    
+
     return NULL ;
 }
 
@@ -204,7 +204,7 @@ char * getcookie(char * key)
     char * needle ;
     int  l = strlen(key);
     int i;
-    
+
     cookie=getenv("HTTP_COOKIE");
     while( cookie ) {
         needle = strstr(cookie, key) ;
@@ -287,7 +287,7 @@ void http_header( int status, char * title, char * mime_type, int length)
         // use default title
         title=http_msg(status);
     }
-    
+
     printf( "%s %d %s\r\n", PROTOCOL, status, title );
     unsetenv("HEADER_Server");                  //  Not allowed for CGI to change server
     unsetenv("HEADER_Date");                    //  Not allowed for CGI to change date
@@ -321,7 +321,7 @@ void http_header( int status, char * title, char * mime_type, int length)
     }
 
     setenv("HEADER_Cache-Control", "no-cache", 0);  // don't overwrite it
-    
+
     for(i=0; i<200; ) {
         if( environ[i]==NULL || environ[i][0]==0 ) {
             break;
@@ -380,7 +380,7 @@ int http_nocache()
 {
     http_setheader( "Cache-Control", "no-cache" );
     return 0 ;
-}    
+}
 
 // return true if document is fresh
 int http_checkcache()
@@ -404,7 +404,7 @@ int http_checkcache()
     if( http_modtime==(time_t)0 || http_etag==0 ) {
         return http_nocache();
     }
-    
+
     sprintf( tbuf, "max-age=%d",  http_cachemaxage );
     http_setheader( "Cache-Control", tbuf );
 
@@ -429,7 +429,7 @@ int http_checkcache()
     return 0 ;
 }
 
-// remove whilespace on head and tail of input string 
+// remove whilespace on head and tail of input string
 int copycleanstring( char * instr, char * outstr )
 {
     int len = 0 ;
@@ -476,7 +476,7 @@ int cgi_run()
     // make output file name for cgi
     sprintf( cgibuf, "%s/cgiout%d", document_root, getpid() );
     setenv("POST_FILE_TMPCGIOUT", cgibuf, 1 );
-    
+
     fflush(stdout);
     childpid=fork();
     if( childpid==0 ) {
@@ -497,7 +497,7 @@ int cgi_run()
         int   len ;
 
         waitpid(childpid, &chstatus, 0);      // wait cgi to finish
-        
+
         FILE * fp = fopen( cgibuf, "r" );
         if( fp==NULL ) {
             http_error( 403, NULL );
@@ -512,7 +512,7 @@ int cgi_run()
         fseek( fp, 0, SEEK_SET );
 
         http_nocache();             // default no cache for cgi result
-        
+
         // parse cgi output header
         char * p ;
         while ( fgets( cgibuf, sizeof(cgibuf), fp )  )
@@ -669,7 +669,7 @@ void smallssi_include_file( char * ifilename )
             fputs(token, stdout);		// pass to client
         }
     }
-    
+
     fclose( fp );
 }
 
@@ -693,7 +693,7 @@ int checkserialno( char * serialno )
     return 0;
 }
 
-// update valid serialno time 
+// update valid serialno time
 int updateserialno(char * serialno)
 {
     time_t t ;
@@ -752,7 +752,7 @@ int savepostfile()
     if( content_length <= 2*lbdy ) {
         return res;
     }
-    
+
     // get first boundary
     if( fgets( linebuf, sizeof(linebuf), stdin)== NULL )
         return res;
@@ -761,13 +761,13 @@ int savepostfile()
         strncmp( &linebuf[2], boundary, lbdy )!=0 )
         return res;
 
-    
+
     FILE * ulprogfile = fopen("uploading", "w");
     int  ulbytes = 0 ;
 
     fprintf(ulprogfile,"0" );
     fflush(ulprogfile);
-    
+
     while(1) {
         char part_name[128] ;
         char part_filename[256] ;
@@ -803,10 +803,10 @@ int savepostfile()
                 }
             }
         }
-        
+
         if( strlen(part_name)<=0 )
             break ;
-        
+
         sprintf(postfilename, "%s/post_file_%d_%s", document_root, (int)getpid(), part_name );
         postfile = fopen(postfilename, "w");
         if( postfile ) {
@@ -831,7 +831,7 @@ int savepostfile()
                     fprintf(ulprogfile,"%d\r\n", ulbytes*100/content_length );
                     fflush(ulprogfile);
                 }
-                
+
                 if( d==EOF ) {
                     if( i>0 ) {
                         fwrite( linebuf, 1, i, postfile);
@@ -936,7 +936,7 @@ void smallssi_run()
 
     char * ssiname = getenv("REQUEST_URI");
     ssiname++ ;
-    
+
     fp = fopen( ssiname, "r" );
     if ( fp == NULL ) {
         http_error( 403, NULL );
@@ -957,14 +957,14 @@ void smallssi_run()
     // set ssi output file
     sprintf( ssioutfile, "%s/ssiout%d", document_root, getpid() );
     setenv("POST_FILE_TMPSSI", ssioutfile, 1 );
-    
+
     int hssifile = open(ssioutfile, O_RDWR|O_CREAT, S_IRWXU );
     dup2( hssifile, 1 ) ;
     dup2( hssifile, 2 ) ;
     close( hssifile );
 
     smallssi_include_file( ssiname );
-    
+
     // restore stdout
     fflush( stdout );
     dup2( oldstdout, 1 );
@@ -974,7 +974,7 @@ void smallssi_run()
 
     // add IE document mode support
     http_setheader("X-UA-Compatible", "IE=EmulateIE8" );
-    
+
     if( http_checkcache() ) {       // check if cache fresh?
         // use cahce
         http_header( 304, NULL, NULL, 0 );        // let browser to use cache
@@ -992,7 +992,7 @@ void smallssi_run()
     }
 }
 
-// set http headers as environment variable. 
+// set http headers as environment variable.
 void sethttpenv(char * headerline)
 {
     char envname[105] ;
@@ -1021,7 +1021,7 @@ void sethttpenv(char * headerline)
     }
 }
 
-// un-set http headers as environment variable. 
+// un-set http headers as environment variable.
 void unsethttpenv()
 {
     int i ;
@@ -1031,7 +1031,7 @@ void unsethttpenv()
 
     // un-set regular HTTP env
     unsetenv( "QUERY_STRING" );
-    
+
     for(i=0; i<200; ) {
         if( environ[i]==NULL || environ[i][0]==0 ) {
             break;
@@ -1072,7 +1072,7 @@ int savepost()
     char * post_string;
     char * p ;
     int  r ;
-    
+
     // check input
     p = getenv("HTTP_CONTENT_LENGTH") ;
     if( p ) {
@@ -1081,7 +1081,7 @@ int savepost()
     if( content_length<=0 ) {       // no contents
         return 1 ;                  // return success.
     }
-    
+
     content_type = getenv("HTTP_CONTENT_TYPE");
     request_method = getenv("REQUEST_METHOD") ;
     if( strcmp( request_method, "POST" )==0 &&      // support "POST" contents only
@@ -1203,10 +1203,10 @@ void http_document()
 
         fclose( fp );
     }
-    
+
 }
 
-// process_input (header part) of http protocol 
+// process_input (header part) of http protocol
 // return 1: success, 0: failed
 int http_input()
 {
@@ -1220,7 +1220,7 @@ int http_input()
     {
         return 0;
     }
-    
+
     method = cleanstring(linebuf);
     uri = strchr(method, ' ');
     if( uri==NULL ) {
@@ -1239,7 +1239,7 @@ int http_input()
     else {
         return 0 ;
     }
-    
+
     // check uri
     if( uri[0] != '/' ||
         uri[1] == '/' ||
@@ -1247,7 +1247,7 @@ int http_input()
     {
         return 0 ;
     }
-    
+
     protocol=strchr(uri, ' ');
     if( protocol==NULL ) {
         return 0 ;
@@ -1321,7 +1321,7 @@ void http()
     http_document() ;
 
 http_done:
-    
+
     fflush(stdout);
 
     // remove all HTTP_* environment and POST files
@@ -1352,12 +1352,12 @@ void http_listen()
     int sockfd;
     int asockfd ;
     int val;
-    
+
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_flags = AI_PASSIVE;
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM ;
-    
+
     res = NULL;
     if (getaddrinfo(NULL, "80", &hints, &res) != 0) {
         printf("Error:getaddrinfo!");
@@ -1368,7 +1368,7 @@ void http_listen()
         exit(1);
     }
     ressave = res;
-    
+
     /*
      Try open socket with each address getaddrinfo returned,
      until getting a valid listening socket.
@@ -1377,7 +1377,7 @@ void http_listen()
     while (res) {
         sockfd = socket(res->ai_family,
                         res->ai_socktype, res->ai_protocol);
-        
+
         if (sockfd != -1) {
             val = 1;
             setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &val,
@@ -1390,9 +1390,9 @@ void http_listen()
         }
         res = res->ai_next;
     }
-    
+
     freeaddrinfo(ressave);
-    
+
     if (sockfd == -1) {
         printf("Error:listen!");
         exit(1);
@@ -1415,8 +1415,6 @@ void http_listen()
 
     return ;
 }
-
-
 
 int main(int argc, char * argv[])
 {

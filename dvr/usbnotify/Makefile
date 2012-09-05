@@ -7,7 +7,7 @@ include $(PROJDIR)/arm_tool
 
 SOURCES=usbnotify.cpp
 
-EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h
+EXTHEADERS=../dvrsvr/config.h ../dvrsvr/genclass.h
 EXTSOURCES=../httpd/net.cpp
 HEADERS=
 

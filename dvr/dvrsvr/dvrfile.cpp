@@ -27,6 +27,13 @@ unsigned char g_filekey[256] ;
 const char g_264ext[]=F264EXT;
 #define H264FILEFLAG  F264FILEFLAG
 #define FRAMESYNC     F264FRAMESYNC
+
+// convert timestamp value to milliseconds
+inline int tstamp2ms(int tstamp )
+{
+    return tstamp*15+tstamp*5/8;	// 	tstamp * 1000 / 64;  ( to preview overflow)
+}
+
 #endif
 
 #ifdef EAGLE34
@@ -40,12 +47,6 @@ const char g_264ext[]=F266EXT ;
 #define H264FILEFLAG  F266FILEFLAG
 #define FRAMESYNC     F266FRAMESYNC
 #endif
-
-// convert timestamp value to milliseconds
-inline int tstamp2ms(int tstamp )
-{
-    return tstamp*15+tstamp*5/8;	// 	tstamp * 1000 / 64;  ( to preview overflow)
-}
 
 dvrfile::dvrfile()
 {
@@ -201,7 +202,7 @@ int dvrfile::write(void *buffer, size_t buffersize)
         // auto use buffer
         if( m_filebuffer == NULL ) {
             m_filebuffersize = m_filebuffersuggestsize ;
-            m_filebuffer = (char *)mem_alloc(m_filebuffersize);    // allocate a bit more
+            m_filebuffer = (char *)malloc(m_filebuffersize);    // allocate a bit more
             m_filebufferpos = 0 ;
         }
         if( m_filebuffer ) {
@@ -277,7 +278,7 @@ void dvrfile::flushbuffer()
             // write to file
             fwrite(m_filebuffer, 1, m_filebufferpos, m_handle);
         }
-        mem_free(m_filebuffer);
+        free(m_filebuffer);
         m_filebuffer = NULL ;
         m_filebufferpos = 0;
     }
@@ -1175,99 +1176,6 @@ int dvrfile::seek( dvrtime * seekto )
 }
 
 // repair a .264 file, return 1 for success, 0 for failed
-/*
-int dvrfile::repair1()
-{
-    struct hd_frame frame;
-    int filepos, filelength;
-    int framecount;
-    DWORD starttimestamp=0 ;
-    DWORD endtimestamp=0 ;
-    char newfilename[512] ;
-    char * rn ;
-    char * tail ;
-    dvr_key_t keyt ;
-    int frsize ;
-
-    if( m_filesize < (file_repaircut+512000) ) {        // file too small, not worth to repair
-        return 0 ;
-    }
-
-    // pre-truncate bad files, to repair file system error ?
-    m_filesize-=file_repaircut ;
-
-    truncate( m_filesize );
-
-    int ms = 0;
-
-    if( m_keyarray.size()>0 ) {
-        ms+=m_keyarray[0].ktime ;
-        m_keyarray.setsize(0);
-    }
-
-    framecount = 0;
-    filepos=m_filestart;
-    starttimestamp = 0 ;                                        // initial start time stamp
-    seek(filepos, SEEK_SET);
-    while ((frsize=framesize()) > 0) {
-
-        // if rec_busy, delay for 10 s
-        int busywait ;
-        for( busywait=0; busywait<100; busywait++) {
-            if( rec_busy || disk_busy || g_cpu_usage>0.5 ) {
-                usleep(100000);
-            }
-            else {
-                break ;
-            }
-        }
-
-        if( filepos+frsize > m_filesize ) {
-            break ;
-        }
-        read(&frame, sizeof(frame));                            // read frame header
-        if( starttimestamp==0 ) {
-            starttimestamp = frame.timestamp ;
-        }
-        endtimestamp = frame.timestamp;
-        seek(filepos+frsize, SEEK_SET );	        // seek to next frame
-        // key frame ?
-        if( HD264_FRAMETYPE(frame) == 3 )
-        {
-            keyt.koffset = filepos;
-            keyt.ktime = tstamp2ms (endtimestamp - m_filestamp) + ms ;
-            m_keyarray.add(keyt);
-        }
-        framecount++;
-        filepos = tell();
-    }
-
-    if (framecount < 5 || filepos < 0x10000
-        || endtimestamp < starttimestamp+100)
-    {
-        return 0 ;                                          // file too small, failed
-    }
-
-    m_initialsize = filepos + 1 ;       // set a fake init size, so close() will do file truncate
-    m_openmode = 1 ;                    // set open mode to write, so close() would save key file
-    close();
-
-    // rename file to include new length
-    filelength = (endtimestamp - starttimestamp) / 64;          // repaired file length
-
-    strcpy( newfilename, m_filename);
-    rn = strstr(newfilename, "_0_");
-    if( rn ) {
-        tail = strstr(m_filename, "_0_")+3 ;
-        sprintf( rn, "_%d_%s", filelength, tail );
-        if( rename( m_filename, newfilename )>=0 ) {         // success
-            return 1;
-        }
-    }
-    return 0;
-}
-*/
-
 int dvrfile::repair()
 {
     int framecount;

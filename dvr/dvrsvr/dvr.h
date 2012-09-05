@@ -35,7 +35,7 @@
 #include "dvrprotocol.h"
 #include "crypt.h"
 #include "genclass.h"
-#include "cfg.h"
+#include "config.h"
 
 #ifndef TRUE
 #define TRUE (1)
@@ -1270,5 +1270,12 @@ int dvr_jpeg_capture(int sockfd, int channel, int quality, int pic);
 int dvr_startcapture(int sockfd );
 // Stop local capture ( for eagle368 )
 int dvr_stopcapture(int sockfd );
+
+// Init local shared memory
+int dvr_shm_init(int sockfd, char * shmfile );
+// close local shared memory
+int dvr_shm_close(int sockfd);
+// open live stream from local svr, over shared memory
+int dvr_openliveshm(int sockfd, int channel);
 
 #endif							// __dvr_h__

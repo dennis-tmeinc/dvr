@@ -8,7 +8,7 @@ include $(PROJDIR)/arm_tool
 #SOURCES=eagle_setup.cpp md5.cpp
 SOURCES=eagle_setup.cpp ../../dvrsvr/md5.cpp
 
-EXTHEADERS=../../dvrsvr/cfg.h ../../dvrsvr/genclass.h
+EXTHEADERS=../../dvrsvr/config.h ../../dvrsvr/genclass.h
 EXTSOURCES=../../dvrsvr/config.cpp ../../dvrsvr/string.cpp ../../dvrsvr/crypt.cpp
 
 HEADERS=

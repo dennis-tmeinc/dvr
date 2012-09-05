@@ -9,7 +9,7 @@ SOURCES=dvrtime.cpp
 
 HEADERS=
 
-EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h ../ioprocess/diomap.h
+EXTHEADERS=../ioprocess/diomap.h ../dvrsvr/config.h ../dvrsvr/genclass.h
 EXTSOURCES=../ioprocess/diomap.cpp ../dvrsvr/config.cpp ../dvrsvr/string.cpp
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))

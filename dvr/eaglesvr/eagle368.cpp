@@ -164,7 +164,7 @@ void eagle368_capture::streamcallback(
     if( capframe.frametype != FRAMETYPE_UNKNOWN ) {
         capframe.channel = m_channel ;
         capframe.framesize = size ;
-        capframe.framedata = (char *) buf ;
+        capframe.framedata = (char *)buf;
         onframe(&capframe);
     }
 }

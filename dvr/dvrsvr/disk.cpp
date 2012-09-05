@@ -26,7 +26,7 @@ static int disk_clean_run = 0 ;           // 0: quit cleaning thread, 1: keep ru
 struct disk_info {
     dev_t   dev ;                        // disk device id
     int     mark ;
-	int		readonly ;
+    int		readonly ;
     string  basedir ;
 //    int     tlen ;                       // total video len
 //    int     llen ;                       // total lock file len
@@ -38,6 +38,7 @@ static string disk_play;                // playback disk base dir. ("/var/dvr")
 static string disk_arch;                // archiving disk base dir, ("/var/dvr/arch")
 static string disk_curdiskfile;         // record current disk
 static string disk_archdiskfile ;       // current archieving disk
+static int    disk_arch_mincpuusage ;   // minimum cpu usage to do archiving
 
 char *basefilename(const char *fullpath)
 {
@@ -58,7 +59,7 @@ int f264time(const char *filename, struct dvrtime *dvrt)
 {
     int n ;
     time_dvrtime_init(dvrt,2000);
-    n=sscanf( F264TIME( filename ), "%04d%02d%02d%02d%02d%02d", 
+    n=sscanf( F264TIME( filename ), "%04d%02d%02d%02d%02d%02d",
              &(dvrt->year),
              &(dvrt->month),
              &(dvrt->day),
@@ -88,7 +89,7 @@ int f264length(const char *filename)
     if( sscanf( basename+19, "_%d_%c", &length, &lock )==2 ) {
         return length ;
     }
-    else 
+    else
         return 0;
 }
 
@@ -134,24 +135,24 @@ int f264channel(const char *filename)
 int disk_freespace(char *path)
 {
     struct statfs stfs;
-    
+
     if (statfs(path, &stfs) == 0) {
         return stfs.f_bavail / ((1024 * 1024) / stfs.f_bsize);
     }
-	return 0;
+    return 0;
 }
 
-// return true for disk space check pass, false for failed 
+// return true for disk space check pass, false for failed
 int disk_freespace_check(char *path)
 {
     struct statfs stfs;
-    
+
     if (statfs(path, &stfs) == 0) {
-		return 
-			(int)(stfs.f_bavail * 100 / stfs.f_blocks) >= disk_minfreespace_percentage  && 
-			(int)(stfs.f_bavail / ((1024 * 1024) / stfs.f_bsize)) >= disk_minfreespace ;
+        return
+            (int)(stfs.f_bavail * 100 / stfs.f_blocks) >= disk_minfreespace_percentage  &&
+            (int)(stfs.f_bavail / ((1024 * 1024) / stfs.f_bsize)) >= disk_minfreespace ;
     }
-	return 0;
+    return 0;
 }
 
 // remove all files and directory
@@ -214,7 +215,7 @@ void disk_rmemptytree(const char *path)
 
 // remove .264 files and related .k, .idx
 // return 0 for success
-static int disk_removefile( const char * file264 ) 
+static int disk_removefile( const char * file264 )
 {
     string f264 ;
     char * extension ;
@@ -240,29 +241,29 @@ static int disk_removefile( const char * file264 )
 static int repairfile(const char *filename)
 {
     dvrfile vfile;
-    
+
     if (vfile.open(filename, "r+b") == 0) {	// can't open it
         disk_removefile( filename );		// try delete it.
         return 0;
     }
-    
+
     if( vfile.repair() ) {					// success?
         vfile.close();
-        dvr_log("File repaired. %s", basename(filename));		
+        dvr_log("File repaired. %s", basename(filename));
         return 1;
     }
     else {
         // can't repair, delete it
         vfile.close();
         if( disk_removefile( filename )==0 ) {
-			dvr_log("Corrupt file deleted. %s", basename(filename));
-		}
+            dvr_log("Corrupt file deleted. %s", basename(filename));
+        }
         return 2;
     }
 }
 
 // try to repair partial lock files
-int  repairepartiallock(const char * filename) 
+int  repairepartiallock(const char * filename)
 {
     dvrfile vfile ;
     int length, locklength ;
@@ -501,7 +502,7 @@ int disk_unlockfile( dvrtime * begin, dvrtime * end )
     return 1;
 }
 
-// find oldest .264 files 
+// find oldest .264 files
 // parameter:
 //      dir: directory to start search,
 //      day: only to search this day
@@ -541,7 +542,7 @@ static int disk_oldestfile_hlp( char *dir, int day, int & timeofday, string & fi
             }
         }
     }
-    
+
     return res ;
 }
 
@@ -596,7 +597,7 @@ int disk_deloldfile( int lock )
     daylist.sort();
 
     array <f264name> flist ;
-    
+
     struct dvrtime dvrt ;
     time_now(&dvrt);
     thismonth = dvrt.year*12+dvrt.month ;
@@ -673,9 +674,9 @@ int disk_renew( char * filename, int add )
         disk_llen=disk_tlen ;
     }
 
-/*    
+/*
     disk_lock();
-    
+
     for( disk=0; disk<disk_disklist.size(); disk++ ) {
         base = disk_disklist[disk].basedir ;
         l=disk_disklist[disk].basedir.length() ;
@@ -699,12 +700,12 @@ int disk_renew( char * filename, int add )
     }
 
     disk_unlock();
-*/     
+*/
     return 0;
 }
 
 // test if this directory writable
-int disk_testwritable( char * dir ) 
+int disk_testwritable( char * dir )
 {
     char testfilename[512] ;
     int t1 = 12345 ;
@@ -716,26 +717,26 @@ int disk_testwritable( char * dir )
     if( ftest!=NULL ) {
         fwrite( &t1, 1, sizeof(t1), ftest );
         if( fclose( ftest )!= 0 ) {
-			return 0 ;
-		}
+            return 0 ;
+        }
     }
-	else {
-		return 0 ;
-	}
+    else {
+        return 0 ;
+    }
 
     ftest = fopen( testfilename, "r" );
     if( ftest!=NULL ) {
         fread( &t2, 1, sizeof(t2), ftest );
-		if( fclose( ftest )!= 0 ) {
-			return 0 ;
-		}
+        if( fclose( ftest )!= 0 ) {
+            return 0 ;
+        }
     }
-	else {
-		return 0 ;
-	}
-	if( unlink( testfilename )!=0 ) {
-		return 0 ;
-	}
+    else {
+        return 0 ;
+    }
+    if( unlink( testfilename )!=0 ) {
+        return 0 ;
+    }
     return t1==t2 ;
 }
 
@@ -769,7 +770,7 @@ int disk_findrecdisk()
         writetest=0 ;
 
         // ok, none of the disks has space
-        
+
         // first, let see what kind of file to delete, _L_ or _N_
         if( disk_tlen<=0 && disk_llen<=0 ){        // no video files at all !!!
             dvr_log("No video files found!");
@@ -791,7 +792,7 @@ int disk_findrecdisk()
     return -1;
 }
 
-// 
+//
 void disk_renewdisk(char * dir)
 {
     dir_find dfind(dir);
@@ -815,7 +816,7 @@ void disk_renewdisk(char * dir)
 int disk_scandisk( int diskindex )
 {
     char * basedir = disk_disklist[diskindex].basedir;
-    
+
     if( !disk_testwritable( basedir ) ) {
         return 0 ;              // no writable disk, return failed
     }
@@ -828,7 +829,7 @@ int disk_scandisk( int diskindex )
 //    disk_disklist[diskindex].tlen=0;
 //    disk_disklist[diskindex].llen=0;
     disk_renewdisk(basedir);
-    
+
     return 1 ;
 }
 */
@@ -840,7 +841,7 @@ int disk_scanalldisk()
     struct stat diskstat;
     char * diskname;
     int i;
-    
+
     if (stat(disk_base, &basestat) != 0) {
         dvr_log("Disk base error, not able to record!");
         return 0;
@@ -928,7 +929,7 @@ int disk_stat(int * recordtime, int * lockfiletime, int * remaintime)
         *remaintime = 0 ;
         return 0 ;
     }
-    
+
     if( freesp <= disk_minfreespace ) {
         *recordtime = disk_tlen ;
         *lockfiletime = disk_llen ;
@@ -988,7 +989,7 @@ int disk_archive_deloldfile(char * archdir)
         oldfilelist.remove(0);
         return 1 ;
     }
-    
+
     oldfilelist.empty();
 
     array <int> daylist ;
@@ -1055,7 +1056,7 @@ static int disk_archive_copyfile( char * srcfile, char * destfile, int * arc )
     res = 0 ;
     while( * arc > 0 ) {
         usleep(10000);
-        if( (!rec_busy) && (!disk_busy) && g_cpu_usage<0.5 ) {
+        if( (!rec_busy) && (!disk_busy) && g_cpu_usage < (float)disk_arch_mincpuusage/100.0 ) {
             filebuf=(char *)malloc(disk_archive_bufsize) ;
             if( filebuf ) {
                 r=fread( filebuf, 1, disk_archive_bufsize, fsrc );
@@ -1130,9 +1131,9 @@ static int disk_archive_arch( char * filename, char * srcdir, char * destdir )
     l1=strlen( destdir ) ;
     p = strstr( &arch_filename[l1], "_L_" ) ;
     if( p ) {
-        p[1]='N' ;  
+        p[1]='N' ;
         if( stat( arch_filename, &fst )==0 ) {
-            if( S_ISREG( fst.st_mode ) && fst.st_size == sfst.st_size ) {      
+            if( S_ISREG( fst.st_mode ) && fst.st_size == sfst.st_size ) {
                 // unlocked arch file already exist
                 if( disk_archive_unlock ) {
                     dvrfile::unlock( filename );
@@ -1142,7 +1143,7 @@ static int disk_archive_arch( char * filename, char * srcdir, char * destdir )
         }
         p[1] = 'L' ;
     }
-        
+
     // create dirs
     p = &arch_filename[l1] ;
     while( (p=strchr( p+1, '/' ))!=NULL ) {
@@ -1304,7 +1305,7 @@ int disk_archive_basedisk(string & archbase)
     if( disk_arch.length() <= 0 ) {
         return 0 ;
     }
-    
+
     if (stat(disk_arch, &basestat) != 0) {      // no archive root dir
         return 0;
     }
@@ -1318,7 +1319,7 @@ int disk_archive_basedisk(string & archbase)
                     if( disk_testwritable( diskname ) ) {
                         archbase = diskname ;
                         if( disk_archdiskfile.length()>0 ) {
-                            FILE * f = fopen(disk_archdiskfile, "w"); 
+                            FILE * f = fopen(disk_archdiskfile, "w");
                             if( f ) {
                                 fputs(diskname, f);
                                 fclose(f);
@@ -1425,20 +1426,20 @@ void disk_check()
             }
 
 #ifdef PWII_APP
-	    // To change hostname specified from media disk
-	    char * mediaidfile ;
-	    mediaidfile = new char [1024] ;
-	    sprintf( mediaidfile, "%s/pwid.conf", (char *)rec_basedir );
-	    config mediaidconfig( mediaidfile, 0 );		// don't merge defconf
-	    delete mediaidfile ;
-	    string mediaid ;
-	    mediaid = mediaidconfig.getvalue("system","id1");
-	    if( mediaid.length()>0 ) {
-		sprintf(g_id1, "%s", (char *)mediaid );
-		g_servername = mediaid ;
-		sethostname( (char *)g_servername, g_servername.length()+1);
-		dvr_log("Setup server name from media disk: %s", (char *)g_servername);
-	    }
+        // To change hostname specified from media disk
+        char * mediaidfile ;
+        mediaidfile = new char [1024] ;
+        sprintf( mediaidfile, "%s/pwid.conf", (char *)rec_basedir );
+        config mediaidconfig( mediaidfile, 0 );		// don't merge defconf
+        delete mediaidfile ;
+        string mediaid ;
+        mediaid = mediaidconfig.getvalue("system","id1");
+        if( mediaid.length()>0 ) {
+        sprintf(g_id1, "%s", (char *)mediaid );
+        g_servername = mediaid ;
+        sethostname( (char *)g_servername, g_servername.length()+1);
+        dvr_log("Setup server name from media disk: %s", (char *)g_servername);
+        }
 #endif
 
             dvr_log("Start recording on disk : %s.", basename(rec_basedir)) ;
@@ -1461,7 +1462,7 @@ void disk_logdir(char * logfilename)
     char logpath[512] ;
     struct stat logstat ;
     for( i=0; i<disk_disklist.size(); i++ ) {
-        sprintf( logpath, "%s/_%s_/%s", 
+        sprintf( logpath, "%s/_%s_/%s",
                 (char *)(disk_disklist[i].basedir),
                 (char *)g_servername,
                 logfilename );
@@ -1522,7 +1523,7 @@ void disk_init(config &dvrconfig)
     if (disk_minfreespace_percentage<1 || disk_minfreespace_percentage>50 ) {
         disk_minfreespace_percentage=5 ;
     }
-    
+
     disk_curdiskfile = dvrconfig.getvalue("system", "currentdisk");
     if( disk_curdiskfile.length()<2) {
         disk_curdiskfile=VAR_DIR"/dvrcurdisk" ;
@@ -1559,13 +1560,18 @@ void disk_init(config &dvrconfig)
 
     disk_archive_unlock = dvrconfig.getvalueint("system", "arch_unlock");
 
+    disk_arch_mincpuusage = dvrconfig.getvalueint("system", "arch_mincpuusage");
+    if( disk_arch_mincpuusage<50 ) {
+        disk_arch_mincpuusage = 50;
+    }
+
     // to start archiving task
     disk_archive_run = 0 ;
     disk_archive_start();
 
     disk_clean_run = 1 ;
     //    pthread_create(&disk_cleanthreadid, NULL, disk_cleanthread, NULL);
-    
+
     dvr_log("Disk initialized.");
 
 }
@@ -1576,7 +1582,7 @@ void disk_uninit()
     disk_clean_run = 0 ;
     // wait cleaning threading to finish ;
 //    pthread_join( disk_cleanthreadid, NULL );
-    
+
     // to stop archiving
     disk_archive_stop();
 
@@ -1588,7 +1594,7 @@ void disk_uninit()
     disk_disklist.empty();
     disk_busy=0 ;
 
-// make these file persistant    
+// make these file persistant
     // un-mark current recording disk
 //    unlink( disk_curdiskfile );
 

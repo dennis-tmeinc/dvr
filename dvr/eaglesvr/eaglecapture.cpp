@@ -379,7 +379,7 @@ void * thread_capjpeg(void *param)
     nice(10);
     usleep(10);
     unsigned int bufsize = 256*1024 ;
-    unsigned char * jpegbuf = (unsigned char *) mem_alloc(bufsize) ;
+    unsigned char * jpegbuf = new unsigned char [bufsize] ;
     if( jpegbuf ) {
         if( GetJPEGImage(pjpeg_parameter->handle, pjpeg_parameter->quality, pjpeg_parameter->pic, jpegbuf, &bufsize)==0 ) {
             // adjust/add jpeg tag
@@ -410,14 +410,10 @@ void * thread_capjpeg(void *param)
             capframe.channel = pjpeg_parameter->channel ;
             capframe.framesize = end-begin ;
             capframe.frametype = FRAMETYPE_JPEG ;
-            capframe.framedata = (char *) mem_alloc( capframe.framesize );
-            if( capframe.framedata ) {
-                mem_cpy32(capframe.framedata, &jpegbuf[begin], capframe.framesize ) ;
-                cap_channel[capframe.channel]->onframe(&capframe);
-                mem_free(capframe.framedata);
-            }
+            capframe.framedata = (char *) &jpegbuf[begin] ;
+            cap_channel[capframe.channel]->onframe(&capframe);
         }
-        mem_free(jpegbuf);
+        delete [] jpegbuf;
     }
     delete pjpeg_parameter ;
     return NULL ;

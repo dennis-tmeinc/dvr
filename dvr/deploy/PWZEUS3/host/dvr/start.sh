@@ -20,6 +20,8 @@ mkdir /var/dvr/disks
 
 # reboot utility (the original one on zeus3 doesn't work)
 ln -sf /davinci/dvr/reboot.sh /sbin/reboot
+ln -sf /davinci/dosfsck /sbin/fsck.vfat
+ln -sf /davinci/mkdosfs /sbin/mkdosfs
 
 # setup DVR configure file
 mkdir /etc/dvr
@@ -62,6 +64,8 @@ echo "Restart inetd."
 
 cd /davinci/dvr
 
+ln -sf /davinci/dvr/libeagle368dvr.so /usr/lib/libeagle368dvr.so
+
 #smartftp support
 #ln -sf /davinci/dvr/librt-0.9.28.so /lib/librt.so.0
 #ln -sf /davinci/dvr/libcurl.so.4 /lib/libcurl.so.4
@@ -92,5 +96,3 @@ tdevmount /davinci/dvr/tdevhotplug < /dev/null > /dev/null 2> /dev/null &
 sleep 20
 glog < /dev/null > /dev/null 2> /dev/null &
 
-# do endless loop
-while true ; do sleep 1000 ; done

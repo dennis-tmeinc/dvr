@@ -22,7 +22,7 @@
 #include "draw.h"
 
 // extra line below screen
-#define EXTRALINE	(576-480+64)		
+#define EXTRALINE	(576-480+64)
 
 static UINT32 draw_drawcolor ;
 static UINT32 draw_pixelmode ;		// 0: copy, 1: blend
@@ -98,8 +98,8 @@ static int  alphabuffersize ;
 //Y = 0.299R+0.587G+0.114B
 //U = 0.564(B - Y) = -0.169R-0.331G+0.500B
 //V = 0.713(R - Y) = 0.500R-0.419G-0.081B
-#define Y(R,G,B) ( (            77 * (R) + 150 * (G) +  29 * (B) ) >> 8) 
-#define U(R,G,B) ( ( 128*256 -  43 * (R) -  85 * (G) + 128 * (B) ) >> 8) 
+#define Y(R,G,B) ( (            77 * (R) + 150 * (G) +  29 * (B) ) >> 8)
+#define U(R,G,B) ( ( 128*256 -  43 * (R) -  85 * (G) + 128 * (B) ) >> 8)
 #define V(R,G,B) ( ( 128*256 + 128 * (R) - 107 * (G) -  21 * (B) ) >> 8)
 
 static UINT32 draw_buf[DRAW_H][DRAW_W] ;
@@ -111,7 +111,7 @@ static int draw_h ;
 
 // input
 //       videoformat: 0=default, 1:NTSC, 2:PAL
-// return 
+// return
 //        0 : failed
 //        1 : success
 int draw_init(int videoformat)
@@ -206,10 +206,10 @@ int draw_init(int videoformat)
 
     draw_w = colorbufferinfo.xres ;
     draw_h = colorbufferinfo.yres ;
-    
+
 #endif
 
-#ifdef EAGLE34    
+#ifdef EAGLE34
     //    memset( draw_buf, 0, sizeof( draw_buf ) );
 
     draw_w = DRAW_W ;
@@ -222,7 +222,7 @@ int draw_init(int videoformat)
     else {
         draw_h = DRAW_H ;
     }
-#endif    
+#endif
 
     draw_setcolor(0);
     draw_setpixelmode( DRAW_PIXELMODE_COPY );
@@ -236,7 +236,7 @@ int draw_init(int videoformat)
 struct draw_rect {
     int x1, y1, x2, y2, enable;
 } ;
-static struct draw_rect draw_area[SDK_MAX_MENU_DISP_NUM] ; 
+static struct draw_rect draw_area[SDK_MAX_MENU_DISP_NUM] ;
 
 // copy data from draw_buf to MenuBuf of Eagle34
 static void draw_menu_copybuffer(int x, int y, int w, int h)
@@ -433,7 +433,7 @@ static void draw_area_clear( int x, int y, int w, int h )
     }
 }
 
-#endif    
+#endif
 
 // draw finish, clean up
 void draw_finish()
@@ -448,7 +448,7 @@ void draw_finish()
         munmap( colorbuffer, colorbuffersize );
         colorbuffer = NULL ;
     }
-#endif    
+#endif
 }
 
 int draw_screenwidth()
@@ -490,13 +490,13 @@ int draw_setdrawarea( int x, int y, int w, int h )
 
 int draw_refresh()
 {
-#ifdef EAGLE34        
+#ifdef EAGLE34
     draw_menu_update();
-#endif  	
+#endif
     return 1 ;
 }
 
-void draw_setcolor( UINT32 color ) 
+void draw_setcolor( UINT32 color )
 {
     draw_drawcolor = color ;
 }
@@ -532,9 +532,9 @@ UINT32 draw_getpixel( int x, int y)
     if( alpha>=0xe0 ) alpha = 0xff ;
     return COLOR( COLOR16_R(color16), COLOR16_G(color16), COLOR16_B(color16), alpha ) ;
 #endif
-#ifdef EAGLE34    
+#ifdef EAGLE34
     return draw_buf[y][x] ;
-#endif    
+#endif
 }
 
 // copy pixel without boundary check
@@ -550,7 +550,7 @@ static void draw_putpixel_copy( int x, int y, UINT32 color )
 #endif
 #ifdef EAGLE34
     draw_buf[y][x]=color ;
-#endif    		
+#endif
 }
 
 // blend pixel without boundary check
@@ -560,7 +560,7 @@ static void draw_putpixel_blend( int x, int y, UINT32 color )
     UINT32  ocolor ;
     UINT32  o_r, o_g, o_b, o_a ;
     UINT32  n_r, n_g, n_b, n_a ;
-#ifdef EAGLE32        
+#if defined(EAGLE32        )
     ocolor = (UINT32)colorbuffer[ y*colorbufferinfo.xres_virtual + x ] ;
     o_r = COLOR16_R( ocolor ) ;
     o_g = COLOR16_G( ocolor ) ;
@@ -572,14 +572,20 @@ static void draw_putpixel_blend( int x, int y, UINT32 color )
         o_a = (alphabuffer[ (y*alphabufferinfo.xres_virtual+x)/2 ]&0x70) << 1 ;
     }
     if( o_a>=0xe0 ) o_a = 0xff ;
-#endif        
-#ifdef EAGLE34
+#elif defined(EAGLE34)
     ocolor = draw_buf[y][x] ;
     o_r = COLOR_R( ocolor ) ;
     o_g = COLOR_G( ocolor ) ;
     o_b = COLOR_B( ocolor ) ;
     o_a = COLOR_A( ocolor ) ;
-#endif        
+#else
+    // other case
+    ocolor = 0 ;
+    o_r = COLOR_R( ocolor ) ;
+    o_g = COLOR_G( ocolor ) ;
+    o_b = COLOR_B( ocolor ) ;
+    o_a = COLOR_A( ocolor ) ;
+#endif
     n_r = COLOR_R( color ) ;
     n_g = COLOR_G( color ) ;
     n_b = COLOR_B( color ) ;
@@ -626,15 +632,15 @@ static void draw_fillline( int x, int y, int w )
         w-=(draw_minx-x) ;
         x=draw_minx ;
     }
-    
+
     if( x+w > draw_maxx ) {
         w = draw_maxx-x ;
     }
-    
+
     if( w<=0 ) {
         return ;
     }
-    
+
     if( draw_pixelmode == DRAW_PIXELMODE_BLEND ) {
         w+=x ;
         for( ; x<w ; x++ ) {
@@ -677,7 +683,7 @@ static void draw_fillline( int x, int y, int w )
         for( ; x<w ; x++ ) {
             draw_buf[y][x]=draw_drawcolor ;
         }
-#endif        
+#endif
     }
 }
 
@@ -719,7 +725,7 @@ void draw_line(int x1, int y1, int x2, int y2 )
     if( COLOR_A(draw_drawcolor)>=32 ) {
         draw_area_addrect( ix>0?x1:x2, iy>0?y1:y2, dx, dy ) ;
     }
-#endif	
+#endif
 
     // scale deltas and store in dx2 and dy2
     dx2 = dx * 2;
@@ -775,7 +781,7 @@ void draw_circle( int cx, int cy, int r )
     if( COLOR_A(draw_drawcolor)>=32 ) {
         draw_area_addrect( cx-r, cy-r, r+r+1, r+r+1 ) ;
     }
-#endif	
+#endif
 
     while( x<=y ) {
         if( x==0 ) {
@@ -823,7 +829,7 @@ void draw_fillcircle( int cx, int cy, int r )
     if( COLOR_A(draw_drawcolor)>=32 ) {
         draw_area_addrect( cx-r, cy-r, r+r+1, r+r+1 ) ;
     }
-#endif	
+#endif
 
     draw_fillline( cx-y, cy,  y*2+1 );
     while( x<=y ) {
@@ -847,25 +853,25 @@ void draw_rect( int x, int y, int w, int h )
     int ix, iy, x2, y2 ;
     if( w>0 && h>0 ) {
 #ifdef EAGLE34
-	// add menu area for eagle34
-	if( COLOR_A(draw_drawcolor)>=32 ) {
-	    draw_area_addrect( x, y, w, h ) ;
-	}
-#endif			
-	x2 = x+w-1 ;
-	y2 = y+h-1 ;
-	for( ix=x; ix<=x2; ix++ ) {
-	    draw_putpixel( ix, y, draw_drawcolor );
-	    draw_putpixel( ix, y2, draw_drawcolor );
-	}
-	for( iy=y; iy<=y2; iy++ ) {
-	    draw_putpixel( x, iy, draw_drawcolor );
-	    draw_putpixel( x2, iy, draw_drawcolor );
-	}
+    // add menu area for eagle34
+    if( COLOR_A(draw_drawcolor)>=32 ) {
+        draw_area_addrect( x, y, w, h ) ;
+    }
+#endif
+    x2 = x+w-1 ;
+    y2 = y+h-1 ;
+    for( ix=x; ix<=x2; ix++ ) {
+        draw_putpixel( ix, y, draw_drawcolor );
+        draw_putpixel( ix, y2, draw_drawcolor );
+    }
+    for( iy=y; iy<=y2; iy++ ) {
+        draw_putpixel( x, iy, draw_drawcolor );
+        draw_putpixel( x2, iy, draw_drawcolor );
+    }
     }
 }
 
-void draw_fillrect( int x, int y, int w, int h) 
+void draw_fillrect( int x, int y, int w, int h)
 {
 
 #ifdef EAGLE34
@@ -877,7 +883,7 @@ void draw_fillrect( int x, int y, int w, int h)
         // here is the only place to clear draw area
         draw_area_clear( x, y, w, h ) ;
     }
-#endif	
+#endif
 
     h+=y ;
     for( ; y<h; y++ ) {
@@ -966,7 +972,7 @@ void draw_closebmp( struct BITMAP * bmp )
     free( bmp->bits );
 }
 
-void draw_bitmap( struct BITMAP * bmp, int dx, int dy, int sx, int sy, int w, int h ) 
+void draw_bitmap( struct BITMAP * bmp, int dx, int dy, int sx, int sy, int w, int h )
 {
     int ix, iy, x, y ;
     UINT8 * sline ;
@@ -1007,7 +1013,7 @@ void draw_bitmap( struct BITMAP * bmp, int dx, int dy, int sx, int sy, int w, in
 #ifdef EAGLE34
     // add menu area for eagle34
     draw_area_addrect( dx, dy, w, h ) ;
-#endif	
+#endif
 
     if( bmp->bits_per_pixel == 32 ) {
         for( iy=0, y=dy ; iy<h ; iy++, y++ ) {
@@ -1048,7 +1054,7 @@ void draw_bitmap( struct BITMAP * bmp, int dx, int dy, int sx, int sy, int w, in
 
 
 // stretch a 32bit bitmap with alpha
-void draw_stretchbitmap_32b( struct BITMAP * bmp, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh ) 
+void draw_stretchbitmap_32b( struct BITMAP * bmp, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh )
 {
     int idx, idy, isx, isy ;
     int sx_step, sy_step ;
@@ -1126,7 +1132,7 @@ void draw_stretchbitmap_32b( struct BITMAP * bmp, int dx, int dy, int dw, int dh
 }
 
 // stretch a 24bit bitmap
-void draw_stretchbitmap_24b( struct BITMAP * bmp, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh ) 
+void draw_stretchbitmap_24b( struct BITMAP * bmp, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh )
 {
     int idx, idy, isx, isy ;
     int sx_step, sy_step ;
@@ -1195,7 +1201,7 @@ void draw_stretchbitmap_24b( struct BITMAP * bmp, int dx, int dy, int dw, int dh
 }
 
 // stretch a 1bit bitmap
-void draw_stretchbitmap_1b( struct BITMAP * bmp, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh ) 
+void draw_stretchbitmap_1b( struct BITMAP * bmp, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh )
 {
     int idx, idy, isx, isy ;
     int sx_step, sy_step ;
@@ -1257,7 +1263,7 @@ void draw_stretchbitmap_1b( struct BITMAP * bmp, int dx, int dy, int dw, int dh,
 }
 
 // stretch a bitmap
-void draw_stretchbitmap( struct BITMAP * bmp, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh ) 
+void draw_stretchbitmap( struct BITMAP * bmp, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh )
 {
 
     if( dw<=0 || dh<=0 ) {
@@ -1299,7 +1305,7 @@ void draw_stretchbitmap( struct BITMAP * bmp, int dx, int dy, int dw, int dh, in
 #ifdef EAGLE34
     // add menu area for eagle34
     draw_area_addrect( dx, dy, dw, dh ) ;
-#endif	
+#endif
 
     if( bmp->bits_per_pixel == 32 ) {
         draw_stretchbitmap_32b(bmp, dx, dy, dw, dh, sx, sy, sw, sh ) ;

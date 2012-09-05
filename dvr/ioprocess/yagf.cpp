@@ -15,7 +15,7 @@
 #include "../cfg.h"
 
 #include "../dvrsvr/genclass.h"
-#include "../dvrsvr/cfg.h"
+#include "../dvrsvr/config.h"
 #include "netdbg.h"
 #include "mcu.h"
 #include "diomap.h"
@@ -72,7 +72,7 @@ int yagf_cmd(char * rsp, int cmd, int datalen, ...)
     return res ;
 }
 
-void yagf_setrtc()
+int yagf_setrtc()
 {
     struct timeval tv ;
     time_t tt ;
@@ -80,7 +80,7 @@ void yagf_setrtc()
     gettimeofday(&tv, NULL);
     tt = (time_t) tv.tv_sec ;
     gmtime_r( &tt, &t );
-    yagf_cmd(NULL, YAGF_CMD_SETRTC, 7,
+    return yagf_cmd(NULL, YAGF_CMD_SETRTC, 7,
                     bcd( t.tm_sec ),
                     bcd( t.tm_min ),
                     bcd( t.tm_hour ),
@@ -122,7 +122,6 @@ void yagf_log( int x, int y, int z )
     p_dio_mmap->gforce_down = gd ;
     dio_unlock();
 }
-
 
 void yagf_input( char * ibuf )
 {
@@ -425,7 +424,10 @@ void yagf_init( config & dvrconfig )
     }
 
     // do this before set trigger
-    yagf_setrtc();
+    if( yagf_setrtc()==0 ) {
+        dvr_log("tab102b gforce sensor failed!");
+        return ;
+    }
 
     // set trigger value
     rsize = yagf_cmd(rsp, YAGF_CMD_SETTRIGGER,

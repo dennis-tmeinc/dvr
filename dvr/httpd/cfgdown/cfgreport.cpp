@@ -9,7 +9,7 @@
 #include "../../dvrsvr/dvr.h"
 #include "../../dvrsvr/crypt.h"
 #include "../../dvrsvr/genclass.h"
-#include "../../dvrsvr/cfg.h"
+#include "../../dvrsvr/config.h"
 
 char tzfile[] = "tz_option" ;
 

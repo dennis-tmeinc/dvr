@@ -24,7 +24,7 @@
 
 #include "../cfg.h"
 #include "../dvrsvr/genclass.h"
-#include "../dvrsvr/cfg.h"
+#include "../dvrsvr/config.h"
 #include "../ioprocess/diomap.h"
 
 char dvriomap[256] = "/var/dvr/dvriomap" ;
@@ -39,12 +39,12 @@ char ntpserver[]="64.90.182.55" ;
 
 void inittz()
 {
-#ifdef DVR_APP	
+#ifdef DVR_APP
     char * p ;
     config dvrconfig(CFG_FILE);
     string tz ;
     string tzi ;
-    
+
     tz=dvrconfig.getvalue( "system", "timezone" );
     if( tz.length()>0 ) {
         tzi=dvrconfig.getvalue( "timezones", tz );
@@ -63,7 +63,7 @@ void inittz()
             setenv("TZ", tz, 1);
         }
     }
-#endif	
+#endif
 }
 
 int readrtc(struct tm * ptm)
@@ -124,7 +124,7 @@ int printlocaltime()
            ptm->tm_mday, ptm->tm_hour,
            ptm->tm_min, ptm->tm_sec,
            int(tv.tv_usec/1000),
-           ptm->tm_zone, 
+           ptm->tm_zone,
            1900 + ptm->tm_year);
     return 1;
 }
@@ -141,7 +141,7 @@ int printutc()
            ptm->tm_mday, ptm->tm_hour,
            ptm->tm_min, ptm->tm_sec,
            int(tv.tv_usec/1000),
-           ptm->tm_zone, 
+           ptm->tm_zone,
            1900 + ptm->tm_year);
     return 1 ;
 }
@@ -155,7 +155,7 @@ int printrtc()
                mon_name[rtctm.tm_mon],
                rtctm.tm_mday, rtctm.tm_hour,
                rtctm.tm_min, rtctm.tm_sec,
-               "RTC", 
+               "RTC",
                1900 + rtctm.tm_year);
         return 1;
     }
@@ -187,7 +187,7 @@ int setlocaltime(char * datetime)
         tv.tv_usec=0;
         tv.tv_sec=(time_t)mktime(&tmtime);
         return settimeofday( &tv, NULL )==0 ;
-    }	
+    }
 }
 
 int utctortc()
@@ -218,7 +218,7 @@ int localtortc()
     gettimeofday( &tv, NULL );
     ptm = localtime( &tv.tv_sec );
     return setrtc(ptm);
-    
+
 }
 
 int rtctolocal()
@@ -255,8 +255,8 @@ int readmcu(struct tm * t)
         dio_munmap();
         return 0 ;
     }
-    
-    // wait 
+
+    // wait
     for( i=0;i<1000; i++ ) {
         if( p_dio_mmap->rtc_cmd==0 ) break;
         if( p_dio_mmap->rtc_cmd<0 ) {
@@ -266,13 +266,13 @@ int readmcu(struct tm * t)
         usleep(1000);
     }
     p_dio_mmap->rtc_cmd = 1 ;		// read rtc command
-    // wait 
+    // wait
     for( i=0;i<1000; i++ ) {
-        if( p_dio_mmap->rtc_cmd!=1 ) 
+        if( p_dio_mmap->rtc_cmd!=1 )
             break;
         usleep(1000);
     }
-    
+
     if( p_dio_mmap->rtc_cmd==0 ) {
         dio_lock();
         t->tm_year=p_dio_mmap->rtc_year-1900 ;
@@ -307,8 +307,8 @@ int writemcu(struct tm * t)
         dio_munmap();
         return res ;
     }
-    
-    // wait 
+
+    // wait
     for( i=0;i<1000; i++ ) {
         if( p_dio_mmap->rtc_cmd==0 ) break;
         if( p_dio_mmap->rtc_cmd<0 ) {
@@ -326,13 +326,13 @@ int writemcu(struct tm * t)
     p_dio_mmap->rtc_second=t->tm_sec;
     p_dio_mmap->rtc_cmd = 2 ;		// set rtc command
     dio_unlock();
-    // wait 
+    // wait
     for( i=0;i<1000; i++ ) {
-        if( p_dio_mmap->rtc_cmd!=2 ) 
+        if( p_dio_mmap->rtc_cmd!=2 )
             break;
         usleep(1000);
     }
-    
+
     if( p_dio_mmap->rtc_cmd==0 ) {
         res=1 ;
     }
@@ -349,7 +349,7 @@ int mcu()
                mon_name[rtctm.tm_mon],
                rtctm.tm_mday, rtctm.tm_hour,
                rtctm.tm_min, rtctm.tm_sec,
-               "MCU", 
+               "MCU",
                1900 + rtctm.tm_year);
         return 1 ;
     }
@@ -424,7 +424,7 @@ int readgps(struct tm * t)
         dio_munmap() ;
         return res ;
     }
-    
+
     if( p_dio_mmap->gps_valid ) {
         time_t tt=(time_t)p_dio_mmap->gps_gpstime ;
         gmtime_r( &tt, t );
@@ -443,7 +443,7 @@ int gps()
                mon_name[ttm.tm_mon],
                ttm.tm_mday, ttm.tm_hour,
                ttm.tm_min, ttm.tm_sec,
-               "GPS", 
+               "GPS",
                1900 + ttm.tm_year);
         return 1 ;
     }
@@ -486,11 +486,11 @@ int net_connect(const char *netname, int port, int type, struct my_sockaddr * ad
     struct addrinfo *ressave;
     int sockfd;
     char service[20];
-    
+
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = type;
-    
+
     sprintf(service, "%d", port);
     res = NULL;
     if (getaddrinfo(netname, service, &hints, &res) != 0) {
@@ -502,7 +502,7 @@ int net_connect(const char *netname, int port, int type, struct my_sockaddr * ad
         return -1;
     }
     ressave = res;
-    
+
     /*
      Try open socket with each address getaddrinfo returned,
      until getting a valid socket.
@@ -511,7 +511,7 @@ int net_connect(const char *netname, int port, int type, struct my_sockaddr * ad
     while (res) {
         sockfd = socket(res->ai_family,
                         res->ai_socktype, res->ai_protocol);
-        
+
         if (sockfd != -1) {
             if( ad!=NULL ) {
                 ad->addrlen = res->ai_addrlen ;
@@ -530,14 +530,14 @@ int net_connect(const char *netname, int port, int type, struct my_sockaddr * ad
         }
         res = res->ai_next;
     }
-    
+
     freeaddrinfo(ressave);
-    
+
     if (sockfd == -1) {
         printf("Error:netsvr:net_connect!");
         return -1;
     }
-    
+
     return sockfd;
 }
 
@@ -654,7 +654,7 @@ double ntp_offset(char * server)
     struct ntp_block ntpb ;
     struct timeval tv_send ;
     struct timeval tv_recv ;
-    
+
     int fd ;
     int n ;
     double res=0.0;
@@ -680,7 +680,7 @@ double ntp_offset(char * server)
                 t1 = (double)tv_send.tv_sec + ((double)tv_send.tv_usec)/1000000.0 ;
                 t4 = (double)tv_recv.tv_sec + ((double)tv_recv.tv_usec)/1000000.0 ;
                 t2 = (double)ntohl(ntpb.Receive_Timestamp)-2208988800. + (double)ntohl(ntpb.Receive_Timestamp_f)*pow(2., -32 ) ;
-                t3 = (double)ntohl(ntpb.Transmit_Timestamp)-2208988800. + (double)ntohl(ntpb.Transmit_Timestamp_f)*pow(2., -32 ) ; 
+                t3 = (double)ntohl(ntpb.Transmit_Timestamp)-2208988800. + (double)ntohl(ntpb.Transmit_Timestamp_f)*pow(2., -32 ) ;
                 res = -(t4-t3+t1-t2)/2 ;
             }
             else {
@@ -707,7 +707,7 @@ int ntp(char * server)
     int i;
     int point ;
     struct timeval tv ;
-    
+
     memset( &ntpb, 0, sizeof(ntpb));
     if( ntp_gettime( server, &ntpb) ) {
         ui = ntohl(ntpb.Transmit_Timestamp);
@@ -730,7 +730,7 @@ int ntp(char * server)
                rtctm.tm_mday, rtctm.tm_hour,
                rtctm.tm_min, rtctm.tm_sec,
                (int)(tv.tv_usec/1000),
-               "NTP", 
+               "NTP",
                1900 + rtctm.tm_year);
         return 1 ;
     }
@@ -744,7 +744,7 @@ int ntptoutc(char * server)
     int i;
     int point ;
     struct timeval tv ;
-    
+
     memset( &ntpb, 0, sizeof(ntpb));
     if( ntp_gettime( server, &ntpb) ) {
         ui = ntohl(ntpb.Transmit_Timestamp);
@@ -843,7 +843,7 @@ int htp_gettime(char * server, struct tm * t)
                         char wday[10], month[10] ;
                         int mday, year, hour, minute, second ;
                         n=sscanf( pbuf, "Date: %4s %02d %3s %d %02d:%02d:%02d",
-                                 wday,  
+                                 wday,
                                  &mday,
                                  month,
                                  &year,
@@ -890,7 +890,7 @@ int htptoutc(char * server)
         else {
             tv.tv_sec = diffs ;
             tv.tv_usec = 0 ;
-            adjtime(&tv, &rem);	
+            adjtime(&tv, &rem);
         }
         return 1 ;
     }
@@ -905,7 +905,7 @@ int cool(char * arg)
     tv.tv_sec=(time_t)offset ;
     tv.tv_usec=(int)((offset-(double)tv.tv_sec)*1000000.0) ;
     adjtime(&tv, &rem);
-    printf("offset: %f, tv: %d-%d, rem : %d-%d\n", offset, 
+    printf("offset: %f, tv: %d-%d, rem : %d-%d\n", offset,
            (int) tv.tv_sec, (int)tv.tv_usec,
            (int) rem.tv_sec, (int) rem.tv_usec );
     return 1 ;
@@ -990,14 +990,14 @@ int main(int argc, char * argv[])
     else if( strcmp(argv[1], "htptoutc" )==0 ) {
         res=htptoutc(argv[2]);
     }
-#ifdef MCU_SUPPORT	
+#ifdef MCU_SUPPORT
     else if( strcmp(argv[1], "gps" )==0 ) {
         res=gps();
     }
     else if( strcmp(argv[1], "gpstoutc" )==0 ) {
         res=gpstoutc();
     }
-#endif	
+#endif
     else if( strcmp(argv[1], "cool" )==0 ) {
         res=cool(argv[2]);
     }

@@ -7,7 +7,7 @@ include $(PROJDIR)/arm_tool
 
 SOURCES=glog.cpp netdbg.cpp
 
-EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h ../ioprocess/diomap.h ../dvrsvr/dir.h
+EXTHEADERS=../ioprocess/diomap.h ../dvrsvr/config.h ../dvrsvr/genclass.h ../dvrsvr/dir.h
 EXTSOURCES=../ioprocess/diomap.cpp ../dvrsvr/config.cpp ../dvrsvr/string.cpp
 
 HEADERS=netdbg.h

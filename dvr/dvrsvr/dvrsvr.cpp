@@ -67,7 +67,8 @@ dvrsvr::~dvrsvr()
         delete m_playback ;
     }
     if( m_recvbuf ) {
-        mem_free( m_recvbuf ) ;
+        delete m_recvbuf  ;
+        m_recvbuf=NULL ;
     }
     unlock();
 
@@ -110,7 +111,7 @@ int dvrsvr::read()
             return 0 ;
         }
         else if (m_req.reqsize>0 ){	// wait for extra data
-            m_recvbuf = (char *)mem_alloc(m_req.reqsize);
+            m_recvbuf = new char [m_req.reqsize];
             if (m_recvbuf == NULL) {
                 // no enough memory
                 down();             // indicate socket is down
@@ -145,7 +146,7 @@ int dvrsvr::read()
     onrequest();
 
     if (m_recvbuf != NULL) {
-        mem_free(m_recvbuf);
+        delete m_recvbuf;
         m_recvbuf = NULL;
     }
     m_recvlen = m_recvloc = 0 ;
@@ -800,10 +801,10 @@ void dvrsvr::ReqStreamSeek()
         ans.anssize = m_playback->fileheadersize() ;
         Send( &ans, sizeof(ans)) ;
         if( ans.anssize>0 ) {
-            char * header = (char *)mem_alloc(ans.anssize);
+            char * header = new char [ans.anssize];
             m_playback->readfileheader(header, ans.anssize);
             Send( header, ans.anssize ) ;
-            mem_free(header);
+            delete header ;
         }
 #endif
     }
@@ -821,11 +822,11 @@ void dvrsvr::ReqStreamFileHeader()
         if( ans.anssize > 0 ) {
             ans.anscode = ANSSTREAMFILEHEADER;
             ans.data = 0 ;
-            char * header = (char *)mem_alloc(ans.anssize);
+            char * header = new char [ans.anssize];
             m_playback->readfileheader(header, ans.anssize);
             Send( &ans, sizeof(ans)) ;
             Send( header, ans.anssize ) ;
-            mem_free(header);
+            delete header ;
             return ;
         }
     }
@@ -1437,9 +1438,10 @@ void dvrsvr::ReqCheckKey()
             // do connection log
             dvr_logkey( 1, key ) ;
 
-            dvr_log("Key check passed!");
-
             return ;
+        }
+        else {
+            dvr_log("Key check failed!");
         }
     }
 #endif
@@ -2669,3 +2671,57 @@ int dvr_stopcapture(int sockfd )
     }
     return FALSE ;
 }
+
+// Init local shared memory
+int dvr_shm_init(int sockfd, char * shmfile )
+{
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQINITSHM ;
+    req.data = 0 ;
+    req.reqsize=strlen(shmfile)+1 ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    net_send(sockfd,shmfile,req.reqsize);
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        return ( ans.anscode==ANSOK ) ;
+    }
+    return FALSE ;
+}
+
+
+// close local shared memory
+int dvr_shm_close(int sockfd)
+{
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+    req.reqcode=REQCLOSESHM ;
+    req.data = 0 ;
+    req.reqsize=0 ;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        return ( ans.anscode==ANSOK ) ;
+    }
+    return FALSE ;
+}
+
+// open live stream from local svr, over shared memory
+int dvr_openliveshm(int sockfd, int channel)
+{
+    struct dvr_req req ;
+    struct dvr_ans ans ;
+
+    req.reqcode=REQOPENLIVESHM ;
+    req.data=channel ;
+    req.reqsize=0;
+    net_clean(sockfd);
+    net_send(sockfd, &req, sizeof(req));
+    if( net_recv(sockfd, &ans, sizeof(ans))) {
+        if( ans.anscode==ANSSTREAMOPEN ) {
+            return 1 ;
+        }
+    }
+    return 0 ;
+}
+

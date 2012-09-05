@@ -2,7 +2,7 @@
 #include "../cfg.h"
 
 #include "genclass.h"
-#include "cfg.h"
+#include "config.h"
 
 config::config()
 {
