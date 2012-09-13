@@ -299,7 +299,7 @@ void capture::onframe(cap_frame * pcapframe)
         return ;
     m_working=10;
     m_streambytes+=pcapframe->framesize ;               // for bitrate calculation
-    if( pcapframe->frametype == FRAMETYPE_264FILEHEADER ) {
+    if( pcapframe->frametype == FRAMETYPE_FILEHEADER ) {
         m_headerlen = pcapframe->framesize ;
         memcpy( m_header, pcapframe->framedata, pcapframe->framesize );
         return ;
@@ -1154,7 +1154,7 @@ void cap_start()
 #ifdef EAGLE368
     for( i=0; i<cap_channels; i++) {
         if( cap_channel[i]->isstarted() ) {
-            ((ipeagle32_capture *)cap_channel[i])->eagle368_startcapture();
+            ((netcapture *)cap_channel[i])->eagle368_startcapture();
             break;
         }
     }
@@ -1168,7 +1168,7 @@ void cap_stop()
 #ifdef EAGLE368
     for( i=0; i<cap_channels; i++) {
         if( cap_channel[i]->isstarted() ) {
-            ((ipeagle32_capture *)cap_channel[i])->eagle368_stopcapture();
+            ((netcapture *)cap_channel[i])->eagle368_stopcapture();
             break;
         }
     }
@@ -1219,7 +1219,7 @@ void cap_init(config &dvrconfig)
         sprintf(cameraid, "camera%d", i+1 );
         cameratype = dvrconfig.getvalueint(cameraid, "type");
         if( cameratype == 1 ) {	// ip camera
-            cap_channel[i] = new ipeagle32_capture(i);
+            cap_channel[i] = new netcapture(i);
         }
         else {
             cap_channel[i]=new capture(i);					// dummy channel

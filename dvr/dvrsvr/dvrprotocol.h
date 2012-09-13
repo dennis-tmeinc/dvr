@@ -241,4 +241,14 @@ struct dvrtime {
     int tz;
 };
 
+// capture frame types
+#define FRAMETYPE_UNKNOWN	(0)
+#define FRAMETYPE_KEYVIDEO	(1)
+#define FRAMETYPE_VIDEO		(2)
+#define FRAMETYPE_AUDIO		(3)
+#define FRAMETYPE_JPEG		(4)
+#define FRAMETYPE_COMBINED	(5)
+#define FRAMETYPE_264FILEHEADER	(10)
+#define FRAMETYPE_FILEHEADER	(FRAMETYPE_264FILEHEADER)
+
 #endif							// __dvrprotocol_h__

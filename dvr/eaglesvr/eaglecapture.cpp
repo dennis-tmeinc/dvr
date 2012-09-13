@@ -9,6 +9,34 @@
 #endif
 
 #ifdef EAGLE32
+struct hd_frame {
+    DWORD flag;					// 1
+    DWORD serial;
+    DWORD timestamp;
+    DWORD res1;
+    DWORD d_frames;				// sub frames number, lower 8 bits
+    DWORD width_height;			// lower word: width, higher word: height
+    DWORD res3[6];
+    DWORD d_type;				// lower 8 bits; 3  keyframe, 1, audio, 4: B frame
+    DWORD res5[3];
+    DWORD framesize;
+};
+#define HD264_FRAMEWIDTH(hd)  	  ( ((hd).width_height) & 0x0ffff)
+#define HD264_FRAMEHEIGHT(hd)     ( (((hd).width_height)>>16)&0x0ffff)
+#define HD264_FRAMESUBFRAME(hd)   ( ((hd).d_frames)&0x0ff)
+#define HD264_FRAMETYPE(hd)       ( ((hd).d_type)&0x0ff)
+
+struct hd_subframe {
+    DWORD d_flag ;				// lower 16 bits as flag, audio: 0x1001  B frame: 0x1005
+    DWORD res1[3];
+    DWORD framesize;			// 0x50 for audio
+};
+
+#define HD264_SUBFLAG(subhd)      ( ((subhd).d_flag)&0x0ffff )
+
+#endif
+
+#ifdef EAGLE32
 char Dvr264Header[40] =
 {
     '\x34', '\x48', '\x4B', '\x48', '\xFE', '\xB3', '\xD0', '\xD6',
@@ -67,7 +95,6 @@ public:
     virtual void setosd( struct hik_osd_type * posd );
 
     // virtual function implements
-    virtual void update(int updosd);	// periodic update procedure, updosd: require to update OSD
     virtual void start();
     virtual void stop();
     virtual void captureIFrame();       // force to capture I frame
@@ -77,11 +104,48 @@ public:
     virtual int getsignal();        // get signal available status, 1:ok,0:signal lost
 };
 
+int cap_channels;
+capture * * cap_channel;
 
 eagle_capture::eagle_capture( int channel )
 : capture(channel)
 {
-    m_type=CAP_TYPE_HIKLOCAL;
+    m_channel=channel ;
+
+    m_signal=1;			// assume signal is good at beginning
+    m_oldsignal=1;
+    m_enable=0 ;
+    m_signal_standard = 1 ;
+    m_started = 0 ;
+    // default file header
+    m_headerlen = 0;
+
+    //    m_jpeg_mode = -1 ;
+    //    m_jpeg_quality = 0 ;
+
+    // set default m_attr
+    memset( &m_attr, 0, sizeof(m_attr) );
+    m_attr.structsize = sizeof(m_attr);
+
+    m_attr.Enable = 0;
+    sprintf(m_attr.CameraName, "camera%d", m_channel);
+    m_attr.Resolution=3; 	// 4CIF
+    m_attr.RecMode=0;		// Not used
+    m_attr.PictureQuality=5;
+    m_attr.FrameRate=10;
+
+    // bitrate
+    m_attr.BitrateEn=1;
+    m_attr.Bitrate=1000000;
+    m_attr.BitMode=0;
+
+    // picture control
+    m_attr.brightness=5;
+    m_attr.contrast  =5;
+    m_attr.saturation=5;
+    m_attr.hue       =5;
+
+    m_attr.key_interval = 100;
 
     // hik eagle32 parameters
     m_hikhandle=channel+1 ;			// handle = channel+1
@@ -211,7 +275,9 @@ void eagle_capture::streamcallback(
                 break;
             case FRAME_TYPE_HEADER:
             case FRAME_TYPE_SUB_HEADER:
-                capframe.frametype = FRAMETYPE_264FILEHEADER ;
+                capframe.frametype = FRAMETYPE_FILEHEADER ;
+                m_headerlen = size ;
+                memcpy( m_header,  buf, size );
                 break;
             case FRAME_TYPE_MD_RESULT:
                 // analyze motion data
@@ -472,17 +538,6 @@ void eagle_capture::setosd( struct hik_osd_type * posd )
     }
 }
 
-void eagle_capture::update(int updosd)
-{
-    if( m_started ) {
-        if( m_motionupd ) {
-            m_motionupd = 0 ;
-            updosd=1;
-        }
-        capture::update( updosd );
-    }
-}
-
 int eagle_capture::getsignal()
 {
     int res ;
@@ -501,27 +556,6 @@ int eagle_capture::getsignal()
 #endif
     }
     return m_signal ;
-}
-
-// convert channel (camera number) to hik handle
-int eagle32_hikhandle(int channel)
-{
-    if( channel < cap_channels ) {
-        if( cap_channel[channel]->type()==0 ) {     // local capture card
-            return ((eagle_capture *)cap_channel[channel])->gethandle() ;
-        }
-    }
-    return 0 ;
-}
-
-
-// check if hik channel enabled ?
-int eagle32_hikchanelenabled(int channel)
-{
-    if( channel < cap_channels ) {
-        return cap_channel[channel]->enabled() ;
-    }
-    return 0 ;
 }
 
 static int eagle_InitSystem=0 ;

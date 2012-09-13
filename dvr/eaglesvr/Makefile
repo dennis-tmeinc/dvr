@@ -16,7 +16,7 @@ SOURCES=eaglesvr.cpp \
 		../lzmasdk/dec.cpp \
 		../lzmasdk/LzmaDec.c
 
-LDFLAGS=  -lpthread -lstdc++ -Wl,-rpath,.
+LDFLAGS=  -lpthread -lstdc++
 
 HEADERS=eaglesvr.h \
 		draw.h \
@@ -27,14 +27,14 @@ HEADERS=eaglesvr.h \
 
 ifeq ($(EAGLE),zeus3)
 SOURCES += eagle368.cpp
-LDFLAGS += eagle368/libeagle368dvr.so -lrt
+LDFLAGS += -L./eagle368 -leagle368dvr -lrt
 else
 # eagle34 or eagle32
 SOURCES += eaglecapture.cpp
 ifeq ($(EAGLE),eagle34)
 SOURCES += ../dvrsvr/cppinitpatch.cpp
 endif
-LDFLAGS += -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib
+LDFLAGS += -L./$(EAGLE) -lsdk -ldadsp  ./$(EAGLE)/dsplink.lib -Wl,-rpath,.
 endif
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))

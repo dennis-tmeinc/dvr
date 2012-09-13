@@ -1,5 +1,6 @@
 
 #include "eaglesvr.h"
+#include "screen.h"
 
 pthread_mutex_t mutex_init=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP ;
 static pthread_mutex_t dvr_mutex;
@@ -36,19 +37,9 @@ int dvr_log(char *fmt, ...)
     return 0 ;
 }
 
-int dvr_getsystemsetup(struct system_stru * psys)
-{
-    memset( psys, 0, sizeof(struct system_stru) );
-    strcpy(  psys->productid, "EAGLE");
-    strncpy(psys->ServerName, (char *)g_servername, sizeof(psys->ServerName));
-    psys->cameranum = cap_channels;
-    return 1 ;
-}
-
 int app_restart;
 unsigned long app_signalmap=0;
 int app_signal_ex=0;
-const char g_servername[]="eaglesvr";
 
 void sig_handler(int signum)
 {
@@ -154,7 +145,7 @@ void do_init()
 
     time_init();
     cap_init();
-    screen_init();
+    eagle_screen_init();
     net_init();
 
 //    cap_start();	// let ip cam to start the channel
@@ -167,7 +158,7 @@ void do_uninit()
     cap_stop();		// stop capture
 
     net_uninit();
-    screen_uninit();
+    eagle_screen_uninit();
     cap_uninit();
     time_uninit();
 

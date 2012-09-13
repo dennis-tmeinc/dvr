@@ -1,7 +1,7 @@
 
 #include "dvr.h"
 
-ipeagle32_capture::ipeagle32_capture( int channel )
+netcapture::netcapture( int channel )
 : capture(channel)
 {
     config dvrconfig(CFG_FILE);
@@ -23,6 +23,17 @@ ipeagle32_capture::ipeagle32_capture( int channel )
     if( m_ip.length()==0 ) {
         m_ip="127.0.0.1" ;				// default point to localhost
     }
+
+    if( *(char *)m_ip == '/' ||
+            strcmp( (char *)m_ip, "127.0.0.1")==0 ||
+            strcmp( (char *)m_ip, "localhost")==0 )
+    {
+        m_local=1 ;
+    }
+    else {
+        m_local=0;
+    }
+
     m_port = dvrconfig.getvalueint( cameraid, "port");
     if( m_port==0 ) {
         m_port = EAGLESVRPORT ;
@@ -55,13 +66,13 @@ ipeagle32_capture::ipeagle32_capture( int channel )
     m_enable = m_attr.Enable ;
 }
 
-ipeagle32_capture::~ipeagle32_capture()
+netcapture::~netcapture()
 {
     stop();
 }
 
 /*
-void ipeagle32_capture::streamthread()
+void netcapture::streamthread()
 {
     struct cap_frame capframe ;
     struct hd_frame hdframe ;
@@ -163,7 +174,7 @@ void ipeagle32_capture::streamthread()
 */
 
 
-void ipeagle32_capture::streamthread_net()
+void netcapture::streamthread_net()
 {
     struct cap_frame capframe ;
     int recvok;
@@ -244,7 +255,7 @@ void ipeagle32_capture::streamthread_net()
 }
 
 // get live stream over sh mem
-void ipeagle32_capture::streamthread_shm()
+void netcapture::streamthread_shm()
 {
     int dvr_openliveshm(int sockfd, int channel) ;
 
@@ -351,7 +362,7 @@ void ipeagle32_capture::streamthread_shm()
 }
 
 // get live stream over sh mem
-void ipeagle32_capture::streamthread()
+void netcapture::streamthread()
 {
     if( m_shm_enabled ) {
         streamthread_shm();
@@ -363,24 +374,12 @@ void ipeagle32_capture::streamthread()
 
 static void * ipeagle32_thread(void *param)
 {
-    ((ipeagle32_capture *)param) ->streamthread();
+    ((netcapture *)param) ->streamthread();
     return NULL ;
 }
 
-int ipeagle32_capture::channelsetup( int socket )
+int netcapture::connect()
 {
-    struct  DvrChannel_attr attr;
-    // set ip cam attr
-    attr = m_attr ;
-    attr.Enable = 1 ;
-    attr.RecMode = -1;					// No recording
-    dvr_setchannelsetup (socket, m_ipchannel, &attr) ;
-}
-
-
-int ipeagle32_capture::connect()
-{
-    struct dvrtime dvrt ;
     char * tzenv ;
 
     m_sockfd = net_connect (m_ip, m_port) ;
@@ -393,10 +392,18 @@ int ipeagle32_capture::connect()
         dvr_settimezone(m_sockfd, tzenv) ;
     }
 
-    time_utctime( &dvrt );
-    dvr_adjtime(m_sockfd, &dvrt) ;
+    if( !m_local ) {
+        struct dvrtime dvrt ;
+        time_utctime( &dvrt );
+        dvr_adjtime(m_sockfd, &dvrt) ;
+    }
 
-    channelsetup( m_sockfd ) ;
+    struct  DvrChannel_attr attr;
+    // set ip cam attr
+    attr = m_attr ;
+    attr.Enable = 1 ;
+    attr.RecMode = -1;					// No recording mode on ip cam
+    dvr_setchannelsetup (m_sockfd, m_ipchannel, &attr) ;
 
     if( m_shm_enabled ) {
         void * shmtest = mem_shm_alloc(20) ;
@@ -413,7 +420,7 @@ int ipeagle32_capture::connect()
     return 1 ;
 }
 
-void ipeagle32_capture::start()
+void netcapture::start()
 {
     if( m_enable ) {
         if( !m_started ) {
@@ -426,7 +433,7 @@ void ipeagle32_capture::start()
     }
 }
 
-void ipeagle32_capture::stop()
+void netcapture::stop()
 {
     m_state = 0;
     if( m_sockfd>0 ) {
@@ -440,7 +447,7 @@ void ipeagle32_capture::stop()
     m_started = 0 ;
 }
 
-void ipeagle32_capture::setosd( struct hik_osd_type * posd )
+void netcapture::setosd( struct hik_osd_type * posd )
 {
     if( m_sockfd>0 && m_enable ) {
         dvr_sethikosd(m_sockfd, m_ipchannel, posd);
@@ -448,7 +455,7 @@ void ipeagle32_capture::setosd( struct hik_osd_type * posd )
 }
 
 // periodically called
-void ipeagle32_capture::update(int updosd)
+void netcapture::update(int updosd)
 {
     if( !m_enable ) {
         return ;
@@ -463,7 +470,7 @@ void ipeagle32_capture::update(int updosd)
         return ;
     }
     else {
-        if( g_timetick - m_timesynctimer>600000 || g_timetick - m_timesynctimer < 0 ) {
+        if( !m_local && (g_timetick - m_timesynctimer>600000 || g_timetick - m_timesynctimer < 0) ) {
             // sync ip camera time
             struct dvrtime dvrt ;
             time_utctime( &dvrt );
@@ -500,8 +507,10 @@ void ipeagle32_capture::update(int updosd)
     }
 }
 
+#ifdef EAGLE368
+
 // eagle368 specific
-int ipeagle32_capture::eagle368_startcapture()
+int netcapture::eagle368_startcapture()
 {
     dvr_log("start eagle368!");
     if( m_started && m_sockfd>0 ) {
@@ -510,10 +519,12 @@ int ipeagle32_capture::eagle368_startcapture()
 }
 
 // eagle368 specific
-int ipeagle32_capture::eagle368_stopcapture()
+int netcapture::eagle368_stopcapture()
 {
     dvr_log("stop eagle368!");
     if( m_started && m_sockfd>0 ) {
         dvr_stopcapture(m_sockfd);
     }
 }
+
+#endif

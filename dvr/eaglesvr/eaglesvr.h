@@ -42,13 +42,6 @@
 
 int dvr_log(char *fmt, ...);
 
-#define SUPPORT_EVENTMARKER	1
-
-#define DVRVERSION0		(2)
-#define	DVRVERSION1		(0)
-#define DVRVERSION2		(8)
-#define	DVRVERSION3		(521)
-
 // used types
 typedef unsigned int DWORD;
 typedef unsigned short int WORD;
@@ -66,7 +59,6 @@ extern int app_state;
 extern int system_shutdown;
 extern float g_cpu_usage ;
 extern int g_lowmemory;
-extern const char g_servername[] ;
 extern int g_timetick ;            // global time tick ;
 
 
@@ -74,51 +66,6 @@ extern int g_timetick ;            // global time tick ;
 //void dvr_unlock();
 
 unsigned dvr_random();
-
-// dvr .264 file structure
-// .264 file struct
-struct hd_file {
-    DWORD flag;					//      "4HKH", 0x484b4834
-    DWORD res1[6];
-    DWORD width_height;			// lower word: width, high word: height
-    DWORD res2[2];
-};
-
-#ifdef EAGLE32
-struct hd_frame {
-    DWORD flag;					// 1
-    DWORD serial;
-    DWORD timestamp;
-    DWORD res1;
-    DWORD d_frames;				// sub frames number, lower 8 bits
-    DWORD width_height;			// lower word: width, higher word: height
-    DWORD res3[6];
-    DWORD d_type;				// lower 8 bits; 3  keyframe, 1, audio, 4: B frame
-    DWORD res5[3];
-    DWORD framesize;
-};
-#define HD264_FRAMEWIDTH(hd)  	  ( ((hd).width_height) & 0x0ffff)
-#define HD264_FRAMEHEIGHT(hd)     ( (((hd).width_height)>>16)&0x0ffff)
-#define HD264_FRAMESUBFRAME(hd)   ( ((hd).d_frames)&0x0ff)
-#define HD264_FRAMETYPE(hd)       ( ((hd).d_type)&0x0ff)
-
-struct hd_subframe {
-    DWORD d_flag ;				// lower 16 bits as flag, audio: 0x1001  B frame: 0x1005
-    DWORD res1[3];
-    DWORD framesize;			// 0x50 for audio
-};
-
-#define HD264_SUBFLAG(subhd)      ( ((subhd).d_flag)&0x0ffff )
-
-#endif
-
-#define FRAMETYPE_UNKNOWN	(0)
-#define FRAMETYPE_KEYVIDEO	(1)
-#define FRAMETYPE_VIDEO		(2)
-#define FRAMETYPE_AUDIO		(3)
-#define FRAMETYPE_JPEG		(4)
-#define FRAMETYPE_COMBINED	(5)
-#define FRAMETYPE_264FILEHEADER	(10)
 
 struct cap_frame {
     int channel;
@@ -133,15 +80,8 @@ extern int cap_channels;
 
 void cap_start();
 void cap_stop();
-void cap_restart(int channel);
-void cap_capIframe(int channel);
-char * cap_fileheader(int channel);
 void cap_init();
 void cap_uninit();
-
-#define CAP_TYPE_UNKNOWN	(-1)
-#define CAP_TYPE_HIKLOCAL	(0)
-#define CAP_TYPE_HIKIP		(1)
 
 struct hik_osd_type {
     int brightness ;
@@ -154,78 +94,43 @@ struct hik_osd_type {
 class capture {
 protected:
     struct  DvrChannel_attr	m_attr ;	// channel attribute
-    int m_type ;				// channel type, 0: local capture card, 1: eagle ip camera
     int m_channel;				// channel number
     int m_enable ;				// 1: enable, 0:disable
     int m_motion ;				// motion status ;
     int m_signal ;				// signal ok.
     int m_oldsignal ;           // signal ok.
     int m_signal_standard ;     // 1: ntsc, 2: pal
-    unsigned m_streambytes;     // total stream bytes.
 
     int m_started ;             // 0: stopped, 1: started
-    int m_remoteosd ;           // get OSD from network
 
-    unsigned int m_sensorosd ;      // bit maps for sensor osd
-
-    int m_motionalarm ;
-    int m_motionalarm_pattern ;
-    int m_signallostalarm ;
-    int m_signallostalarm_pattern ;
-
-    int m_showgpslocation ;
-
-#ifdef  TVS_APP
-    int m_show_medallion ;
-    int m_show_licenseplate ;
-    int m_show_ivcs ;
-    int m_show_cameraserial ;
-#endif
-
-#ifdef PWII_APP
-    int m_show_vri;
-    int m_show_policeid ;
-#endif
-
-    int m_show_gforce ;
     int m_headerlen ;
     char m_header[256] ;
 
 public:
-    capture(int channel) ;
-    virtual ~capture() ;
-
-    int getchannel() {
-        return m_channel;
+    capture(int channel) {
+        m_channel = channel ;
     }
+
+    virtual ~capture(){}
+
     int enabled(){
         return m_enable;
     }
     int isstarted(){
         return ( m_started ) ;
     }
-    int type(){
-        return m_type ;
-    }
-    unsigned int streambytes() {
-        return m_streambytes ;
-    }
+
     void onframe(cap_frame * pcapframe);	// send frames to network or to recording
     char * getname(){
         return m_attr.CameraName ;
     }
-    int getptzaddr() {
-        return m_attr.ptz_addr;
-    }
-    void setremoteosd() { m_remoteosd=1; }
-    void alarm();                   	// update alarm relate to capture channel
-    int getheaderlen(){return m_headerlen;}
-    char * getheader(){return m_header;}
+
+    virtual int getheaderlen(){return m_headerlen;}
+    virtual char * getheader(){return m_header;}
 
     virtual void getattr(struct DvrChannel_attr * pattr)=0;
     virtual void setattr(struct DvrChannel_attr * pattr)=0;
 
-    virtual void update(int updosd);	// periodic update procedure, updosd: require to update OSD
     virtual void setosd( struct hik_osd_type * posd ){}
     virtual void start(){}				// start capture
     virtual void stop(){}				// stop capture
@@ -235,16 +140,15 @@ public:
             start();
         }
     }
-    virtual	void streamcallback( void * buf, int size, int frame_type){	// live stream call back
-    }
+    virtual	void streamcallback( void * buf, int size, int frame_type)=0 ;	// live stream call back
 
     virtual void captureIFrame(){        // force to capture I frame
     }
     // to capture one jpeg frame
     virtual void captureJPEG(int quality, int pic)=0 ;
 
-    virtual int getsignal(){return m_signal;}	// get signal available status, 1:ok,0:signal lost
-    virtual int getmotion(){return m_motion;}	// get motion detection status
+    virtual int getsignal(){return 0;}	// get signal available status, 1:ok,0:signal lost
+    virtual int getmotion(){return 0;}	// get motion detection status
 };
 
 extern capture * * cap_channel;
@@ -451,9 +355,6 @@ public:
     dvrsvr *next() {
         return m_next;
     }
-    int isfifo() {
-        return m_fifo != NULL;
-    }
     int hasfifo() {
         return m_fifo != NULL;
     }
@@ -481,14 +382,10 @@ public:
     void onrequest();
 
     void ReqRealTime();
-    void ChannelInfo();
-    void DvrServerName();
-    void GetSystemSetup();
+    void ReqChannelInfo();
     void GetChannelSetup();
     void SetChannelSetup();
-    void HostName();
     void GetChannelState();
-    void GetVersion();
     void ReqEcho();
     void ReqOpenLive();
     void ReqOpenLiveShm();
@@ -501,7 +398,6 @@ public:
     void Req2SetTimeZone();
     void ReqSetHikOSD();
     void Req2GetChState();
-    void Req2GetStreamBytes();
     void Req2GetJPEG();
 
     // EagleSVR supports
@@ -537,26 +433,5 @@ public:
     void ReqStartCapture();
     void ReqStopCapture();
 };
-
-// return true for ok
-int dvr_getsystemsetup(struct system_stru * psys);
-// return true for ok
-int dvr_setsystemsetup(struct system_stru * psys);
-// return true for ok
-int dvr_getchannelsetup(int ch, struct DvrChannel_attr * pchannel, int attrsize);
-// return true for ok
-int dvr_setchannelsetup(int ch, struct DvrChannel_attr * pchannel, int attrsize);
-
-// support screen service over tcp
-void screen_setmode( int videostd, int screennum, unsigned char * displayorder );
-void screen_live( int channel ) ;
-void screen_playback( int channel, int speed ) ;
-void screen_playbackinput( int channel, void * buffer, int bufsize );
-void screen_stop( int channel );
-void screen_audio( int channel, int onoff );
-
-void screen_init();
-void screen_uninit();
-
 
 #endif							// __eaglesvr_h__

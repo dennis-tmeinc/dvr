@@ -43,8 +43,6 @@ protected:
     int m_chantype ;
     int m_dspdatecounter ;
 
-    char m_motiondata[256] ;
-    int m_motionupd;				// motion status changed ;
 public:
     eagle368_capture(int channel);
     ~eagle368_capture();
@@ -71,7 +69,6 @@ public:
     virtual void setosd( struct hik_osd_type * posd );
 
     // virtual function implements
-    virtual void update(int updosd);	// periodic update procedure, updosd: require to update OSD
     virtual void start();
     virtual void stop();
     virtual void captureIFrame();       // force to capture I frame
@@ -86,7 +83,42 @@ public:
 eagle368_capture::eagle368_capture( int channel )
     : capture(channel)
 {
-    m_type=CAP_TYPE_HIKLOCAL;
+    m_channel=channel ;
+
+    m_signal=1;			// assume signal is good at beginning
+    m_oldsignal=1;
+    m_enable=0 ;
+    m_signal_standard = 1 ;
+    m_started = 0 ;
+    // default file header
+    m_headerlen = 0;
+
+    //    m_jpeg_mode = -1 ;
+    //    m_jpeg_quality = 0 ;
+
+    // set default m_attr
+    memset( &m_attr, 0, sizeof(m_attr) );
+    m_attr.structsize = sizeof(m_attr);
+
+    m_attr.Enable = 0;
+    sprintf(m_attr.CameraName, "camera%d", m_channel);
+    m_attr.Resolution=3; 	// 4CIF
+    m_attr.RecMode=0;		// Not used
+    m_attr.PictureQuality=5;
+    m_attr.FrameRate=10;
+
+    // bitrate
+    m_attr.BitrateEn=1;
+    m_attr.Bitrate=1000000;
+    m_attr.BitMode=0;
+
+    // picture control
+    m_attr.brightness=5;
+    m_attr.contrast  =5;
+    m_attr.saturation=5;
+    m_attr.hue       =5;
+
+    m_attr.key_interval = 100;
 
     // hik eagle32 parameters
     m_hikhandle=channel ;
@@ -94,7 +126,6 @@ eagle368_capture::eagle368_capture( int channel )
     m_dspdatecounter=0 ;
 
     m_motion=0 ;
-    m_motionupd = 1 ;
     m_started = 0 ;                 // no started.
 
     // default file header
@@ -113,6 +144,9 @@ eagle368_capture::~eagle368_capture()
 {
     stop();
 }
+
+int cap_channels;
+capture * * cap_channel;
 
 // stream call back
 static void StreamReadCallBack(CALLBACK_DATA CallBackData,void* context)
@@ -273,8 +307,7 @@ void eagle368_capture::stop()
 
     int i;
     for( i=0; i<cap_channels ;i++) {
-        if( cap_channel[i] ) {
-            cap_channel[i]->isstarted();
+        if( cap_channel[i] && cap_channel[i]->isstarted() ) {
             return ;
         }
     }
@@ -282,7 +315,7 @@ void eagle368_capture::stop()
         dvr_log( "Eagle368 System Stop!") ;
         SystemStop();
         eagle368_systemstart = 0 ;
-        eagle368_systemstart_time = time_tick();
+        eagle368_systemstart_time = g_timetick;
     }
 }
 
@@ -315,32 +348,6 @@ void eagle368_capture::setosd( struct hik_osd_type * posd )
                           posd->lines,
                           osdformat );
         EnableOSD(m_hikhandle, 1);		// enable OSD
-        if( m_dspdatecounter > g_timetick || (g_timetick-m_dspdatecounter)>30000 ) {
-            struct dvrtime dvrt ;
-            struct SYSTEMTIME nowt ;
-            m_dspdatecounter = g_timetick ;
-            time_now ( &dvrt );
-            memset( &nowt, 0, sizeof(nowt));
-            nowt.year = dvrt.year ;
-            nowt.month = dvrt.month ;
-            nowt.day = dvrt.day ;
-            nowt.hour = dvrt.hour ;
-            nowt.minute = dvrt.minute ;
-            nowt.second = dvrt.second ;
-            nowt.milliseconds = dvrt.milliseconds ;
-//            SetDSPDateTime(m_hikhandle, &nowt);
-        }
-    }
-}
-
-void eagle368_capture::update(int updosd)
-{
-    if( m_started ) {
-        if( m_motionupd ) {
-            m_motionupd = 0 ;
-            updosd=1;
-        }
-        capture::update( updosd );
     }
 }
 
@@ -352,44 +359,13 @@ int eagle368_capture::getsignal()
     return m_signal ;
 }
 
-int SetMotionDetection(int channel, int sensitity);
-
-/*Notes for EnalbeMotionDetection
-    Enable the Motion Detection for channel
-    INPUTS:
-    int channel: channel handle
-    int enable: 1 enable,0 disable
-
-*/
-int EnalbeMotionDetection(int channel, int enable);
-/*Notes for GetChannelMotionStatus
-   Get the motion status for channel
-   INPUTS:
-   int channel: channel handle
-*/
-int GetChannelMotionStatus(int channel);
-
 int eagle368_capture::getmotion()
 {
     if( m_started ) {
-        int motion = GetChannelMotionStatus(m_hikhandle);
-        if( motion != m_motion ) {
-            m_motion = motion ;
-            m_motionupd = 1 ;
-        }
+        m_motion = GetChannelMotionStatus(m_hikhandle);
     }
     return m_motion ;
 }
-
-// check if hik channel enabled ?
-int eagle32_hikchanelenabled(int channel)
-{
-    if( channel < cap_channels ) {
-        return cap_channel[channel]->enabled() ;
-    }
-    return 0 ;
-}
-
 
 void eagle_idle()
 {

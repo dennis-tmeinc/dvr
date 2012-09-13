@@ -10,19 +10,19 @@
 
 // dynamic growable array
 /*
-template <class T> 
+template <class T>
 class array {
     T * m_array ;
     int m_size ;
     int m_arraysize ;
-    
+
     // swap items of index a and b
     void swap( int a, int b) {
         m_array[m_size] = m_array[a] ;
         m_array[a] = m_array[b] ;
         m_array[b] = m_array[m_size] ;
     }
-    
+
     void quicksort(int lo, int hi) {
         int i=lo, j=hi-1;
         while(i<=j) {
@@ -46,7 +46,7 @@ class array {
         }
         if( hi>i+1 ) {
             quicksort( i+1, hi );
-        }		
+        }
     }
     public:
         array(int initialsize=0){
@@ -184,12 +184,12 @@ class array {
 };
 */
 
-template <class T> 
+template <class T>
 class array {
     T * * m_array ;
     int m_size ;
     int m_arraysize ;
-    
+
     // swap items of index a and b
     void swap( int a, int b) {
         T * sw ;
@@ -197,7 +197,7 @@ class array {
         m_array[a] = m_array[b] ;
         m_array[b] = sw ;
     }
-    
+
     void quicksort(int lo, int hi) {
         int i=lo, j=hi-1;
         while(i<=j) {
@@ -221,19 +221,19 @@ class array {
         }
         if( hi>i+1 ) {
             quicksort( i+1, hi );
-        }		
+        }
     }
     void expand( int newsize ) {
         if( newsize>m_arraysize ) {
             int i;
             m_arraysize=newsize+ARRAYSTEPSIZE ;
             T ** newarray = new T * [m_arraysize] ;
-			if( m_array ) {
-				for( i=0; i<m_size; i++ ) {
-					newarray[i] = m_array[i] ;
-				}
-				delete [] m_array ;
-			}
+            if( m_array ) {
+                for( i=0; i<m_size; i++ ) {
+                    newarray[i] = m_array[i] ;
+                }
+                delete [] m_array ;
+            }
             m_array = newarray ;
         }
     }
@@ -246,8 +246,8 @@ class array {
         array(int initialsize){
             m_array=NULL ;
             m_size=0;
-			m_arraysize = 0 ;
-			expand( initialsize ) ;
+            m_arraysize = 0 ;
+            expand( initialsize ) ;
         }
         ~array(){
             empty();
@@ -322,10 +322,10 @@ class array {
         }
         void empty(){
             setsize(0);
-			if( m_array ) {
-				delete [] m_array ;
-				m_array = NULL ;
-			}
+            if( m_array ) {
+                delete [] m_array ;
+                m_array = NULL ;
+            }
             m_arraysize = 0 ;
         }
         void compact(){
@@ -420,6 +420,7 @@ public:
         }
         return getstring() ;
     }
+
     int isempty() {
         if( m_str ) {
             return (m_str[0] == 0);
@@ -431,7 +432,7 @@ public:
 };
 
 inline int operator < ( string & s1, string & s2 ) {
-	return ( strcmp(s1, s2)<0 );
+    return ( strcmp(s1, s2)<0 );
 }
 
 char * str_trimtail(char *line);

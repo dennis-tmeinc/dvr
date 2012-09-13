@@ -13,9 +13,9 @@ int ptz_msg( int channel, DWORD command, int param )
     BYTE msg[8] ;
     if( ptz_handle <= 0 )
         return 0;
-    
+
     addr = cap_channel[channel]->getptzaddr();
-    
+
     msg[2] = (BYTE)(command >> 24) ;
     msg[3] = (BYTE)(command >> 16) ;
     msg[4] = (BYTE)(command >> 8) ;
@@ -26,7 +26,7 @@ int ptz_msg( int channel, DWORD command, int param )
     if( (msg[3] & 0x19)!=0 ) {
         msg[5] += param ;
     }
-    
+
     if( ptz_protocol == 0 ) {			// PELCO "D" pro
         msg[0] = 0xff ;
         msg[1] = addr ;
@@ -73,14 +73,14 @@ void ptz_init(config &dvrconfig)
     sscanf((char *)t, "%d", &ptz_enable);
     if (ptz_enable) {
         ptz_device = dvrconfig.getvalue("ptz", "device");
-        
+
         ptz_handle = open( ptz_device, O_WRONLY|O_NONBLOCK );
         if( ptz_handle > 0 ) {
             tcgetattr(ptz_handle, &saved_serialattributes);
             memcpy( &serialattributes, &saved_serialattributes, sizeof( saved_serialattributes ) );
-            
+
             // set serial port attributes
-            
+
             serialattributes.c_cflag = CS8 |CLOCAL | CREAD;
             serialattributes.c_iflag = IGNPAR;
             serialattributes.c_oflag = 0;
@@ -93,13 +93,13 @@ void ptz_init(config &dvrconfig)
             cfsetspeed(&serialattributes, ptz_baudrate);
             tcflush(ptz_handle, TCIFLUSH);
             tcsetattr(ptz_handle, TCSANOW, &serialattributes);
-            
+
             t = dvrconfig.getvalue("ptz", "protocol");
             if( *(char *)t=='P' )
                 ptz_protocol = 1 ;
             else
                 ptz_protocol = 0 ;
-            
+
             dvr_log("PTZ initialized.");
         }
         else {

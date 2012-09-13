@@ -2,6 +2,22 @@
 #ifndef __MCU_H__
 #define __MCU_H__
 
+// MCU POWER DOWN CODE
+//01: software watchdog reset the power
+//02: CPU request system reset
+//03: key off before system boot up ready
+//04: key off power
+//05: bootup time out
+//06: power input is too low/high when power on
+//07: power input is too low/high after system already on
+//08: power input is not stable
+//09: HD heater on
+//0a: temperature is too high when power on
+//0b: temperature is too high after power on
+//0c: hardware reset
+//0d: CPU request power off
+//0e: Normal power off
+
 #define ID_HOST     (0)
 #define ID_MCU      (1)
 
@@ -24,6 +40,8 @@
 #define MCU_CMD_CAMERA_ZOOMOUT  (0x20)
 #define MCU_CMD_MICON	        (0x21)
 #define MCU_CMD_MICOFF	        (0x22)
+#define MCU_CMD_INCARMICON	    (0x23)
+#define MCU_CMD_INCARMICOFF	    (0x24)
 #define MCU_CMD_HDPOWERON       (0x28)
 #define MCU_CMD_HDPOWEROFF      (0x29)
 #define MCU_CMD_GETVERSION	    (0x2d)

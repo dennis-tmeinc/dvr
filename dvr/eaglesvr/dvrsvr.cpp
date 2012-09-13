@@ -5,6 +5,7 @@
 
 #include "eaglesvr.h"
 #include "draw.h"
+#include "screen.h"
 
 dvrsvr *dvrsvr::m_head = NULL;
 
@@ -397,16 +398,7 @@ void dvrsvr::onrequest()
         ReqRealTime();
         break;
     case REQCHANNELINFO:
-        ChannelInfo();
-        break;
-    case REQSERVERNAME:
-        DvrServerName();
-        break;
-    case REQHOSTNAME:
-        HostName();
-        break;
-    case REQGETSYSTEMSETUP:
-        GetSystemSetup();
+        ReqChannelInfo();
         break;
     case REQGETCHANNELSETUP:
         GetChannelSetup();
@@ -416,9 +408,6 @@ void dvrsvr::onrequest()
         break;
     case REQGETCHANNELSTATE:
         GetChannelState();
-        break;
-    case REQGETVERSION:
-        GetVersion();
         break;
     case REQOPENLIVE:
         ReqOpenLive();
@@ -629,7 +618,7 @@ struct channel_info {
     char CameraName[64] ;
 } ;
 
-void dvrsvr::ChannelInfo()
+void dvrsvr::ReqChannelInfo()
 {
     int i;
     struct dvr_ans ans ;
@@ -647,48 +636,18 @@ void dvrsvr::ChannelInfo()
     }
 }
 
-void dvrsvr::HostName()
-{
-    struct dvr_ans ans;
-    ans.anscode = ANSSERVERNAME;
-    ans.anssize = strlen(g_servername)+1;
-    ans.data = 0;
-    Send( &ans, sizeof(ans));
-    Send( (char *)g_servername, ans.anssize );
-}
-
-void dvrsvr::DvrServerName()
-{
-    HostName();
-}
-
-void dvrsvr::GetSystemSetup()
-{
-    struct dvr_ans ans ;
-    struct system_stru sys ;
-    memset( &sys, 0, sizeof(sys));
-    if( dvr_getsystemsetup(&sys) ) {
-        ans.anscode = ANSSYSTEMSETUP;
-        ans.anssize = sizeof( struct system_stru );
-        ans.data = 0;
-        Send( &ans, sizeof(ans) );
-        Send( &sys, sizeof(sys) );
-    }
-    else {
-        AnsError ();
-    }
-}
-
 void dvrsvr::GetChannelSetup()
 {
-    struct DvrChannel_attr dattr ;
-    struct dvr_ans ans ;
-    if( dvr_getchannelsetup(m_req.data, &dattr, sizeof(dattr)) ) {
+    if( m_req.data>=0 && m_req.data<cap_channels )
+    {
+        struct DvrChannel_attr capattr ;
+        struct dvr_ans ans ;
+        cap_channel[m_req.data]->getattr( &capattr ) ;
         ans.anscode = ANSCHANNELSETUP;
-        ans.anssize = sizeof( struct DvrChannel_attr );
+        ans.anssize = sizeof( capattr );
         ans.data = m_req.data;
         Send( &ans, sizeof(ans));
-        Send( &dattr, sizeof(dattr));
+        Send( &capattr, ans.anssize);
     }
     else {
         AnsError();
@@ -697,9 +656,12 @@ void dvrsvr::GetChannelSetup()
 
 void dvrsvr::SetChannelSetup()
 {
-    struct dvr_ans ans ;
-    struct DvrChannel_attr * pchannel = (struct DvrChannel_attr *) m_recvbuf ;
-    if( dvr_setchannelsetup(m_req.data, pchannel, m_req.reqsize) ) {
+    if( m_req.data>=0 &&
+        m_req.data<cap_channels &&
+        m_req.reqsize >= sizeof( struct DvrChannel_attr ) )
+    {
+        struct dvr_ans ans ;
+        cap_channel[m_req.data]->setattr( (struct DvrChannel_attr *) m_recvbuf ) ;
         ans.anscode = ANSOK;
         ans.anssize = 0;
         ans.data = 0;
@@ -736,24 +698,6 @@ void dvrsvr::GetChannelState()
         }
         Send(&cs, sizeof(cs));
     }
-}
-
-void dvrsvr::GetVersion()
-{
-    int version ;
-    struct dvr_ans ans;
-    ans.anscode = ANSGETVERSION;
-    ans.anssize = 4*sizeof(int);
-    ans.data = 0;
-    Send(&ans, sizeof(ans));
-    version = DVRVERSION0 ;
-    Send(&version, sizeof(version));
-    version = DVRVERSION1 ;
-    Send(&version, sizeof(version));
-    version = DVRVERSION2 ;
-    Send(&version, sizeof(version));
-    version = DVRVERSION3 ;
-    Send(&version, sizeof(version));
 }
 
 struct ptz_cmd {
@@ -905,13 +849,9 @@ void dvrsvr::ReqSetHikOSD()
 {
     struct dvr_ans ans ;
     if( m_req.data>=0 && m_req.data<cap_channels
-        && m_req.reqsize>=(int)sizeof( hik_osd_type )
-        && cap_channel[m_req.data]->type() == CAP_TYPE_HIKLOCAL )
+        && m_req.reqsize>=(int)sizeof( hik_osd_type ) )
     {
-        capture * pcap = (capture *)cap_channel[m_req.data] ;
-        struct hik_osd_type * posd = (struct hik_osd_type *) m_recvbuf ;
-        pcap->setremoteosd();
-        pcap->setosd(posd);
+        cap_channel[m_req.data]->setosd((struct hik_osd_type *) m_recvbuf );
         ans.anscode = ANSOK ;
         ans.anssize = 0 ;
         ans.data = 0 ;
@@ -940,19 +880,6 @@ void dvrsvr::Req2GetChState()
     else {
         AnsError();
     }
-}
-
-void dvrsvr::Req2GetStreamBytes()
-{
-    struct dvr_ans ans ;
-    if( m_req.data >=0 && m_req.data < cap_channels ) {
-        ans.data = cap_channel[m_req.data]->streambytes() ;
-        ans.anssize=0;
-        ans.anscode = ANS2STREAMBYTES ;
-        Send( &ans, sizeof(ans));
-        return ;
-    }
-    AnsError();
 }
 
 void dvrsvr::Req2GetJPEG()
@@ -995,7 +922,7 @@ void dvrsvr::ReqScreenSetMode()
             displayorder[i] = i ;
         }
     }
-    screen_setmode( videostd, screennum, displayorder );
+    eagle_screen_setmode( videostd, screennum, displayorder );
     ans.anscode = ANSOK;
     ans.anssize = 0;
     ans.data = 0;
@@ -1005,7 +932,7 @@ void dvrsvr::ReqScreenSetMode()
 
 void dvrsvr::ReqScreenLive()
 {
-    screen_live( m_req.data );
+    eagle_screen_live( m_req.data );
     AnsOk();
 }
 
@@ -1019,13 +946,13 @@ void dvrsvr::ReqScreenPlay()
     else {
         speed = 4 ;		// normal speed
     }
-    screen_playback( m_req.data, speed );
+    eagle_screen_playback( m_req.data, speed );
     AnsOk();
 }
 
 void dvrsvr::ReqScreenInput()
 {
-    screen_playbackinput( m_req.data, m_recvbuf, m_req.reqsize );
+    eagle_screen_playbackinput( m_req.data, m_recvbuf, m_req.reqsize );
     //  no response for input data, to improve performance
     //	AnsOk();
 }
@@ -1033,7 +960,7 @@ void dvrsvr::ReqScreenInput()
 void dvrsvr:: ReqScreenStop()
 {
     AnsOk();
-    screen_stop( m_req.data );
+    eagle_screen_stop( m_req.data );
 }
 
 void dvrsvr::ReqScreenAudio()
@@ -1047,7 +974,7 @@ void dvrsvr::ReqScreenAudio()
     else {
         audioon = 1 ;
     }
-    screen_audio( m_req.data, audioon );
+    eagle_screen_audio( m_req.data, audioon );
 }
 
 void dvrsvr::ReqGetScreenWidth()

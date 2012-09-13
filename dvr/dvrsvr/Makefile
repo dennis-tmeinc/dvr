@@ -14,7 +14,7 @@ SOURCES=main.cpp \
 		ptz.cpp \
 		record.cpp \
 		capture.cpp \
-		ipcapture.cpp \
+		netcapture.cpp \
 		memory.cpp \
 		dvrfile.cpp \
 		playback.cpp \
@@ -39,7 +39,7 @@ SOURCES=main.cpp \
 		ptz.cpp \
 		record.cpp \
 		capture.cpp \
-		ipcapture.cpp \
+		netcapture.cpp \
 		memory.cpp \
 		dvrfile.cpp \
 		playback.cpp \
@@ -62,33 +62,11 @@ endif
 
 EXTRASOURCES=../ioprocess/diomap.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
 
-EAGLESRS=eaglesvr.cpp \
-		dvrtime.cpp \
-		dvrsvr.cpp \
-		netsvr.cpp \
-		msg.cpp \
-		ptz.cpp \
-		record.cpp \
-		capture.cpp \
-		eaglecapture.cpp \
-		ipcapture.cpp \
-		memory.cpp \
-		dvrfile.cpp \
-		playback.cpp \
-		string.cpp \
-		disk.cpp \
-		idx.cpp \
-		config.cpp \
-		event.cpp \
-		live.cpp \
-		crypt.cpp \
-		dio.cpp \
-		screen.cpp \
-		md5.cpp
-
 HEADERS=dvr.h \
 		dvrprotocol.h \
 		genclass.h \
+		capture.h \
+		netcapture.h \
 		config.h \
 		fbwindow.h \
 		draw.h \
@@ -119,10 +97,6 @@ strip: dvrsvr
 
 ../fb/libfbdraw.so :
 	cd ../fb ; make
-
-eaglesvr : $(EAGLESRS)
-	$(CC)  $(CFLAGS) -o $@ $(EAGLESRS) ../fb/libfbdraw.so $(LDFLAGS)
-	cp eaglesvr  $(debug_folder)
 
 eagleinit : eagleinit.cpp
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
