@@ -59,8 +59,6 @@ extern int app_state;
 extern int system_shutdown;
 extern float g_cpu_usage ;
 extern int g_lowmemory;
-extern int g_timetick ;            // global time tick ;
-
 
 //void dvr_lock();
 //void dvr_unlock();
@@ -76,70 +74,28 @@ struct cap_frame {
 
 // capture
 
-extern int cap_channels;
-
 void cap_start();
 void cap_stop();
 void cap_init();
 void cap_uninit();
 
-struct hik_osd_type {
-    int brightness ;
-    int translucent ;
-    int twinkle ;
-    int lines ;
-    WORD osdline[8][128] ;
-} ;
-
-class capture {
-protected:
-    struct  DvrChannel_attr	m_attr ;	// channel attribute
-    int m_channel;				// channel number
-    int m_enable ;				// 1: enable, 0:disable
-    int m_motion ;				// motion status ;
-    int m_signal ;				// signal ok.
-    int m_oldsignal ;           // signal ok.
-    int m_signal_standard ;     // 1: ntsc, 2: pal
-
-    int m_started ;             // 0: stopped, 1: started
-
-    int m_headerlen ;
-    char m_header[256] ;
+class icapture {
 
 public:
-    capture(int channel) {
-        m_channel = channel ;
-    }
 
-    virtual ~capture(){}
+    virtual ~icapture(){}
 
-    int enabled(){
-        return m_enable;
-    }
-    int isstarted(){
-        return ( m_started ) ;
-    }
+    virtual void onframe(cap_frame * pcapframe);	// send frames to network or to recording
 
-    void onframe(cap_frame * pcapframe);	// send frames to network or to recording
-    char * getname(){
-        return m_attr.CameraName ;
-    }
-
-    virtual int getheaderlen(){return m_headerlen;}
-    virtual char * getheader(){return m_header;}
-
-    virtual void getattr(struct DvrChannel_attr * pattr)=0;
+    virtual int enabled()=0;
+    virtual int isstarted()=0;
+    virtual int getheaderlen()=0;
+    virtual char * getheader()=0;
     virtual void setattr(struct DvrChannel_attr * pattr)=0;
+    virtual void setosd( struct hik_osd_type * posd )=0;
+    virtual void start()=0;				// start capture
+    virtual void stop()=0;				// stop capture
 
-    virtual void setosd( struct hik_osd_type * posd ){}
-    virtual void start(){}				// start capture
-    virtual void stop(){}				// stop capture
-    virtual void restart(){				// restart capture
-        stop();
-        if( m_enable ) {
-            start();
-        }
-    }
     virtual	void streamcallback( void * buf, int size, int frame_type)=0 ;	// live stream call back
 
     virtual void captureIFrame(){        // force to capture I frame
@@ -151,7 +107,8 @@ public:
     virtual int getmotion(){return 0;}	// get motion detection status
 };
 
-extern capture * * cap_channel;
+extern int cap_channels;
+extern icapture * * cap_channel;
 
 void eagle_idle();
 int  eagle_init();
@@ -381,12 +338,8 @@ public:
     // request handlers
     void onrequest();
 
-    void ReqRealTime();
-    void ReqChannelInfo();
-    void GetChannelSetup();
     void SetChannelSetup();
     void GetChannelState();
-    void ReqEcho();
     void ReqOpenLive();
     void ReqOpenLiveShm();
     void ReqInitShm();

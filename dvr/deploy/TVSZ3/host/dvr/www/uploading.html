@@ -1,0 +1,41 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<title>Upload progress</title>
+<script type="text/javascript" src="eagle3.js"></script>
+</head>
+<body style="background-color:#b0c4de">
+
+<p style="text-align: center" > Uploading, please wait... </p>
+
+<table style="width:80%;position:absolute;left:10%;height:0.8cm;text-align:center;" cellspacing=0 cellpadding=0 border=1 >
+<tr>
+  <td style="text-align: center; width:1%; background-color: SandyBrown;" id="id_progbar">
+  </td>
+  <td>
+  </td>
+</tr>   
+</table>
+
+<script type="text/javascript">
+
+function timefunc()
+{
+    ajaxload( "POST", "uploading", ulprog ) ;
+}
+
+function ulprog( ul )
+{
+  var elm=document.getElementById("id_progbar") ;
+  elm.style.width=parseFloat(ul).toString()+"%" ;
+  elm.innerHTML=parseInt(ul).toString()+"%" ;
+  setTimeout("timefunc()", 100);
+}
+
+setTimeout("timefunc()", 200);
+
+</script>
+</body>
+</html>
+

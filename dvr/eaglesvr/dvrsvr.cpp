@@ -368,14 +368,6 @@ int dvrsvr::onframe(cap_frame * pframe)
             }
             return 1;
         }
-        else if (m_conntype == CONN_REALTIME ) {
-            if ( pframe->frametype == FRAMETYPE_KEYVIDEO ){	// for keyframes
-                // clean all tailing fifo
-                cleanfifotail();
-            }
-            Send(pframe->framedata, pframe->framesize);
-            return 1;
-        }
         else if ( pframe->frametype==FRAMETYPE_JPEG ) {
             ans.anscode = ANS2JPEG ;
             ans.anssize = pframe->framesize ;
@@ -394,15 +386,6 @@ void dvrsvr::onrequest()
     case REQOK:
         AnsOk();
         break ;
-    case REQREALTIME:
-        ReqRealTime();
-        break;
-    case REQCHANNELINFO:
-        ReqChannelInfo();
-        break;
-    case REQGETCHANNELSETUP:
-        GetChannelSetup();
-        break;
     case REQSETCHANNELSETUP:
         SetChannelSetup();
         break;
@@ -441,9 +424,6 @@ void dvrsvr::onrequest()
         break;
     case REQ2GETJPEG:
         Req2GetJPEG();
-        break;
-    case REQECHO:
-        ReqEcho();
         break;
 
     case REQSCREEENSETMODE:
@@ -574,84 +554,6 @@ void dvrsvr::AnsError()
     ans.anssize = 0;
     ans.data = 0;
     Send(&ans, sizeof(ans));
-}
-
-void dvrsvr::ReqEcho()
-{
-    struct dvr_ans ans ;
-    ans.anscode=ANSECHO ;
-    ans.data=0;
-    ans.anssize=m_recvlen ;
-    Send(&ans, sizeof(ans));
-    if( m_recvlen>0 ) {
-        Send(m_recvbuf, m_recvlen);
-    }
-}
-
-void dvrsvr::ReqRealTime()
-{
-    struct dvr_ans ans ;
-    if (m_req.data >= 0 && m_req.data < cap_channels) {
-        ans.anscode = ANSREALTIMEHEADER;
-        int channel = m_req.data ;
-        ans.data = channel ;
-        ans.anssize = cap_channel[channel]->getheaderlen();
-        Send(&ans, sizeof(ans));
-        if( ans.anssize>0) {
-            Send( cap_channel[channel]->getheader(), ans.anssize ) ;
-        }
-        m_conntype = CONN_REALTIME;
-        m_connchannel = m_req.data;
-        cap_channel[m_connchannel]->start();
-
-        dvr_log( "Open Real Time channel %d", m_connchannel );
-
-    }
-    else {
-        AnsError();
-    }
-}
-
-struct channel_info {
-    int Enable ;
-    int Resolution ;
-    char CameraName[64] ;
-} ;
-
-void dvrsvr::ReqChannelInfo()
-{
-    int i;
-    struct dvr_ans ans ;
-    struct channel_info chinfo ;
-    ans.anscode = ANSCHANNELDATA ;
-    ans.data = cap_channels ;
-    ans.anssize = cap_channels * sizeof(struct channel_info);
-    Send( &ans, sizeof(ans));
-    for( i=0; i<cap_channels; i++ ) {
-        memset( &chinfo, 0, sizeof(chinfo));
-        chinfo.Enable=cap_channel[i]->enabled() ;
-        chinfo.Resolution=0 ;
-        strncpy( chinfo.CameraName, cap_channel[i]->getname(), 64);
-        Send(&chinfo, sizeof(chinfo));
-    }
-}
-
-void dvrsvr::GetChannelSetup()
-{
-    if( m_req.data>=0 && m_req.data<cap_channels )
-    {
-        struct DvrChannel_attr capattr ;
-        struct dvr_ans ans ;
-        cap_channel[m_req.data]->getattr( &capattr ) ;
-        ans.anscode = ANSCHANNELSETUP;
-        ans.anssize = sizeof( capattr );
-        ans.data = m_req.data;
-        Send( &ans, sizeof(ans));
-        Send( &capattr, ans.anssize);
-    }
-    else {
-        AnsError();
-    }
 }
 
 void dvrsvr::SetChannelSetup()

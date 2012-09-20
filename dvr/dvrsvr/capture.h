@@ -73,14 +73,6 @@ void cap_uninit();
 #define CAP_TYPE_HIKLOCAL	(0)
 #define CAP_TYPE_HIKIP		(1)
 
-struct hik_osd_type {
-    int brightness ;
-    int translucent ;
-    int twinkle ;
-    int lines ;
-    WORD osdline[8][128] ;
-} ;
-
 class capture {
   protected:
     struct  DvrChannel_attr	m_attr ;	// channel attribute

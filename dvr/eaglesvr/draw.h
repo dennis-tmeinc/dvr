@@ -31,13 +31,13 @@
 
 struct BITMAP {
     int width ;
-	int height ;
-	int bits_per_pixel ;	// support 1, 24, 32 bits per pixel
-	int bytes_per_line ;
-	UINT8 * bits ;			// pointer to pixel data
+    int height ;
+    int bits_per_pixel ;	// support 1, 24, 32 bits per pixel
+    int bytes_per_line ;
+    UINT8 * bits ;			// pointer to pixel data
 } ;
 
-// r, g, b, a all range from 0-255 
+// r, g, b, a all range from 0-255
 #define COLOR( r, g, b, a ) 	 ( (((UINT32)(r))<<16) | (((UINT32)(g))<<8) | (UINT32)(b) | (((UINT32)(a))<<24) )
 
 // r, g, b, a componet
@@ -51,17 +51,18 @@ struct BITMAP {
 
 // input
 //       videoformat: 0=default, 1:NTSC, 2:PAL
-// return 
+// return
 //        0 : failed
 //        1 : success
 int draw_init(int videoformat);
 // draw finish, clean up
 void draw_finish();
+
 int draw_screenwidth();				// return screen width
 int draw_screenheight();			// return screen height
 int draw_resetdrawarea();								// reset draw area to (0,0, screen_width, screen_height)
 int draw_setdrawarea( int x, int y, int w, int h );		// set draw area, all drawing limited inside this area
-int draw_refresh();		
+int draw_refresh();
 void draw_setcolor( UINT32 color ) ;
 UINT32 draw_getcolor();
 void draw_setpixelmode( int pixelmode );
@@ -69,7 +70,7 @@ int draw_getpixelmode();
 void draw_putpixel( int x, int y, UINT32 color );
 #ifdef EAGLE34
 void draw_putpixel_eagle34( int x, int y, UINT32 color );
-#endif	
+#endif
 UINT32 draw_getpixel( int x, int y);
 void draw_line(int x1, int y1, int x2, int y2 );
 void draw_rect( int x, int y, int w, int h );
@@ -86,7 +87,7 @@ int draw_fontheight(struct BITMAP * font);
 void draw_text( int dx, int dy, char * text, struct BITMAP * font);
 void draw_text_ex( int dx, int dy, char * text, struct BITMAP * font, int fontw, int fonth);
 
-#define draw_fillscreen() draw_fillrect( 0, 0, draw_screenwidth(), draw_screenheight() ) 
+#define draw_fillscreen() draw_fillrect( 0, 0, draw_screenwidth(), draw_screenheight() )
 
 #endif
 // __DRAW_H__

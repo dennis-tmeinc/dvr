@@ -1,0 +1,107 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<link href="eagle3.css" rel="stylesheet" type="text/css" /><title>Sensor Setup Page</title>
+<!--#exec cmd="cgi/pagevalue"-->
+<script type="text/javascript" src="eagle3.js"></script>
+</head>
+
+<body>
+<!--#include file="header.i"-->
+<div class="tabs">
+<ul>
+<li><a onclick="on_system_click()"><span>System</span></a></li>
+<li><a onclick="on_camera_click()"><span>Camera</span></a></li>
+<li class="current"><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
+<li><a onclick="on_status_click()"><span>Status</span></a></li>
+<li><a onclick="on_tools_click()"><span>Tools </span></a></li>
+</ul>
+</div>
+<p>&nbsp;</p>
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="apply.html">
+<input name="page" value="sensor" type="hidden" />
+<input name="sensor_number" id="id_sensor_number" value="6" type="hidden" />
+<table id="id_sensor_table">
+
+<!--
+<tr>
+<td class="col1">Sensor Number:</td>
+<td>
+<select name="sensor_number" id="id_sensor_number" onchange="on_sensor_number_change()">
+    <option value="6">6</option>
+    <option value="10">10</option>
+    <option value="12">12</option>
+</select>
+</td>
+</tr>
+-->
+
+<tr>
+<td class="col1">Sensor 1</td>
+<td> Name: <input name="sensor1_name" value="Panic" readonly="readonly" />
+<input name="bool_sensor1_inverted" type="hidden" value="on" />
+<input name="sensor1_inverted" type="radio" value="on" />
+ HI 
+<input name="sensor1_inverted" type="radio" value="off" />
+LO
+</td>
+</tr>
+
+<script type="text/javascript">
+for( i=2; i<=32; i++ ) {
+document.write( 
+"<tr>",
+"<td class=\"col1\">Sensor "+i+"</td>",
+"<td> Name: <input name=\"sensor"+i+"_name\" value=\"Sensor "+i+"\" />",
+" <input name=\"bool_sensor"+i+"_inverted\" type=\"hidden\" value=\"on\" />",
+" <input name=\"sensor"+i+"_inverted\" type=\"radio\" value=\"on\" />",
+" HI ",
+" <input name=\"sensor"+i+"_inverted\" type=\"radio\" value=\"off\" />",
+" LO ",
+"</td>",
+"</tr>" 
+);
+}
+</script>
+
+<tr>
+<td></td>
+<td> <input id="id_apply" value="Apply" type="submit" />
+</td>
+</tr>
+
+</table>
+</form>
+<script type="text/javascript">
+var formdata = 
+<!--#include file="sensor_value" --> 
+;
+JSONinitfield( formdata );
+
+function show_sensor_table()
+{
+    var i;
+    var sensor_table = document.getElementById('id_sensor_table') ;
+    for( i=0; i<sensornum; i++ ) {
+        sensor_table.rows[i].style.display="" ;
+    }
+    
+    for( ; i<32; i++ ) {
+        sensor_table.rows[i].style.display="none" ;
+    }
+}
+
+function on_sensor_number_change()
+{
+sensornum=document.getElementById("id_sensor_number").value;
+show_sensor_table();
+}
+
+on_sensor_number_change();
+
+</script>
+</body>
+</html>

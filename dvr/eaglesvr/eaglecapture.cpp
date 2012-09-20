@@ -58,15 +58,28 @@ char Dvr264Header[40] =
 #endif
 
 
-class eagle_capture : public capture {
+class eagle_capture : public icapture {
 protected:
     // Hik Eagle32 parameter
-    int m_hikhandle;				// hikhandle = hikchannel+1
+    int m_hikhandle;				// hikhandle = hikchannel+1 (used for API call)
     int m_chantype ;
     int m_dspdatecounter ;
 
     char m_motiondata[256] ;
     int m_motionupd;				// motion status changed ;
+
+    struct  DvrChannel_attr	m_attr ;	// channel attribute
+    int m_channel;				// channel number
+    int m_enable ;				// 1: enable, 0:disable
+    int m_motion ;				// motion status ;
+    int m_signal ;				// signal ok.
+    int m_oldsignal ;           // signal ok.
+    int m_signal_standard ;     // 1: ntsc, 2: pal
+
+    int m_started ;             // 0: stopped, 1: started
+
+    int m_headerlen ;
+    char m_header[256] ;
 
 public:
     eagle_capture(int channel);
@@ -80,14 +93,22 @@ public:
         return m_attr.Resolution;
     }
 
-    virtual void getattr(struct DvrChannel_attr * pattr) {
-        memcpy( pattr, &m_attr, sizeof(m_attr) );
+    virtual int enabled(){
+        return m_enable;
     }
+    virtual int isstarted(){
+        return ( m_started ) ;
+    }
+    virtual int getheaderlen(){return m_headerlen;}
+    virtual char * getheader(){return m_header;}
     virtual void setattr(struct DvrChannel_attr * pattr) {
         if( pattr->structsize == sizeof(struct DvrChannel_attr) && memcmp(pattr, &m_attr, pattr->structsize)!=0 ) {
             memcpy(&m_attr, pattr, pattr->structsize );
             if( m_started ) {
-                restart();
+                stop();
+                if( m_enable ) {
+                    start();
+                }
             }
         }
     }
@@ -105,20 +126,16 @@ public:
 };
 
 int cap_channels;
-capture * * cap_channel;
+icapture * * cap_channel;
 
 eagle_capture::eagle_capture( int channel )
-: capture(channel)
 {
     m_channel=channel ;
-
     m_signal=1;			// assume signal is good at beginning
     m_oldsignal=1;
     m_enable=0 ;
     m_signal_standard = 1 ;
     m_started = 0 ;
-    // default file header
-    m_headerlen = 0;
 
     //    m_jpeg_mode = -1 ;
     //    m_jpeg_quality = 0 ;
@@ -150,7 +167,7 @@ eagle_capture::eagle_capture( int channel )
     // hik eagle32 parameters
     m_hikhandle=channel+1 ;			// handle = channel+1
     m_chantype=MAIN_CHANNEL ;
-    m_dspdatecounter=0 ;
+    m_dspdatecounter=time_tick() ;
 
     m_motion=0 ;
     m_motionupd = 1 ;
@@ -189,7 +206,7 @@ static int motionanalyze( unsigned int * mddata, int line )
 
 // stream call back
 #ifdef EAGLE32
-static void StreamReadCallBack(	int handle,
+static void Eagle_StreamCallBack(	int handle,
                                void * buf,
                                int size,
                                int frame_type,
@@ -207,7 +224,7 @@ static void StreamReadCallBack(	int handle,
 
 
 #ifdef EAGLE34
-static void StreamReadCallBack(CALLBACK_DATA CallBackData,void* context)
+static void Eagle_StreamCallBack(CALLBACK_DATA CallBackData,void* context)
 {
     int channel=CallBackData.channel-1 ;
     if( channel>=0 &&
@@ -520,10 +537,13 @@ void eagle_capture::setosd( struct hik_osd_type * posd )
                           posd->lines,
                           osdformat );
         EnableOSD(m_hikhandle, 1);		// enable OSD
-        if( m_dspdatecounter > g_timetick || (g_timetick-m_dspdatecounter)>30000 ) {
+
+        // sync DSP time (for osd)
+        int timetick=time_tick();
+        if( m_dspdatecounter > timetick || (timetick-m_dspdatecounter)>30000 ) {
             struct dvrtime dvrt ;
             struct SYSTEMTIME nowt ;
-            m_dspdatecounter = g_timetick ;
+            m_dspdatecounter = timetick ;
             time_now ( &dvrt );
             memset( &nowt, 0, sizeof(nowt));
             nowt.year = dvrt.year ;
@@ -584,12 +604,12 @@ int eagle_init()
             cap_channels=0;
         }
         else {
-            cap_channel = new capture * [cap_channels] ;
+            cap_channel = new icapture * [cap_channels] ;
             //    dvr_log("%d capture card (local) channels detected.", dvrchannels);
             for (i = 0; i < cap_channels; i++ ) {
                 cap_channel[i]=new eagle_capture(i);
             }
-            res=RegisterStreamDataCallback(StreamReadCallBack,NULL);
+            res=RegisterStreamDataCallback(Eagle_StreamCallBack,NULL);
         }
     }
 

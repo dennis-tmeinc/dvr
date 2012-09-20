@@ -1,114 +1,81 @@
 
-#include <stdio.h>
-#include <time.h>
-#include <string.h>
-#include <sys/time.h>
-#include <time.h>
-#include <assert.h>
-#include <string.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <memory.h>
-#include <dirent.h>
-#include <pthread.h>
-#include <signal.h>
-#include <fnmatch.h>
-#include <termios.h>
-#include <stdarg.h>
-
-#include <sys/vfs.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
+#include <sys/types.h>
+#include <netinet/ip.h>
 #include <arpa/inet.h>
-#include <netdb.h>
+#include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 
-unsigned short map[576][720] ;
-
-unsigned rgb2y( int r, int g, int b )
+int raw_recv(void)
 {
-    return (unsigned)((0.257 * r) + (0.504 * g) + (0.098 * b) + 16) ;
-}
+    int s;
+    struct sockaddr_in saddr;
+    char packet[50];
 
-unsigned rgb2u( int r, int g, int b )
-{
-    return (unsigned)(-(0.148 * r) - (0.291 * g) + (0.439 * b) + 128) ;
-}
-
-unsigned rgb2v( int r, int g, int b )
-{
-    return (unsigned)((0.439 * r) - (0.368 * g) - (0.071 * b) + 128) ;
-}
-
-int test_722_logo()
-{
-    FILE * f422 ;
-    f422 = fopen("720.422.org", "r");
-    fread( map, 1, sizeof( map ), f422 );
-    fclose( f422 );
-
-    int x, y ;
-    unsigned int v ;
-    v=0 ;
-    for( y=0; y<576; y++) {
-        for( x=0; x<720; x++ ) {
-            if( y>=100 && y<(100+256) && x>=100 && x<(100+2*256) ) {
-                int r, g, b ;
-                r=y-100 ;
-                g=0 ;
-                b=(x-100)/2 ;
-                unsigned Y, U, V ;
-                Y=rgb2y(r,g,b);
-                U=rgb2u(r,g,b);
-                V=rgb2v(r,g,b);
-                if( x%2==0 ) {
-//                    map[y][x]= (y-100)*256 + 128;
-                    map[y][x]= Y*256+U ;
-                }
-                else { 
-//                    map[y][x]= (y-100)*256 + (x-100)/2;
-                    map[y][x]= Y*256+V ;
-                }
-            }
-        }
+    if ((s = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0) {
+        perror("error:");
+        exit(EXIT_FAILURE);
     }
-    
-    f422 = fopen( "720.422", "w");
-    fwrite( map, 1, sizeof( map ), f422 );
-    fclose( f422 );
-    return 0 ;
+
+    memset(packet, 0, sizeof(packet));
+    socklen_t *len = (socklen_t *)sizeof(saddr);
+    int fromlen = sizeof(saddr);
+
+    while(1) {
+        if (recvfrom(s, (char *)&packet, sizeof(packet), 0,
+            (struct sockaddr *)&saddr, &fromlen) < 0)
+            perror("packet receive error:");
+
+        int i = sizeof(struct iphdr);	/* print the payload */
+        while (i < sizeof(packet)) {
+            fprintf(stderr, "%c", packet[i]);
+            i++;
+        }
+        printf("\n");
+    }
+    exit(EXIT_SUCCESS);
 }
 
-class ts {
-	public:
-		int member ;
-		ts() {
-			printf(" Construct ts %p\n", this );
-			member=55;
-		}
-		~ts() {
-			printf(" Destruct ts %p\n", this );
-		}
-		void print() {
-			printf( "member = %d\n", member );
-		}
-} ;
 
-ts t1, t2 ;
-int x = 50 ;	
+#define DEST "127.0.0.1"
 
-int main()
+int raw_send(void)
 {
 
-	printf("x=%d\n", x );
-  t1.print();  
-//    test_722_logo();
-     ts t ;
-	t.print();
-    return 0;
+    int s;
+    struct sockaddr_in daddr;
+    char packet[50];
+    /* point the iphdr to the beginning of the packet */
+    struct iphdr *ip = (struct iphdr *)packet;
+
+    if ((s = socket(AF_INET, SOCK_RAW, IPPROTO_RAW)) < 0) {
+        perror("error:");
+        exit(EXIT_FAILURE);
+    }
+
+    daddr.sin_family = AF_INET;
+    daddr.sin_port = 0; /* not needed in SOCK_RAW */
+    inet_pton(AF_INET, DEST, (struct in_addr *)&daddr.sin_addr.s_addr);
+    memset(daddr.sin_zero, 0, sizeof(daddr.sin_zero));
+    memset(packet, 'A', sizeof(packet));   /* payload will be all As */
+
+    ip->ihl = 5;
+    ip->version = 4;
+    ip->tos = 0;
+    ip->tot_len = htons(40);	/* 16 byte value */
+    ip->frag_off = 0;		/* no fragment */
+    ip->ttl = 64;			/* default value */
+    ip->protocol = IPPROTO_RAW;	/* protocol at L4 */
+    ip->check = 0;			/* not needed in iphdr */
+    ip->saddr = daddr.sin_addr.s_addr;
+    ip->daddr = daddr.sin_addr.s_addr;
+
+    while(1) {
+        sleep(1);
+        if (sendto(s, (char *)packet, sizeof(packet), 0,
+            (struct sockaddr *)&daddr, (socklen_t)sizeof(daddr)) < 0)
+            perror("packet send error:");
+    }
+    exit(EXIT_SUCCESS);
 }

@@ -21,10 +21,10 @@ void cap_uninit()
     eagle_uninit ();
 }
 
-void capture::onframe(cap_frame * pcapframe)
+void icapture::onframe(cap_frame * pcapframe)
 {
     if( net_onframe(pcapframe)<=0 ) {
-        dvr_log( "No network connect, to stop channel %d ", m_channel );
+//        dvr_log( "No network connect, to stop channel %d ", m_channel );
         stop();
     }
 }
@@ -33,15 +33,12 @@ void capture::onframe(cap_frame * pcapframe)
 
 typedef void (* framecallback)(struct cap_frame *frame ) ;
 
-static framecallback framecb ;
-
-void defframecb(struct cap_frame * )
-{
-    // do nothing ;
-}
+static framecallback framecb = NULL ;
 
 int eagle_cap_init(framecallback fcb)
 {
+    time_init();
+    mem_init();
     eagle_init();
     framecb = fcb;
     return cap_channels ;
@@ -49,14 +46,25 @@ int eagle_cap_init(framecallback fcb)
 
 void eagle_cap_uninit()
 {
-    framecb = defframecb;
+    framecb = NULL;
     eagle_uninit();
+    mem_uninit();
+    time_uninit();
 }
 
 void eagle_cap_finish()
 {
     eagle_finish();
 }
+
+/*
+void capture::onframe(cap_frame * pcapframe)
+{
+    if( framecb ) {
+        framecb( pcapframe );
+    }
+}
+*/
 
 void eagle_cap_start()
 {

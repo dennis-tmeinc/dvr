@@ -9,7 +9,9 @@
 //#define MDVR_APP
 #define PWII_APP
 //#define TVS_APP
-#define PWZEUS_APP
+
+// different way of mcu programming
+#define MCU_ZEUS
 
 //#define EAGLESVR
 

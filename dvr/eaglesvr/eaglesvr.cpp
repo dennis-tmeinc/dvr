@@ -2,9 +2,6 @@
 #include "eaglesvr.h"
 #include "screen.h"
 
-pthread_mutex_t mutex_init=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP ;
-static pthread_mutex_t dvr_mutex;
-
 int app_state;				// APPQUIT, APPUP, APPDOWN, APPRESTART
 
 int g_lowmemory ;
@@ -173,9 +170,6 @@ int main()
 {
     int app_ostate;				// application status. ( APPUP, APPDOWN )
 
-    // initial mutex
-    memcpy( &dvr_mutex, &mutex_init, sizeof(mutex_init));
-
     mem_init();
 
     app_ostate = APPDOWN ;
@@ -220,6 +214,5 @@ int main()
     // try un-init eagle board
     eagle_finish();
 
-    pthread_mutex_destroy(&dvr_mutex);
     return 0 ;
 }

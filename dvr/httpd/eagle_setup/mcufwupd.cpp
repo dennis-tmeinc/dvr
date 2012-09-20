@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>   
+#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -11,19 +11,19 @@
 
 #include "../../cfg.h"
 
-void runapp(char *const argv[]) 
+void runapp(char *const argv[])
 {
-	int status ;
-	pid_t pid ;
-	pid=fork();
-	if( pid==0 ) {
-		// child process
-		execv( argv[0], argv );
-		exit(1);
-	}
-	else if( pid>0 ) {
-		wait(&status);
-	}
+    int status ;
+    pid_t pid ;
+    pid=fork();
+    if( pid==0 ) {
+        // child process
+        execv( argv[0], argv );
+        exit(1);
+    }
+    else if( pid>0 ) {
+        wait(&status);
+    }
 }
 
 int main()
@@ -33,7 +33,7 @@ int main()
     int res = 0 ;
     char mcufirmwarefile[128] ;
     char mcumsgfile[128] ;
-    
+
     mcu_firmwarefilename = getenv( "POST_FILE_mcu_firmware_file" );
     if( mcu_firmwarefilename ) {
         FILE * mcufirmfile = fopen( mcu_firmwarefilename, "r" ) ;
@@ -96,7 +96,7 @@ int main()
         }
 
         // updating MCU firmware
-#ifdef  PWZEUS_APP
+#ifdef  MCU_ZEUS
         fd = open(mcumsgfile, O_RDWR );
         char * msg ;
 
@@ -132,7 +132,7 @@ int main()
         write(fd, msg, strlen(msg)) ;
         close( fd );
 
-#else		
+#else
         execlp( APP_DIR"/ioprocess", "ioprocess", "-fw", mcufirmwarefile, NULL );
 #endif
         exit(2);    // error exec
@@ -145,7 +145,7 @@ int main()
     else {
         printf( "MCU firmware update failed. Reset system!" );
     }
-    
+
     if( fork() == 0 ) {
         // disable stdin , stdout
         int fd = open("/dev/null", O_RDWR );

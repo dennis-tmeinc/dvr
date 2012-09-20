@@ -151,6 +151,10 @@ enum anscode_type {
 #define UINT32 unsigned int
 #endif
 
+#ifndef UINT16
+#define UINT16 unsigned short
+#endif
+
 // dvr system setup
 struct system_stru {
 //	char IOMod[80]  ;
@@ -240,6 +244,15 @@ struct dvrtime {
     int milliseconds;
     int tz;
 };
+
+// OSD data
+struct hik_osd_type {
+    int brightness ;
+    int translucent ;
+    int twinkle ;
+    int lines ;
+    UINT16 osdline[8][128] ;
+} ;
 
 // capture frame types
 #define FRAMETYPE_UNKNOWN	(0)

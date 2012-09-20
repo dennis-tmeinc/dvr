@@ -36,12 +36,24 @@ static int  eagle368_systemstart ;
 static int  eagle368_systemstart_req ;
 static int  eagle368_systemstart_time ;
 
-class eagle368_capture : public capture {
+class eagle368_capture : public icapture {
 protected:
     // Hik Eagle32 parameter
-    int m_hikhandle;				// hikhandle = hikchannel+1
-    int m_chantype ;
-    int m_dspdatecounter ;
+    int m_channel;				// channel number
+    int m_chantype ;            // MAIN_CHANNEL
+    int m_hikhandle;			// hikhandle = channel (used for for API call)
+
+    struct  DvrChannel_attr	m_attr ;	// channel attribute
+    int m_enable ;				// 1: enable, 0:disable
+    int m_motion ;				// motion status ;
+    int m_signal ;				// signal ok.
+    int m_oldsignal ;           // signal ok.
+    int m_signal_standard ;     // 1: ntsc, 2: pal
+
+    int m_started ;             // 0: stopped, 1: started
+
+    int m_headerlen ;
+    char m_header[256] ;
 
 public:
     eagle368_capture(int channel);
@@ -55,9 +67,16 @@ public:
         return m_attr.Resolution;
     }
 
-    virtual void getattr(struct DvrChannel_attr * pattr) {
-        memcpy( pattr, &m_attr, sizeof(m_attr) );
+    virtual int enabled(){
+        return m_enable;
     }
+    virtual int isstarted(){
+        return ( m_started ) ;
+    }
+
+    virtual int getheaderlen(){return m_headerlen;}
+    virtual char * getheader(){return m_header;}
+
     virtual void setattr(struct DvrChannel_attr * pattr) {
         if( pattr->structsize == sizeof(struct DvrChannel_attr) && memcmp(pattr, &m_attr, pattr->structsize)!=0 ) {
             memcpy(&m_attr, pattr, pattr->structsize );
@@ -81,9 +100,8 @@ public:
 };
 
 eagle368_capture::eagle368_capture( int channel )
-    : capture(channel)
 {
-    m_channel=channel ;
+    m_channel = channel ;
 
     m_signal=1;			// assume signal is good at beginning
     m_oldsignal=1;
@@ -123,7 +141,6 @@ eagle368_capture::eagle368_capture( int channel )
     // hik eagle32 parameters
     m_hikhandle=channel ;
     m_chantype=MAIN_CHANNEL ;
-    m_dspdatecounter=0 ;
 
     m_motion=0 ;
     m_started = 0 ;                 // no started.
@@ -146,10 +163,10 @@ eagle368_capture::~eagle368_capture()
 }
 
 int cap_channels;
-capture * * cap_channel;
+icapture * * cap_channel;
 
 // stream call back
-static void StreamReadCallBack(CALLBACK_DATA CallBackData,void* context)
+static void Eagle368_StreamCallBack(CALLBACK_DATA CallBackData,void* context)
 {
 
     int channel=CallBackData.channel ;
@@ -304,19 +321,6 @@ void eagle368_capture::stop()
         res=StopCodec(m_hikhandle, m_chantype);
         m_started = 0 ;
     }
-
-    int i;
-    for( i=0; i<cap_channels ;i++) {
-        if( cap_channel[i] && cap_channel[i]->isstarted() ) {
-            return ;
-        }
-    }
-    if( eagle368_systemstart ) {
-        dvr_log( "Eagle368 System Stop!") ;
-        SystemStop();
-        eagle368_systemstart = 0 ;
-        eagle368_systemstart_time = g_timetick;
-    }
 }
 
 void eagle368_capture::captureIFrame()
@@ -329,7 +333,6 @@ void eagle368_capture::captureIFrame()
 // to capture one jpeg frame
 void eagle368_capture::captureJPEG(int quality, int pic)
 {
-
 }
 
 void eagle368_capture::setosd( struct hik_osd_type * posd )
@@ -369,9 +372,10 @@ int eagle368_capture::getmotion()
 
 void eagle_idle()
 {
-    int i;
     if(eagle368_systemstart_req!=eagle368_systemstart) {
-        if( g_timetick-eagle368_systemstart_time > 8000 ) {     // delay 8 seconds between systemstart and systemstop, system would hang otherwise
+        int i;
+        int timetick = time_tick();
+        if( timetick-eagle368_systemstart_time > 8000 ) {     // delay 8 seconds between systemstart and systemstop, system would hang otherwise
             if(eagle368_systemstart_req){
                 // start all channel
                 for( i=0; i<cap_channels ;i++) {
@@ -382,7 +386,7 @@ void eagle_idle()
                 dvr_log( "Eagle368 System Start!") ;
                 SystemStart();
                 eagle368_systemstart = eagle368_systemstart_req ;
-                eagle368_systemstart_time = g_timetick ;
+                eagle368_systemstart_time = timetick ;
             }
             else {
                 // stop all channel
@@ -394,7 +398,7 @@ void eagle_idle()
                 dvr_log( "Eagle368 System Stop!") ;
                 SystemStop();
                 eagle368_systemstart = eagle368_systemstart_req ;
-                eagle368_systemstart_time = g_timetick ;
+                eagle368_systemstart_time = timetick ;
             }
         }
     }
@@ -434,18 +438,18 @@ int eagle_init()
             cap_channels=0;
         }
         else {
-            cap_channel = new capture * [cap_channels] ;
+            cap_channel = new icapture * [cap_channels] ;
             //    dvr_log("%d capture card (local) channels detected.", dvrchannels);
             for (i = 0; i < cap_channels; i++ ) {
                 cap_channel[i]=new eagle368_capture(i);
 
             }
-            res=RegisterStreamDataCallback(StreamReadCallBack,NULL);
+            res=RegisterStreamDataCallback(Eagle368_StreamCallBack,NULL);
         }
     }
 
     eagle368_systemstart_req = eagle368_systemstart = 0  ;
-    eagle368_systemstart_time = g_timetick-10000 ;  // make it ready to start
+    eagle368_systemstart_time = time_tick()-10000 ;  // make it ready to start
 
     return cap_channels ;
 }

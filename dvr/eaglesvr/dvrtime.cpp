@@ -6,7 +6,6 @@
 
 // time functions
 
-int g_timetick=0 ;            // global time tick , to maintain a always count up time counter in ms (even between restart)
 static time_t timetick_ref=0 ;
 
 void time_init()
@@ -14,7 +13,6 @@ void time_init()
     struct timespec tp ;
     clock_gettime(CLOCK_MONOTONIC, &tp );
     timetick_ref = tp.tv_sec ;
-    time_tick();
 }
 
 void time_uninit()
@@ -25,16 +23,8 @@ void time_uninit()
 int time_tick()
 {
     struct timespec tp ;
-    // to gaurantee g_timetick always going up
     clock_gettime(CLOCK_MONOTONIC, &tp );
-    g_timetick = (tp.tv_sec - timetick_ref)*1000+tp.tv_nsec/1000000 ;
-    if( g_timetick<0 ) {                                             // timer overflow
-        dvr_log("Reach timer limit, restarting.");
-        timetick_ref = tp.tv_sec ;
-        g_timetick=0;
-        app_state = APPRESTART ;
-    }
-    return g_timetick ;
+    return (tp.tv_sec - timetick_ref)*1000+tp.tv_nsec/1000000 ;
 }
 
 void time_now(struct dvrtime *dvrt)
