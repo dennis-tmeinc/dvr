@@ -421,6 +421,21 @@ public:
         return getstring() ;
     }
 
+    char * setsize(int nsize){
+        if( length()<nsize ) {
+            char * nbuf = new char [nsize+1] ;
+            if( m_str ) {
+                strcpy( nbuf, m_str ) ;
+                delete m_str ;
+            }
+            else {
+                *nbuf=0 ;
+            }
+            m_str = nbuf ;
+        }
+        return getstring() ;
+    }
+
     int isempty() {
         if( m_str ) {
             return (m_str[0] == 0);

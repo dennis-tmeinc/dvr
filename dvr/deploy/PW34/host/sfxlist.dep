@@ -12,6 +12,9 @@ sfxrun.dep sfxrun
 ./iwpriv
 ./mos7840.ko
 ./usbserial.ko
+./dosfsck
+./dosfslabel
+./mkdosfs
 ./ID/APPID
 ./ID/BOARDNUM
 ./ID/BOARDID

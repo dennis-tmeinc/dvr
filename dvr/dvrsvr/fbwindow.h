@@ -115,11 +115,12 @@ protected:
     struct rect m_drawrect ;
 
     // window timer
+#define NUM_TIMER   (4)
     struct w_timer {
         int id ;
         int interval ;          // in milli-second
         int starttime ;         // in milli-second
-    } m_timer ;
+    } m_timer[NUM_TIMER] ;
 
 public:
 
@@ -138,7 +139,7 @@ public:
         m_brother = NULL ;
         m_redraw = 0 ;
         m_show = 0 ;			// no show by default
-        m_timer.id=0;
+        memset(m_timer,0,sizeof(m_timer));
     }
 
     window( window * parent, int id, int x, int y, int w, int h ) {
@@ -155,7 +156,7 @@ public:
             parent->addchild( this );
         }
         m_show = 1 ;			// show by default
-        m_timer.id=0;
+        memset(m_timer,0,sizeof(m_timer));
         redraw();
     }
 
@@ -489,19 +490,35 @@ public:
 
     // interval on miliseconds
     void settimer( int interval, int id=1 ) {
-        m_timer.id = id ;
-        if( id ) {
-            if( interval>0 ) {
-                m_timer.interval = interval ;
+        int i;
+        for(i=0;i<NUM_TIMER;i++) {
+            if(m_timer[i].id==id) {      // found the same id
+                m_timer[i].id = 0 ;
             }
-            m_timer.starttime = g_timetick ;
+        }
+        for(i=0;i<NUM_TIMER;i++) {
+            if(m_timer[i].id==0) {      // found an empty slot
+                m_timer[i].id=id ;
+                m_timer[i].interval = interval ;
+                m_timer[i].starttime = g_timetick ;
+                return;
+            }
         }
     }
 
     // interval on miliseconds
-    void killtimer( int ) {
-        m_timer.starttime = g_timetick ;
-        m_timer.id = 0 ;
+    void killtimer( int id = 0 ) {
+        if( id == 0 ) {         // kill all timer
+            memset(m_timer, 0, sizeof(m_timer));
+        }
+        else {
+            int i;
+            for(i=0;i<NUM_TIMER;i++) {
+                if(m_timer[i].id==id) {
+                    m_timer[i].id=0 ;
+                }
+            }
+        }
     }
 
     void checktimer() {
@@ -513,10 +530,15 @@ public:
         if( m_alive==0 ) {
             delete this ;
         }
-        else if( m_timer.id && g_timetick >= (m_timer.starttime+m_timer.interval) ) {
-            int tid = m_timer.id ;
-            m_timer.id = 0 ;
-            ontimer(tid);
+        else {
+            int i;
+            for(i=0;i<NUM_TIMER;i++) {
+                if(m_timer[i].id && (g_timetick-m_timer[i].starttime)>=m_timer[i].interval ) {
+                    int tid = m_timer[i].id ;
+                    m_timer[i].id = 0 ;
+                    ontimer(tid);
+                }
+            }
         }
     }
 

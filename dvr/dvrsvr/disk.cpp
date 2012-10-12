@@ -19,8 +19,9 @@ static int disk_tlen ;
 static int disk_llen ;
 static array <f264name> disk_oldfilelist ;
 static array <f264name> disk_oldnfilelist ;
+static int disk_disable_archive ;
 
-static pthread_t disk_cleanthreadid;
+//static pthread_t disk_cleanthreadid;
 static int disk_clean_run = 0 ;           // 0: quit cleaning thread, 1: keep running
 
 struct disk_info {
@@ -368,7 +369,6 @@ static void disk_listday_help(char *dir, array <f264name> & flist, int day, int 
         if( dfind.isdir() ) {
             if( fnmatch( "_*_", dfind.filename(), 0 )==0 ){		// a root direct for DVR files
                 char chpath[512] ;
-                f264name p ;
                 for( channel=0; channel<16; channel++ ) {
                     if( ch>=0 && channel!=ch ) {
                         continue ;
@@ -388,8 +388,9 @@ static void disk_listday_help(char *dir, array <f264name> & flist, int day, int 
                                 ( strstr(filename, "_L_")!=NULL || strstr(filename, "_N_")!=NULL ) &&
                                 strstr(filename, "_0_")==NULL )          // must be a propery closed file
                             {
-                                p=find264.pathname() ;
-                                flist.add(p);
+                                f264name fn ;
+                                fn = find264.pathname() ;
+                                flist.add(fn);
                             }
                         }
                     }
@@ -440,6 +441,16 @@ int disk_listday(array <f264name> & flist, struct dvrtime * day, int channel)
             i++ ;
         }
     }
+
+    // check file readable?
+    for( i=0; i<flist.size();i++ ) {
+        dvrfile f ;
+        if( !f.open(flist[i]) ) {
+            // can't open
+            flist.remove(i--);
+        }
+    }
+
     flist.compact();
     return flist.size();
 }
@@ -1034,14 +1045,14 @@ int disk_archive_mkfreespace( char * diskdir )
 
 static char disk_archive_tmpfile[]=".DVRARCH" ;
 static int  disk_archive_unlock = 0 ;           // by default not to unlock archived file
-static int  disk_archive_bufsize = (4*1024*1024) ;
+static int  disk_archive_bufsize = (1024*1024) ;
 
 // return 1: success, 0: fail, -1: to quit
 static int disk_archive_copyfile( char * srcfile, char * destfile, int * arc )
 {
     FILE * fsrc ;
     FILE * fdest ;
-    char * filebuf ;
+    char filebuf[4096] ;
     int r ;
     int res ;
 
@@ -1055,30 +1066,23 @@ static int disk_archive_copyfile( char * srcfile, char * destfile, int * arc )
 
     res = 0 ;
     while( * arc > 0 ) {
-        usleep(10000);
         if( (!rec_busy) && (!disk_busy) && g_cpu_usage < (float)disk_arch_mincpuusage/100.0 ) {
-            filebuf=(char *)malloc(disk_archive_bufsize) ;
-            if( filebuf ) {
-                r=fread( filebuf, 1, disk_archive_bufsize, fsrc );
-                if( r>0 ) {
-                    fwrite( filebuf, 1, r, fdest ) ;
-                    free( filebuf );
-                }
-                else {
-                    res = 1 ;       // success
-                    free( filebuf );
-                    break ;
-                }
+            r=fread( filebuf, 1, sizeof(filebuf), fsrc );
+            if( r>0 ) {
+                fwrite( filebuf, 1, r, fdest ) ;
             }
             else {
-                res=0 ;
-                break;
+                res = 1 ;       // success
+                break ;
             }
         }
+        else {
+            usleep(1000);
+        }
     }
-
     fclose( fsrc ) ;
     fclose( fdest ) ;
+    sync();
     return res ;
 }
 
@@ -1229,20 +1233,27 @@ static int disk_archive_round(char * srcdir, char * destdir)
     FILE * archupdfile ;
     char   archupdfilename[128] ;
     int    upd_date ;
+    int    upd_time ;
     int    upd = 1 ;        // to update last date
     int    res = 0 ;
 
     // get last archived file time
     upd_date=0;
+    upd_time=0;
     sprintf( archupdfilename, "%s/.archupd", srcdir);
     archupdfile = fopen( archupdfilename, "r" );
     if( archupdfile ) {
-        if( fscanf(archupdfile, "%d", &upd_date)<1 )
+        if( fscanf(archupdfile, "%d %d", &upd_date, &upd_time)<1 )
         {
             upd_date=0 ;
+            upd_time=0 ;
         }
         fclose( archupdfile );
     }
+
+
+    // copy log files, smartlog files
+    disk_archive_cplogfile(srcdir, destdir);
 
     disk_getdaylist_help(srcdir, daylist, -1);
     daylist.sort();
@@ -1266,33 +1277,34 @@ static int disk_archive_round(char * srcdir, char * destdir)
                     if( ch<0 || ch>= cap_channels ) {
                         continue ;
                     }
-                    if( disk_archive_arch( flist[i], srcdir, destdir ) ) {
-                        // successfully archived. update latest archive file date & time
-                        res = 1 ;
+
+                    dvrtime dvrft ;
+                    f264time(fname, &dvrft);
+                    int ud = dvrft.year *10000 + dvrft.month * 100 + dvrft.day ;
+                    int ut = dvrft.hour * 10000 + dvrft.minute * 100 + dvrft.second ;
+                    if( ut>=upd_time || ud>upd_date ) {
+
+                        // update latest file time
                         if( upd ) {
-                            upd_date=day ;
+                            archupdfile = fopen( archupdfilename, "w" );
+                            if( archupdfile ) {
+                                fprintf( archupdfile, "%d %d", ud, ut) ;
+                                fclose( archupdfile );
+                            }
+                        }
+
+                        if( disk_archive_arch( flist[i], srcdir, destdir ) ) {
+                            res = 1 ;
                         }
                     }
                 }
                 else {
-                    upd = 0 ;       // stop update last archive date, this is unfinished (partial) locked file
+                    upd = 0 ;       // stop update lastest archive date, this is unfinished (partial) locked file
                 }
             }
         }
     }
 
-    if( res ) {
-        archupdfile = fopen( archupdfilename, "w" );
-        if( archupdfile ) {
-            fprintf( archupdfile, "%d", upd_date) ;
-            fclose( archupdfile );
-        }
-    }
-
-    if( disk_archive_run > 0 ) {
-        // copy log files, smartlog files
-        disk_archive_cplogfile(srcdir, destdir);
-    }
     return res ;
 }
 
@@ -1334,26 +1346,24 @@ int disk_archive_basedisk(string & archbase)
     return 0 ;
 }
 
-static pthread_t disk_archive_threadid ;
-static int       disk_archive_round_wait ;
+static pthread_t disk_archive_threadid = 0 ;
+static int       disk_archive_wait = 0 ;
 
 void * disk_archive_thread(void * )
 {
-    while( 1 ) {     // run all the time?
-        if( disk_archive_run ) {
-            disk_archive_round_wait = 30 ;          // wait 30 seconds after this round
+    nice(5) ;          // run nicely
+
+    while( disk_archive_run>0 ) {     // run all the time?
+        if( --disk_archive_wait<=0 ) {
             // run one round archiving
             string archbase ;
-            if( dio_mode_archive() && rec_basedir.length()>0 && disk_archive_basedisk( archbase ) ) {
+            if( dio_record && rec_basedir.length()>0 && disk_archive_basedisk( archbase ) ) {
                 disk_archive_round(rec_basedir, archbase ) ;
             }
-            disk_archive_run = 0 ;
+            disk_archive_wait = 200 ;
         }
         else {
-            if ( --disk_archive_round_wait <= 0 ) {
-                disk_archive_run = 1 ;
-            }
-            sleep(1);
+            usleep(100000) ;
         }
     }
     return NULL ;
@@ -1361,32 +1371,37 @@ void * disk_archive_thread(void * )
 
 void disk_archive_start()
 {
-    disk_archive_round_wait=0 ;
+    if( disk_archive_threadid != 0 ) {
+        disk_archive_run = -1 ;
+        pthread_join(disk_archive_threadid, NULL);
+        disk_archive_threadid = 0 ;
+    }
+    disk_archive_wait = 0 ;
     disk_archive_run = 1 ;
-    if( disk_archive_threadid == 0 ) {
-        if( pthread_create(&disk_archive_threadid, NULL, disk_archive_thread, NULL )!=0 ) {
-            disk_archive_threadid = 0 ;
-            disk_archive_run = 0 ;
-        }
+    if( pthread_create(&disk_archive_threadid, NULL, disk_archive_thread, NULL )!=0 ) {
+        disk_archive_threadid = 0 ;
+        disk_archive_run = 0 ;
     }
 }
 
 void disk_archive_stop()
 {
-    disk_archive_round_wait = 60 ;      // let it wait in non archiving state for 1 minute
     disk_archive_run = -1 ;
 }
 
+// arch is actively run
 int disk_archive_runstate()
 {
-    return disk_archive_run > 0 ;   // arch is actively run
+    return (disk_archive_run > 0 && disk_archive_wait<=0 ) ;
 }
 
+static int disk_mediaidset=0 ;        // media ID set by archiving disk
 
 // regular disk check, every 3 seconds
 void disk_check()
 {
     int i;
+    string archbase ;
 
     // check disks
     if( disk_scanalldisk()<=0 ) {
@@ -1426,25 +1441,49 @@ void disk_check()
             }
 
 #ifdef PWII_APP
-        // To change hostname specified from media disk
-        char * mediaidfile ;
-        mediaidfile = new char [1024] ;
-        sprintf( mediaidfile, "%s/pwid.conf", (char *)rec_basedir );
-        config mediaidconfig( mediaidfile, 0 );		// don't merge defconf
-        delete mediaidfile ;
-        string mediaid ;
-        mediaid = mediaidconfig.getvalue("system","id1");
-        if( mediaid.length()>0 ) {
-        sprintf(g_id1, "%s", (char *)mediaid );
-        g_servername = mediaid ;
-        sethostname( (char *)g_servername, g_servername.length()+1);
-        dvr_log("Setup server name from media disk: %s", (char *)g_servername);
-        }
+            if( disk_mediaidset == 0 ) {
+                // To change hostname specified from media disk
+                string mediaidfile ;
+                sprintf( mediaidfile.setsize(200), "%s/pwid.conf", (char *)rec_basedir );
+                config mediaidconfig( mediaidfile, 0 );		// don't merge defconf
+                string mediaid ;
+                mediaid = mediaidconfig.getvalue("system","id1");
+                if( mediaid.length()>0 ) {
+                    sprintf(g_id1, "%s", (char *)mediaid );
+                    g_servername = mediaid ;
+                    sethostname( (char *)g_servername, g_servername.length()+1);
+                    dvr_log("Setup server name from media disk: %s", (char *)g_servername);
+                }
+            }
 #endif
 
             dvr_log("Start recording on disk : %s.", basename(rec_basedir)) ;
 
         }
+    }
+
+    if( (!disk_disable_archive) &&
+            disk_archive_threadid==0 &&
+            dio_record &&
+            rec_basedir.length()>0 &&
+            disk_archive_basedisk( archbase ) )
+    {
+#ifdef PWII_APP
+            // To change hostname specified from media disk
+            string mediaidfile ;
+            sprintf( mediaidfile.setsize(200), "%s/pwid.conf", (char *)archbase );
+            config mediaidconfig( mediaidfile, 0 );		// don't merge defconf
+            string mediaid ;
+            mediaid = mediaidconfig.getvalue("system","id1");
+            if( mediaid.length()>0 ) {
+                sprintf(g_id1, "%s", (char *)mediaid );
+                g_servername = mediaid ;
+                sethostname( (char *)g_servername, g_servername.length()+1);
+                disk_mediaidset = 1 ;
+                dvr_log("Setup server name from media disk: %s", (char *)g_servername);
+            }
+#endif
+        disk_archive_start();
     }
 
 disk_check_finish:
@@ -1560,14 +1599,14 @@ void disk_init(config &dvrconfig)
 
     disk_archive_unlock = dvrconfig.getvalueint("system", "arch_unlock");
 
+    disk_disable_archive = dvrconfig.getvalueint( "system", "disable_archive");
+
     disk_arch_mincpuusage = dvrconfig.getvalueint("system", "arch_mincpuusage");
     if( disk_arch_mincpuusage<50 ) {
         disk_arch_mincpuusage = 50;
     }
 
-    // to start archiving task
     disk_archive_run = 0 ;
-    disk_archive_start();
 
     disk_clean_run = 1 ;
     //    pthread_create(&disk_cleanthreadid, NULL, disk_cleanthread, NULL);

@@ -1299,7 +1299,7 @@ int dvrfile::repairpartiallock()
         // if rec_busy, delay for 10 s
         int busywait ;
         for( busywait=0; busywait<100; busywait++) {
-            if( rec_busy || disk_busy || g_cpu_usage>0.5 ) {
+            if( rec_busy || disk_busy || g_cpu_usage>0.7 ) {
                 usleep(10000);
             }
             else {

@@ -80,6 +80,9 @@ int playback::seek( struct dvrtime * seekto )
                 preread();
                 goto seek_end ;				// done!
             }
+            else {
+                m_filelist.remove(m_curfile--) ;        // silently remove it form list
+            }
         }
     }
 
@@ -317,44 +320,6 @@ int playback::getprevcliptime(struct dvrtime * begin, struct dvrtime * end)
 }
 
 
-void playback::getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * pday)
-{
-    struct dvrtime t ;
-    int len ;
-    int i;
-    struct dayinfoitem di ;
-    struct dayinfoitem di_x ;
-    array <f264name> filelist ;
-
-    di.ontime=0;
-    di.offtime=0;
-
-    disk_listday( filelist, pday, m_channel );
-
-    dayinfo.setsize(0);
-    for( i=0; i<filelist.size(); i++) {
-        char * fname = filelist[i];
-        len=f264length(fname) ;
-        if( len<=0 || len>5000 ) {
-            continue ;
-        }
-        f264time(fname, &t);
-        di_x.ontime=t.hour * 3600 + t.minute * 60 + t.second ;
-        di_x.offtime=di_x.ontime+len ;
-        if( (di_x.ontime-di.offtime)>5 ) {
-            if( di.offtime>di.ontime ) {
-                dayinfo.add(di);
-            }
-            di.ontime=di_x.ontime ;
-        }
-        di.offtime=di_x.offtime ;
-    }
-
-    if( di.offtime>di.ontime ) {
-        dayinfo.add(di);
-    }
-}
-
 int  playback::getdaylist( array <int> & daylist )
 {
     if( m_daylist.size()>0 ) {
@@ -380,7 +345,7 @@ DWORD playback::getmonthinfo(struct dvrtime * month)
     return minfo ;
 }
 
-void playback::getlockinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * pday)
+void playback::getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * pday, int lock)
 {
     struct dvrtime t ;
     int len ;
@@ -389,19 +354,33 @@ void playback::getlockinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime *
     struct dayinfoitem di ;
     struct dayinfoitem di_x ;
     array <f264name> filelist ;
+    array <f264name> * pfilelist ;
 
     di.ontime=0;
     di.offtime=0;
 
-    disk_listday( filelist, pday, m_channel );
+    int bcdseekday = pday->year*10000 + pday->month*100 + pday->day ;
+    if( bcdseekday != m_day ) {			// get different day list
+        // load day file list
+        disk_listday( filelist, pday, m_channel );
+        pfilelist = &filelist ;
+    }
+    else {
+        pfilelist = &m_filelist ;
+    }
 
     dayinfo.setsize(0);
-    for( i=0; i<filelist.size(); i++) {
-        char * fname = filelist[i];
+    for( i=0; i<pfilelist->size(); i++) {
+        char * fname = (*pfilelist)[i];
         if( strstr(fname, "_L_") ) {
             len=f264length(fname) ;
-            locklen = f264locklength( fname );
-            if( len<=0 || locklen<=0 || len>5000 || locklen>len ) {
+            if( lock ) {
+                locklen = f264locklength( fname );
+            }
+            else {
+                locklen = len ;     // fake full lengh
+            }
+            if( len<=0 || locklen<=0 || len>90000 || locklen>len ) {
                 continue ;
             }
             f264time(fname, &t);

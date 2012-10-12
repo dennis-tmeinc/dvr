@@ -91,7 +91,7 @@ pwii_policeidlistfile=/davinci/dvr/policeidlist
 
 # pwlite, disable wifi and archive feature
 disable_wifiupload=1
-disable_archive=1
+disable_archive=0
 
 [network]
 port=15112

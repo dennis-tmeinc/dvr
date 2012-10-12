@@ -1109,10 +1109,6 @@ int rec_channel::dorecord()
         w++;
     }
 
-    if( g_cpu_usage>0.8 ) {
-        usleep(500000);
-    }
-
     m_file.flushbuffer();
 
     m_activetime=g_timetick;

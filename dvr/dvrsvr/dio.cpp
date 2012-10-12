@@ -87,7 +87,7 @@ int dio_enablewatchdog()
         p_dio_mmap->dvrwatchdog = -1 ;
 #else
         p_dio_mmap->dvrwatchdog = 0 ;
-#endif		
+#endif
     }
     dio_unlock();
     return (0);
@@ -116,21 +116,21 @@ int dio_kickwatchdog()
 }
 
 // set dvr status bits
-int dio_setstate( int status ) 
+int dio_setstate( int status )
 {
 #ifdef PWII_APP
     int rstart = 0 ;
-#endif    
+#endif
     dio_lock();
     if( p_dio_mmap ){
 #ifdef PWII_APP
         if( (status & DVR_LOCK)!=0 &&
-            (p_dio_mmap->dvrstatus & DVR_LOCK)==0 ) 
+            (p_dio_mmap->dvrstatus & DVR_LOCK)==0 )
         {
                 // start recording
                 struct dvrtime cliptime ;
                 time_now(&cliptime) ;
-                sprintf( g_vri, "%s-%02d%02d%02d%02d%02d", 
+                sprintf( g_vri, "%s-%02d%02d%02d%02d%02d",
                         (char *)g_servername,
                         cliptime.year%100,
                         cliptime.month,
@@ -141,11 +141,11 @@ int dio_setstate( int status )
                 memcpy( p_dio_mmap->pwii_VRI, g_vri, sizeof(p_dio_mmap->pwii_VRI) );
                 rstart = 1 ;
         }
-#endif    
-       	p_dio_mmap->dvrstatus |= status ;
+#endif
+        p_dio_mmap->dvrstatus |= status ;
     }
     dio_unlock();
-#ifdef PWII_APP    
+#ifdef PWII_APP
     if( rstart ) {
         dvr_log( "Recording started, VRI: %s", g_vri);
     }
@@ -158,27 +158,27 @@ int dio_clearstate( int status )
 {
 #ifdef PWII_APP
     int rstart = 1 ;
-#endif    
+#endif
     dio_lock();
     if( p_dio_mmap ){
 #ifdef PWII_APP
         if( status == DVR_LOCK &&
-            (p_dio_mmap->dvrstatus & DVR_LOCK)!=0 ) 
+            (p_dio_mmap->dvrstatus & DVR_LOCK)!=0 )
         {
             // stop recording
             rstart = 0 ;
             g_vri[0]=0 ;
             p_dio_mmap->pwii_VRI[0]=0 ;
         }
-#endif    
-       	p_dio_mmap->dvrstatus &= ~status ;
+#endif
+        p_dio_mmap->dvrstatus &= ~status ;
     }
     dio_unlock();
 #ifdef PWII_APP
     if( rstart==0 ) {
         dvr_log( "Recording stopped.");
     }
-#endif    
+#endif
     return 0 ;
 }
 
@@ -217,7 +217,7 @@ void dio_setchstat( int channel, int ch_state )
 int pwii_front_ch ;         // pwii front camera channel
 int pwii_rear_ch ;          // pwii real camera channel
 
-// return 1 : key event, 0: no key event 
+// return 1 : key event, 0: no key event
 int dio_getpwiikeycode( int * keycode, int * keydown)
 {
     static struct key_map_t {
@@ -366,10 +366,10 @@ int dio_check()
                 rec_start();
                 break;
             case 5:
-                dio_lock();
-                p_dio_mmap->dvrstatus |= DVR_ARCH ;
-                dio_unlock();
-                disk_archive_start();
+//                dio_lock();
+//                p_dio_mmap->dvrstatus |= DVR_ARCH ;
+//                dio_unlock();
+//                disk_archive_start();
                 break;
             case 6:
                 // disk_archive_stop();         // 2011-12-19. Archiving is runing all the time
@@ -566,11 +566,11 @@ int dio_syncrtc()
 void dio_init(config &dvrconfig)
 {
     string iomapfile ;
-    
+
     dio_inputmap = 0 ;
     dio_record = 1 ;
     p_dio_mmap=NULL ;
-    
+
 #ifdef    PWII_APP
     pwii_front_ch = dvrconfig.getvalueint( "pwii", "front");
     pwii_rear_ch = dvrconfig.getvalueint( "pwii", "rear");

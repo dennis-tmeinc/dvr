@@ -494,8 +494,11 @@ class playback {
             *dvrt=m_streamtime ;
             return 1;
         }
-        void getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * pday);
-        void getlockinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * pday);
+        void getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * pday, int lock=0 );
+        void getlockinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * pday) {
+            getdayinfo( dayinfo, pday, 1 );
+        }
+
         DWORD getmonthinfo(dvrtime * month);				// return day info in bits, bit 0 as day 1
         int  getdaylist( array <int> & daylist );
 

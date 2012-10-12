@@ -902,9 +902,10 @@ int main(int argc, char * argv[])
         // rtc command check
         check_rtccmd();
 
-        // check cpu usage
+        // check cpu usage, (this is quite common on EAGLE368, don't do it)
+#ifndef EAGLE368
         check_cpuusage();
-
+#endif
         // check temperature
         check_temperature();
 

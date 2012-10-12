@@ -30,12 +30,12 @@ int screen_setliveview( int channel )
     return 0;
 }
 
-int screen_menu( int level ) 
+int screen_menu( int level )
 {
     return 0;
 }
 
-int screen_key( int keycode, int keydown ) 
+int screen_key( int keycode, int keydown )
 {
     return 0;
 }
@@ -110,7 +110,7 @@ class video_icon : public window {
 
     public:
     video_icon( window * parent, int id, int x, int y, int w, int h ) :
-        window( parent, id, x, y, w, h ) 
+        window( parent, id, x, y, w, h )
     {
     }
 
@@ -131,7 +131,7 @@ class video_icon : public window {
         virtual void paint() {
             setcolor (COLOR(0,0,0,0)) ;	// full transparent
             setpixelmode (DRAW_PIXELMODE_COPY);
-            fillrect ( 0, 0, m_pos.w, m_pos.h );	
+            fillrect ( 0, 0, m_pos.w, m_pos.h );
             if( m_icon.valid() ) {
                 drawbitmap( m_icon, 0, 0, 0, 0, m_pos.w, m_pos.h );
             }
@@ -143,7 +143,7 @@ class video_status : public window {
     string m_status ;
     public:
     video_status( window * parent, int id, int x, int y, int w, int h ) :
-        window( parent, id, x, y, w, h ) 
+        window( parent, id, x, y, w, h )
     {
     }
 
@@ -156,11 +156,11 @@ class video_status : public window {
     }
         // event handler
     protected:
-    virtual void paint() 
+    virtual void paint()
     {
         setcolor (COLOR(0,0,0,0)) ;	// full transparent
         setpixelmode (DRAW_PIXELMODE_COPY);
-        fillrect ( 0, 0, m_pos.w, m_pos.h );	
+        fillrect ( 0, 0, m_pos.w, m_pos.h );
         resource font("mono32b.font");
         setcolor(COLOR(240,240,80,200));
         drawtext( 0, 0, m_status, font );
@@ -194,6 +194,8 @@ class video_status : public window {
 #define ID_VIDEO_SCREEN (1001)
 #define ID_MENU_SCREEN (1101)
 
+#define ID_TIMER_DECODER    (3001)
+
 
 // command send to video screen
 #define CMD_MENUOFF (2001)
@@ -218,7 +220,7 @@ class pwii_menu : public window {
     int m_maxselect ;       // selection from 0 to maxselect
     int m_dispbegin ;
     array <string> m_officerIDlist ;
-    
+
 public:
     pwii_menu( window * parent, int id, int x, int y, int w, int h )
         :window( parent, id, x, y, w, h ) {
@@ -473,8 +475,10 @@ protected:
     int m_decode_speed ;            // decoder speed
     int m_decode_runmode ;          // decoder thread running,
     int m_decode_modesafe ;         // safe to change decoding mode
+    playback * m_decode_ply ;
 
-    pthread_t  m_decodethreadid ;
+//    pthread_t  m_decodethreadid ;
+    dvrtime  m_streamreftime ;      // stream start(restart) time
     dvrtime  m_streamtime ;         // remember streaming playback time
     dvrtime  m_playbacktime ;       // remember previous playback time
 
@@ -513,7 +517,7 @@ public:
             screen_menustartup=1 ;
         }
         m_decode_modesafe = 0 ;
-#endif                
+#endif
         m_keypad_up = 0 ;
     }
 
@@ -536,13 +540,13 @@ public:
         if( m_videomode <= VIDEO_MODE_PLAYBACK ) {
             startliveview(m_playchannel);
         }
-#ifdef PWII_APP        
+#ifdef PWII_APP
         startmenu() ;
         pwii_menu * pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN ) ;
         if( pmenu ) {
             pmenu->level(level);
         }
-#endif      // PWII_APP        
+#endif      // PWII_APP
 
         updatestatus();
     }
@@ -564,9 +568,9 @@ public:
     // stop every thing?
     void stop() {
         stopdecode();
-#ifdef PWII_APP        
+#ifdef PWII_APP
         stopmenu();
-#endif            
+#endif
         stopliveview();
     }
 
@@ -597,9 +601,9 @@ protected:
 
     virtual void oncommand( int id, void * param ) {	// children send command to parent
         if( id == CMD_MENUOFF ) {
-#ifdef PWII_APP        
+#ifdef PWII_APP
             stopmenu();
-#endif  // PWII_APP                
+#endif  // PWII_APP
         }
     }
 
@@ -613,7 +617,7 @@ protected:
         if( channel==pwii_rear_ch ) {
             screen_liveaudio=screen_rearaudio ;
         }
-#endif            
+#endif
         if( m_videomode == VIDEO_MODE_LIVE &&
             m_playchannel == channel )
         {
@@ -652,7 +656,7 @@ protected:
         }
     }
 
-#ifdef PWII_APP        
+#ifdef PWII_APP
     void startmenu() {
         //            stop();
 
@@ -676,9 +680,9 @@ protected:
             updatestatus();
         }
     }
-#endif  // PWII_APP        
+#endif  // PWII_APP
 
-    void restartdecoder(void * fileheader) {
+    void restartdecoder() {
         dvr_screen_stop(screen_sockfd, m_eaglechannel);
         if( m_decode_runmode == DECODE_MODE_PLAY ) {
             m_decode_speed = DECODE_SPEED_NORMAL ;
@@ -687,6 +691,9 @@ protected:
             m_decode_speed = DECODE_SPEED_FASTEST ;  // make decoder run super faster, so I can take care the player speed
         }
         dvr_screen_play(screen_sockfd, m_eaglechannel, m_decode_speed) ;
+        time_now( &m_playbacktime );
+        m_decode_ply->getstreamtime(&m_streamreftime) ;
+        m_streamtime = m_streamreftime ;
         updatestatus();
     }
 
@@ -719,237 +726,126 @@ protected:
         }
     }
 
-    void playback_thread()  {
-        void * buf ;
-        int    bufsize ;
-        int    frametype ;
-        int    play=0;
-        dvrtime streamstart ;
-        dvrtime streamtime ;
-        dvrtime ref_start ;
-        dvrtime ref_time ;
+    void decode_run()  {
+        dvrtime tnow ;
         int diff_stream, diff_ref ;
-        struct hd_file hdfile ;
 
-        playback * ply = new playback( m_playchannel, 1 ) ;
-
-        m_decode_speed = DECODE_SPEED_NORMAL ;
-        dvr_screen_play(screen_sockfd, m_eaglechannel, m_decode_speed) ;
-
-        time_now( &streamtime );
-        if( time_dvrtime_diff( &streamtime, &m_playbacktime )> (60*30) ) {
-            ply->seek( &streamtime );
-            m_decode_runmode = DECODE_MODE_PRIOR ;
-        }
-        else {
-            ply->seek(&m_streamtime);
-            m_decode_runmode = DECODE_MODE_PLAY ;
+        if( m_decode_runmode<=0 ) {
+            return ;
         }
 
-        while( m_decode_runmode>0 ) {
+        // repeat this timer
+        settimer( 50, ID_TIMER_DECODER );
 
-            bufsize = 0 ;
-            buf = NULL ;
-
-            if( m_decode_runmode == DECODE_MODE_PLAY ) {
-
-                ply->getstreamdata(&buf, &bufsize, &frametype );
-                if( bufsize<=0 ) {
-                    usleep(10000);
-                    continue;
-                }
-                ply->getstreamtime(&streamtime);
-
-                diff_stream = time_dvrtime_diffms( &streamtime, &streamstart );
-                int loop = 0 ;
-                if( bufsize>0 && buf){
-                    while( m_decode_runmode==DECODE_MODE_PLAY ) {
-                        time_now( &ref_time );
-                        if( play==0 ) {
-                            //  ply->readfileheader( (char *)&hdfile, sizeof(hdfile));
-                            //  restartdecoder(&hdfile);            // restart decoder to flush decoder buffer
-                            play=1 ;
-                            streamstart = streamtime ;
-                            ref_start = ref_time ;
-
-                            break ;
-                        }
-                        diff_ref = time_dvrtime_diffms( &ref_time, &ref_start );
-                        if( diff_ref < diff_stream ) {
-                            if( (diff_stream-diff_ref)>2000 ) {
-                                play=0 ;
-                            }
-                            else {
-                                usleep(10000 );
-                                if( ++loop>200 ) {        // wait too long?
-                                    play=0 ;
-                                }
-                            }
-                        }
-                        else if( (diff_ref-diff_stream)>1000 ) {
-                            //    streamstart = streamtime ;
-                            //    ref_start = ref_time ;
-                            play=0;
-                            continue ;
-                        }
-                        else {
-                            break ;
-                        }
-                    }
+        if( m_decode_runmode == DECODE_MODE_PLAY ) {
+            m_decode_ply->getstreamtime(&m_streamtime);
+            diff_stream = time_dvrtime_diffms( &m_streamtime , &m_streamreftime );
+            time_now(&tnow);
+            diff_ref = time_dvrtime_diffms( &tnow, &m_playbacktime );
+            if( (diff_ref-diff_stream)>5000 || (diff_ref-diff_stream)<-5000 ) {
+                restartdecoder();
+                return ;
+            }
+            if( (diff_ref-diff_stream)>0 ) {
+                void * buf=NULL ;
+                int    bufsize=0 ;
+                int    frametype ;
+                m_decode_ply->getstreamdata(&buf, &bufsize, &frametype );
+                if( bufsize>0 ) {
                     dvr_screen_playinput(screen_sockfd, m_eaglechannel, buf, bufsize);
                 }
-                m_decode_modesafe = 1 ;
+                settimer( 1, ID_TIMER_DECODER );        // set faster timer
             }
-            else if( m_decode_runmode == DECODE_MODE_PAUSE ) {
-                //  dvr_screen_playnextframe(screen_sockfd, m_eaglechannel);
-                //  res = DecodeNextFrame(m_decode_handle);
-                //  int dec=0 ;
-                //  struct dec_statistics stat ;
-                m_decode_modesafe = 1 ;
-                usleep(10000);
-                //    res = GetDecodeStatistics( m_decode_handle, &stat );
-                //    if( dec ) {
-                //        DecodeNextFrame(m_decode_handle) ;
-                //    }
-                //    res = GetDecodeStatistics( m_decode_handle, &stat );
-            }
-            else if( m_decode_runmode == DECODE_MODE_PLAY_FASTFORWARD ) {
-                if( m_decode_speed != 0 ) {
-                    ply->readfileheader( (char *)&hdfile, sizeof(hdfile));
-                    restartdecoder(&hdfile);
+            m_decode_modesafe = 1 ;
+        }
+        else if( m_decode_runmode == DECODE_MODE_PAUSE ) {
+            m_decode_modesafe = 1 ;
+        }
+        else if( m_decode_runmode == DECODE_MODE_BACKWARD ) {
+            dvrtime cbegin, pbegin, end ;
+            if( m_decode_ply->getcurrentcliptime( &cbegin, &end ) ) {
+                if( time_dvrtime_diff( &m_streamtime , &cbegin ) > m_jumptime )
+                {
+                    time_dvrtime_del(&m_streamtime, m_jumptime);
+                    m_decode_ply->seek(&m_streamtime);
                 }
-                ply->getstreamdata(&buf, &bufsize, &frametype );
-                ply->getstreamtime(&streamtime);
-
-                int diff_stream;
-                diff_stream = time_dvrtime_diffms( &streamtime, &streamstart );
-                if( diff_stream > 500 ) {
-                    usleep( 50000 );
-                }
-                else if( diff_stream>0 ) {
-                    usleep( diff_stream*100 );
-                }
-                if( bufsize>0 && buf){
-                    //   res = InputAvData(m_decode_handle, buf, bufsize );
-                    dvr_screen_playinput(screen_sockfd, m_eaglechannel, buf, bufsize );
+                else if( m_decode_ply->getprevcliptime( &pbegin, &end ) ) {
+                    time_dvrtime_del(&end, m_jumptime*3);
+                    m_decode_ply->seek(&end);
                 }
                 else {
-                    usleep(10000);
-                }
-                m_decode_modesafe = 1 ;
-            }
-            else if( m_decode_runmode == DECODE_MODE_PLAY_FASTBACKWARD ) {
-                ply->getstreamdata(&buf, &bufsize, &frametype );
-                ply->getstreamtime(&streamtime);
-                if( bufsize>0 && buf){
-                    //  res =InputAvData(m_decode_handle, buf, bufsize );
-                    dvr_screen_playinput(screen_sockfd, m_eaglechannel, buf, bufsize );
-                }
-                else {
-                    usleep(10000);
+                    m_decode_ply->seek(&cbegin);
                 }
             }
-            else if( m_decode_runmode == DECODE_MODE_BACKWARD ) {
-                dvrtime cbegin, pbegin, end ;
-                if( ply->getcurrentcliptime( &cbegin, &end ) ) {
-                    if( time_dvrtime_diff( &streamtime , &cbegin ) > m_jumptime )
-                    {
-                        time_dvrtime_del(&streamtime, m_jumptime);
-                        ply->seek(&streamtime);
-                    }
-                    else if( ply->getprevcliptime( &pbegin, &end ) ) {
-                        time_dvrtime_del(&end, m_jumptime);
-                        ply->seek(&end);
-                    }
-                    else {
-                        ply->seek(&cbegin);
-                    }
-                }
-                else if( ply->getprevcliptime( &cbegin, &end ) ) {
-                    time_dvrtime_del(&end, m_jumptime);
-                    ply->seek(&end);
-                }
-                play=0 ;
-                m_decode_runmode = DECODE_MODE_PLAY ;
+            else if( m_decode_ply->getprevcliptime( &cbegin, &end ) ) {
+                time_dvrtime_del(&end, m_jumptime);
+                m_decode_ply->seek(&end);
             }
-            else if( m_decode_runmode == DECODE_MODE_FORWARD ) {
-                time_dvrtime_add(&streamtime, m_jumptime);
-                ply->seek(&streamtime);
-                play=0 ;
-                m_decode_runmode = DECODE_MODE_PLAY ;
-            }
-            else if( m_decode_runmode == DECODE_MODE_PRIOR ) {
-                dvrtime cbegin, pbegin, end ;
-                if( ply->getcurrentcliptime( &cbegin, &end ) ) {
-                    if( time_dvrtime_diff( &streamtime , &cbegin ) > screen_play_cliptime )
-                    {
-                        time_dvrtime_del(&streamtime, screen_play_cliptime);
-                        ply->seek(&streamtime);
-                    }
-                    else if ( time_dvrtime_diff( &streamtime , &cbegin ) > screen_play_jumptime )
-                    {
-                        ply->seek(&cbegin);
-                    }
-                    else if( ply->getprevcliptime( &pbegin, &end ) ) {
-                        time_dvrtime_del(&end, screen_play_cliptime );
-                        if( pbegin < end ) {
-                            ply->seek(&end);
-                        }
-                        else {
-                            ply->seek(&pbegin);
-                        }
-                    }
-                    else {
-                        ply->seek(&cbegin);
-                    }
+            m_decode_runmode = DECODE_MODE_PLAY ;
+            restartdecoder();
+        }
+        else if( m_decode_runmode == DECODE_MODE_FORWARD ) {
+            time_dvrtime_add(&m_streamtime, m_jumptime);
+            m_decode_ply->seek(&m_streamtime);
+            m_decode_runmode = DECODE_MODE_PLAY ;
+            restartdecoder();
+        }
+        else if( m_decode_runmode == DECODE_MODE_PRIOR ) {
+            dvrtime cbegin, pbegin, end ;
+            if( m_decode_ply->getcurrentcliptime( &cbegin, &end ) ) {
+                if( time_dvrtime_diff( &m_streamtime , &cbegin ) > screen_play_cliptime )
+                {
+                    time_dvrtime_del(&m_streamtime, screen_play_cliptime);
+                    m_decode_ply->seek(&m_streamtime);
                 }
-                else if( ply->getprevcliptime( &pbegin, &end ) ) {
+                else if ( time_dvrtime_diff( &m_streamtime , &cbegin ) > screen_play_jumptime )
+                {
+                    m_decode_ply->seek(&cbegin);
+                }
+                else if( m_decode_ply->getprevcliptime( &pbegin, &end ) ) {
                     time_dvrtime_del(&end, screen_play_cliptime );
                     if( pbegin < end ) {
-                        ply->seek(&end);
+                        m_decode_ply->seek(&end);
                     }
                     else {
-                        ply->seek(&pbegin);
+                        m_decode_ply->seek(&pbegin);
                     }
                 }
-                play=0;
-                m_decode_runmode = DECODE_MODE_PLAY ;
-            }
-            else if( m_decode_runmode == DECODE_MODE_NEXT ) {
-                dvrtime begin, end ;
-                if( ply->getcurrentcliptime( &begin, &end ) ) {
-                    if( time_dvrtime_diff( &end, &streamtime ) > screen_play_cliptime ) {
-                        time_dvrtime_add(&streamtime, screen_play_cliptime);
-                        ply->seek(&streamtime);
-                    }
-                    else if( ply->getnextcliptime( &begin, &end ) ) {
-                        ply->seek(&begin);
-                    }
-                    else {
-                        ply->seek(&end);
-                    }
+                else {
+                    m_decode_ply->seek(&cbegin);
                 }
-                play=0 ;
-                m_decode_runmode = DECODE_MODE_PLAY ;
             }
-
+            else if( m_decode_ply->getprevcliptime( &pbegin, &end ) ) {
+                time_dvrtime_del(&end, screen_play_cliptime );
+                if( pbegin < end ) {
+                    m_decode_ply->seek(&end);
+                }
+                else {
+                    m_decode_ply->seek(&pbegin);
+                }
+            }
+            m_decode_runmode = DECODE_MODE_PLAY ;
+            restartdecoder();
+        }
+        else if( m_decode_runmode == DECODE_MODE_NEXT ) {
+            dvrtime begin, end ;
+            if( m_decode_ply->getcurrentcliptime( &begin, &end ) ) {
+                if( time_dvrtime_diff( &end, &m_streamtime ) > screen_play_cliptime ) {
+                    time_dvrtime_add(&m_streamtime, screen_play_cliptime);
+                    m_decode_ply->seek(&m_streamtime);
+                }
+                else if( m_decode_ply->getnextcliptime( &begin, &end ) ) {
+                    m_decode_ply->seek(&begin);
+                }
+                else {
+                    m_decode_ply->seek(&end);
+                }
+            }
+            m_decode_runmode = DECODE_MODE_PLAY ;
+            restartdecoder();
         }
 
-        dvr_screen_stop(screen_sockfd, m_eaglechannel);
 
-        //            if( m_decode_handle > 0 ) {
-        //                StopDecode(m_decode_handle) ;
-        //                m_decode_handle = 0 ;
-        //            }
-        delete ply ;
-        m_streamtime = streamtime ;
-        time_now( &m_playbacktime );
-
-    }
-
-    static void * s_playback_thread(void *param) {
-        ((video_screen *)(param))->playback_thread();
-        return NULL ;
     }
 
 
@@ -968,7 +864,27 @@ protected:
             //                res = SetDecodeAudio(MAIN_OUTPUT, 1, 1);
             m_videomode = VIDEO_MODE_PLAYBACK ;
             m_decode_runmode = DECODE_MODE_PLAY ;
-            pthread_create(&m_decodethreadid, NULL, s_playback_thread, (void *)(this));
+//            pthread_create(&m_decodethreadid, NULL, s_playback_thread, (void *)(this));
+
+
+            m_decode_ply = new playback( m_playchannel, 1 ) ;
+
+            m_decode_speed = DECODE_SPEED_NORMAL ;
+
+            dvrtime tnow ;
+            time_now( &tnow );
+            if( time_dvrtime_diff( &tnow, &m_playbacktime )> (60*30) ) {
+                m_streamtime = tnow ;
+                m_decode_ply->seek( &m_streamtime );
+                m_decode_runmode = DECODE_MODE_PRIOR ;
+            }
+            else {
+                m_decode_ply->seek(&m_streamtime);
+                m_decode_runmode = DECODE_MODE_PLAY ;
+                restartdecoder();
+            }
+
+            settimer(10, ID_TIMER_DECODER);
         }
     }
 
@@ -978,20 +894,21 @@ protected:
 
         m_decode_runmode = DECODE_MODE_QUIT ;
 
-        /*
-        for( res=0 ; res<1000 ; res++ ) {
-            if( m_decode_handle > 0 ) {
-                StopDecode( m_decode_handle );
-                usleep(100000);
-            }
-            else {
-                break;
-            }
-        }
-        */
+        dvr_screen_stop(screen_sockfd, m_eaglechannel);
 
-        pthread_join(m_decodethreadid, NULL);
-        m_decodethreadid = 0 ;
+        //            if( m_decode_handle > 0 ) {
+        //                StopDecode(m_decode_handle) ;
+        //                m_decode_handle = 0 ;
+        //            }
+        if(m_decode_ply!=NULL){
+            delete m_decode_ply ;
+            m_decode_ply = NULL ;
+        }
+        time_now( &m_playbacktime );
+        m_decode_runmode = DECODE_MODE_QUIT ;
+
+//        pthread_join(m_decodethreadid, NULL);
+//        m_decodethreadid = 0 ;
 
         // stop decode screen
         //            res = SetDecodeScreen(MAIN_OUTPUT, 1, 0);
@@ -1019,6 +936,9 @@ protected:
                 dio_pwii_standby(1);
             }
         }
+        else if( id == ID_TIMER_DECODER ) {
+            decode_run() ;
+        }
         else {
             // key pad repeat
             if( m_videomode == VIDEO_MODE_PLAYBACK &&
@@ -1027,12 +947,12 @@ protected:
                 if( id == VK_MEDIA_PREV_TRACK ) {           // play backward
                     //                m_decode_runmode = DECODE_MODE_PLAY_FASTBACKWARD ;
                     m_decode_runmode = DECODE_MODE_BACKWARD ;
-                    settimer(2400, id);
+                    settimer(3000, id);
                 }
                 else if( id == VK_MEDIA_NEXT_TRACK ) {      // play forward
                     //                m_decode_runmode = DECODE_MODE_PLAY_FASTFORWARD ;
                     m_decode_runmode = DECODE_MODE_FORWARD ;
-                    settimer(2400, id);
+                    settimer(3000, id);
                 }
             }
         }
@@ -1044,7 +964,7 @@ protected:
 
     virtual int onkey( int keycode, int keydown ) {		// keyboard/keypad event
         if( keydown ) {
-            if( keycode == VK_MEDIA_PREV_TRACK ) {     // jump backward
+            if( keycode == VK_MEDIA_PREV_TRACK ) {     // (REW) jump backward
                 if( m_videomode == VIDEO_MODE_LIVE ) { // live mode
                 }
                 else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
@@ -1061,6 +981,7 @@ protected:
                         m_decode_runmode = DECODE_MODE_BACKWARD ;  //  jump backward.
                     }
                     m_icon->seticon( "rwd.pic" );
+                    settimer( 3000, keycode ) ;
                 }
                 else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
 #ifdef PWII_APP
@@ -1072,7 +993,7 @@ protected:
 #endif      // PWII_APP
                 }
             }
-            else if( keycode == VK_MEDIA_NEXT_TRACK ) { //  jump forward.
+            else if( keycode == VK_MEDIA_NEXT_TRACK ) { //  (FF) jump forward.
                 if( m_videomode == VIDEO_MODE_LIVE ) { 	// live mode, switch audio on/off
                     screen_liveaudio = !screen_liveaudio ;
                     //	 SetPreviewAudio(MAIN_OUTPUT,eagle32_hikhandle(m_playchannel),screen_liveaudio);
@@ -1090,8 +1011,10 @@ protected:
                             m_jumptime = screen_play_jumptime ;
                         }
                         m_decode_runmode = DECODE_MODE_FORWARD ;  //  jump backward.
+                        settimer( 3000, keycode ) ;
                     }
                     m_icon->seticon( "fwd.pic" );
+                    settimer( 3000, keycode );
                 }
                 else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
 #ifdef PWII_APP
@@ -1120,13 +1043,13 @@ protected:
                     }
                 }
                 else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
-#ifdef PWII_APP        
+#ifdef PWII_APP
                     pwii_menu * pmenu ;                // menu
                     pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
                     if( pmenu ) {
                         pmenu->cancel();
                     }
-#endif                        
+#endif
                 }
             }
             else if( keycode == VK_MEDIA_STOP ) {      // stop playback if in playback mode, enter menu mode if in live view mode
@@ -1139,19 +1062,19 @@ protected:
                         settimer( 5000, keycode );
 #endif
 */
-#ifdef PWII_APP        
+#ifdef PWII_APP
                     // bring up menu mode
                     startmenu();
-#endif      /// PWII_APP        
+#endif      /// PWII_APP
                 }
                 else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
-#ifdef PWII_APP        
+#ifdef PWII_APP
                     pwii_menu * pmenu ;                // menu
                     pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
                     if( pmenu ) {
                         pmenu->enter();
                     }
-#endif      // PWII_APP        
+#endif      // PWII_APP
                 }
                 else if( m_videomode == VIDEO_MODE_PLAYBACK ) {   // playback
                     m_icon->seticon( "stop.pic" );
@@ -1174,7 +1097,7 @@ protected:
                     startliveview(m_playchannel);
                 }
             }
-            else if( keycode == VK_PRIOR ) { //  previous video clip
+            else if( keycode == VK_PRIOR ) { //  PR
                 if( m_videomode==VIDEO_MODE_LIVE ) {   // live
                     // switch live view channel
                     int retry = cap_channels ;
@@ -1197,16 +1120,16 @@ protected:
                     }
                 }
                 else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
-#ifdef PWII_APP        
+#ifdef PWII_APP
                     pwii_menu * pmenu ;                // menu
                     pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
                     if( pmenu ) {
                         pmenu->prevpage();
                     }
-#endif      // PWII_APP        
+#endif      // PWII_APP
                 }
             }
-            else if( keycode == VK_NEXT ) { //  jump forward.
+            else if( keycode == VK_NEXT ) { //  NX
                 if( m_videomode==VIDEO_MODE_LIVE ) {   // live, black LCD
                     // switch live view channel
                     int retry = cap_channels ;
@@ -1229,13 +1152,13 @@ protected:
                     }
                 }
                 else if( m_videomode == VIDEO_MODE_MENU ) {   // menu mode
-#ifdef PWII_APP        
+#ifdef PWII_APP
                     pwii_menu * pmenu ;                // menu
                     pmenu = (pwii_menu *)findwindow( ID_MENU_SCREEN );
                     if( pmenu ) {
                         pmenu->nextpage();
                     }
-#endif      // PWII_APP        
+#endif      // PWII_APP
                 }
             }
             //                else if( keycode == VK_EM ) { //  event marker key
@@ -1284,7 +1207,7 @@ protected:
         }
         else {                  // key up
             m_keytime = g_timetick ;
-            killtimer( 0 );           // delete timer
+            killtimer( keycode );           // delete timer
             m_keypad_up = keycode ;
             m_icon->seticon( NULL );
         }
@@ -1519,15 +1442,15 @@ int screen_setliveview( int channel )
     return 0;
 }
 
-int screen_menu( int level ) 
+int screen_menu( int level )
 {
     video_screen * vs ;
 
 #ifdef PWII_APP
-	if( screen_nomenu ) {  //  do not show police id input menu on startup
-		return 0 ;
-	}
-#endif	
+    if( screen_nomenu ) {  //  do not show police id input menu on startup
+        return 0 ;
+    }
+#endif
     if( topwindow!=NULL ) {
         vs = (video_screen *) topwindow->findwindow( ID_VIDEO_SCREEN ) ;
         if( vs ) {
@@ -1546,7 +1469,7 @@ int screen_mouseevent(int x, int y, int buttons)
     return 1;
 }
 
-int screen_key( int keycode, int keydown ) 
+int screen_key( int keycode, int keydown )
 {
 #ifdef PWII_APP
     void rec_pwii_toggle_rec(int ch) ;
@@ -1555,7 +1478,7 @@ int screen_key( int keycode, int keydown )
 #endif  // PWII_APP
 
     NET_DPRINT("screen_key  code : %04x  down: %d\n", keycode, keydown );
-    
+
     if( keycode == (int) VK_TM ) {
         if( keydown ) {
             screen_setliveview(-1);         // switch to live view
@@ -1568,7 +1491,7 @@ int screen_key( int keycode, int keydown )
             event_tm = 0 ;
          }
     }
-#ifdef PWII_APP    
+#ifdef PWII_APP
     else if( keycode==(int)VK_RECON ) {     // record on, (turn on all record)
         if( keydown ) {
             screen_setliveview(-1);
@@ -1611,7 +1534,7 @@ int screen_key( int keycode, int keydown )
         screen_update();    // just do the screen update for now. (Hardware do mute already)
     }
     */
-#endif    
+#endif
     else if( topwindow ) {
 //        dvr_log("Key code 0x%02x %s.", keycode, keydown?"pressed":"released" );
         topwindow->key( keycode, keydown );
@@ -1675,10 +1598,10 @@ static int getmouseevent( struct mouse_event * mev, int usdelay )
         int x=mousex, y=mousey ;
         int buttons=mousebuttons ;
         UINT8 mousebuf[8] ;
-        
+
         if( readok(mousedev, usdelay) ) {
-            if( read(mousedev, mousebuf, 8) >=3 && 
-               ( (mousebuf[0] & 0xc8 )==0x8 ) ) 
+            if( read(mousedev, mousebuf, 8) >=3 &&
+               ( (mousebuf[0] & 0xc8 )==0x8 ) )
             {
                 if( mousebuf[0] & 0x10 ) {
                     offsetx = ((-1)&(~0x0ff)) | mousebuf[1] ;
@@ -1738,7 +1661,7 @@ static int getkeyevent( struct key_event * kev )
 {
 #ifdef    PWII_APP
     return dio_getpwiikeycode(&(kev->keycode), &(kev->keydown));
-#else    
+#else
     return 0 ;
 #endif
 }
@@ -1763,7 +1686,7 @@ int screen_io(int usdelay)
 
     // window timer
     topwindow->checktimer();
-    
+
     screen_draw();
 
     return 0;
@@ -1771,10 +1694,10 @@ int screen_io(int usdelay)
 
 int screen_onframe( cap_frame * capframe )
 {
-    if( screen_liveview_handle>0 && 
-       capframe->channel==screen_liveview_channel) 
+    if( screen_liveview_handle>0 &&
+       capframe->channel==screen_liveview_channel)
     {
-//        InputAvData( screen_liveview_handle, capframe->framedata, capframe->framesize );		
+//        InputAvData( screen_liveview_handle, capframe->framedata, capframe->framesize );
     }
     return 0;
 }
@@ -1783,21 +1706,21 @@ int screen_onframe( cap_frame * capframe )
 void screen_init(config &dvrconfig)
 {
     string v ;
-	int i;
-	
+    int i;
+
     ScreenNum = dvrconfig.getvalueint("VideoOut", "screennum" );
     if( ScreenNum!=4 && ScreenNum!=2 ) {		// support 4, 2, 1 screen mode
         ScreenNum=1 ;			// set to one screen mode by default
     }
 
-    // NTSC : 1  , PAL : 2 
+    // NTSC : 1  , PAL : 2
     ScreenStandard = dvrconfig.getvalueint("VideoOut", "standard" );
     if( ScreenStandard != STANDARD_PAL ) {
         ScreenStandard = STANDARD_NTSC ;
     }
 
-	screen_liveaudio = 1;		// enable audio by default
-	
+    screen_liveaudio = 1;		// enable audio by default
+
     screen_play_jumptime = dvrconfig.getvalueint("VideoOut", "jumptime" );
     if( screen_play_jumptime < 5 ) screen_play_jumptime=5 ;
 
@@ -1810,46 +1733,46 @@ void screen_init(config &dvrconfig)
     }
 
     screen_play_cliptime = dvrconfig.getvalueint("VideoOut", "cliptime" );
-    if( screen_play_cliptime < 60 ) screen_play_cliptime = 60 ;    
+    if( screen_play_cliptime < 60 ) screen_play_cliptime = 60 ;
 
     v = dvrconfig.getvalue("VideoOut", "resource" );
     if( v.length()>0 ) {
         strncpy( resource::resource_dir, v, 128 );
     }
 
-#ifdef PWII_APP    
+#ifdef PWII_APP
     screen_rearaudio = dvrconfig.getvalueint("VideoOut", "rearaudio" );
     screen_keepcapture = dvrconfig.getvalueint("VideoOut", "keepcapture" );
     screen_nostartmenu = dvrconfig.getvalueint("VideoOut", "nostartmenu" );
-	screen_nomenu = dvrconfig.getvalueint("VideoOut", "nomenu" );
+    screen_nomenu = dvrconfig.getvalueint("VideoOut", "nomenu" );
 #endif
 
-	// initial eaglesvr server
-	v = dvrconfig.getvalue("VideoOut", "server" );
-	if( v.length()==0 ) {
-		v="127.0.0.1" ;			// default to connect localhost
-	}
-	int videoport = dvrconfig.getvalueint("VideoOut", "port" ) ;
-	if( videoport==0 ) {
-		videoport=EAGLESVRPORT ;
-	}
+    // initial eaglesvr server
+    v = dvrconfig.getvalue("VideoOut", "server" );
+    if( v.length()==0 ) {
+        v="127.0.0.1" ;			// default to connect localhost
+    }
+    int videoport = dvrconfig.getvalueint("VideoOut", "port" ) ;
+    if( videoport==0 ) {
+        videoport=EAGLESVRPORT ;
+    }
 
-	for( i=0; i<5; i++ ) {		// retry 5 times
-		screen_sockfd = net_connect(v, videoport );
-		if( screen_sockfd > 0 ) {
-			if( dvr_screen_setmode( screen_sockfd, ScreenStandard, ScreenNum ) ) {
-				dvr_log( "Screen connected, set screen number %d.");
-				break;
-			}
-			closesocket(screen_sockfd);
-			sleep(1);
-		}
-	}
-	
-	int ch ;
-	for(ch=0; ch<4; ch++) {
-		dvr_screen_stop( screen_sockfd, ch);
-	}
+    for( i=0; i<5; i++ ) {		// retry 5 times
+        screen_sockfd = net_connect(v, videoport );
+        if( screen_sockfd > 0 ) {
+            if( dvr_screen_setmode( screen_sockfd, ScreenStandard, ScreenNum ) ) {
+                dvr_log( "Screen connected, set screen number %d.");
+                break;
+            }
+            closesocket(screen_sockfd);
+            sleep(1);
+        }
+    }
+
+    int ch ;
+    for(ch=0; ch<4; ch++) {
+        dvr_screen_stop( screen_sockfd, ch);
+    }
 
     // select Video output format to NTSC
     draw_init(ScreenStandard);
@@ -1901,7 +1824,7 @@ void screen_uninit()
     }
 
     draw_finish();
-	closesocket(screen_sockfd);
+    closesocket(screen_sockfd);
 }
 
 #endif	// NO_ONBOARD_EAGLE

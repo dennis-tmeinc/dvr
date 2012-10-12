@@ -286,16 +286,16 @@ void eagle_screen_playback( int channel, int speed )
     if( ScreenNum==1 ) {        // single screen
         int ch ;
         for (ch=0; ch<cap_channels; ch++ ) {
-            if( ch!=channel ) {
+//            if( ch!=channel ) {
                 screen_vs[ch]->stop();
-            }
+//            }
         }
     }
 #if defined(EAGLE32) || defined(EAGLE34)
     if( channel>=0 && channel<cap_channels ) {
-        if( !screen_vs[channel]->isdecode() ) {
+//        if( !screen_vs[channel]->isdecode() ) {
             screen_vs[channel]->startdecode();
-        }
+//        }
         screen_vs[channel]->decodespeed(speed);
     }
 #endif
