@@ -74,7 +74,7 @@ struct rec_fifo {
 
 #define MAX_TRIGGERSENSOR   (32)
 
-#define MAX_WRITEBUFFER   (8*1024*1024)
+#define MAX_WRITEBUFFER   (4*1024*1024)
 
 static char rec_stname(enum REC_STATE recst)
 {
@@ -465,21 +465,19 @@ void rec_channel::onframe(cap_frame * pframe)
                         }
                     }
                     else if(m_recstate == REC_PRERECORD ) {
-                        // dump out all fifo
-                        m_flushout=1 ;
                     }
                     else {
                         // kind of error!
                     }
+                    // dump out all fifo
+                    m_flushout=1 ;
                 }
                 else {
                     if( m_inmemrecording && m_recstate == REC_PRERECORD ) {
+                        dvrtime now ;
+                        time_now(&now);
                         while(m_fifohead){
                             if( m_fifohead->frametype == FRAMETYPE_KEYVIDEO || m_fifohead->frametype == FRAMETYPE_JPEG ) {
-
-                                dvrtime now ;
-                                time_now(&now);
-
                                 if( time_dvrtime_diff( &now, &(m_fifohead->time)) <= m_prerecord_time ){
                                     break ;
                                 }
@@ -1033,6 +1031,10 @@ int rec_channel::dorecord()
         return 0 ;
     }
 
+    if(rectype == REC_PRERECORD && m_inmemrecording ) {
+        return 0 ;
+    }
+
     rec_lock();
     flushout = m_flushout ;
     m_flushout = 0 ;
@@ -1070,23 +1072,20 @@ int rec_channel::dorecord()
     //            break;
     //        }
 
-    // suggest file buffer size
-    wsize = m_fifosize ;
-    if( wsize>rec_fifobusy ) {
+    if( m_fifosize>rec_fifobusy ) {
         rec_busy=1 ;
     }
-    if( wsize>MAX_WRITEBUFFER-1024*1024) {
-        wsize=(MAX_WRITEBUFFER);
+
+    wsize = MAX_WRITEBUFFER ;
+
+    if( m_file.isopen() ) {
+        m_file.setbufsize(wsize) ;
     }
-    else {
-        wsize+=1024*1024 ;
-    }
-    m_file.setbufsize(wsize) ;
 
     while( rec_run && wsize>0 ) {
 
         fifo = peekfifo();
-        if( fifo==NULL ) {
+        if( fifo==NULL || fifo->bufsize>wsize ) {
             break;
         }
 
@@ -1109,7 +1108,9 @@ int rec_channel::dorecord()
         w++;
     }
 
-    m_file.flushbuffer();
+    if( m_file.isopen() ) {
+        m_file.flushbuffer();
+    }
 
     m_activetime=g_timetick;
     return w ;
@@ -1360,13 +1361,13 @@ void rec_init(config &dvrconfig)
     }
 
     rec_fifo_minsize=dvrconfig.getvalueint("system", "record_fifo_minsize");
-    if( rec_fifo_minsize<(256*1024) || rec_fifo_minsize>(16*1024*1024) ) {
-        rec_fifo_minsize=(1024*1024) ;          // default 1Mb
+    if( rec_fifo_minsize<(128*1024) || rec_fifo_minsize>(4*1024*1024) ) {
+        rec_fifo_minsize=(128*1024) ;          // default 128k
     }
 
     rec_fifo_size=dvrconfig.getvalueint("system", "record_fifo_size");
-    if( rec_fifo_size<rec_fifo_minsize*4 || rec_fifo_size>rec_fifo_minsize*40 ) {
-        rec_fifo_size=rec_fifo_minsize*10 ;      // default 10Mb
+    if( rec_fifo_size<(1024*1024) || rec_fifo_size>(16*1024*1024) ) {
+        rec_fifo_size=(8*1024*1024) ;      // default 10Mb
     }
 
     rec_fifobusy = dvrconfig.getvalueint("system", "record_fifobusy");

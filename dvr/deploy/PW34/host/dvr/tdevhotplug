@@ -20,7 +20,7 @@ vardir=/var/dvr
 lockfile=${vardir}/lock_${devclass}_${subsys}_${devname}_$1
 if [ -f ${lockfile} ]; then
     exit
-fi    
+fi
 
 echo 1 > ${lockfile}
 
@@ -61,392 +61,396 @@ fi
 case $1 in
     "add")
 
-        # hotplug block device (USB disk)
-        if [ ${devclass} = "block" -a -r ${devpath}/dev  ] ; then
-            devnum=`cat ${devpath}/dev`
-            # generate device if not exist
-            if [ -e /dev/${devname} ] ; then
-                rm /dev/${devname}
-            fi
-            mknod /dev/${devname} b ${devnum%%:*} ${devnum##*:}
+	# hotplug block device (USB disk)
+	if [ ${devclass} = "block" -a -r ${devpath}/dev  ] ; then
+	    devnum=`cat ${devpath}/dev`
+	    # generate device if not exist
+	    if [ -e /dev/${devname} ] ; then
+		rm /dev/${devname}
+	    fi
+	    mknod /dev/${devname} b ${devnum%%:*} ${devnum##*:}
 
-            partition=${devname##*[a-z]}
-            if [ ${partition:-0} -ge 1 -a ! -f ${xmountdir}/mount_${devname} ]; then
+	    partition=${devname##*[a-z]}
+	    if [ ${partition:-0} -ge 1 -a ! -f ${xmountdir}/mount_${devname} ]; then
 
-                echo  ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
-                mkdir -p ${xmountdir}/${devname}
+		echo  ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
+		mkdir -p ${xmountdir}/${devname}
 
-                if mount /dev/${devname} ${xmountdir}/${devname} -t ext3 -o noatime,data=ordered ; then
-                    if [ -f ${xmountdir}/${devname}/archive ] ; then
-                        d_mount=${dvrarchdir}/d_${devname}
-                    else
-                        d_mount=${dvrmountdir}/d_${devname}
-                    fi
+		if mount /dev/${devname} ${xmountdir}/${devname} -t ext3 -o noatime,data=ordered ; then
+		    if [ -f ${xmountdir}/${devname}/archive ] ; then
+			d_mount=${dvrarchdir}/d_${devname}
+		    else
+			d_mount=${dvrmountdir}/d_${devname}
+		    fi
 
-                    if umount ${xmountdir}/${devname} ; then
-                        rm -r ${xmountdir}/${devname}
-                        mkdir -p ${d_mount}
-                        if mount /dev/${devname} ${d_mount} -t ext3 -o noatime,data=ordered ; then
-                            # mark mounted disk
-                            echo  ${d_mount} > ${xmountdir}/mount_${devname}
-                        else
-                            rm ${xmountdir}/mount_${devname}
-                        fi
+		    if umount ${xmountdir}/${devname} ; then
+			rm -r ${xmountdir}/${devname}
+			mkdir -p ${d_mount}
+			if mount /dev/${devname} ${d_mount} -t ext3 -o noatime,data=ordered ; then
+			    # mark mounted disk
+			    echo  ${d_mount} > ${xmountdir}/mount_${devname}
+			else
+			    rm ${xmountdir}/mount_${devname}
+			fi
 
-                    fi
+		    fi
 
-                elif mount /dev/${devname} ${xmountdir}/${devname} -t ext2 -o noatime ; then
-                    if [ -f ${xmountdir}/${devname}/archive ] ; then
-                        d_mount=${dvrarchdir}/d_${devname}
-                    else
-                        d_mount=${dvrmountdir}/d_${devname}
-                    fi
+		elif mount /dev/${devname} ${xmountdir}/${devname} -t ext2 -o noatime ; then
+		    if [ -f ${xmountdir}/${devname}/archive ] ; then
+			d_mount=${dvrarchdir}/d_${devname}
+		    else
+			d_mount=${dvrmountdir}/d_${devname}
+		    fi
 
-                    if umount ${xmountdir}/${devname} ; then
-                        rm -r ${xmountdir}/${devname}
-                        mkdir -p ${d_mount}
-                        if mount /dev/${devname} ${d_mount} -t ext2 -o noatime ; then
-                            # mark mounted disk
-                            echo  ${d_mount} > ${xmountdir}/mount_${devname}
-                        else
-                            rm ${xmountdir}/mount_${devname}
-                        fi
+		    if umount ${xmountdir}/${devname} ; then
+			rm -r ${xmountdir}/${devname}
+			mkdir -p ${d_mount}
+			if mount /dev/${devname} ${d_mount} -t ext2 -o noatime ; then
+			    # mark mounted disk
+			    echo  ${d_mount} > ${xmountdir}/mount_${devname}
+			else
+			    rm ${xmountdir}/mount_${devname}
+			fi
 
-                    fi
+		    fi
 
-                elif mount /dev/${devname} ${xmountdir}/${devname} -o shortname=winnt ; then
+		elif mount /dev/${devname} ${xmountdir}/${devname} -o shortname=winnt ; then
 
-                    # dvr recording disk ?
-                    if [ -f ${xmountdir}/${devname}/dvrdisk -o -f ${xmountdir}/${devname}/DVRDISK ] ; then
+		    # dvr recording disk ?
+		    if [ -f ${xmountdir}/${devname}/dvrdisk -o -f ${xmountdir}/${devname}/DVRDISK ] ; then
 
-                        if umount ${xmountdir}/${devname} ; then
+			if umount ${xmountdir}/${devname} ; then
 
-                            d_mount=${dvrmountdir}/d_${devname}
+			    d_mount=${dvrmountdir}/d_${devname}
 
-                            rm -r ${xmountdir}/${devname}
-                            
-                            # do dosfs check here
-                            dosfsck -a /dev/${devname}
+			    rm -r ${xmountdir}/${devname}
 
-                            mkdir -p ${d_mount}
-                            if mount /dev/${devname} ${d_mount} -o shortname=winnt ; then
-                                rm -f ${d_mount}/FSCK*
-                                # mark mounted disk
-                                echo  ${d_mount} > ${xmountdir}/mount_${devname}
-                            else 
-                                rm ${xmountdir}/mount_${devname}
-                            fi
-                        fi
+			    # do dosfs check here
+			    dosfsck -a /dev/${devname}
 
-                    # dvr archive disk ?
-                    elif [ -f ${xmountdir}/${devname}/archive -o -f ${xmountdir}/${devname}/ARCHIVE ] ; then
+			    mkdir -p ${d_mount}
+			    if mount /dev/${devname} ${d_mount} -o shortname=winnt ; then
+				rm -f ${d_mount}/FSCK*
+				# mark mounted disk
+				echo  ${d_mount} > ${xmountdir}/mount_${devname}
+			    else
+				rm ${xmountdir}/mount_${devname}
+			    fi
+			fi
 
-                        if umount ${xmountdir}/${devname} ; then
+		    # dvr archive disk ?
+		    elif [ -f ${xmountdir}/${devname}/archive -o -f ${xmountdir}/${devname}/ARCHIVE ] ; then
 
-                            d_mount=${dvrarchdir}/d_${devname}
+			if umount ${xmountdir}/${devname} ; then
 
-                            rm -r ${xmountdir}/${devname}
-                            
-                            # do dosfs check here
-                            dosfsck -a /dev/${devname}
+			    d_mount=${dvrarchdir}/d_${devname}
 
-                            mkdir -p ${d_mount}
-                            if mount /dev/${devname} ${d_mount} -o shortname=winnt ; then
-                                rm -f ${d_mount}/FSCK*
-                                # mark mounted disk
-                                echo  ${d_mount} > ${xmountdir}/mount_${devname}
-                            else 
-                                rm ${xmountdir}/mount_${devname}
-                            fi
-                        fi
-                        
-                    # autorun disk .. key ...
-                    elif [ -f ${xmountdir}/${devname}/key ] ; then
+			    rm -r ${xmountdir}/${devname}
 
-                        if volumeid /dev/${devname} ${xmountdir}/${devname} ; then
-                            # key check passed
-                            echo ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
-                            
-                            USBROOT=${xmountdir}/${devname} 
-                            export USBROOT
+			    # do dosfs check here
+			    dosfsck -a /dev/${devname}
 
-                            # check directory 510
-                            if [ -d ${USBROOT}/510 ]; then 
-                                EXEDIR=${USBROOT}/510
-                            else
-                                EXEDIR=${USBROOT}
-                            fi
+			    mkdir -p ${d_mount}
+			    if mount /dev/${devname} ${d_mount} -o shortname=winnt ; then
+				rm -f ${d_mount}/FSCK*
+				# mark mounted disk
+				echo  ${d_mount} > ${xmountdir}/mount_${devname}
+			    else
+				rm ${xmountdir}/mount_${devname}
+			    fi
+			fi
 
-                            export EXEDIR
-                            cd ${EXEDIR}
+		    # autorun disk .. key ...
+		    elif [ -f ${xmountdir}/${devname}/key ] ; then
 
-                            for autoruncheck in `ls *.check`
-                            do
-                                if md5check ${autoruncheck} ; then
-                                    autorun_file=${autoruncheck%.check}.autorun
-                                    if [ -r ${autorun_file} ] ; then
-                                        # run autorun file
-                                        mkdir ${xmountdir}/${devname}_run
-                                        cp -f ${autorun_file} ${xmountdir}/${devname}_run
-                                        cd ${xmountdir}/${devname}_run
-                                        chmod a+x ${autorun_file}
-                                        ./${autorun_file} &
-                                    fi
-                                fi
-                            done
+			if volumeid /dev/${devname} ${xmountdir}/${devname} ; then
+			    # key check passed
+			    echo ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
 
-                            cd /
+			    USBROOT=${xmountdir}/${devname}
+			    export USBROOT
 
-                        else    # no autorun file
+			    # check directory 510
+			    if [ -d ${USBROOT}/510 ]; then
+				EXEDIR=${USBROOT}/510
+			    else
+				EXEDIR=${USBROOT}
+			    fi
 
-                            cd /
-                            if umount ${xmountdir}/${devname} ; then
-                                rm -r ${xmountdir}/${devname}
-                                rm ${xmountdir}/mount_${devname}
-                            fi
-                          
-                        fi
+			    export EXEDIR
+			    cd ${EXEDIR}
 
-                    # autorun disk by usbkey
-                    elif [ -f ${xmountdir}/${devname}/usbkey ] ; then
+			    for autoruncheck in `ls *.check`
+			    do
+				if md5check ${autoruncheck} ; then
+				    autorun_file=${autoruncheck%.check}.autorun
+				    if [ -r ${autorun_file} ] ; then
+					# run autorun file
+					mkdir ${xmountdir}/${devname}_run
+					cp -f ${autorun_file} ${xmountdir}/${devname}_run
+					cd ${xmountdir}/${devname}_run
+					chmod a+x ${autorun_file}
+					./${autorun_file} &
+				    fi
+				fi
+			    done
 
-                        # check auto runable disk
-                        cd ${xmountdir}/${devname}		# required to be current dir, so usbcheck can read FW file.
+			    cd /
 
-                        autorun_appid=`cat ${id_file}` 
-                        autorun_file_app=`usbcheck /dev/${devname%[1-9]} usbkey ${autorun_appid}`
-                        autorun_file=`usbcheck /dev/${devname%[1-9]} usbkey`
-                        if [ -f ${xmountdir}/${devname}/${autorun_file} ] ; then
+			else    # no autorun file
 
-                            echo ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
+			    cd /
+			    if umount ${xmountdir}/${devname} ; then
+				rm -r ${xmountdir}/${devname}
+				rm ${xmountdir}/mount_${devname}
+			    fi
 
-                            mkdir /home/usbautorun
-                            cd /home/usbautorun
-                            # run autorun file
-                            EXEDIR=${xmountdir}/${devname}
-                            export EXEDIR
-                            USBROOT=${EXEDIR}
-                            export USBROOT
-                            ${EXEDIR}/${autorun_file}  &
-                           
-                        elif [ -f ${xmountdir}/${devname}/${autorun_file_app} ] ; then
+			fi
 
-                            echo ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
+		    # autorun disk by usbkey
+		    elif [ -f ${xmountdir}/${devname}/usbkey ] ; then
 
-                            mkdir /home/usbautorun
-                            cd /home/usbautorun
-                            # run autorun file
-                            EXEDIR=${xmountdir}/${devname}
-                            export EXEDIR
-                            USBROOT=${EXEDIR}
-                            export USBROOT
-                            ${EXEDIR}/${autorun_file}  &
-                           
-                        else    # no autorun file
+			# check auto runable disk
+			cd ${xmountdir}/${devname}		# required to be current dir, so usbcheck can read FW file.
 
-                            cd /
-                            if umount ${xmountdir}/${devname} ; then
-                                rm -r ${xmountdir}/${devname}
-                            fi
-                           
-                        fi
-                        
-                    # other disk
-                    else
-                        if umount ${xmountdir}/${devname} ; then
-                            rm -r ${xmountdir}/${devname}
-                        fi
-                    fi
+			autorun_appid=`cat ${id_file}`
+			autorun_file_app=`usbcheck /dev/${devname%[1-9]} usbkey ${autorun_appid}`
+			autorun_file=`usbcheck /dev/${devname%[1-9]} usbkey`
+			if [ -f ${xmountdir}/${devname}/${autorun_file} ] ; then
 
-                else    # can't mount this disk
+			    echo ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
 
-                    rm ${xmountdir}/mount_${devname}
-                    rm -r ${xmountdir}/${devname}
+			    mkdir /home/usbautorun
+			    cd /home/usbautorun
+			    # run autorun file
+			    EXEDIR=${xmountdir}/${devname}
+			    export EXEDIR
+			    USBROOT=${EXEDIR}
+			    export USBROOT
+			    ${EXEDIR}/${autorun_file}  &
 
-                fi      # mounted
-            fi      # partitions 
+			elif [ -f ${xmountdir}/${devname}/${autorun_file_app} ] ; then
 
-        fi	# block device 
+			    echo ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
 
-        # charactor device
-        if [ ${devclass} = "class" -a -r ${devpath}/dev  ] ; then
-            devnum=`cat ${devpath}/dev`
-            # generate device if not exist
-            if [ -e /dev/${devname} ] ; then
-                rm /dev/${devname}
-            fi
-            mknod /dev/${devname} c ${devnum%%:*} ${devnum##*:}
-        fi
+			    mkdir /home/usbautorun
+			    cd /home/usbautorun
+			    # run autorun file
+			    EXEDIR=${xmountdir}/${devname}
+			    export EXEDIR
+			    USBROOT=${EXEDIR}
+			    export USBROOT
+			    ${EXEDIR}/${autorun_file}  &
 
-        # check usb wifi
-        if [  ${devclass} = "class" -a ${subsys} = "net" -a -d ${devpath}/wireless ]; then
-            echo ${devname} > ${vardir}/wifidev
-            sleep 2
+			else    # no autorun file
 
-            wifi_essid=`cfg get network wifi_essid`
-            wifi_enc=`cfg get network wifi_enc`
-            wifi_key=`cfg get network wifi_key`
-            wifi_ip=`cfg get network wifi_ip`
-            wifi_mask=`cfg get network wifi_mask`
-        
-            ifconfig ${devname} up ${wifi_ip}
-            ifconfig ${devname} netmask ${wifi_mask}
+			    cd /
+			    if umount ${xmountdir}/${devname} ; then
+				rm -r ${xmountdir}/${devname}
+			    fi
+
+			fi
+
+		    # other disk
+		    else
+			if umount ${xmountdir}/${devname} ; then
+			    rm -r ${xmountdir}/${devname}
+			fi
+		    fi
+
+		else    # can't mount this disk
+
+		    rm ${xmountdir}/mount_${devname}
+		    rm -r ${xmountdir}/${devname}
+
+		fi      # mounted
+	    fi      # partitions
+
+	fi	# block device
+
+	# charactor device
+	if [ ${devclass} = "class" -a -r ${devpath}/dev  ] ; then
+	    devnum=`cat ${devpath}/dev`
+	    # generate device if not exist
+	    if [ -e /dev/${devname} ] ; then
+		rm /dev/${devname}
+	    fi
+	    mknod /dev/${devname} c ${devnum%%:*} ${devnum##*:}
+	fi
+
+	# check usb wifi
+	if [  ${devclass} = "class" -a ${subsys} = "net" -a -d ${devpath}/wireless ]; then
+	    echo ${devname} > ${vardir}/wifidev
+	    sleep 2
+
+	    wifi_essid=`cfg get network wifi_essid`
+	    wifi_enc=`cfg get network wifi_enc`
+	    wifi_key=`cfg get network wifi_key`
+	    wifi_ip=`cfg get network wifi_ip`
+	    wifi_mask=`cfg get network wifi_mask`
+	    wifi_bcast='cfg get network wifi_bcast`
+
+	    ifconfig ${devname} up ${wifi_ip}
+	    ifconfig ${devname} netmask ${wifi_mask}
 
 		    case ${wifi_enc} in
 		    "0")
-		        # Disable (no enc)
-		        iwpriv ${devname} set NetworkType=Infra
-	            iwpriv ${devname} set AuthMode=OPEN
-	            iwpriv ${devname} set EncrypType=NONE
-    		    iwpriv ${devname} set SSID=${wifi_essid}
-	    	    ;;
+			# Disable (no enc)
+			iwpriv ${devname} set NetworkType=Infra
+		    iwpriv ${devname} set AuthMode=OPEN
+		    iwpriv ${devname} set EncrypType=NONE
+		    iwpriv ${devname} set SSID=${wifi_essid}
+		    ;;
 		    "1")
-		        # WEP open
-	            iwpriv ${devname} set NetworkType=Infra
-	            iwpriv ${devname} set AuthMode=OPEN
-	            iwpriv ${devname} set EncrypType=WEP
-	            iwpriv ${devname} set Key1=${wifi_key}
-	            iwpriv ${devname} set DefaultKeyID=1
-		        iwpriv ${devname} set SSID=${wifi_essid}
-		        ;;
+			# WEP open
+		    iwpriv ${devname} set NetworkType=Infra
+		    iwpriv ${devname} set AuthMode=OPEN
+		    iwpriv ${devname} set EncrypType=WEP
+		    iwpriv ${devname} set Key1=${wifi_key}
+		    iwpriv ${devname} set DefaultKeyID=1
+			iwpriv ${devname} set SSID=${wifi_essid}
+			;;
 		    "2")
-		        # WEP shared
-	            iwpriv ${devname} set NetworkType=Infra
-	            iwpriv ${devname} set AuthMode=SHARED
-	            iwpriv ${devname} set EncrypType=WEP
-	            iwpriv ${devname} set Key1=$wifi_key
-	            iwpriv ${devname} set DefaultKeyID=1
-		        iwpriv ${devname} set SSID=$wifi_essid
-		        ;;
+			# WEP shared
+		    iwpriv ${devname} set NetworkType=Infra
+		    iwpriv ${devname} set AuthMode=SHARED
+		    iwpriv ${devname} set EncrypType=WEP
+		    iwpriv ${devname} set Key1=$wifi_key
+		    iwpriv ${devname} set DefaultKeyID=1
+			iwpriv ${devname} set SSID=$wifi_essid
+			;;
 		    "3")
-  		        # WEP auto
-	            iwpriv ${devname} set NetworkType=Infra
-	            iwpriv ${devname} set AuthMode=WEPAUTO
-	            iwpriv ${devname} set EncrypType=WEP
-	            iwpriv ${devname} set Key1=$wifi_key
-	            iwpriv ${devname} set DefaultKeyID=1
-		        iwpriv ${devname} set SSID=$wifi_essid
-		        ;;
+			# WEP auto
+		    iwpriv ${devname} set NetworkType=Infra
+		    iwpriv ${devname} set AuthMode=WEPAUTO
+		    iwpriv ${devname} set EncrypType=WEP
+		    iwpriv ${devname} set Key1=$wifi_key
+		    iwpriv ${devname} set DefaultKeyID=1
+			iwpriv ${devname} set SSID=$wifi_essid
+			;;
 		    "4")
-		        # WPA Personal TKIP
-	            iwpriv ${devname} set NetworkType=Infra
-		        iwpriv ${devname} set AuthMode=WPAPSK
-		        iwpriv ${devname} set EncrypType=TKIP
-		        iwpriv ${devname} set SSID=$wifi_essid
-		        iwpriv ${devname} set WPAPSK=$wifi_key
-		        iwpriv ${devname} set SSID=$wifi_essid
-		        ;;
+			# WPA Personal TKIP
+		    iwpriv ${devname} set NetworkType=Infra
+			iwpriv ${devname} set AuthMode=WPAPSK
+			iwpriv ${devname} set EncrypType=TKIP
+			iwpriv ${devname} set SSID=$wifi_essid
+			iwpriv ${devname} set WPAPSK=$wifi_key
+			iwpriv ${devname} set SSID=$wifi_essid
+			;;
 		    "5")
-		        # WPA Personal AES
-	            iwpriv ${devname} set NetworkType=Infra
-	            iwpriv ${devname} set AuthMode=WPAPSK
-	            iwpriv ${devname} set EncrypType=AES
-		        iwpriv ${devname} set SSID=$wifi_essid
-	            iwpriv ${devname} set WPAPSK=$wifi_key
-		        iwpriv ${devname} set SSID=$wifi_essid
-		        ;;
+			# WPA Personal AES
+		    iwpriv ${devname} set NetworkType=Infra
+		    iwpriv ${devname} set AuthMode=WPAPSK
+		    iwpriv ${devname} set EncrypType=AES
+			iwpriv ${devname} set SSID=$wifi_essid
+		    iwpriv ${devname} set WPAPSK=$wifi_key
+			iwpriv ${devname} set SSID=$wifi_essid
+			;;
 		    "6")
-		        # WPA2 Personal TKIP
-	            iwpriv ${devname} set NetworkType=Infra
-	            iwpriv ${devname} set AuthMode=WPA2PSK
-	            iwpriv ${devname} set EncrypType=TKIP
-		        iwpriv ${devname} set SSID=$wifi_essid
-	            iwpriv ${devname} set WPAPSK=$wifi_key
-		        iwpriv ${devname} set SSID=$wifi_essid
-		        ;;
+			# WPA2 Personal TKIP
+		    iwpriv ${devname} set NetworkType=Infra
+		    iwpriv ${devname} set AuthMode=WPA2PSK
+		    iwpriv ${devname} set EncrypType=TKIP
+			iwpriv ${devname} set SSID=$wifi_essid
+		    iwpriv ${devname} set WPAPSK=$wifi_key
+			iwpriv ${devname} set SSID=$wifi_essid
+			;;
 		    "7")
-		        # WPA2 Personal AES
-	            iwpriv ${devname} set NetworkType=Infra
-	            iwpriv ${devname} set AuthMode=WPA2PSK
-	            iwpriv ${devname} set EncrypType=AES
-		        iwpriv ${devname} set SSID=$wifi_essid
-	            iwpriv ${devname} set WPAPSK=$wifi_key
-		        iwpriv ${devname} set SSID=$wifi_essid
-		        ;;
+			# WPA2 Personal AES
+		    iwpriv ${devname} set NetworkType=Infra
+		    iwpriv ${devname} set AuthMode=WPA2PSK
+		    iwpriv ${devname} set EncrypType=AES
+			iwpriv ${devname} set SSID=$wifi_essid
+		    iwpriv ${devname} set WPAPSK=$wifi_key
+			iwpriv ${devname} set SSID=$wifi_essid
+			;;
 		    *)
-		        ;;
+			;;
 		    esac
 
-            ifconfig ${devname} up ${wifi_ip}
-            ifconfig ${devname} netmask ${wifi_mask}
-            
-            wifi_dhcp=`cfg get network wifi_dhcp`
-            if [ ${wifi_dhcp} = "1" ]; then
-                # to use dhcp on wifi
-                udhcpc -b -p ${vardir}/wifiudhcpc.pid -i ${devname} -s ${vardir}/udhcpc.script
-            fi
+	    ifconfig ${devname} up ${wifi_ip}
+	    ifconfig ${devname} netmask ${wifi_mask}
+	    if [ -n "${wifi_bcast}" ] ; then
+		ifconfig ${devname} broadcast ${wifi_bcast}
+	    fi
 
-        fi
+	    wifi_dhcp=`cfg get network wifi_dhcp`
+	    if [ ${wifi_dhcp} = "1" ]; then
+		# to use dhcp on wifi
+		udhcpc -b -p ${vardir}/wifiudhcpc.pid -i ${devname} -s ${vardir}/udhcpc.script
+	    fi
 
-        ;;
+	fi
+
+	;;
 
     "remove")
-    
-        if [ ${devclass} = "block" -a -r ${xmountdir}/mount_${devname} ]; then
 
-            mountdir=`cat ${xmountdir}/mount_${devname}`
-            dvrsvrdown=0
-            dvrpid=0
+	if [ ${devclass} = "block" -a -r ${xmountdir}/mount_${devname} ]; then
 
-            # suspend dvrsvr
-            if [ -f ${dvrpidfile} -a -f ${dvrcurdisk} ]; then
-                dvrdisk=`cat ${dvrcurdisk}`
-                if [ ${dvrdisk} = ${mountdir} ] ; then
-                    dvrpid=`cat ${dvrpidfile}`
-                    kill -USR1 ${dvrpid}
-                    for x in 1 2 3 4 5 6 7 8 9 10 ; do
-                        if [ -f ${dvrcurdisk} ]; then
-                            sleep 3
-                        else
-                            break
-                        fi
-                    done
-                    dvrsvrdown=1
-                fi
-            fi
-            
-            if [ -d ${xmountdir}/${devname}_run ] ; then
-                rm -r ${xmountdir}/${devname}_run
-            fi
+	    mountdir=`cat ${xmountdir}/mount_${devname}`
+	    dvrsvrdown=0
+	    dvrpid=0
 
-            for x in 1 2 3 4 5 6 7 8 ; do
-                if [ -d ${mountdir} ] ; then
-                   sync;
-                   if umount ${mountdir} ; then
-                      rm -r ${mountdir}
-                   else
-                      sleep 1
-                   fi
-                else
-                   break
-                fi ;
-            done ;
+	    # suspend dvrsvr
+	    if [ -f ${dvrpidfile} -a -f ${dvrcurdisk} ]; then
+		dvrdisk=`cat ${dvrcurdisk}`
+		if [ ${dvrdisk} = ${mountdir} ] ; then
+		    dvrpid=`cat ${dvrpidfile}`
+		    kill -USR1 ${dvrpid}
+		    for x in 1 2 3 4 5 6 7 8 9 10 ; do
+			if [ -f ${dvrcurdisk} ]; then
+			    sleep 3
+			else
+			    break
+			fi
+		    done
+		    dvrsvrdown=1
+		fi
+	    fi
 
-            # restart dvrsvr
-            if [ $dvrsvrdown = 1 ]; then
-                kill -USR2 $dvrpid
-            fi
+	    if [ -d ${xmountdir}/${devname}_run ] ; then
+		rm -r ${xmountdir}/${devname}_run
+	    fi
 
-            rm ${xmountdir}/mount_${devname}
+	    for x in 1 2 3 4 5 6 7 8 ; do
+		if [ -d ${mountdir} ] ; then
+		   sync;
+		   if umount ${mountdir} ; then
+		      rm -r ${mountdir}
+		   else
+		      sleep 1
+		   fi
+		else
+		   break
+		fi ;
+	    done ;
 
-        fi;
-        
-        # remove wifi interface      
-        if [  ${devclass} = "class" -a ${subsys} = "net" ]; then
-            if [ -f ${vardir}/wifidev ] ; then
-                wifidev=`cat ${vardir}/wifidev`
-                if [ ${wifidev} = ${devname} ]; then
-                    rm ${vardir}/wifidev
-                fi
-            fi ;
+	    # restart dvrsvr
+	    if [ $dvrsvrdown = 1 ]; then
+		kill -USR2 $dvrpid
+	    fi
 
-            if [ -f ${vardir}/wifiudhcpc.pid ] ; then
-                kill `cat ${vardir}/wifiudhcpc.pid`
-            fi
-        fi; 
+	    rm ${xmountdir}/mount_${devname}
 
-        ;;
-esac 
+	fi;
+
+	# remove wifi interface
+	if [  ${devclass} = "class" -a ${subsys} = "net" ]; then
+	    if [ -f ${vardir}/wifidev ] ; then
+		wifidev=`cat ${vardir}/wifidev`
+		if [ ${wifidev} = ${devname} ]; then
+		    rm ${vardir}/wifidev
+		fi
+	    fi ;
+
+	    if [ -f ${vardir}/wifiudhcpc.pid ] ; then
+		kill `cat ${vardir}/wifiudhcpc.pid`
+	    fi
+	fi;
+
+	;;
+esac
 
 # unlock hotplug
 rm ${lockfile}

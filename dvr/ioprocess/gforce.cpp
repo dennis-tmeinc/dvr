@@ -423,6 +423,13 @@ int gforce_getcrashdata()
     }
     sleep(3);
 
+#ifdef SUPPORT_YAGF
+    int yagf_getcrashdata();
+
+    yagf_getcrashdata() ;
+#else
+    // original g-force sensor
+
     rsize = mcu_cmd(rsp, MCU_CMD_GSENSORUPLOAD, 1,
                     (int)(direction_table[gsensor_direction][2]) );      // direction
     if( rsize >= 10 ) {
@@ -465,6 +472,9 @@ int gforce_getcrashdata()
     }
 
     gforce_reinit();
+
+#endif
+
     dvrsvr_resume() ;
     glog_resume();
     p_dio_mmap->iomode=iomode;

@@ -76,4 +76,4 @@ strip : eaglesvr
 
 clean :
 	rm -f *.o
-	rm -f eaglesvr
+	rm -f eaglesvr libeaglesvr.so

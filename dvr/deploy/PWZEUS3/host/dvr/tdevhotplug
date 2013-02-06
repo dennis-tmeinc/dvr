@@ -288,6 +288,7 @@ case $1 in
 	    wifi_key=`cfg get network wifi_key`
 	    wifi_ip=`cfg get network wifi_ip`
 	    wifi_mask=`cfg get network wifi_mask`
+	    wifi_bcast=`cfg get network wifi_bcast`
 
 	    ifconfig ${devname} up ${wifi_ip}
 	    ifconfig ${devname} netmask ${wifi_mask}
@@ -369,6 +370,9 @@ case $1 in
 
 	    ifconfig ${devname} up ${wifi_ip}
 	    ifconfig ${devname} netmask ${wifi_mask}
+	    if [ -n "${wifi_bcast}" ] ; then
+		ifconfig ${devname} broadcast ${wifi_bcast}
+	    fi
 
 	    wifi_dhcp=`cfg get network wifi_dhcp`
 	    if [ ${wifi_dhcp} = "1" ]; then

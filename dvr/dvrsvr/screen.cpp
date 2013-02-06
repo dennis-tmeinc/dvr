@@ -791,7 +791,16 @@ protected:
             restartdecoder();
         }
         else if( m_decode_runmode == DECODE_MODE_PRIOR ) {
-            dvrtime cbegin, pbegin, end ;
+            dvrtime begin, end ;
+
+            if( m_decode_ply->getprevcliptime( &begin, &end ) ) {
+                m_decode_ply->seek(&begin);
+            }
+            else if( m_decode_ply->getcurrentcliptime( &begin, &end ) ) {
+                m_decode_ply->seek(&begin);
+            }
+
+/*
             if( m_decode_ply->getcurrentcliptime( &cbegin, &end ) ) {
                 if( time_dvrtime_diff( &m_streamtime , &cbegin ) > screen_play_cliptime )
                 {
@@ -824,11 +833,19 @@ protected:
                     m_decode_ply->seek(&pbegin);
                 }
             }
+*/
+
             m_decode_runmode = DECODE_MODE_PLAY ;
             restartdecoder();
         }
         else if( m_decode_runmode == DECODE_MODE_NEXT ) {
             dvrtime begin, end ;
+            if( m_decode_ply->getnextcliptime( &begin, &end ) ) {
+                m_decode_ply->seek(&begin);
+                restartdecoder();
+            }
+
+/*
             if( m_decode_ply->getcurrentcliptime( &begin, &end ) ) {
                 if( time_dvrtime_diff( &end, &m_streamtime ) > screen_play_cliptime ) {
                     time_dvrtime_add(&m_streamtime, screen_play_cliptime);
@@ -841,8 +858,8 @@ protected:
                     m_decode_ply->seek(&end);
                 }
             }
+*/
             m_decode_runmode = DECODE_MODE_PLAY ;
-            restartdecoder();
         }
 
 
@@ -856,7 +873,7 @@ protected:
             if( !screen_keepcapture ){
                 cap_stop();       // stop live codec, so decoder has full DSP power
             }
-            disk_archive_stop();   // stop archiving
+//            disk_archive_stop();   // stop archiving
             m_playchannel = channel ;
             m_eaglechannel = cap_channel[channel]->geteaglechannel();
 

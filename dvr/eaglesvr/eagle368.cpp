@@ -23,7 +23,7 @@ struct File_format_info {
    unsigned int reserverd2;
 };
 
-char DvrFileHeader[40] =
+const char DvrFileHeader[40] =
 {
     '\x46', '\x45', '\x4d', '\x54', '\x01', '\x00', '\x01', '\x00',
     '\x01', '\x00', '\x01', '\x00', '\x01', '\x00', '\x01', '\x10',
@@ -154,7 +154,6 @@ eagle368_capture::eagle368_capture( int channel )
     ffi->video_framerate = m_attr.FrameRate ;
     ffi->video_height = 480 ;
     ffi->video_width = 720 ;
-
 }
 
 eagle368_capture::~eagle368_capture()
@@ -165,13 +164,21 @@ eagle368_capture::~eagle368_capture()
 int cap_channels;
 icapture * * cap_channel;
 
+// nul stream call back
+static void Eagle368_NulStreamCallBack(CALLBACK_DATA ,void* )
+{
+}
+
 // stream call back
 static void Eagle368_StreamCallBack(CALLBACK_DATA CallBackData,void* context)
 {
 
     int channel=CallBackData.channel ;
-    if( channel>=0 &&
+    if( eagle368_systemstart &&
+        eagle368_systemstart_req &&
+        channel>=0 &&
         channel<cap_channels &&
+        cap_channel != NULL &&
         cap_channel[channel] )
     {
         cap_channel[channel]->streamcallback(CallBackData.pBuf,
@@ -210,14 +217,13 @@ void eagle368_capture::streamcallback(
         break;
     default:
         dvr_log( "Unknown frame captured!" );
+        return ;
     }
 
-    if( capframe.frametype != FRAMETYPE_UNKNOWN ) {
-        capframe.channel = m_channel ;
-        capframe.framesize = size ;
-        capframe.framedata = (char *)buf;
-        onframe(&capframe);
-    }
+    capframe.channel = m_channel ;
+    capframe.framesize = size ;
+    capframe.framedata = (char *)buf;
+    onframe(&capframe);
 }
 
 void eagle368_capture::start()
@@ -287,7 +293,7 @@ void eagle368_capture::start()
                       m_attr.saturation*25,
                       m_attr.hue*36-180 );
 
-/*
+
         if( m_attr.MotionSensitivity>=0 ) {
             res = SetMotionDetection(m_hikhandle,  m_attr.MotionSensitivity );
             res = EnalbeMotionDetection( m_hikhandle, 1);
@@ -295,7 +301,6 @@ void eagle368_capture::start()
         else {
             EnalbeMotionDetection( m_hikhandle, 0 );
         }
-*/
 
         // Start codec
         StartCodec( m_hikhandle, m_chantype );
@@ -317,7 +322,7 @@ void eagle368_capture::stop()
 
         dvr_log("Cap channel %d stopped!", m_channel );
 
-        res=EnalbeMotionDetection(m_hikhandle, 0);	// disable motion detection
+//        res=EnalbeMotionDetection(m_hikhandle, 0);	// disable motion detection
         res=StopCodec(m_hikhandle, m_chantype);
         m_started = 0 ;
     }
@@ -375,7 +380,7 @@ void eagle_idle()
     if(eagle368_systemstart_req!=eagle368_systemstart) {
         int i;
         int timetick = time_tick();
-        if( timetick-eagle368_systemstart_time > 8000 ) {     // delay 8 seconds between systemstart and systemstop, system would hang otherwise
+        if( timetick-eagle368_systemstart_time > 6000 ) {     // delay 6 seconds between systemstart and systemstop, system would hang otherwise
             if(eagle368_systemstart_req){
                 // start all channel
                 for( i=0; i<cap_channels ;i++) {
@@ -383,10 +388,9 @@ void eagle_idle()
                         cap_channel[i]->start();
                     }
                 }
-                dvr_log( "Eagle368 System Start!") ;
+                dvr_log( "SystemStart()...") ;
                 SystemStart();
-                eagle368_systemstart = eagle368_systemstart_req ;
-                eagle368_systemstart_time = timetick ;
+                dvr_log( "SystemStart() finished!");
             }
             else {
                 // stop all channel
@@ -395,11 +399,12 @@ void eagle_idle()
                         cap_channel[i]->stop();
                     }
                 }
-                dvr_log( "Eagle368 System Stop!") ;
+                dvr_log( "SystemStop()...") ;
                 SystemStop();
-                eagle368_systemstart = eagle368_systemstart_req ;
-                eagle368_systemstart_time = timetick ;
+                dvr_log( "SystemStop() finished.") ;
             }
+            eagle368_systemstart = eagle368_systemstart_req ;
+            eagle368_systemstart_time = timetick ;
         }
     }
 }
@@ -420,6 +425,7 @@ int eagle_init()
 {
     int res ;
     int i;
+    int channels ;
     board_info binfo ;
 
     if( eagle_InitSystem==0 ) {
@@ -432,17 +438,16 @@ int eagle_init()
     }
 
     if( GetBoardInfo(&binfo)==0 ) {
-        cap_channels = (int)binfo.enc_chan ;
+        channels = (int)binfo.enc_chan ;
 
-        if( cap_channels<0 || cap_channels>16 ) {
-            cap_channels=0;
+        if( channels<0 || channels>16 ) {
+            channels=0;
         }
         else {
-            cap_channel = new icapture * [cap_channels] ;
+            cap_channel = new icapture * [channels] ;
             //    dvr_log("%d capture card (local) channels detected.", dvrchannels);
-            for (i = 0; i < cap_channels; i++ ) {
+            for (i = 0; i < channels; i++ ) {
                 cap_channel[i]=new eagle368_capture(i);
-
             }
             res=RegisterStreamDataCallback(Eagle368_StreamCallBack,NULL);
         }
@@ -451,15 +456,27 @@ int eagle_init()
     eagle368_systemstart_req = eagle368_systemstart = 0  ;
     eagle368_systemstart_time = time_tick()-10000 ;  // make it ready to start
 
+    cap_channels=channels ;
+
     return cap_channels ;
 }
 
 void eagle_uninit()
 {
     int i;
+    int channels;
+
+    if( cap_channel==NULL ) {
+        return ;
+    }
+    channels = cap_channels ;
+    cap_channels = 0 ;          // to stop callback
+
+    // register a nul call back
+    RegisterStreamDataCallback(Eagle368_NulStreamCallBack,NULL);
 
     // stop eagle 368 capturing
-    for( i=0; i<cap_channels ;i++) {
+    for( i=0; i<channels ;i++) {
         if( cap_channel[i] ) {
             cap_channel[i]->stop();
         }
@@ -469,16 +486,14 @@ void eagle_uninit()
         eagle368_systemstart=0 ;
     }
 
-    if( cap_channels > 0 ) {
-        i=cap_channels ;
-        cap_channels=0 ;
-        while(i>0) {
-            delete cap_channel[--i] ;
+    // delete  eagle 368 channel
+    for( i=0; i<channels ;i++) {
+        if( cap_channel[i] ) {
+            delete cap_channel[i];
         }
-        delete [] cap_channel ;
-        cap_channel=NULL ;
-        RegisterStreamDataCallback(NULL,NULL);
     }
+    delete [] cap_channel ;
+    cap_channel=NULL ;
 }
 
 void eagle_finish()

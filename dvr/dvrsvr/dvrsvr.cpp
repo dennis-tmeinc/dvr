@@ -760,7 +760,6 @@ void dvrsvr::ReqOpenLive()
             Send( &ans, sizeof(ans));
             Send( cap_channel[m_req.data]->getheader(), hlen );
         }
-        cap_channel[m_connchannel]->start();
         return ;
     }
     AnsError();

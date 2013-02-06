@@ -28,8 +28,8 @@ serialtest : $(OBJS) $(HEADERS)
 
 gentest : gentest.cpp
 #	gcc $(CFLAGS) -o gentest gentest.cpp $(LDFLAGS)
-	$(CC) $(CFLAGS) -o gentest1 gentest.cpp $(LDFLAGS)
-	cp gentest1  $(debug_folder)
+	$(CC) $(CFLAGS) -o gentest gentest.cpp $(LDFLAGS) -lrt
+	cp gentest  $(debug_folder)
 
 #gentest : gentest.cpp $(EXTHEADERS) $(EXTSOURCES)
 #	$(CPP) $(CFLAGS) -o $@ gentest.cpp $(EXTSOURCES) $(LDFLAGS)

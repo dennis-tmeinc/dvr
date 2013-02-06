@@ -208,27 +208,39 @@ void playback::preread()
 int playback::getcurrentcliptime(struct dvrtime * begin, struct dvrtime * end)
 {
     array <struct dayinfoitem> dayinfo ;
-    int i ;
     int timeinday ;
+    struct dvrtime clipday ;
+    int i, j;
 
-    timeinday=m_streamtime.hour * 3600 + m_streamtime.minute * 60 + m_streamtime.second ;
+    memset( &clipday, 0, sizeof(clipday));
 
-    getdayinfo( dayinfo, &m_streamtime );
+    for( j=0 ; j<m_daylist.size(); j++ ) {
+        if( m_daylist[j]>=m_day ) {
+            if( m_daylist[j]==m_day ) {
+                timeinday=m_streamtime.hour * 3600 + m_streamtime.minute * 60 + m_streamtime.second ;
+            }
+            else {
+                timeinday = -100 ;
+            }
+            clipday.year = m_daylist[j] / 10000 ;
+            clipday.month = (m_daylist[j]%10000) / 100 ;
+            clipday.day = m_daylist[j] % 100 ;
 
-    for( i=0; i<dayinfo.size(); i++ ) {
-        struct dayinfoitem & di = dayinfo[i] ;
-        if( timeinday >= di.ontime && timeinday <= di.offtime ) {
-            *begin = m_streamtime ;
-            begin->hour = di.ontime / 3600 ;
-            begin->minute = (di.ontime % 3600) / 60 ;
-            begin->second = di.ontime % 60 ;
-            begin->milliseconds = 0 ;
-            *end = m_streamtime ;
-            end->hour = di.offtime / 3600 ;
-            end->minute = (di.offtime % 3600) / 60 ;
-            end->second = di.offtime % 60 ;
-            end->milliseconds = 0 ;
-            return 1 ;
+            getdayinfo( dayinfo, &clipday );
+            for( i=0; i<dayinfo.size(); i++ ) {
+                struct dayinfoitem & di = dayinfo[i] ;
+                if( di.offtime >= timeinday ) {
+                    *begin = clipday ;
+                    begin->hour = di.ontime / 3600 ;
+                    begin->minute = (di.ontime % 3600) / 60 ;
+                    begin->second = di.ontime % 60 ;
+                    *end = clipday ;
+                    end->hour = di.offtime / 3600 ;
+                    end->minute = (di.offtime % 3600) / 60 ;
+                    end->second = di.offtime % 60 ;
+                    return 1 ;
+                }
+            }
         }
     }
 
@@ -349,7 +361,6 @@ void playback::getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * 
 {
     struct dvrtime t ;
     int len ;
-    int locklen ;
     int i;
     struct dayinfoitem di ;
     struct dayinfoitem di_x ;
@@ -372,29 +383,24 @@ void playback::getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * 
     dayinfo.setsize(0);
     for( i=0; i<pfilelist->size(); i++) {
         char * fname = (*pfilelist)[i];
-        if( strstr(fname, "_L_") ) {
-            len=f264length(fname) ;
-            if( lock ) {
-                locklen = f264locklength( fname );
-            }
-            else {
-                locklen = len ;     // fake full lengh
-            }
-            if( len<=0 || locklen<=0 || len>90000 || locklen>len ) {
-                continue ;
-            }
-            f264time(fname, &t);
-            di_x.ontime=t.hour * 3600 + t.minute * 60 + t.second ;
-            di_x.offtime=di_x.ontime+len ;
-            di_x.ontime=di_x.offtime-locklen ;
-            if( (di_x.ontime-di.offtime)>5 ) {
-                if( di.offtime>di.ontime ) {
-                    dayinfo.add(di);
-                }
-                di.ontime=di_x.ontime ;
-            }
-            di.offtime=di_x.offtime ;
+        len=f264length(fname) ;
+        f264time(fname, &t);
+        di_x.ontime=t.hour * 3600 + t.minute * 60 + t.second ;
+        di_x.offtime=di_x.ontime+len ;
+        if( lock ) {
+            len = f264locklength( fname );
+            di_x.ontime=di_x.offtime-len ;
         }
+        if( len<=0 || len>90000 ) {
+            continue ;
+        }
+        if( (di_x.ontime-di.offtime)>5 ) {
+            if( di.offtime>di.ontime ) {
+                dayinfo.add(di);
+            }
+            di.ontime=di_x.ontime ;
+        }
+        di.offtime=di_x.offtime ;
     }
 
     if( di.offtime>di.ontime ) {

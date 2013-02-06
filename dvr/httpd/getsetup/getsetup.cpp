@@ -801,6 +801,12 @@ int main()
             fprintf(fvalue, "\"eth_mask\":\"%s\",", (char *)value );
         }
 
+        // eth_bcast
+        value = dvrconfig.getvalue("network","eth_bcast");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"eth_bcast\":\"%s\",", (char *)value );
+        }
+
         // gateway
         value = dvrconfig.getvalue("network","gateway");
         if( value.length()>0 ) {
@@ -823,6 +829,12 @@ int main()
         value = dvrconfig.getvalue("network","wifi_mask");
         if( value.length()>0 ) {
             fprintf(fvalue, "\"wifi_mask\":\"%s\",", (char *)value );
+        }
+
+        // wifi_bcast
+        value = dvrconfig.getvalue("network","wifi_bcast");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"wifi_bcast\":\"%s\",", (char *)value );
         }
 
         // wifi_essid

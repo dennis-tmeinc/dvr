@@ -262,6 +262,13 @@ int EnalbeMotionDetection(int channel, int enable);
    int channel: channel handle
 */
 int GetChannelMotionStatus(int channel);
+/*Notes for GetChannelObjectStatus
+    Get the object detection status
+    INPUTS:
+    in channel: channel handle
+    Return Value: if object is not detected,return 0; otherwise, the starttime is returned;
+*/
+int GetChannelObjectStatus(int channel);
 
 int SetOSDDisplayMode(int channel, int brightness, int translucent, int param, int line_count,unsigned short**format);
 int EnableOSD(int channel, int enable);
@@ -344,7 +351,6 @@ int DecodeNextFrame(int handle);
    int size:   data buffer size;
 */
 int InputAvData(int handle, void* buf, int size);
-
 
 #ifdef __cplusplus
 }

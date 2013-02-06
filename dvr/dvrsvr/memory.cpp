@@ -81,14 +81,14 @@ void mem_available()
 void mem_cpy32( void  *dest, const void *src, size_t count)
 {
     if( ((unsigned long)dest&3)==0 &&
-        ((unsigned long)src&3)==0 )
+        ((unsigned long)src&3)==0 &&
+        ((unsigned long)count&3)==0 )
     {
-        unsigned long * ldest = (unsigned long *)dest ;
-        unsigned long * lsrc = (unsigned long *)src ;
-
-        count = (count+sizeof(unsigned long)-1)/sizeof(unsigned long) ;
+        unsigned long * dst32 = (unsigned long *)dest ;
+        unsigned long * src32 = (unsigned long *)src ;
+        count /= sizeof(unsigned long) ;
         while (count-->0) {
-            *ldest++ = *lsrc++ ;
+            *dst32++ = *src32++ ;
         }
     }
     else {
@@ -96,7 +96,6 @@ void mem_cpy32( void  *dest, const void *src, size_t count)
         memcpy(dest,src,count);
     }
 }
-
 
 /*
 void mem_cpy32(void *dest, const void *src, size_t count)

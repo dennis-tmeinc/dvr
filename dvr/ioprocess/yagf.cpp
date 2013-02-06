@@ -3,8 +3,6 @@
 
     Yet Another G-Force
 
-    ( alias of new tab102b, refer original tab102b codes to glog )
-
 */
 
 #include <unistd.h>
@@ -19,6 +17,7 @@
 #include "netdbg.h"
 #include "mcu.h"
 #include "diomap.h"
+#include "gforce.h"
 #include "yagf.h"
 
 // functions from ioprocess.cpp
@@ -27,6 +26,10 @@ int dvr_log(char *fmt, ...);
 extern int gforce_log_enable;
 extern int gforce_available;
 extern int gforce_crashdata_enable;
+
+static int yagf_cal_x=0x200 ;
+static int yagf_cal_y=0x200 ;
+static int yagf_cal_z=0x200 ;
 
 // direction table
 // 0:Front,1:Back, 2:Right, 3:Left, 4:Bottom, 5:Top
@@ -59,6 +62,16 @@ static char yagf_direction_table[24][3] =
     {5, 3, 0x54}  // Forward:top, Upward:left,    Leftward:front
 };
 
+
+int yagf_sendcmd(int cmd, int datalen=0, ...);
+
+// send command to mcu without waiting for responds
+int yagf_sendcmd(int cmd, int datalen, ...)
+{
+    va_list v ;
+    va_start( v, datalen ) ;
+    return mcu_sendcmd_va( ID_YAGF, cmd, datalen, v ) ;
+}
 
 int yagf_cmd(char * rsp, int cmd, int datalen=0, ...);
 
@@ -100,6 +113,80 @@ void yagf_enablepeak()
     yagf_cmd(NULL, YAGF_CMD_ENABLEPEAK );
 }
 
+void yagf_reset()
+{
+    yagf_cmd(NULL, YAGF_CMD_RESET );
+}
+
+// calibrate g-sensor. (via MCU)
+//   return 0: no sensor, 1: ok, -1: command failed
+//   comunications:
+//       input :  p_dio_mmap->rtc_cmd = 10
+//       output :
+//            success => p_dio_mmap->rtc_cmd = 0
+//                       p_dio_mmap->rtc_year = response code
+//            failed  => p_dio_mmap->rtc_cmd = -1
+int yagf_calibration()
+{
+    int res = yagf_cmd(NULL, YAGF_CMD_CALIBRATION ) ;
+
+    if( res>0 ) {
+        dio_lock();
+        p_dio_mmap->rtc_year = 0 ;
+        p_dio_mmap->rtc_cmd = 0 ;
+        dio_unlock();
+        return 0 ;
+    }
+    else {
+        p_dio_mmap->rtc_cmd = -1 ;
+        return -1 ;
+    }
+}
+
+int yagf_getcrashdata()
+{
+    int rsize ;
+    int success = 0 ;
+    unsigned char buf[10] ;
+
+    yagf_sendcmd(YAGF_CMD_UPLOADCRASHDATA) ;
+
+    rsize = mcu_read( (char *)buf, 9, 3000000, 3000000 );
+    if( rsize<9 ) {
+        netdbg_print("No data\n") ;
+    }
+
+    if( rsize >= 10 ) {
+        int uploadSize =
+                (((unsigned int)buf[5]) << 24) |
+                (((unsigned int)buf[6]) << 16) |
+                (((unsigned int)buf[7]) << 8) |
+                (((unsigned int)buf[8]) ) ;
+
+        if (uploadSize>0 && uploadSize<1000000 ) {
+            int bufsize = uploadSize + 8;       // 8 bytes header
+            gforce_crashdata =(unsigned char *)malloc(bufsize+100);     // extra 100 byte room
+
+            netdbg_print("yagf upload, requst: %d bytes\n", bufsize );
+            rsize = mcu_read((char *)gforce_crashdata, bufsize, 1000000, 1000000 );
+            netdbg_print("yagf upload, read: %d bytes\n", rsize );
+
+            //  if (nbytes >= uploadSize + UPLOAD_ACK_SIZE + 8) {
+            if (rsize >= bufsize) {
+                success=1 ;
+                gforce_crashdatalen=rsize ;
+                dvr_log( "Read gforce crash data success, data size %d", gforce_crashdatalen );
+            }
+            else {
+                dvr_log("Read gforce crash data error");
+                gforce_freecrashdata();
+            }
+        }
+    }
+    yagf_cmd(NULL, YAGF_CMD_UPLOADCRASHDATAACK, 1, success) ;
+
+    return 0;
+}
 
 // recevied gforce sensor data
 void yagf_log( int x, int y, int z )
@@ -114,13 +201,20 @@ void yagf_log( int x, int y, int z )
     gr = (y-512.0)/ 37.0 ;
     gd = (z-512.0)/ 37.0 ;
 
+    netdbg_print("yagf value gf=%f, gr=%f, gd=%f\n",
+                 gf,
+                 gr,
+                 gd );
+
     // save to log
-    dio_lock();
-    p_dio_mmap->gforce_serialno++ ;
-    p_dio_mmap->gforce_forward = gf ;
-    p_dio_mmap->gforce_right = gr ;
-    p_dio_mmap->gforce_down = gd ;
-    dio_unlock();
+    if( gforce_log_enable ) {
+        dio_lock();
+        p_dio_mmap->gforce_serialno++ ;
+        p_dio_mmap->gforce_forward = gf ;
+        p_dio_mmap->gforce_right = gr ;
+        p_dio_mmap->gforce_down = gd ;
+        dio_unlock();
+    }
 }
 
 void yagf_input( char * ibuf )
@@ -130,15 +224,40 @@ void yagf_input( char * ibuf )
         int x, y, z ;
         x = ((unsigned int)(unsigned char)ibuf[5]) ;
         x <<= 8 ;
-        x = ((unsigned int)(unsigned char)ibuf[6]) ;
+        x += ((unsigned int)(unsigned char)ibuf[6]) ;
         y = ((unsigned int)(unsigned char)ibuf[7]) ;
         y <<= 8 ;
-        y = ((unsigned int)(unsigned char)ibuf[8]) ;
+        y += ((unsigned int)(unsigned char)ibuf[8]) ;
         z = ((unsigned int)(unsigned char)ibuf[9]) ;
         z <<= 8 ;
-        z = ((unsigned int)(unsigned char)ibuf[10]) ;
+        z += ((unsigned int)(unsigned char)ibuf[10]) ;
+
+        if( gforce_available == 0 ) {           // gforce_init may not return correct availability answer, so we do it here.
+            FILE * fgsensor ;
+            dvr_log("tab102b data available!");
+            fgsensor = fopen( VAR_DIR"/gsensor", "w" );
+            if( fgsensor ) {
+                fprintf(fgsensor, "1");
+                fclose(fgsensor);
+            }
+            gforce_available = 1 ;
+        }
 
         yagf_log( x, y, z ) ;
+    }
+    if( ibuf[3]==YAGF_CALIBRATIONDATA ) {
+        yagf_cal_x = ((unsigned int)(unsigned char)ibuf[5]) ;
+        yagf_cal_x <<= 8 ;
+        yagf_cal_x += ((unsigned int)(unsigned char)ibuf[6]) ;
+
+        yagf_cal_y = ((unsigned int)(unsigned char)ibuf[5]) ;
+        yagf_cal_y <<= 8 ;
+        yagf_cal_y += ((unsigned int)(unsigned char)ibuf[6]) ;
+
+        yagf_cal_z = ((unsigned int)(unsigned char)ibuf[5]) ;
+        yagf_cal_z <<= 8 ;
+        yagf_cal_z += ((unsigned int)(unsigned char)ibuf[6]) ;
+
     }
     // ignor every thing else
 }
@@ -168,7 +287,6 @@ void yagf_init( config & dvrconfig )
 
     // gforce log enabled ?
     gforce_log_enable = dvrconfig.getvalueint( "glog", "gforce_log_enable");
-    gforce_available = 0 ;
     gforce_crashdata_enable = dvrconfig.getvalueint( "io", "gsensor_crashdata" );
 
     // unit direction
@@ -425,8 +543,7 @@ void yagf_init( config & dvrconfig )
 
     // do this before set trigger
     if( yagf_setrtc()==0 ) {
-        dvr_log("tab102b gforce sensor failed!");
-        return ;
+        dvr_log("tab102b setrtc failed!");
     }
 
     // set trigger value
@@ -454,7 +571,14 @@ void yagf_init( config & dvrconfig )
                      crash_z_pos>>8, crash_z_pos&0xff,
                      crash_z_neg>>8, crash_z_neg&0xff,
 
-                     yagf_direction_table[unit_direction][2] );
+                     yagf_direction_table[unit_direction][2],
+
+                     /* calibration data */
+                     yagf_cal_x>>8, yagf_cal_x&0xff,
+                     yagf_cal_y>>8, yagf_cal_y&0xff,
+                     yagf_cal_z>>8, yagf_cal_z&0xff
+
+                     );
 
     if( rsize>0 && rsp[5] ) { // g_sensor available
         dvr_log("tab102b gforce sensor detected!");
@@ -471,4 +595,7 @@ void yagf_init( config & dvrconfig )
 
 void yagf_finish()
 {
+    gforce_available = 0 ;
+    yagf_reset();
+    sleep(3);
 }

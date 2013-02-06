@@ -382,6 +382,7 @@ int netcapture::connect()
 {
     char * tzenv ;
 
+
     m_sockfd = net_connect (m_ip, m_port) ;
     if( m_sockfd<0 ) {
         return 0;
@@ -424,10 +425,10 @@ void netcapture::start()
 {
     if( m_enable ) {
         if( !m_started ) {
+            m_started = 1 ;
             if( connect() ) {
                 m_state=1 ;
                 pthread_create(&m_streamthreadid, NULL, ipeagle32_thread, this);
-                m_started = 1 ;
             }
         }
     }
@@ -461,9 +462,11 @@ void netcapture::update(int updosd)
         return ;
     }
 
+/*
     if( m_state==0 ) {
         start();
     }
+*/
 
     if( m_sockfd<=0 ) {
         connect();

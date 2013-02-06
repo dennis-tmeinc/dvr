@@ -468,8 +468,8 @@ int dio_getgforce( float * gf, float * gr, float *gd )
     static int gforceupdtime ;
     static int gforceserialno ;
     int v=0 ;
-    dio_lock();
     if( p_dio_mmap && p_dio_mmap->gforce_serialno ) {
+        dio_lock();
         if( gforceserialno !=  p_dio_mmap->gforce_serialno ) {
             v=1 ;
             gforceupdtime=g_timetick ;
@@ -483,8 +483,8 @@ int dio_getgforce( float * gf, float * gr, float *gd )
             *gr = p_dio_mmap->gforce_right ;
             *gd = p_dio_mmap->gforce_down ;
         }
+        dio_unlock();
     }
-    dio_unlock();
     return v;
 }
 

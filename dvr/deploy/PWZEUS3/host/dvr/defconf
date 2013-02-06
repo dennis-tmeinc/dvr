@@ -417,6 +417,9 @@ Mexico/BajaNorte=PST+8PDT+7,M4.1.0/2,M10.4.0/2 (GMT-8:00) Tijuana
 
 # parameters for io module
 [io]
+# show gsensor value as acceleration value
+gsensor_showacc=1
+
 gsensor_forward_trigger=0.5
 gsensor_backward_trigger=0.5
 gsensor_right_trigger=0.5

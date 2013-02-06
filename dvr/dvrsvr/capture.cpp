@@ -22,6 +22,8 @@
 int _osd_vert_exp = 4 ;
 int _osd_hori_exp = 4 ;
 
+static int cap_gsensor_showacc ;
+
 int cap_channels;
 capture * * cap_channel;
 
@@ -793,18 +795,28 @@ void capture::updateOSD()
 
     float gf, gr, gd ;
     if( m_show_gforce && dio_getgforce( &gf, &gr, &gd ) ) {
-        sprintf( osdbuf, "%c%2.1lf %c%2.1lf %c%2.1lf",
-                gf>=0.0?'F':'B',
-                gf>=0.0?gf:-gf,
-                gr>=0.0?'R':'L',
-                gr>=0.0?gr:-gr,
-                gd>=0.0?'D':'U',
-                gd>=0.0?gd:-gd );
+        if( cap_gsensor_showacc ) {
+            gf=-gf ;
+            gr=-gr ;
+            gd=1-gd ;
+        }
+        sprintf( osdbuf, "%c%2.1lf %c%2.1lf %c%2.1lf   ",
+                 gf<0.0?'B':'F',
+                 gf<0.0?-gf:gf,
+                 gr<0.0?'L':'R',
+                 gr<0.0?-gr:gr,
+                 gd<0.0?'U':'D',
+                 gd<0.0?-gd:gd );
         k=osdbuf ;
         while( *k && i<50 ) {
             osd.osdline[line][i++] = * k++ ;
         }
         osd.osdline[line][i] = 0 ;
+    }
+    else {
+        for(j=0;j<20;j++) {
+            osd.osdline[line][i++]=' ';
+        }
     }
     osd.osdline[line][i]=0 ;            // null terminal
     line++ ;
@@ -1102,18 +1114,28 @@ void capture::updateOSD()
 
     float gf, gr, gd ;
     if( m_show_gforce && dio_getgforce( &gf, &gr, &gd ) ) {
-        sprintf( osdbuf, "%c%2.1lf %c%2.1lf %c%2.1lf",
-                gf>=0.0?'F':'B',
-                gf>=0.0?gf:-gf,
-                gr>=0.0?'R':'L',
-                gr>=0.0?gr:-gr,
-                gd>=0.0?'D':'U',
-                gd>=0.0?gd:-gd );
+        if( cap_gsensor_showacc ) {
+            gf=-gf ;
+            gr=-gr ;
+            gd=1-gd ;
+        }
+        sprintf( osdbuf, "%c%2.1lf %c%2.1lf %c%2.1lf   ",
+                 gf<0.0?'B':'F',
+                 gf<0.0?-gf:gf,
+                 gr<0.0?'L':'R',
+                 gr<0.0?-gr:gr,
+                 gd<0.0?'U':'D',
+                 gd<0.0?-gd:gd );
         k=osdbuf ;
         while( *k && i<50 ) {
             osd.osdline[line][i++] = * k++ ;
         }
         osd.osdline[line][i] = 0 ;
+    }
+    else {
+        for(j=0;j<20;j++) {
+            osd.osdline[line][i++]=' ';
+        }
     }
     osd.osdline[line][i]=0 ;            // null terminal
     line++ ;
@@ -1202,6 +1224,10 @@ void cap_init(config &dvrconfig)
     int videostandard ;
     int enabled_channels ;
     enabled_channels = 0 ;
+
+    // show acceleration value (0: show g-force value)
+
+    cap_gsensor_showacc=dvrconfig.getvalueint("io", "gsensor_showacc");
 
     cap_channels = dvrconfig.getvalueint("system", "totalcamera");
     if( cap_channels<=0 || cap_channels>64 ) {

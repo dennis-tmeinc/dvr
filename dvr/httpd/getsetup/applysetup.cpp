@@ -387,12 +387,7 @@ int main()
 
         // g-force data
         v = getsetvalue( "gforce_enable" );
-        if( v ) {
-            dvrconfig.setvalueint( "glog", "gforce_log_enable", 1 );
-        }
-        else {
-            dvrconfig.setvalueint( "glog", "gforce_log_enable", 0 );
-        }
+        dvrconfig.setvalueint( "glog", "gforce_log_enable", v?1:0 );
 
         v = getsetvalue( "gforce_forward" );
         if( v ) {
@@ -956,6 +951,12 @@ int main()
             dvrconfig.setvalue( section, "eth_mask", v);
         }
 
+        // eth_bcast
+        v=getsetvalue("eth_bcast");
+        if( v ) {
+            dvrconfig.setvalue( section, "eth_bcast", v);
+        }
+
         // gateway
         v=getsetvalue("gateway_1");
         if( v ) {
@@ -983,6 +984,12 @@ int main()
         v=getsetvalue("wifi_mask");
         if( v ) {
             dvrconfig.setvalue( section, "wifi_mask", v);
+        }
+
+        // wifi_bcast
+        v=getsetvalue("wifi_bcast");
+        if( v ) {
+            dvrconfig.setvalue( section, "wifi_bcast", v);
         }
 
         // wifi_essid

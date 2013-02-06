@@ -14,14 +14,20 @@
 #define YAGF_CMD_ENABLEPEAK         (0x0f)
 #define YAGF_CMD_ENABLEDI           (0x1b)
 #define YAGF_CMD_FIRMWAREVERSION    (0x0e)
-#define YAGF_CMD_RESET              (0x09)
+//#define YAGF_CMD_RESET              (0x09)
+#define YAGF_CMD_RESET              (0x00)
+#define YAGF_CMD_CALIBRATION        (0x21)
 
 #define YAGF_REPORT_PEAK            (0x1E)
 #define YAGF_REPORT_DI              (0x1C)
+#define YAGF_CALIBRATIONDATA        (0x22)
 
 // initialize gforce sensor
 void yagf_init( config & dvrconfig );
 void yagf_finish();
+
+int yagf_calibration();
+int yagf_getcrashdata();
 
 // input to host
 void yagf_input( char * ibuf );

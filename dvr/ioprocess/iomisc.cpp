@@ -21,6 +21,9 @@
 #include "../dvrsvr/config.h"
 #include "netdbg.h"
 #include "mcu.h"
+#ifdef SUPPORT_YAGF
+#include "yagf.h"
+#endif
 #include "gforce.h"
 #include "diomap.h"
 #include "iomisc.h"
@@ -179,11 +182,19 @@ void check_rtccmd()
             time_syncrtc();
         }
         else if( p_dio_mmap->rtc_cmd == 10 ) {      // Ex command, calibrate gforce sensor
+#ifdef SUPPORT_YAGF
+            yagf_calibration();
+#else
             gforce_calibration();
+#endif
         }
         else if( p_dio_mmap->rtc_cmd == 11 ) {      // Ex command, save gforce crash data
             p_dio_mmap->rtc_cmd = 0 ;
+#ifdef SUPPORT_YAGF
+            yagf_getcrashdata();
+#else
             gforce_getcrashdata();
+#endif
         }
         else if( p_dio_mmap->rtc_cmd == 15 ) {      // Ex command, calibrate gforce mount angle
             p_dio_mmap->rtc_cmd = 0 ;

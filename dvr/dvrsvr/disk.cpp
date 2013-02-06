@@ -223,7 +223,6 @@ static int disk_removefile( const char * file264 )
     f264 = file264 ;
     if( unlink(file264 )!=0 ) {
         dvr_log( "Delete file failed : %s", basename(file264) );
-        return -1;
     }
     extension=strstr( f264, g_264ext );
     if( extension ) {
@@ -318,7 +317,9 @@ void disk_repair264(char *dir)
     dir_find dfind(dir);
     while( dfind.find() ) {
         if( dfind.isdir() ) {
-            disk_repair264(  dfind.pathname() );
+            if( strstr(dfind.pathname(), "/_")!=NULL ) {
+                disk_repair264(  dfind.pathname() );
+            }
         }
         else if( dfind.isfile() ) {
             char * lp ;
@@ -353,9 +354,6 @@ void disk_repair264(char *dir)
         }
     }
     dfind.close();
-    if( r264>0 ) {
-        disk_rmempty264dir(dir);
-    }
 }
 
 // play back supporting routine.
@@ -477,17 +475,22 @@ static void disk_getdaylist_help( char * dir, array <int> & daylist, int ch )
                     }
                     if( dup==0 ) {
                         if( ch>=0 ) {
-                            struct stat dstat ;
                             char chpath[512] ;
                             sprintf( chpath, "%s/CH%02d", dfind.pathname(), ch );
-                            if( stat( chpath, &dstat )==0 ) {
-                                if( S_ISDIR(dstat.st_mode) ) {
-                                    daylist.add(day);
-                                }
+                            if( disk_find264(chpath) ) {
+                                daylist.add(day);
+                            }
+                            else {
+                                disk_rmdir(chpath);
                             }
                         }
                         else {
-                            daylist.add(day);
+                            if( disk_find264(dfind.pathname()) ) {
+                                daylist.add(day);
+                            }
+                            else {
+                                disk_rmdir(dfind.pathname());
+                            }
                         }
                     }
                 }
@@ -809,8 +812,10 @@ void disk_renewdisk(char * dir)
     dir_find dfind(dir);
     while( dfind.find() ) {
         if( dfind.isdir() ) {
-            disk_renewdisk( dfind.pathname());
-            disk_rmemptydir(dfind.pathname());
+            if( strstr( dfind.pathname(), "/_" )!=NULL ) {
+                disk_renewdisk( dfind.pathname());
+                disk_rmemptydir(dfind.pathname());
+            }
         }
         else if( dfind.isfile() ) {
             char *filename=dfind.filename();
@@ -1045,14 +1050,14 @@ int disk_archive_mkfreespace( char * diskdir )
 
 static char disk_archive_tmpfile[]=".DVRARCH" ;
 static int  disk_archive_unlock = 0 ;           // by default not to unlock archived file
-static int  disk_archive_bufsize = (1024*1024) ;
+static int  disk_archive_bufsize = (64*1024) ;
 
 // return 1: success, 0: fail, -1: to quit
 static int disk_archive_copyfile( char * srcfile, char * destfile, int * arc )
 {
     FILE * fsrc ;
     FILE * fdest ;
-    char filebuf[4096] ;
+    char   *filebuf ;
     int r ;
     int res ;
 
@@ -1064,10 +1069,11 @@ static int disk_archive_copyfile( char * srcfile, char * destfile, int * arc )
         return 0 ;
     }
 
+    filebuf=(char *)malloc(disk_archive_bufsize);
     res = 0 ;
     while( * arc > 0 ) {
         if( (!rec_busy) && (!disk_busy) && g_cpu_usage < (float)disk_arch_mincpuusage/100.0 ) {
-            r=fread( filebuf, 1, sizeof(filebuf), fsrc );
+            r=fread( filebuf, 1, disk_archive_bufsize, fsrc );
             if( r>0 ) {
                 fwrite( filebuf, 1, r, fdest ) ;
             }
@@ -1080,9 +1086,9 @@ static int disk_archive_copyfile( char * srcfile, char * destfile, int * arc )
             usleep(1000);
         }
     }
+    free(filebuf);
     fclose( fsrc ) ;
     fclose( fdest ) ;
-    sync();
     return res ;
 }
 

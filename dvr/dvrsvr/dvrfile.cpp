@@ -202,11 +202,11 @@ int dvrfile::write(void *buffer, size_t buffersize)
         // auto use buffer
         if( m_filebuffer == NULL ) {
             m_filebuffersize = m_filebuffersuggestsize ;
-            m_filebuffer = (char *)malloc(m_filebuffersize);    // allocate a bit more
+            m_filebuffer = (char *)malloc(m_filebuffersize);
             m_filebufferpos = 0 ;
         }
         if( m_filebuffer ) {
-            if( m_filebufferpos+buffersize < m_filebuffersize ) {
+            if( m_filebufferpos+buffersize <= m_filebuffersize ) {
                 mem_cpy32( m_filebuffer+m_filebufferpos, buffer, buffersize );
                 m_filebufferpos+=buffersize ;
                 return (int)buffersize ;
@@ -268,7 +268,7 @@ void dvrfile::setbufsize(int bufsize)
     if( bufsize<64*1024 ) {
         bufsize=64*1024 ;
     }
-    m_filebuffersuggestsize = bufsize+4096 ; // a bit bigger
+    m_filebuffersuggestsize = bufsize ;
 }
 
 void dvrfile::flushbuffer()
@@ -977,6 +977,7 @@ int dvrfile::prevframe()
             }
         }
     }
+    return 0 ;
 }
 
 int dvrfile::nextkeyframe()
@@ -1329,7 +1330,7 @@ int dvrfile::repairpartiallock()
 
         framebuf = new char [framesize] ;
         read( framebuf, framesize );
-        lockfile.writeframe( framebuf, framesize, 1, &frametime );
+        lockfile.writeframe( framebuf, framesize, FRAMETYPE_KEYVIDEO, &frametime );
         delete framebuf ;
 
     }
@@ -1459,19 +1460,21 @@ void file_init(config &dvrconfig)
         file_encrypt=0;
     }
 
+    file_bufsize = 64*1024;
     v=dvrconfig.getvalue("system", "filebuffersize");
     char unit='b' ;
     int n=sscanf(v, "%d%c", &iv, &unit);
     if( n==2 && (unit=='k' || unit=='K') ) {
-         iv*=1024 ;
+        file_bufsize = iv*1024 ;
     }
     else if( n==2 && (unit=='M' || unit=='m' ) ) {
-        iv*=1024*1024 ;
+        file_bufsize = iv*1024*1024 ;
     }
-    // to make sure buffer size is power of 2
-    file_bufsize = 64*1024;
-    while( iv > file_bufsize && file_bufsize<=(8*1024*1024) ) {
-        file_bufsize*=2 ;
+    if( file_bufsize<16*1024 ) {
+        file_bufsize=16*1024 ;
+    }
+    else if( file_bufsize>4*1024*1024 ) {
+        file_bufsize=4*1024*1024 ;
     }
 
     file_nodecrypt=dvrconfig.getvalueint("system", "file_nodecrypt");

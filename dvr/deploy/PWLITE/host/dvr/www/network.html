@@ -34,6 +34,10 @@
 <td><input name="eth_mask" /> </td>
 </tr>
 <tr>
+<td class="col1">Ethernet Broadcast Address:</td>
+<td><input name="eth_bcast" /> </td>
+</tr>
+<tr>
 <td></td>
 <td></td>
 </tr>
@@ -60,23 +64,23 @@
 </table>
 </form>
 <script type="text/javascript">
-var formdata = 
-<!--#include file="network_value" --> 
+var formdata =
+<!--#include file="network_value" -->
 ;
 
 function onclickshowkey()
 {
     wifi_key=document.getElementById("id_wifi_key") ;
     wifi_key_s=document.getElementById("id_wifi_key_s") ;
-    if( document.getElementById("id_wifi_showkey").checked ) 
+    if( document.getElementById("id_wifi_showkey").checked )
     {
-        wifi_key.style.display="none" ;
-        wifi_key_s.style.display="" ;
-        wifi_key_s.value=wifi_key.value ;
+	wifi_key.style.display="none" ;
+	wifi_key_s.style.display="" ;
+	wifi_key_s.value=wifi_key.value ;
     }
     else {
-        wifi_key.style.display="" ;
-        wifi_key_s.style.display="none" ;
+	wifi_key.style.display="" ;
+	wifi_key_s.style.display="none" ;
     }
 }
 

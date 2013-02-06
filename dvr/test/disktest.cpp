@@ -265,7 +265,7 @@ void spdtest()
 //                    wsize = write( fileno(pfilet[i].filehandle), buf, wsize );
                     free( buf );
                     if( filesync ) {
-                        sync();
+                        fdatasync(fileno(pfilet[i].filehandle) ) ;
                     }
                 }
 

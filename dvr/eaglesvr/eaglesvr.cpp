@@ -25,9 +25,10 @@ unsigned dvr_random()
 //       0: log to temperary file
 int dvr_log(char *fmt, ...)
 {
+    int logtime = time_tick();
     va_list ap ;
     va_start( ap, fmt );
-    printf("eaglesvr:");
+    printf("eaglesvr:%d.%03d:", logtime/1000, logtime%1000);
     vprintf(fmt, ap );
     printf("\n");
     va_end( ap );
