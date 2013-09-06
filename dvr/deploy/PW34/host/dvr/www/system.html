@@ -114,6 +114,42 @@
 <td class="col1">Minimum Free Disk Space Percentage (%):</td>
 <td><input name="minimun_disk_space" /></td>
 </tr>
+<tr>
+<td>&nbsp;</td>
+</tr>
+
+<tr>
+<td class="col1">Check Disk Timeout (seconds):</td>
+<td><input name="fscktimeout" /></td>
+</tr>
+<tr>
+<td class="col1">Check Internal CF on Bootup:</td>
+<td>
+<input name="checkinternalCF" value="on" type="checkbox" />
+<input name="bool_checkinternalCF" value="on" type="hidden" />
+</td>
+</tr>
+<tr>
+<td class="col1">Format Internal CF If Disk Check Failure:</td>
+<td>
+<input name="formatinternalCF" value="on" type="checkbox" />
+<input name="bool_formatinternalCF" value="on" type="hidden" />
+</td>
+</tr>
+<tr>
+<td class="col1">Check External CF on Bootup:</td>
+<td>
+<input name="checkexternalCF" value="on" type="checkbox" />
+<input name="bool_checkexternalCF" value="on" type="hidden" />
+</td>
+</tr>
+<tr>
+<td class="col1">Format External CF If Disk Check Failure::</td>
+<td>
+<input name="formatexternalCF" value="on" type="checkbox" />
+<input name="bool_formatexternalCF" value="on" type="hidden" />
+</td>
+</tr>
 
 <tr>
 <td>&nbsp;</td>
@@ -231,16 +267,16 @@
 <tr id="idtr_gforce_enable" >
 <td class="col1">Enable G Force Sensor:</td>
 <td>
-<input name="gforce_enable" value="on" type="checkbox" /> 
-<input name="bool_gforce_enable" value="on" type="hidden" /> 
+<input name="gforce_enable" value="on" type="checkbox" />
+<input name="bool_gforce_enable" value="on" type="hidden" />
 
-<div id="gforce_win" style="width:60%;height:180px;display:none;position:fixed;border:2px solid gray;left:20%;top:32%;z-index:10;background-color:#b0c4de;"> 
+<div id="gforce_win" style="width:60%;height:180px;display:none;position:fixed;border:2px solid gray;left:20%;top:32%;z-index:10;background-color:#b0c4de;">
 <h style="position:static;text-align:center;">
 G Force Sensor Calibration
 </h>
 <div id="gforce_msg" style="width:80%;margin:auto;">
 <pre>
-force msg 
+force msg
 </pre>
 </div>
 
@@ -286,9 +322,9 @@ force msg
 <tr id="idtr_gforce_mountangle">
 <td class="col1">Unit Mounting Angle (Tilt Forward):</td>
 <td>
-<input id="id_gforce_mountangle" name="gforce_mountangle"/> 
+<input id="id_gforce_mountangle" name="gforce_mountangle"/>
 
-<div id="gforce_dlg_mountangle" style="width:60%;height:240px;display:none;position:fixed;border:2px solid gray;left:20%;top:32%;z-index:50;background-color:#b0c4de;"> 
+<div id="gforce_dlg_mountangle" style="width:60%;height:240px;display:none;position:fixed;border:2px solid gray;left:20%;top:32%;z-index:50;background-color:#b0c4de;">
 <h4 style="position:static;text-align:center;">Unit Mounting Angle Calibration</h4>
 <h5 style="position:static;text-align:center;">Do not move unit!</h5>
 <table style="border:0px;width:80%;">
@@ -313,8 +349,8 @@ force msg
 <tr id="idtr_gforce_crashdata">
 <td class="col1">Collect G-Force Crash Data:</td>
 <td>
-<input name="gforce_crashdata" value="on" type="checkbox" /> 
-<input name="bool_gforce_crashdata" value="on" type="hidden" /> 
+<input name="gforce_crashdata" value="on" type="checkbox" />
+<input name="bool_gforce_crashdata" value="on" type="hidden" />
 </td>
 </tr>
 
@@ -389,11 +425,11 @@ Crash&nbsp;<input name="gforce_upward_crash" size=5 />
 
 var calibration_on=0 ;
 
-function calibration_go( response ) 
+function calibration_go( response )
 {
     if( calibration_on ) {
-        document.getElementById('gforce_msg').innerHTML="<pre>"+response+"</pre>" ;
-        setTimeout("calibration_get()", 1000);
+	document.getElementById('gforce_msg').innerHTML="<pre>"+response+"</pre>" ;
+	setTimeout("calibration_get()", 1000);
     }
 }
 
@@ -402,7 +438,7 @@ function calibration_get()
     ajaxload("post", "gcal.txt", calibration_go);
 }
 
-function calibration_start( response ) 
+function calibration_start( response )
 {
     var dlg = document.getElementById('gforce_win') ;
     dlg.style.display="" ;
@@ -443,16 +479,16 @@ function gforceMount_readval()
 function gforceMount_val( JSONval )
 {
     if( gsensor_mount_cal==1 ) {
-        gsensor_mount_calvalue = eval('(' + JSONval + ')'); 
-        if( gsensor_mount_calvalue.gvalue_f ) 
-            document.getElementById('gvalue_Forword').innerHTML=gsensor_mount_calvalue.gvalue_f ;
-        if( gsensor_mount_calvalue.gvalue_f ) 
-            document.getElementById('gvalue_Down').innerHTML=gsensor_mount_calvalue.gvalue_d ;
-        if( gsensor_mount_calvalue.gvalue_f ) 
-            document.getElementById('gvalue_Right').innerHTML=gsensor_mount_calvalue.gvalue_r ;
-        if( gsensor_mount_calvalue.gvalue_f ) 
-            document.getElementById('gvalue_Angle').innerHTML=gsensor_mount_calvalue.gvalue_angle+"&deg;" ;
-        setTimeout("gforceMount_readval()", 800);
+	gsensor_mount_calvalue = eval('(' + JSONval + ')');
+	if( gsensor_mount_calvalue.gvalue_f )
+	    document.getElementById('gvalue_Forword').innerHTML=gsensor_mount_calvalue.gvalue_f ;
+	if( gsensor_mount_calvalue.gvalue_f )
+	    document.getElementById('gvalue_Down').innerHTML=gsensor_mount_calvalue.gvalue_d ;
+	if( gsensor_mount_calvalue.gvalue_f )
+	    document.getElementById('gvalue_Right').innerHTML=gsensor_mount_calvalue.gvalue_r ;
+	if( gsensor_mount_calvalue.gvalue_f )
+	    document.getElementById('gvalue_Angle').innerHTML=gsensor_mount_calvalue.gvalue_angle+"&deg;" ;
+	setTimeout("gforceMount_readval()", 800);
     }
     else {
        ajaxload("get", "cgi/gangle.cgi?op=stop");

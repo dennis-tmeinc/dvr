@@ -238,8 +238,8 @@ void netcapture::streamthread_net()
             recvact=g_timetick ;
         }
         else if( recvok==0) {       // recvok timeout
-            if( g_timetick-recvact>30000 ) {        // no active for 30 seconds?
-//                dvr_log( "ipcapture:socket time out");
+            if( g_timetick-recvact>20000 ) {        // no active for 20 seconds?
+                dvr_log( "ipcapture:socket time out");
                 closesocket( streamfd );
                 streamfd = 0 ;
                 recvact=g_timetick ;

@@ -25,17 +25,20 @@ if [ ${appid} = "clean" ]; then
 
 #clear utilities
     rm -f cfgpc mksfx sfx
- 
+
 # clean host www files
     cd ${DEPROOT}/host/dvr/www
     rm -f -r cgi
     rm -f eaglehttpd
 
 # clean host firmware filesa
+    cd ${DEPROOT}/host
+    rm -f dosfsck dosfslabel mkdosfs
+
     cd ${DEPROOT}/host/dvr
     rm -f httpd.sfx firmwareid
-    rm -f udhcpc dvrsvr eaglesvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
-    
+    rm -f udhcpc dvrsvr eaglesvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg fsckwrapper
+
     cd ${DEPROOT}/host/ID
     rm -f BOARDNUM APPID BOARDID
 
@@ -46,7 +49,7 @@ www_depfile=${DEPROOT}/www_depfile
 
 if [ $appid = "clean" ]; then
     if [ -f ${www_depfile} ]; then
-        rm ${www_depfile}
+	rm ${www_depfile}
     fi
     exit 0
 fi
@@ -142,9 +145,17 @@ cp -v ${APPROOT}/volumeid/md5check .
 cp -v ${APPROOT}/volumeid/volumeid .
 cp -v ${APPROOT}/cfg/cfg .
 cp -v ${APPROOT}/dhcp/udhcpc .
+cp -v ${APPROOT}/fsckwrapper/fsckwrapper .
 
-${STRIP} dvrsvr eaglesvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg
+${STRIP} dvrsvr eaglesvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg fsckwrapper
+
 cd ${DEPROOT}/host
+# copy dos fs tools
+cp -v ${APPROOT}/dosfstools/mkdosfs .
+cp -v ${APPROOT}/dosfstools/dosfsck .
+cp -v ${APPROOT}/dosfstools/dosfslabel .
+${STRIP} mkdosfs dosfsck dosfslabel
+
 echo ${firmwareid} > dvr/firmwareid
 ${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.dep ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW
 chmod a+x ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Hot-plug script for Eagle32 project
+# Hot-plug script for Eagle34 project
 
 devpath=/sys$2
 devname=${devpath##*/}
@@ -57,6 +57,60 @@ if [ -f ${vardir}/TZ ] ; then
   TZ=`cat ${vardir}/TZ`
   export TZ
 fi
+
+# function mountdosfs
+# mountdosfs <type> <mountpoint>
+mountdosfs () {
+
+    # check and format disk
+    fscktimeout=`/davinci/dvr/cfg get system fscktimeout`
+    if [ -z "$fscktimeout" ] ; then
+      fscktimeout=200 ;
+    fi
+    diskdevice=`ls -l ${devpath%/*}/device | awk '{print $11}'`
+    internaldisk=`/davinci/dvr/cfg get system internaldisk`
+    checkinternalCF=`/davinci/dvr/cfg get system checkinternalCF`
+    formatinternalCF=`/davinci/dvr/cfg get system formatinternalCF`
+    checkexternalCF=`/davinci/dvr/cfg get system checkexternalCF`
+    formatexternalCF=`/davinci/dvr/cfg get system formatexternalCF`
+
+    if [ "${diskdevice}" = "${internaldisk}" ] ; then
+	# internal CF
+	if [ "${checkinternalCF}" = "1" ] ; then
+	    echo "Check internal disk ..."
+	    fsckwrapper $fscktimeout /davinci/dosfsck -a /dev/${devname}
+	    if [ $? != "0" -a  $? != "1"  ] ; then
+		#to format disk
+		if [ "$formatinternalCF" = "1" ]; then
+		    /davinci/mkdosfs /dev/${devname}
+		fi ;
+	    fi ;
+	fi ;
+    else
+	# external CF (CDC)
+	if [ "${checkexternalCF}" = "1" ] ; then
+	    fsckwrapper $fscktimeout /davinci/dosfsck -a /dev/${devname}
+	    echo "Check external disk ..."
+	    if [ $? != "0" -a  $? != "1"  ] ; then
+		#to format disk
+		if [ "$formatexternalCF" = "1" ]; then
+		    /davinci/mkdosfs /dev/${devname}
+		fi ;
+	    fi ;
+	fi ;
+    fi ;
+
+    mkdir -p $2
+    if mount -t vfat /dev/${devname} $2 -o shortname=winnt ; then
+	rm -f ${2}/FSCK*
+	if [ ! -f ${2}/${1} ] ; then
+	    echo 1 > ${2}/${1}
+	fi
+	echo "${2}" > ${xmountdir}/mount_${devname}
+    else
+	rm ${xmountdir}/mount_${devname}
+    fi
+}
 
 case $1 in
     "add")
@@ -118,46 +172,25 @@ case $1 in
 
 		    # dvr recording disk ?
 		    if [ -f ${xmountdir}/${devname}/dvrdisk -o -f ${xmountdir}/${devname}/DVRDISK ] ; then
-
 			if umount ${xmountdir}/${devname} ; then
-
+			    rm -r ${xmountdir}/${devname}
+			    # new mount point
 			    d_mount=${dvrmountdir}/d_${devname}
 
-			    rm -r ${xmountdir}/${devname}
-
-			    # do dosfs check here
-			    dosfsck -a /dev/${devname}
-
-			    mkdir -p ${d_mount}
-			    if mount /dev/${devname} ${d_mount} -o shortname=winnt ; then
-				rm -f ${d_mount}/FSCK*
-				# mark mounted disk
-				echo  ${d_mount} > ${xmountdir}/mount_${devname}
-			    else
-				rm ${xmountdir}/mount_${devname}
-			    fi
+			    # mountdosfs <type> <syspath> <dev> <mountpoint>
+			    mountdosfs DVRDISK ${d_mount} &
 			fi
 
 		    # dvr archive disk ?
 		    elif [ -f ${xmountdir}/${devname}/archive -o -f ${xmountdir}/${devname}/ARCHIVE ] ; then
 
 			if umount ${xmountdir}/${devname} ; then
-
+			    rm -r ${xmountdir}/${devname}
+			    # new mount point
 			    d_mount=${dvrarchdir}/d_${devname}
 
-			    rm -r ${xmountdir}/${devname}
-
-			    # do dosfs check here
-			    dosfsck -a /dev/${devname}
-
-			    mkdir -p ${d_mount}
-			    if mount /dev/${devname} ${d_mount} -o shortname=winnt ; then
-				rm -f ${d_mount}/FSCK*
-				# mark mounted disk
-				echo  ${d_mount} > ${xmountdir}/mount_${devname}
-			    else
-				rm ${xmountdir}/mount_${devname}
-			    fi
+			    # mountdosfs <type> <syspath> <dev> <mountpoint>
+			    mountdosfs ARCHIVE ${d_mount} &
 			fi
 
 		    # autorun disk .. key ...
@@ -288,87 +321,87 @@ case $1 in
 	    wifi_key=`cfg get network wifi_key`
 	    wifi_ip=`cfg get network wifi_ip`
 	    wifi_mask=`cfg get network wifi_mask`
-	    wifi_bcast='cfg get network wifi_bcast`
+	    wifi_bcast=`cfg get network wifi_bcast`
 
-	    ifconfig ${devname} up ${wifi_ip}
+	    ifconfig ${devname} ${wifi_ip}
 	    ifconfig ${devname} netmask ${wifi_mask}
 
 		    case ${wifi_enc} in
 		    "0")
-			# Disable (no enc)
-			iwpriv ${devname} set NetworkType=Infra
+		    # Disable (no enc)
+		    iwpriv ${devname} set NetworkType=Infra
 		    iwpriv ${devname} set AuthMode=OPEN
 		    iwpriv ${devname} set EncrypType=NONE
 		    iwpriv ${devname} set SSID=${wifi_essid}
 		    ;;
 		    "1")
-			# WEP open
+		    # WEP open
 		    iwpriv ${devname} set NetworkType=Infra
 		    iwpriv ${devname} set AuthMode=OPEN
 		    iwpriv ${devname} set EncrypType=WEP
 		    iwpriv ${devname} set Key1=${wifi_key}
 		    iwpriv ${devname} set DefaultKeyID=1
-			iwpriv ${devname} set SSID=${wifi_essid}
-			;;
+		    iwpriv ${devname} set SSID=${wifi_essid}
+		    ;;
 		    "2")
-			# WEP shared
+		    # WEP shared
 		    iwpriv ${devname} set NetworkType=Infra
 		    iwpriv ${devname} set AuthMode=SHARED
 		    iwpriv ${devname} set EncrypType=WEP
 		    iwpriv ${devname} set Key1=$wifi_key
 		    iwpriv ${devname} set DefaultKeyID=1
-			iwpriv ${devname} set SSID=$wifi_essid
-			;;
+		    iwpriv ${devname} set SSID=$wifi_essid
+		    ;;
 		    "3")
-			# WEP auto
+		    # WEP auto
 		    iwpriv ${devname} set NetworkType=Infra
 		    iwpriv ${devname} set AuthMode=WEPAUTO
 		    iwpriv ${devname} set EncrypType=WEP
 		    iwpriv ${devname} set Key1=$wifi_key
 		    iwpriv ${devname} set DefaultKeyID=1
-			iwpriv ${devname} set SSID=$wifi_essid
-			;;
+		    iwpriv ${devname} set SSID=$wifi_essid
+		    ;;
 		    "4")
-			# WPA Personal TKIP
+		    # WPA Personal TKIP
 		    iwpriv ${devname} set NetworkType=Infra
-			iwpriv ${devname} set AuthMode=WPAPSK
-			iwpriv ${devname} set EncrypType=TKIP
-			iwpriv ${devname} set SSID=$wifi_essid
-			iwpriv ${devname} set WPAPSK=$wifi_key
-			iwpriv ${devname} set SSID=$wifi_essid
-			;;
+		    iwpriv ${devname} set AuthMode=WPAPSK
+		    iwpriv ${devname} set EncrypType=TKIP
+		    iwpriv ${devname} set SSID=$wifi_essid
+		    iwpriv ${devname} set WPAPSK=$wifi_key
+		    iwpriv ${devname} set SSID=$wifi_essid
+		    ;;
 		    "5")
-			# WPA Personal AES
+		    # WPA Personal AES
 		    iwpriv ${devname} set NetworkType=Infra
 		    iwpriv ${devname} set AuthMode=WPAPSK
 		    iwpriv ${devname} set EncrypType=AES
-			iwpriv ${devname} set SSID=$wifi_essid
+		    iwpriv ${devname} set SSID=$wifi_essid
 		    iwpriv ${devname} set WPAPSK=$wifi_key
-			iwpriv ${devname} set SSID=$wifi_essid
-			;;
+		    iwpriv ${devname} set SSID=$wifi_essid
+		    ;;
 		    "6")
-			# WPA2 Personal TKIP
+		    # WPA2 Personal TKIP
 		    iwpriv ${devname} set NetworkType=Infra
 		    iwpriv ${devname} set AuthMode=WPA2PSK
 		    iwpriv ${devname} set EncrypType=TKIP
-			iwpriv ${devname} set SSID=$wifi_essid
+		    iwpriv ${devname} set SSID=$wifi_essid
 		    iwpriv ${devname} set WPAPSK=$wifi_key
-			iwpriv ${devname} set SSID=$wifi_essid
-			;;
+		    iwpriv ${devname} set SSID=$wifi_essid
+		    ;;
 		    "7")
-			# WPA2 Personal AES
+		    # WPA2 Personal AES
 		    iwpriv ${devname} set NetworkType=Infra
 		    iwpriv ${devname} set AuthMode=WPA2PSK
 		    iwpriv ${devname} set EncrypType=AES
-			iwpriv ${devname} set SSID=$wifi_essid
+		    iwpriv ${devname} set SSID=$wifi_essid
 		    iwpriv ${devname} set WPAPSK=$wifi_key
-			iwpriv ${devname} set SSID=$wifi_essid
-			;;
+		    iwpriv ${devname} set SSID=$wifi_essid
+		    ;;
 		    *)
 			;;
 		    esac
 
-	    ifconfig ${devname} up ${wifi_ip}
+	    ifconfig ${devname} ${wifi_ip}
 	    ifconfig ${devname} netmask ${wifi_mask}
 	    if [ -n "${wifi_bcast}" ] ; then
 		ifconfig ${devname} broadcast ${wifi_bcast}

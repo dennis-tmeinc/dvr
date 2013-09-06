@@ -1,0 +1,9 @@
+#!/bin/sh
+echo Start update firmware ...
+echo Copying file to /davinci, please wait...
+cp -f -a * /davinci
+echo Removing temperary files
+rm /davinci/sfxrun
+rm -r *
+echo Firmware update finish.
+

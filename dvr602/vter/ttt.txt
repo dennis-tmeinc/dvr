@@ -1,0 +1,201 @@
+new connection:127.0.0.1 on 7
+got one message:3,0(126),146
+SS req(1):<jpegreq><camera>1</camera><quality>1</quality><resolution>2</resolution><images>1</images><interval>5000</interval></jpegreq>
+cam: 1
+got one message:2,1(4),4
+chunk size:1024(2)
+sending jpeg_req_ack
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+connected to JPEG server(cam:0)
+0000: d9 00 00 00 04 00 00 00 5d 7f 00 00                 ........]...
+get_jpeg reply:12 bytes recved
+get_jpeg image:32605 bytes recved
+jpeg_data_size:32605,sent:0(0)
+sent to VTER:1040(992/32605)
+got one message:2,1(4),4
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:992(0)
+sent to VTER:1040(1984/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:1984(0)
+sent to VTER:1040(2976/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:2976(0)
+sent to VTER:1040(3968/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:3968(0)
+sent to VTER:1040(4960/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:4960(0)
+sent to VTER:1040(5952/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:5952(0)
+sent to VTER:1040(6944/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:6944(0)
+sent to VTER:1040(7936/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:7936(0)
+sent to VTER:1040(8928/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:8928(0)
+sent to VTER:1040(9920/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:9920(0)
+sent to VTER:1040(10912/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:10912(0)
+sent to VTER:1040(11904/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:11904(0)
+sent to VTER:1040(12896/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:12896(0)
+sent to VTER:1040(13888/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:13888(0)
+sent to VTER:1040(14880/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:14880(0)
+sent to VTER:1040(15872/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:15872(0)
+sent to VTER:1040(16864/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:16864(0)
+sent to VTER:1040(17856/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:17856(0)
+sent to VTER:1040(18848/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:18848(0)
+sent to VTER:1040(19840/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:19840(0)
+sent to VTER:1040(20832/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:20832(0)
+sent to VTER:1040(21824/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:21824(0)
+sent to VTER:1040(22816/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:22816(0)
+sent to VTER:1040(23808/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:23808(0)
+sent to VTER:1040(24800/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:24800(0)
+sent to VTER:1040(25792/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:25792(0)
+sent to VTER:1040(26784/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:26784(0)
+sent to VTER:1040(27776/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:27776(0)
+sent to VTER:1040(28768/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:28768(0)
+sent to VTER:1040(29760/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:29760(0)
+sent to VTER:1040(30752/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:30752(0)
+sent to VTER:1040(31744/32605)
+got one message:2,1(4),0
+chunk size:1024(3)
+setting interval timer
+jpeg_data_size:32605,sent:31744(0)
+sent to VTER:909(32605/32605)
+waiting for jpeg_write_ack
+got one message:2,1(4),0
+chunk size:1024(4)
+got one message:3,0(177),177
+SS req(4):<jpegwrite><ack_code>1</ack_code><camnum>1</camnum><seqnum>1</seqnum><chunklist><chunkitem>2</chunkitem><chunkitem>4</chunkitem><chunkitem>5</chunkitem></chunklist></jpegwrite>
+send request_to_send to VTER
+got one message:2,1(4),0
+chunk size:1024(5)
+setting interval timer
+to_send:1024
+sent chunk 33(old:2) to VTER:1040
+got one message:2,1(4),0
+chunk size:1024(5)
+setting interval timer
+to_send:1024
+sent chunk 34(old:4) to VTER:1040
+got one message:2,1(4),0
+chunk size:1024(5)
+setting interval timer
+to_send:1024
+sent chunk 35(old:5) to VTER:1040
+waiting for jpeg_write_ack
+got one message:2,1(4),0
+chunk size:1024(4)
+Got SIGUSR1 or SIGINT - Stopping.

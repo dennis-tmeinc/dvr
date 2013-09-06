@@ -1,0 +1,1 @@
+New library is compatible with both 720MHz and 594MHz TI6467

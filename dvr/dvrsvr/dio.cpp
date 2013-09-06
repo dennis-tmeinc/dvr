@@ -206,9 +206,10 @@ int dio_mode_archive()
 void dio_setchstat( int channel, int ch_state )
 {
     if( channel < 8 ) {
-        dio_lock();
+//        dio_lock();
+        // integer assignment is atomic
         p_dio_mmap->camera_status[channel] = ch_state ;
-        dio_unlock();
+//        dio_unlock();
     }
 }
 

@@ -1,0 +1,166 @@
+getpass.o getpass.o: getpass.c setup.h config.h \
+  /home/harry/hik_toolchain/arm-linux/include/stdio.h \
+  /home/harry/hik_toolchain/arm-linux/include/features.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/uClibc_config.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/cdefs.h \
+  /home/harry/hik_toolchain/bin/../lib/gcc/arm-linux/3.4.6/include/stddef.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/types.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/kernel_types.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/pthreadtypes.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/sched.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/uClibc_stdio.h \
+  /home/harry/hik_toolchain/arm-linux/include/wchar.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/wchar.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/uClibc_mutex.h \
+  /home/harry/hik_toolchain/arm-linux/include/pthread.h \
+  /home/harry/hik_toolchain/arm-linux/include/sched.h \
+  /home/harry/hik_toolchain/arm-linux/include/time.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/time.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/uClibc_clk_tck.h \
+  /home/harry/hik_toolchain/arm-linux/include/signal.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/sigset.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/initspin.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/sigthread.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/uClibc_pthread.h \
+  /home/harry/hik_toolchain/bin/../lib/gcc/arm-linux/3.4.6/include/stdarg.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/stdio_lim.h \
+  ../lib/setup_once.h \
+  /home/harry/hik_toolchain/arm-linux/include/stdlib.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/types.h \
+  /home/harry/hik_toolchain/arm-linux/include/endian.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/endian.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/select.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/select.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/sysmacros.h \
+  /home/harry/hik_toolchain/arm-linux/include/alloca.h \
+  /home/harry/hik_toolchain/arm-linux/include/string.h \
+  /home/harry/hik_toolchain/arm-linux/include/ctype.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/uClibc_touplow.h \
+  /home/harry/hik_toolchain/arm-linux/include/errno.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/errno.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/errno_values.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/stat.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/stat.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/time.h \
+  /home/harry/hik_toolchain/bin/../lib/gcc/arm-linux/3.4.6/include/stdbool.h \
+  /home/harry/hik_toolchain/arm-linux/include/unistd.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/posix_opt.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/confname.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/getopt.h getpass.h \
+  /home/harry/hik_toolchain/arm-linux/include/fcntl.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/fcntl.h \
+  /home/harry/hik_toolchain/arm-linux/include/termios.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/termios.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/ttydefaults.h
+
+setup.h:
+
+config.h:
+
+/home/harry/hik_toolchain/arm-linux/include/stdio.h:
+
+/home/harry/hik_toolchain/arm-linux/include/features.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/uClibc_config.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/cdefs.h:
+
+/home/harry/hik_toolchain/bin/../lib/gcc/arm-linux/3.4.6/include/stddef.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/types.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/kernel_types.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/pthreadtypes.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/sched.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/uClibc_stdio.h:
+
+/home/harry/hik_toolchain/arm-linux/include/wchar.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/wchar.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/uClibc_mutex.h:
+
+/home/harry/hik_toolchain/arm-linux/include/pthread.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sched.h:
+
+/home/harry/hik_toolchain/arm-linux/include/time.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/time.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/uClibc_clk_tck.h:
+
+/home/harry/hik_toolchain/arm-linux/include/signal.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/sigset.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/initspin.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/sigthread.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/uClibc_pthread.h:
+
+/home/harry/hik_toolchain/bin/../lib/gcc/arm-linux/3.4.6/include/stdarg.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/stdio_lim.h:
+
+../lib/setup_once.h:
+
+/home/harry/hik_toolchain/arm-linux/include/stdlib.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/types.h:
+
+/home/harry/hik_toolchain/arm-linux/include/endian.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/endian.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/select.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/select.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/sysmacros.h:
+
+/home/harry/hik_toolchain/arm-linux/include/alloca.h:
+
+/home/harry/hik_toolchain/arm-linux/include/string.h:
+
+/home/harry/hik_toolchain/arm-linux/include/ctype.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/uClibc_touplow.h:
+
+/home/harry/hik_toolchain/arm-linux/include/errno.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/errno.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/errno_values.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/stat.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/stat.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/time.h:
+
+/home/harry/hik_toolchain/bin/../lib/gcc/arm-linux/3.4.6/include/stdbool.h:
+
+/home/harry/hik_toolchain/arm-linux/include/unistd.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/posix_opt.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/confname.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/getopt.h:
+
+getpass.h:
+
+/home/harry/hik_toolchain/arm-linux/include/fcntl.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/fcntl.h:
+
+/home/harry/hik_toolchain/arm-linux/include/termios.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/termios.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/ttydefaults.h:

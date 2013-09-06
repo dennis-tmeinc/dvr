@@ -26,6 +26,7 @@ SUBDIRS = dvrsvr\
        ssl \
        eaglesvr \
        lpc21isp \
+       fsckwrapper \
        dosfstools
 
 .PHONY : $(SUBDIRS) applications

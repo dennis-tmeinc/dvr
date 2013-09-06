@@ -1,0 +1,83 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<link href="eagle.css" rel="stylesheet" type="text/css" /><title>Tools</title>
+
+<script type="text/javascript" src="eagle.js"></script>
+</head>
+
+<body>
+<!--#include file="header.i"-->
+<div class="tabs">
+<ul>
+<li><a onclick="on_system_click()"><span>System</span></a></li>
+<li><a onclick="on_camera_click()"><span>Camera</span></a></li>
+<li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
+<li><a onclick="on_network_click()"><span>Network</span></a></li>
+<li><a onclick="on_status_click()"><span>Status</span></a></li>
+<li class="current"><a onclick="on_tools_click()"><span>Tools</span></a></li>
+</ul>
+</div>
+<p>&nbsp;</p>
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="tools.html">
+<input name="page" value="tools" type="hidden" />
+</form>
+<table>
+<tbody>
+<tr>
+<td class="col1">Download Configuration:</td>
+<td>
+<form id="id_down_cfg" enctype="application/x-www-form-urlencoded" method="get" action="cfgdown.cgi">
+<input value="Download" title="Download current configuration." type="submit" />
+</form>
+</td>
+</tr>
+
+<form id="dvrsetup" enctype="multipart/form-data" method="post" action="cfgupload.html">
+<input name="page" value="tools" type="hidden" />
+<tr>
+<td class="col1" rowspan="2">Upload Configuration:</td>
+<td>
+<input name="cfgupload_file" type="file" />
+</td>
+</tr>
+<tr>
+<td><input value="Upload" title="Upload configuration." type="submit" /></td>
+</tr>
+
+</form>
+
+<form enctype="multipart/form-data" method="post" action="firmware.html">
+<tr>
+<td class="col1" rowspan="2">Firmware:</td>
+<td><input name="firmware_file" type="file" /></td>
+</tr>
+<tr>
+<td><input value="Update Firmware" type="submit" /></td>
+</tr>
+</form>
+
+<form enctype="multipart/form-data" method="post" action="mcufirmware.html">
+<tr>
+<td class="col1" rowspan="2">MCU Firmware:<br />(with FORCE-ON loopback cable plugged in)</td>
+<td><input name="mcu_firmware_file" type="file" /></td>
+</tr>
+<tr>
+<td><input value="Update MCU Firmware" type="submit" /></td>
+</tr>
+</form>
+
+<form enctype="multipart/form-data" method="post" action="tab102firmware.html">
+<tr>
+<td class="col1" rowspan="2">Tab102b Firmware:</td>
+<td><input name="tab102b_firmware_file" type="file" /></td>
+</tr>
+<tr>
+<td><input value="Update Tab102b Firmware" type="submit" /></td>
+</tr>
+</form>
+
+</tbody>
+</table>
+</body></html>

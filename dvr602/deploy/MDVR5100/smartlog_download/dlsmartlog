@@ -1,0 +1,32 @@
+#!/bin/sh
+
+cd ${EXEDIR}
+mkdir smartlog
+
+# start flashing "Remove USB" LED
+/davinci/dvr/panelled 1
+
+for disk in `ls -d /var/dvr/disks/*` 
+do
+	if [ -d ${disk}/smartlog ]; then
+		for lfile in `ls ${disk}/smartlog/*_L.001`
+		do
+			echo ${lfile}
+			cp ${lfile} ${EXEDIR}/smartlog/
+			mv ${lfile} ${lfile%L.001}N.001
+		done
+	fi
+done
+
+sync
+sleep 1
+sync
+sleep 1
+sync
+sleep 1
+sync
+sleep 1
+
+# stop flashing "Remove USB" LED
+/davinci/dvr/panelled 0
+

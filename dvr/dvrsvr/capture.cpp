@@ -94,7 +94,7 @@ capture::capture( int channel )
     m_signal=1;			// assume signal is good at beginning
     m_oldsignal=1;
     m_enable=0 ;
-    m_working=0 ;
+    m_working_time=g_timetick ;
     m_streambytes=0 ;
     m_remoteosd = 0 ;	// local OSD by default
     m_signal_standard = 1 ;
@@ -290,6 +290,15 @@ void capture::loadconfig()
     }
 }
 
+int capture::isworking()
+{
+    if( m_started ) {
+        return ! ((g_timetick-m_working_time)>60) ;
+    }
+    else
+        return 1 ;
+}
+
 extern int screen_onframe( cap_frame * capframe );
 
 void capture::onframe(cap_frame * pcapframe)
@@ -299,7 +308,7 @@ void capture::onframe(cap_frame * pcapframe)
 //    }
     if( !m_started )
         return ;
-    m_working=10;
+    m_working_time=g_timetick ;
     m_streambytes+=pcapframe->framesize ;               // for bitrate calculation
     if( pcapframe->frametype == FRAMETYPE_FILEHEADER ) {
         m_headerlen = pcapframe->framesize ;

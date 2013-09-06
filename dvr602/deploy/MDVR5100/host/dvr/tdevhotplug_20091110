@@ -1,0 +1,361 @@
+#!/bin/sh
+
+# Changes:
+# 09/18/2009 Harrison
+#   1. Added support for WPA/WPA2 encryption
+# 11/10/2009 Harrison
+#   1. USB autorun app can unmount itself
+
+# a bit of sync
+for lock in 1 2 3 4 5 6 7 8 9 10 
+do
+  if [ -f /var/dvr/hotpluglock ] ; then
+    sleep 1
+  fi
+done
+echo 1 > /var/dvr/hotpluglock
+
+
+#  dvrsvr information?
+dvrpidfile=/var/dvr/dvrsvr.pid
+
+#  dvrsvr current working disk.
+dvrcurdisk=/var/dvr/dvrcurdisk
+
+# where dvr disks mounted.
+dvrmountdir=/var/dvr/disks
+
+# hotplug disk mounted here.
+xmountdir=/var/dvr/xdisk
+
+devpath=/sys$2
+devname=${devpath##*/}
+
+subsys=$2
+subsys=${subsys#/}
+subsys=${subsys%%/*}
+
+if [ -f /var/dvr/TZ ] ; then
+  TZ=`cat /var/dvr/TZ`
+  export TZ
+fi
+
+case $1 in
+    "add")
+
+        # hotplug block device (USB disk)
+        if [ ${subsys} = "block" -a -r ${devpath}/dev  ] ; then
+            devnum=`cat ${devpath}/dev`
+            # generate device if not exist
+            if [ ! -e /dev/${devname} ] ; then
+                mknod /dev/${devname} b ${devnum%%:*} ${devnum##*:}
+            fi
+
+            partition=${devname##*[a-z]}
+            if [ ${partition:-0} -ge 1 -a ! -f ${xmountdir}/mount_${devname} ]; then
+                mkdir -p ${xmountdir}/${devname}
+
+                if mount /dev/${devname} ${xmountdir}/${devname} -t ext3 ; then
+                    if umount ${xmountdir}/${devname} ; then
+                        rm -r ${xmountdir}/${devname}
+                    fi
+
+                    if [ ! -f ${xmountdir}/mount_${devname} ] ; then
+                        mkdir -p ${dvrmountdir}/d_${devname}
+                        if mount /dev/${devname} ${dvrmountdir}/d_${devname} -t ext3 -o noatime ; then
+                            # mark mounted disk
+                            echo  ${dvrmountdir}/d_${devname} > ${xmountdir}/mount_${devname}
+                        fi
+                    fi
+
+                elif mount /dev/${devname} ${xmountdir}/${devname} -t ext2 ; then
+
+                    if umount ${xmountdir}/${devname} ; then
+                        rm -r ${xmountdir}/${devname}
+                    fi
+
+                    if [ ! -f ${xmountdir}/mount_${devname} ] ; then
+                        mkdir -p ${dvrmountdir}/d_${devname}
+                        if mount /dev/${devname} ${dvrmountdir}/d_${devname} -t ext2 -o noatime ; then
+                            # mark mounted disk
+                            echo  ${dvrmountdir}/d_${devname} > ${xmountdir}/mount_${devname}
+                        fi
+                    fi
+
+                elif mount /dev/${devname} ${xmountdir}/${devname} -o shortname=winnt ; then
+
+                    # dvr recording disk ?
+                    if [ -f ${xmountdir}/${devname}/dvrdisk -o -f ${xmountdir}/${devname}/DVRDISK ] ; then
+
+                        if umount ${xmountdir}/${devname} ; then
+                            rm -r ${xmountdir}/${devname}
+                        fi
+
+                        if [ ! -f ${xmountdir}/mount_${devname} ] ; then
+                            # do dosfs check here
+                            /davinci/dosfsck -a /dev/${devname}
+
+                            mkdir -p ${dvrmountdir}/d_${devname}
+                            mount /dev/${devname} ${dvrmountdir}/d_${devname} -o shortname=winnt
+                            rm -f ${dvrmountdir}/d_${devname}/FSCK*
+                        
+                            # mark mounted disk
+                            echo  ${dvrmountdir}/d_${devname} > ${xmountdir}/mount_${devname}
+                        fi
+
+                        
+                    # autorun disk .. key ...
+                    elif [ -f ${xmountdir}/${devname}/key ] ; then
+
+                        if /davinci/dvr/volumeid /dev/${devname} ${xmountdir}/${devname} ; then
+                            # key check passed
+                            echo ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
+                            
+                            USBROOT=${xmountdir}/${devname} 
+                            export USBROOT
+
+                            # check directory 510
+                            if [ -d ${USBROOT}/510 ]; then 
+                                EXEDIR=${USBROOT}/510
+                            else
+                                EXEDIR=${USBROOT}
+                            fi
+
+                            export EXEDIR
+                            cd ${EXEDIR}
+
+                            for autoruncheck in `ls *.check`
+                            do
+                                if /davinci/dvr/md5check ${autoruncheck} ; then
+                                    autorun_file=${autoruncheck%.check}.autorun
+                                    if [ -x ${autorun_file} ] ; then
+                                        # run autorun file
+                                        mkdir /home/usbrun
+                                        cp ${autorun_file} /home/usbrun
+                                        cd /home/usbrun
+                                        /home/usbrun/${autorun_file}  &
+                                    fi
+                                fi
+                            done
+
+                            cd /
+
+                        else    # no autorun file
+
+                            cd /
+                            if umount ${xmountdir}/${devname} ; then
+                                rm -r ${xmountdir}/${devname}
+                            fi
+                          
+                        fi
+
+                    # autorun disk by usbkey
+                    elif [ -f ${xmountdir}/${devname}/usbkey ] ; then
+
+                        # check auto runable disk
+                        cd ${xmountdir}/${devname}		# required to be current dir, so usbcheck can read FW file.
+
+                        autorun_appid=`cat /davinci/ID/APPID` 
+                        autorun_file_app=`/davinci/dvr/usbcheck /dev/${devname%[1-9]} usbkey ${autorun_appid}`
+                        autorun_file=`/davinci/dvr/usbcheck /dev/${devname%[1-9]} usbkey`
+                        if [ -f ${xmountdir}/${devname}/${autorun_file} ] ; then
+
+                            echo ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
+
+                            mkdir /home/usbautorun
+                            cd /home/usbautorun
+                            # run autorun file
+                            EXEDIR=${xmountdir}/${devname}
+                            export EXEDIR
+                            USBROOT=${EXEDIR}
+                            export USBROOT
+                            ${EXEDIR}/${autorun_file}  &
+                           
+                        elif [ -f ${xmountdir}/${devname}/${autorun_file_app} ] ; then
+
+                            echo ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
+
+                            mkdir /home/usbautorun
+                            cd /home/usbautorun
+                            # run autorun file
+                            EXEDIR=${xmountdir}/${devname}
+                            export EXEDIR
+                            USBROOT=${EXEDIR}
+                            export USBROOT
+                            ${EXEDIR}/${autorun_file}  &
+                           
+                        else    # no autorun file
+
+                            cd /
+                            if umount ${xmountdir}/${devname} ; then
+                                rm -r ${xmountdir}/${devname}
+                            fi
+                           
+                        fi
+                        
+                    # other disk
+                    else
+                        if umount ${xmountdir}/${devname} ; then
+                            rm -r ${xmountdir}/${devname}
+                        fi
+                    fi
+
+                else    # can't mount this disk
+
+                    rm -r ${xmountdir}/${devname}
+
+                fi      # mounted
+            fi      # partitions 
+
+        fi	# block device 
+
+        # chec usb serial adapter
+        if [ -r ${devpath}/dev -a ${devname%[0-9]} = "ttyUSB" ]; then
+            devnum=`cat ${devpath}/dev`
+            mknod /dev/${devname} c ${devnum%%:*} ${devnum##*:}
+        fi
+
+        # check usb wifi
+        if [ ${devname%[0-9]} = "rausb" ]; then	
+            cd /davinci/dvr
+
+	    wifi_essid=`/davinci/dvr/cfg get network wifi_essid`
+	    wifi_enc=`/davinci/dvr/cfg get network wifi_enc`
+	    wifi_key=`/davinci/dvr/cfg get network wifi_key`
+
+	    if [ -n "$wifi_essid" ] ; then
+		if [ -f /davinci/dvr/wifi_ip ]; then
+		    ifconfig ${devname} up
+		
+		    case $wifi_enc in
+		    "0")
+	              /davinci/iwpriv ${devname} set NetworkType=Infra
+	              /davinci/iwpriv ${devname} set AuthMode=OPEN
+	              /davinci/iwpriv ${devname} set EncrypType=NONE
+		      /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		      ;;
+		    "1")
+	              /davinci/iwpriv ${devname} set NetworkType=Infra
+	              /davinci/iwpriv ${devname} set AuthMode=OPEN
+	              /davinci/iwpriv ${devname} set EncrypType=WEP
+	              /davinci/iwpriv ${devname} set Key1=$wifi_key
+	              /davinci/iwpriv ${devname} set DefaultKeyID=1
+		      /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		      ;;
+		    "2")
+	              /davinci/iwpriv ${devname} set NetworkType=Infra
+	              /davinci/iwpriv ${devname} set AuthMode=SHARED
+	              /davinci/iwpriv ${devname} set EncrypType=WEP
+	              /davinci/iwpriv ${devname} set Key1=$wifi_key
+	              /davinci/iwpriv ${devname} set DefaultKeyID=1
+		      /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		      ;;
+		    "3")
+	              /davinci/iwpriv ${devname} set NetworkType=Infra
+	              /davinci/iwpriv ${devname} set AuthMode=WEPAUTO
+	              /davinci/iwpriv ${devname} set EncrypType=WEP
+	              /davinci/iwpriv ${devname} set Key1=$wifi_key
+	              /davinci/iwpriv ${devname} set DefaultKeyID=1
+		      /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		      ;;
+		    "4")
+	              /davinci/iwpriv ${devname} set NetworkType=Infra
+		      /davinci/iwpriv ${devname} set AuthMode=WPAPSK
+		      /davinci/iwpriv ${devname} set EncrypType=TKIP
+		      /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		      /davinci/iwpriv ${devname} set WPAPSK=$wifi_key
+		      /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		      ;;
+		    "5")
+	              /davinci/iwpriv ${devname} set NetworkType=Infra
+	              /davinci/iwpriv ${devname} set AuthMode=WPAPSK
+	              /davinci/iwpriv ${devname} set EncrypType=AES
+		      /davinci/iwpriv ${devname} set SSID=$wifi_essid
+	              /davinci/iwpriv ${devname} set WPAPSK=$wifi_key
+		      /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		      ;;
+		    "6")
+	              /davinci/iwpriv ${devname} set NetworkType=Infra
+	              /davinci/iwpriv ${devname} set AuthMode=WPA2PSK
+	              /davinci/iwpriv ${devname} set EncrypType=TKIP
+		      /davinci/iwpriv ${devname} set SSID=$wifi_essid
+	              /davinci/iwpriv ${devname} set WPAPSK=$wifi_key
+		      /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		      ;;
+		    "7")
+	              /davinci/iwpriv ${devname} set NetworkType=Infra
+	              /davinci/iwpriv ${devname} set AuthMode=WPA2PSK
+	              /davinci/iwpriv ${devname} set EncrypType=AES
+		      /davinci/iwpriv ${devname} set SSID=$wifi_essid
+	              /davinci/iwpriv ${devname} set WPAPSK=$wifi_key
+		      /davinci/iwpriv ${devname} set SSID=$wifi_essid
+		      ;;
+		    *)
+		      ;;
+		    esac
+
+		    if [ -f /davinci/dvr/wifi_mask ]; then
+		      ifconfig ${devname} `cat /davinci/dvr/wifi_ip` netmask `cat /davinci/dvr/wifi_mask` up
+		    else
+		      ifconfig ${devname} `cat /davinci/dvr/wifi_ip` up
+		    fi
+
+	        fi
+
+	    fi
+
+        fi
+
+        ;;
+
+    "remove")
+        if [ ${subsys} = "block" -a -r ${xmountdir}/mount_${devname} ]; then
+
+            mountdir=`cat ${xmountdir}/mount_${devname}`
+            dvrsvrdown=0
+            dvrpid=0
+
+            # suspend dvrsvr
+            if [ -f ${dvrpidfile} -a -f ${dvrcurdisk} ]; then
+                dvrdisk=`cat ${dvrcurdisk}`
+                if [ ${dvrdisk} = ${mountdir} ] ; then
+                    dvrpid=`cat ${dvrpidfile}`
+                    kill -USR1 ${dvrpid}
+                    for x in 1 2 3 4 5 6 7 8 9 10 ; do
+                        if [ -f ${dvrcurdisk} ]; then
+                            sleep 3
+                        else
+                            break
+                        fi
+                    done
+                    dvrsvrdown=1
+                fi
+            fi
+
+            rm ${xmountdir}/mount_${devname}
+            rm -fr /home/usbrun
+
+            for x in 1 2 3 4 5 6 7 8 ; do
+                if [ -d ${mountdir} ] ; then
+                   sync;
+                   if umount ${mountdir} ; then
+                      rm -r ${mountdir}
+                   else
+                      sleep 1
+                   fi
+                else
+                   break
+                fi ;
+            done ;
+
+            # restart dvrsvr
+            if [ $dvrsvrdown = 1 ]; then
+                kill -USR2 $dvrpid
+            fi
+
+        fi;
+        ;;
+esac 
+
+# unlock hotplug
+rm /var/dvr/hotpluglock

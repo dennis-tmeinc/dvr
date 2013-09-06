@@ -42,10 +42,10 @@ void mcu_pwii_setc1c2()
     if( p_dio_mmap->camera_status[pwii_front_ch] & 2 ) {         // front camera recording?
         if( (p_dio_mmap->pwii_output & PWII_LED_C1 ) == 0 ) {
             p_dio_mmap->pwii_output |= PWII_LED_C1 ;
+            dio_unlock();
             // turn on zoomcamera led
             zoomcam_led(1) ;
             // turn on mic
-            dio_unlock();
             mcu_cmd(NULL, MCU_CMD_MICON) ;
             dio_lock();
         }
@@ -53,10 +53,10 @@ void mcu_pwii_setc1c2()
     else {
         if( (p_dio_mmap->pwii_output & PWII_LED_C1) != 0 ) {
             p_dio_mmap->pwii_output &= (~PWII_LED_C1) ;
+            dio_unlock();
             // turn off zoomcamera led
             zoomcam_led(0) ;
             // turn off mic
-            dio_unlock();
             mcu_cmd(NULL, MCU_CMD_MICOFF);
             dio_lock();
         }
@@ -75,91 +75,96 @@ void mcu_pwii_setc1c2()
 // update PWII outputs, include leds and powers
 void mcu_pwii_output()
 {
+    unsigned int pwii_xouts ;
     unsigned int xouts ;
 
+    mcu_pwii_setc1c2()  ;       // check c1 c2 led.
+    pwii_xouts = p_dio_mmap->pwii_output ;
+
     if( (p_dio_mmap->iomode == IOMODE_RUN || p_dio_mmap->iomode == IOMODE_SHUTDOWNDELAY)
-        && (p_dio_mmap->pwii_output & PWII_POWER_BLACKOUT) )
+        && (pwii_xouts & PWII_POWER_BLACKOUT) )
     {
-        dio_lock();
-        p_dio_mmap->pwii_output &= ~(
-                                       PWII_LED_POWER |
-                                       PWII_LED_C1 |
-                                       PWII_LED_C2 |
-                                       PWII_LED_MIC |
-                                       PWII_LED_ERROR |
-                                       PWII_POWER_LCD ) ;
-        dio_unlock();
-    }
-    else {
-        mcu_pwii_setc1c2()  ;       // check c1 c2 led.
+        pwii_xouts &= ~( PWII_LED_POWER |
+                         PWII_LED_C1 |
+                         PWII_LED_C2 |
+                         PWII_LED_MIC |
+                         PWII_LED_ERROR |
+                         PWII_POWER_LCD ) ;
     }
 
-    xouts = pwii_outs ^ p_dio_mmap->pwii_output ;
+    xouts = pwii_outs ^ pwii_xouts ;
+    pwii_outs = pwii_xouts ;
 
-    if( xouts ) {
-        pwii_outs ^= xouts ;
-        if( xouts & PWII_POWER_BLACKOUT ) {         // Black out bit
-            mcu_pwii_cmd(NULL, PWII_CMD_STANDBY, 1, (pwii_outs&PWII_POWER_BLACKOUT)!=0 );
-            if( (pwii_outs&PWII_POWER_BLACKOUT)==0 ) {
-                p_dio_mmap->pwii_output |= PWII_LED_POWER ;			// out of blackout also turn on POWER LED
-            }
+    if( xouts & PWII_POWER_BLACKOUT ) {         // Black out bit
+        mcu_pwii_cmd(NULL, PWII_CMD_STANDBY, 1, (pwii_outs&PWII_POWER_BLACKOUT)!=0 );
+        if( (pwii_outs&PWII_POWER_BLACKOUT)==0 ) {
+            p_dio_mmap->pwii_output |= PWII_LED_POWER ;			// out of blackout also turn on POWER LED
         }
+    }
 
-        if( xouts & PWII_LED_POWER ) {
-            // BIT 4: POWER LED
-            mcu_pwii_cmd(NULL, PWII_CMD_LEDPOWER, 1, ((pwii_outs&PWII_LED_POWER)!=0) );
-        }
+    static int s_led_power_refresh_time ;
+    if( (xouts & PWII_LED_POWER) || runtime-s_led_power_refresh_time > 10000 ) {
+        // BIT 4: POWER LED
+        mcu_pwii_cmd(NULL, PWII_CMD_LEDPOWER, 1, ((pwii_outs&PWII_LED_POWER)?1:0) );
+        s_led_power_refresh_time = runtime ;
+    }
 
-        if( xouts & PWII_LED_C1 ) {
-            mcu_pwii_cmd(NULL, PWII_CMD_C1, 1, ((pwii_outs&PWII_LED_C1)!=0) );
-        }
+    static int s_led_c1_refresh_time ;
+    if( (xouts & PWII_LED_C1) || runtime-s_led_c1_refresh_time>10000 ) {
+        mcu_pwii_cmd(NULL, PWII_CMD_C1, 1, ((pwii_outs&PWII_LED_C1)?1:0) );
+        s_led_c1_refresh_time = runtime ;
+    }
 
-        if( xouts & PWII_LED_C2 ) {
-            mcu_pwii_cmd(NULL, PWII_CMD_C2, 1, ((pwii_outs&PWII_LED_C2)!=0) );
-        }
+    static int s_led_c2_refresh_time ;
+    if( (xouts & PWII_LED_C2) || runtime-s_led_c2_refresh_time>10000 ) {
+        mcu_pwii_cmd(NULL, PWII_CMD_C2, 1, ((pwii_outs&PWII_LED_C2)?1:0) );
+        s_led_c2_refresh_time = runtime ;
+    }
 
-        if( xouts & PWII_LED_MIC ) {
-            mcu_pwii_cmd(NULL, PWII_CMD_LEDMIC, 1, ((pwii_outs&PWII_LED_MIC)!=0) );
-        }
+    static int s_led_mic_refresh_time ;
+    if( (xouts & PWII_LED_MIC) || runtime-s_led_mic_refresh_time>10000 ) {
+        mcu_pwii_cmd(NULL, PWII_CMD_LEDMIC, 1, ((pwii_outs&PWII_LED_MIC)?1:0) );
+        s_led_mic_refresh_time = runtime ;
+    }
 
-        if( xouts & PWII_LP_ZOOMIN ) {
-            mcu_camera_zoom( pwii_outs & PWII_LP_ZOOMIN ) ;
-        }
+    if( xouts & PWII_LP_ZOOMIN ) {
+        mcu_camera_zoom( pwii_outs & PWII_LP_ZOOMIN ) ;
+    }
 
-        if( xouts & PWII_LED_ERROR ) {           // bit 3: ERROR LED
-            if((pwii_outs&PWII_LED_ERROR)!=0) {
-                if( p_dio_mmap->pwii_error_LED_flash_timer>0 ) {
-                    mcu_pwii_cmd(NULL, PWII_CMD_LEDERROR, 2, 2, p_dio_mmap->pwii_error_LED_flash_timer );
-                }
-                else {
-                    mcu_pwii_cmd(NULL, PWII_CMD_LEDERROR, 2, 1, 0 );
-                }
+    if( xouts & PWII_LED_ERROR ) {           // bit 3: ERROR LED
+        if((pwii_outs&PWII_LED_ERROR)!=0) {
+            if( p_dio_mmap->pwii_error_LED_flash_timer>0 ) {
+                mcu_pwii_cmd(NULL, PWII_CMD_LEDERROR, 2, 2, p_dio_mmap->pwii_error_LED_flash_timer );
             }
             else {
-                mcu_pwii_cmd(NULL, PWII_CMD_LEDERROR, 2, 0, 0 );
+                mcu_pwii_cmd(NULL, PWII_CMD_LEDERROR, 2, 1, 0 );
             }
         }
-
-        if( xouts & PWII_POWER_LCD ) {          	// LCD  power
-            mcu_pwii_cmd(NULL, PWII_CMD_LCD, 1, ((pwii_outs&PWII_POWER_LCD)!=0) );
-        }
-
-        if( xouts & PWII_POWER_ANTENNA ) {          // BIT 8: GPS antenna power
-            mcu_pwii_cmd(NULL, PWII_CMD_POWER_GPSANT, 1, ((pwii_outs&PWII_POWER_ANTENNA)!=0) );
-        }
-
-        if( xouts & PWII_POWER_GPS ) {         // BIT 9: GPS POWER
-            mcu_pwii_cmd(NULL, PWII_CMD_POWER_GPS, 1, ((pwii_outs&PWII_POWER_GPS)!=0) );
-        }
-
-        if( xouts & PWII_POWER_RF900 ) {          // BIT 10: RF900 POWER
-            mcu_pwii_cmd(NULL, PWII_CMD_POWER_RF900, 1, ((pwii_outs&PWII_POWER_RF900)!=0) );
-        }
-
-        if( xouts & PWII_POWER_WIFI ) {          // BIT 13: WIFI power
-            mcu_pwii_cmd(NULL, PWII_CMD_POWER_WIFI, 1, ((pwii_outs&PWII_POWER_WIFI)!=0) );
+        else {
+            mcu_pwii_cmd(NULL, PWII_CMD_LEDERROR, 2, 0, 0 );
         }
     }
+
+    if( xouts & PWII_POWER_LCD ) {          	// LCD  power
+        mcu_pwii_cmd(NULL, PWII_CMD_LCD, 1, ((pwii_outs&PWII_POWER_LCD)!=0) );
+    }
+
+    if( xouts & PWII_POWER_ANTENNA ) {          // BIT 8: GPS antenna power
+        mcu_pwii_cmd(NULL, PWII_CMD_POWER_GPSANT, 1, ((pwii_outs&PWII_POWER_ANTENNA)!=0) );
+    }
+
+    if( xouts & PWII_POWER_GPS ) {         // BIT 9: GPS POWER
+        mcu_pwii_cmd(NULL, PWII_CMD_POWER_GPS, 1, ((pwii_outs&PWII_POWER_GPS)!=0) );
+    }
+
+    if( xouts & PWII_POWER_RF900 ) {          // BIT 10: RF900 POWER
+        mcu_pwii_cmd(NULL, PWII_CMD_POWER_RF900, 1, ((pwii_outs&PWII_POWER_RF900)!=0) );
+    }
+
+    if( xouts & PWII_POWER_WIFI ) {          // BIT 13: WIFI power
+        mcu_pwii_cmd(NULL, PWII_CMD_POWER_WIFI, 1, ((pwii_outs&PWII_POWER_WIFI)!=0) );
+    }
+
 }
 
 // auto release keys REC, C2, TM

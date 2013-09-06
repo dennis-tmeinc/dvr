@@ -52,6 +52,7 @@ sfxrun.upd sfxrun
 ./dvr/eaglesvr
 ./dvr/inetd.conf
 ./dvr/glog
+./dvr/fsckwrapper
 ./dvr/tdevhotplug
 ./dvr/defconf
 ./dvr/resource

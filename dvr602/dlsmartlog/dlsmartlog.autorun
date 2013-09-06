@@ -1,0 +1,144 @@
+#!/bin/sh
+
+# ** MDVR510X **
+# Downloading smartlog file to USB stick.
+# 247 Security Inc. 2009
+#
+# Changes:
+# 09/18/2009 Harrison
+#   1. added support for Impact data
+# 11/09/2009 Harrison
+#   1. added support for Multiple/Hybrid disk
+# 01/26/2011 Harrison
+#   1. added support for TVS22g
+
+# wait until the system is up
+while [ ! -f /var/dvr/ioprocess.pid ]
+do
+  sleep 1
+done
+
+while [ ! -f /var/dvr/dvrsvr.pid ]
+do
+  sleep 1
+done
+
+while [ ! -f /var/dvr/glog.pid ]
+do
+  sleep 1
+done
+
+while [ ! -f /var/dvr/dvrcurdisk ]
+do
+  sleep 1
+done
+
+# wait until the gforce download is done
+while [ -f /var/dvr/gforcecheck ]
+do
+  sleep 1
+done
+
+if [ ! -d ${USBROOT}/smartlog ] ; then
+ mkdir ${USBROOT}/smartlog
+fi
+
+# start flashing "Don't Remove USB" LED
+/davinci/dvr/panelled 1
+
+disk=`cat /var/dvr/dvrcurdisk`
+smartdir=${disk}/smartlog
+
+# stop wifi
+[ -f /var/dvr/udhcpc.pid ] && kill `cat /var/dvr/udhcpc.pid`
+ifconfig rausb0 down
+/bin/rmmod rt73
+
+
+# download crash/peak data
+
+# tvs22g
+if [ -f /var/dvr/tab102live -a -f /var/dvr/tab102.pid ]; then
+  echo 1 > /var/dvr/tab102check
+  # wait until the tab102 download is done
+  while [ -f /var/dvr/tab102check ]
+  do
+    sleep 1
+  done
+fi
+
+# do this only if tab102 was detected (on 510x)
+if [ -f /var/dvr/tab102 ]
+then
+    # download tab102 data
+    /davinci/dvr/tab102
+fi
+
+# stop glog
+[ -f /var/dvr/glog.pid ] && kill -s SIGUSR1 `cat /var/dvr/glog.pid`
+
+/bin/rmmod mos7840
+/bin/rmmod usbserial
+
+# stop dvrsvr
+[ -f /var/dvr/dvrsvr.pid ] && kill -s SIGUSR1 `cat /var/dvr/dvrsvr.pid`
+while [ -f /var/dvr/dvrcurdisk ]
+do
+    sleep 1
+done
+
+# kill dvrsvr
+[ -f /var/dvr/dvrsvr.pid ] && kill `cat /var/dvr/dvrsvr.pid`
+
+# do this only if internal GSensor was detected (on 602)
+if [ -f /var/dvr/gforce ]
+then
+  echo 1 > /var/dvr/gforcecheck
+  [ -f /var/dvr/ioprocess.pid ] && kill -s SIGUSR2 `cat /var/dvr/ioprocess.pid`
+  # wait until the gforce download is done
+  while [ -f /var/dvr/gforcecheck ]
+  do
+    sleep 1
+  done
+fi
+
+# copy tab102 files
+mkdir -p $smartdir && mv -f /var/dvr/*.log /var/dvr/*.peak $smartdir
+
+
+if [ -d ${disk}/smartlog ]; then
+    for lfile in `ls ${disk}/smartlog/*_L.001`
+    do
+	echo copying GPS files...
+	echo from: ${lfile}
+	echo to: ${USBROOT}/smartlog/
+	cp -f ${lfile} ${USBROOT}/smartlog/ && mv ${lfile} ${lfile%L.001}N.001
+    done
+    for lfile in `ls ${disk}/smartlog/*_L.log`
+    do
+	echo copying crash files...
+	echo from: ${lfile}
+	echo to: ${USBROOT}/smartlog/
+	cp -f ${lfile} ${USBROOT}/smartlog/ && mv ${lfile} ${lfile%L.log}N.log
+    done
+    for lfile in `ls ${disk}/smartlog/*_L.peak`
+    do
+	echo copying peak files...
+	echo from: ${lfile}
+	echo to: ${USBROOT}/smartlog/
+	cp -f ${lfile} ${USBROOT}/smartlog/ && mv ${lfile} ${lfile%L.peak}N.peak
+    done
+fi
+
+sync
+cd /
+umount ${USBROOT}
+
+# stop flashing "Remove USB" LED
+/davinci/dvr/panelled 0
+sleep 1
+/davinci/dvr/ioprocess -reboot
+sleep 1
+/davinci/dvr/ioprocess -reboot
+sleep 1
+/davinci/dvr/ioprocess -reboot

@@ -24,12 +24,12 @@ ln -sf /davinci/dvr/dvrsvr.conf /etc/dvr/dvr.conf
 
 # install davinci drivers
 
-fmupdate=0 
+fmupdate=0
 
 # check if we need to upgrade firmware
 if [ -d /davinci/upgrade ]; then
     cd /davinci/upgrade
-    for updfirmware in `ls` ; do 
+    for updfirmware in `ls` ; do
 	if [ -x /davinci/upgrade/${updfirmware} ]; then
 		echo Upgrade firmware : ${updfirmware}
 		mkdir /home/upgrade
@@ -50,8 +50,7 @@ if [ $fmupdate = 1 ]; then
 fi
 
 # set debugging ip address
-boardid=`cat /davinci/ID/BOARDID`
-ifconfig eth0 192.168.247.${boardid}
+ifconfig eth0 172.30.84.200
 
 # setup initial TZ environment
 cd /davinci/dvr
@@ -66,7 +65,7 @@ setnetwork
 ifconfig lo up 127.0.0.1
 
 #telnet support
-cp /davinci/dvr/passwd /etc 
+cp /davinci/dvr/passwd /etc
 
 # install web server
 mkdir /home/www
@@ -125,4 +124,4 @@ sleep 20
 glog < /dev/null > /dev/null 2> /dev/null &
 
 # do endless loop
-while true ; do sleep 1000 ; done 
+while true ; do sleep 1000 ; done

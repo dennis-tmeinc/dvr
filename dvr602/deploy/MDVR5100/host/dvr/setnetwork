@@ -1,0 +1,33 @@
+#!/bin/sh
+
+reconfigure_wifi()
+{
+  [ -f /var/dvr/udhcpc.pid ] && kill `cat /var/dvr/udhcpc.pid`
+  ifconfig rausb0 down
+  /bin/rmmod rt73
+  /bin/insmod rt73.ko
+}
+
+cd /davinci
+
+disable_wifi=`/davinci/dvr/cfg get network disable_wifi`
+if [ $disable_wifi -a $disable_wifi = "1" ]; then
+  # don't use wifi on 602 except when /var/dvr/usewifi is found
+  if [ -f /var/dvr/usewifi ]; then
+    reconfigure_wifi
+  fi
+else
+  reconfigure_wifi
+fi
+
+cd /davinci/dvr 
+
+# reconfigure ethernet
+eth_ipaddr=`/davinci/dvr/cfg get network eth_ip`
+eth_netmask=`/davinci/dvr/cfg get network eth_mask`
+ifconfig eth0:1 up $eth_ipaddr
+ifconfig eth0:1 netmask $eth_netmask
+ifconfig eth0:1 broadcast `/davinci/dvr/broadcast ${eth_ipaddr} ${eth_netmask}`
+route del default
+route add default gw `/davinci/dvr/cfg get network gateway_1`
+

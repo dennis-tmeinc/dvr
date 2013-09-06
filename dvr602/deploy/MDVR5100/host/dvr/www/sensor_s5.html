@@ -1,0 +1,139 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<link href="eagle510x.css" rel="stylesheet" type="text/css" /><title>Sensor Setup Page</title>
+<script type="text/javascript" src="eagle510x.js"></script>
+<script type="text/javascript">
+function on_immobile_change() {
+  var selected = document.forms["form1"].immobile_sensor.selectedIndex;
+  if (selected > 0) {
+    var eleid = "sensor"+selected+"_ev";
+    if (document.forms["form1"].elements[eleid].checked == true) {
+      alert("You cannot select Event Marker as immobility sensor.");
+      return false;
+    }
+  }
+  return true;
+}
+</script>
+</head>
+<body>
+<!--#include file="header.i"-->
+<div class="tabs">
+<ul>
+<li><a onclick="on_system_click()"><span>System</span></a></li>
+<li><a onclick="on_camera_click()"><span>Camera</span></a></li>
+<li class="current"><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
+<li><a onclick="on_network_click()"><span>Network</span></a></li>
+<li><a onclick="on_status_click()"><span>Status</span></a></li>
+<li><a onclick="on_tools_click()"><span>Tools</span></a></li>
+</ul>
+</div>
+<p>&nbsp;</p>
+<form id="dvrsetup" name="form1" enctype="application/x-www-form-urlencoded" method="post" action="apply.html">
+<input name="page" value="sensor" type="hidden" />
+<table id="id_sensor_table">
+
+<tr>
+<td class="col1">Sensor Number:</td>
+<td>
+<select name="sensor_number" id="id_sensor_number" value="14" onchange="on_sensor_number_change()">
+    <option value="14">14</option>
+</select>
+<script type="text/javascript">
+for( i=1; i<=32; i++ ) {
+document.write( 
+"<tr>",
+"<td class=\"col1\">Sensor "+i+"</td>",
+"<td> Name: <input name=\"sensor"+i+"_name\" value=\"Sensor "+i+"\" />&nbsp;&nbsp;",
+"<input name=\"sensor"+i+"_inverted\" id=\"id_sensor"+i+"_inverted\" type=\"checkbox\" value=\"on\" />",
+"<label for=\"id_sensor"+i+"_inverted\">Inverted&nbsp;&nbsp;</label>",
+"<input name=\"sensor"+i+"_ev\" id=\"id_sensor"+i+"_ev\" type=\"checkbox\" value=\"on\"  onclick= \"return on_immobile_change();\" />",
+"<label for=\"id_sensor"+i+"_ev\">Event Marker&nbsp;&nbsp;</label>",
+"<input name=\"sensor"+i+"_rising\" id=\"id_sensor"+i+"_rising\" type=\"checkbox\" value=\"on\" />",
+"<label for=\"id_sensor"+i+"_rising\">EV on Rising&nbsp;&nbsp;</label>",
+"<input name=\"sensor"+i+"_falling\" id=\"id_sensor"+i+"_falling\" type=\"checkbox\" value=\"on\" />",
+"<label for=\"id_sensor"+i+"_falling\">EV on Falling&nbsp;&nbsp;</label>",
+"<input name=\"sensor"+i+"_immobile\" id=\"id_sensor"+i+"_immobile\" type=\"checkbox\" value=\"on\" />",
+"<label for=\"id_sensor"+i+"_immobile\">No EV if Moving</label>",
+"</td>",
+"</tr>" 
+);
+}
+</script>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Immobility sensor:</td>
+<td>
+<select size="1" name="immobile_sensor" onchange="on_immobile_change()">
+<script type="text/javascript">
+var sensor_value = 
+<!--#include file="sensor_value" -->
+;
+
+function getsensornumber() {
+    return sensor_value.sensor_number ;
+}
+
+function getsensorname( sensor ) 
+{
+    var sname = "sensor"+sensor+"_name" ;
+    return sensor_value[sname] ;
+}
+ 
+var num_sensor = getsensornumber() ;
+document.write( "<option value=\"0\">Disable</option>" );
+for( j=1; j<=num_sensor; j++ ) {
+    document.write( "<option value=\""+j+"\">"+getsensorname(j)+"</option>" );
+}
+</script>
+</select>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Vehicle considered immobile under:</td>
+<td><input name="immobile_speed" size="10" style="text-align:right" />&nbsp;mph</td>
+</tr>
+
+<tr>
+<td></td>
+<td> <input id="id_apply" value="Apply" type="submit" />
+</td>
+</tr>
+
+</table>
+</form>
+<script type="text/javascript">
+var formdata = 
+<!--#include file="sensor_value" --> 
+;
+JSONinitfield( formdata );
+
+function show_sensor_table()
+{
+    var i;
+    var sensor_table = document.getElementById('id_sensor_table') ;
+    for( i=1; i<=sensornum; i++ ) {
+        sensor_table.rows[i].style.display="" ;
+    }
+    
+    for( ; i<=32; i++ ) {
+        sensor_table.rows[i].style.display="none" ;
+    }
+
+}
+
+function on_sensor_number_change()
+{
+sensornum=document.getElementById("id_sensor_number").value;
+show_sensor_table();
+}
+
+on_sensor_number_change();
+
+</script>
+</body></html>

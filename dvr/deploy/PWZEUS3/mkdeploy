@@ -32,9 +32,12 @@ if [ ${appid} = "clean" ]; then
     rm -f eaglehttpd
 
 # clean host firmware filesa
+    cd ${DEPROOT}/host
+    rm -f dosfsck dosfslabel mkdosfs
+
     cd ${DEPROOT}/host/dvr
     rm -f httpd.sfx firmwareid
-    rm -f dvrsvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg
+    rm -f dvrsvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg fsckwrapper
 
     cd ${DEPROOT}/host/ID
     rm -f BOARDNUM APPID BOARDID
@@ -136,15 +139,16 @@ cp -v ${APPROOT}/volumeid/volumeid .
 cp -v ${APPROOT}/cfg/cfg .
 cp -v ${APPROOT}/dhcp/udhcpc .
 cp -v ${APPROOT}/lpc21isp/lpc21isp .
+cp -v ${APPROOT}/fsckwrapper/fsckwrapper .
 
-${STRIP} dvrsvr eaglesvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg lpc21isp
+${STRIP} dvrsvr eaglesvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg lpc21isp fsckwrapper
+
 cd ${DEPROOT}/host
-
 # copy dos fs tools
-cp -v ${APPROOT}/dosfstools/dosfstools-3.0.12/mkdosfs .
-cp -v ${APPROOT}/dosfstools/dosfstools-3.0.12/dosfsck .
-cp -v ${APPROOT}/dosfstools/dosfstools-3.0.12/dosfslabel .
-
+cp -v ${APPROOT}/dosfstools/mkdosfs .
+cp -v ${APPROOT}/dosfstools/dosfsck .
+cp -v ${APPROOT}/dosfstools/dosfslabel .
+${STRIP} mkdosfs dosfsck dosfslabel
 
 echo ${firmwareid} > dvr/firmwareid
 ${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.dep ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW

@@ -5,6 +5,7 @@
 
 // file header for eagle368 (.266 file)
 struct File_format_info {
+
    unsigned int file_fourcc;
    unsigned short file_version;
    unsigned short device_type;

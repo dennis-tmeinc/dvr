@@ -4,17 +4,11 @@
 #define __CFG_H__
 
 //#define EAGLE32
-#define EAGLE368
+#define EAGLE34
 
 //#define MDVR_APP
 #define PWII_APP
 //#define TVS_APP
-
-// different way of mcu programming
-#define MCU_ZEUS
-
-// yet another g-force
-#define SUPPORT_YAGF
 
 //#define EAGLESVR
 
@@ -27,11 +21,13 @@
 // to enable power cycling test firmware
 // #define POWERCYCLETEST
 
-#define	APPNAME	"PWZ3"
+#endif
+
+#define	APPNAME	"PW34"
 
 // default config file
-#define	CFG_DEFFILE	"/davinci/dvr/defconf"
-#define	CFG_FILE	"/etc/dvr/dvr.conf"
+#define	CFG_DEFFILE	"/davinci/dvr/defconf" 
+#define	CFG_FILE	"/etc/dvr/dvr.conf" 
 
 // applications dir
 #define APP_DIR		"/davinci/dvr"
@@ -41,4 +37,3 @@
 #define WWWROOT	"/home/www"
 #define WWWSERIALFILE "/tmp/wwwserialnofile"
 
-#endif  // __CFG_H__

@@ -53,6 +53,7 @@ sfxrun.dep sfxrun
 ./dvr/inetd.conf
 ./dvr/dvrsvr.conf
 ./dvr/defconf
+./dvr/fsckwrapper
 ./dvr/glog
 ./dvr/tdevhotplug
 ./dvr/resource

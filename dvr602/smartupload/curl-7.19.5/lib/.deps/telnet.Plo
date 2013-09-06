@@ -1,0 +1,328 @@
+telnet.lo telnet.o: telnet.c setup.h config.h ../include/curl/curlbuild.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/types.h \
+  /home/harry/hik_toolchain/arm-linux/include/features.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/uClibc_config.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/cdefs.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/types.h \
+  /home/harry/hik_toolchain/bin/../lib/gcc/arm-linux/3.4.6/include/stddef.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/kernel_types.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/pthreadtypes.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/sched.h \
+  /home/harry/hik_toolchain/arm-linux/include/time.h \
+  /home/harry/hik_toolchain/arm-linux/include/endian.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/endian.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/select.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/select.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/sigset.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/time.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/sysmacros.h \
+  /home/harry/hik_toolchain/arm-linux/include/stdint.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/wchar.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/wordsize.h \
+  /home/harry/hik_toolchain/arm-linux/include/inttypes.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/socket.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/uio.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/uio.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/socket.h \
+  /home/harry/hik_toolchain/arm-linux/include/limits.h \
+  /home/harry/hik_toolchain/bin/../lib/gcc/arm-linux/3.4.6/include/limits.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/posix1_lim.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/local_lim.h \
+  /home/harry/hik_toolchain/arm-linux/include/linux/limits.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/posix2_lim.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/sockaddr.h \
+  /home/harry/hik_toolchain/arm-linux/include/asm/socket.h \
+  /home/harry/hik_toolchain/arm-linux/include/asm/sockios.h \
+  ../include/curl/curlrules.h \
+  /home/harry/hik_toolchain/arm-linux/include/stdio.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/uClibc_stdio.h \
+  /home/harry/hik_toolchain/arm-linux/include/wchar.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/uClibc_mutex.h \
+  /home/harry/hik_toolchain/arm-linux/include/pthread.h \
+  /home/harry/hik_toolchain/arm-linux/include/sched.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/uClibc_clk_tck.h \
+  /home/harry/hik_toolchain/arm-linux/include/signal.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/initspin.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/sigthread.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/uClibc_pthread.h \
+  /home/harry/hik_toolchain/bin/../lib/gcc/arm-linux/3.4.6/include/stdarg.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/stdio_lim.h \
+  /home/harry/hik_toolchain/arm-linux/include/assert.h \
+  /home/harry/hik_toolchain/arm-linux/include/errno.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/errno.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/errno_values.h \
+  setup_once.h /home/harry/hik_toolchain/arm-linux/include/stdlib.h \
+  /home/harry/hik_toolchain/arm-linux/include/alloca.h \
+  /home/harry/hik_toolchain/arm-linux/include/string.h \
+  /home/harry/hik_toolchain/arm-linux/include/ctype.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/uClibc_touplow.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/stat.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/stat.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/time.h \
+  /home/harry/hik_toolchain/bin/../lib/gcc/arm-linux/3.4.6/include/stdbool.h \
+  /home/harry/hik_toolchain/arm-linux/include/netinet/in.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/in.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/byteswap.h \
+  /home/harry/hik_toolchain/arm-linux/include/unistd.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/posix_opt.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/confname.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/getopt.h \
+  /home/harry/hik_toolchain/arm-linux/include/netdb.h \
+  /home/harry/hik_toolchain/arm-linux/include/rpc/netdb.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/netdb.h \
+  /home/harry/hik_toolchain/arm-linux/include/arpa/inet.h \
+  /home/harry/hik_toolchain/arm-linux/include/net/if.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/ioctl.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/ioctls.h \
+  /home/harry/hik_toolchain/arm-linux/include/asm/ioctls.h \
+  /home/harry/hik_toolchain/arm-linux/include/asm/ioctl.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/ioctl-types.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/ttydefaults.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/param.h \
+  /home/harry/hik_toolchain/arm-linux/include/linux/param.h \
+  /home/harry/hik_toolchain/arm-linux/include/asm/param.h urldata.h \
+  cookie.h ../include/curl/curl.h ../include/curl/curlver.h \
+  ../include/curl/curlrules.h ../include/curl/easy.h \
+  ../include/curl/multi.h ../include/curl/curl.h formdata.h timeval.h \
+  http_chunks.h hostip.h hash.h llist.h curl_addrinfo.h \
+  /home/harry/hik_toolchain/arm-linux/include/setjmp.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/setjmp.h splay.h \
+  transfer.h sendf.h telnet.h connect.h ../include/curl/mprintf.h \
+  arpa_telnet.h curl_memory.h select.h \
+  /home/harry/hik_toolchain/arm-linux/include/sys/poll.h \
+  /home/harry/hik_toolchain/arm-linux/include/bits/poll.h strequal.h \
+  rawstr.h memdebug.h
+
+setup.h:
+
+config.h:
+
+../include/curl/curlbuild.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/types.h:
+
+/home/harry/hik_toolchain/arm-linux/include/features.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/uClibc_config.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/cdefs.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/types.h:
+
+/home/harry/hik_toolchain/bin/../lib/gcc/arm-linux/3.4.6/include/stddef.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/kernel_types.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/pthreadtypes.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/sched.h:
+
+/home/harry/hik_toolchain/arm-linux/include/time.h:
+
+/home/harry/hik_toolchain/arm-linux/include/endian.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/endian.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/select.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/select.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/sigset.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/time.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/sysmacros.h:
+
+/home/harry/hik_toolchain/arm-linux/include/stdint.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/wchar.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/wordsize.h:
+
+/home/harry/hik_toolchain/arm-linux/include/inttypes.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/socket.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/uio.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/uio.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/socket.h:
+
+/home/harry/hik_toolchain/arm-linux/include/limits.h:
+
+/home/harry/hik_toolchain/bin/../lib/gcc/arm-linux/3.4.6/include/limits.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/posix1_lim.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/local_lim.h:
+
+/home/harry/hik_toolchain/arm-linux/include/linux/limits.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/posix2_lim.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/sockaddr.h:
+
+/home/harry/hik_toolchain/arm-linux/include/asm/socket.h:
+
+/home/harry/hik_toolchain/arm-linux/include/asm/sockios.h:
+
+../include/curl/curlrules.h:
+
+/home/harry/hik_toolchain/arm-linux/include/stdio.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/uClibc_stdio.h:
+
+/home/harry/hik_toolchain/arm-linux/include/wchar.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/uClibc_mutex.h:
+
+/home/harry/hik_toolchain/arm-linux/include/pthread.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sched.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/uClibc_clk_tck.h:
+
+/home/harry/hik_toolchain/arm-linux/include/signal.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/initspin.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/sigthread.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/uClibc_pthread.h:
+
+/home/harry/hik_toolchain/bin/../lib/gcc/arm-linux/3.4.6/include/stdarg.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/stdio_lim.h:
+
+/home/harry/hik_toolchain/arm-linux/include/assert.h:
+
+/home/harry/hik_toolchain/arm-linux/include/errno.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/errno.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/errno_values.h:
+
+setup_once.h:
+
+/home/harry/hik_toolchain/arm-linux/include/stdlib.h:
+
+/home/harry/hik_toolchain/arm-linux/include/alloca.h:
+
+/home/harry/hik_toolchain/arm-linux/include/string.h:
+
+/home/harry/hik_toolchain/arm-linux/include/ctype.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/uClibc_touplow.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/stat.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/stat.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/time.h:
+
+/home/harry/hik_toolchain/bin/../lib/gcc/arm-linux/3.4.6/include/stdbool.h:
+
+/home/harry/hik_toolchain/arm-linux/include/netinet/in.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/in.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/byteswap.h:
+
+/home/harry/hik_toolchain/arm-linux/include/unistd.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/posix_opt.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/confname.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/getopt.h:
+
+/home/harry/hik_toolchain/arm-linux/include/netdb.h:
+
+/home/harry/hik_toolchain/arm-linux/include/rpc/netdb.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/netdb.h:
+
+/home/harry/hik_toolchain/arm-linux/include/arpa/inet.h:
+
+/home/harry/hik_toolchain/arm-linux/include/net/if.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/ioctl.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/ioctls.h:
+
+/home/harry/hik_toolchain/arm-linux/include/asm/ioctls.h:
+
+/home/harry/hik_toolchain/arm-linux/include/asm/ioctl.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/ioctl-types.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/ttydefaults.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/param.h:
+
+/home/harry/hik_toolchain/arm-linux/include/linux/param.h:
+
+/home/harry/hik_toolchain/arm-linux/include/asm/param.h:
+
+urldata.h:
+
+cookie.h:
+
+../include/curl/curl.h:
+
+../include/curl/curlver.h:
+
+../include/curl/curlrules.h:
+
+../include/curl/easy.h:
+
+../include/curl/multi.h:
+
+../include/curl/curl.h:
+
+formdata.h:
+
+timeval.h:
+
+http_chunks.h:
+
+hostip.h:
+
+hash.h:
+
+llist.h:
+
+curl_addrinfo.h:
+
+/home/harry/hik_toolchain/arm-linux/include/setjmp.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/setjmp.h:
+
+splay.h:
+
+transfer.h:
+
+sendf.h:
+
+telnet.h:
+
+connect.h:
+
+../include/curl/mprintf.h:
+
+arpa_telnet.h:
+
+curl_memory.h:
+
+select.h:
+
+/home/harry/hik_toolchain/arm-linux/include/sys/poll.h:
+
+/home/harry/hik_toolchain/arm-linux/include/bits/poll.h:
+
+strequal.h:
+
+rawstr.h:
+
+memdebug.h:

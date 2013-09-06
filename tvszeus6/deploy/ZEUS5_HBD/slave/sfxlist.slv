@@ -1,0 +1,17 @@
+./dvr
+./dvr/arrow.cursor
+./dvr/dvrip.conf
+./dvr/dvrsvr
+./dvr/firmwareid
+./dvr/start.sh
+./dvr/freemono18.font
+./dvr/freemono32.font
+./dvr/nfile
+./dvr/libfbdraw.so
+./dvr/mono18.font
+./dvr/mono32.font
+./dvr/mono32b.font
+./dvr/passwd
+./dvr/slaveip
+./initrun.sh
+./sfxrun

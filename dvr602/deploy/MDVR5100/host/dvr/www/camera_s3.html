@@ -1,0 +1,434 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<link href="eagle510x.css" rel="stylesheet" type="text/css" /><title>Camera Setup Page</title>
+<script type="text/javascript" src="eagle510x.js"></script>
+</head>
+<body>
+<!--#include file="header.i"-->
+<div class="tabs">
+<ul>
+<li><a onclick="on_system_click()"><span>System</span></a></li>
+<li class="current"><a onclick="on_camera_click()"><span>Camera</span></a></li>
+<li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
+<li><a onclick="on_network_click()"><span>Network</span></a></li>
+<li><a onclick="on_status_click()"><span>Status</span></a></li>
+<li><a onclick="on_tools_click()"><span>Tools</span></a></li>
+</ul>
+</div>
+<div class="tabs" id="id_camera_tabs">
+<ul>
+
+<script type="text/javascript">
+ var formdata = 
+ <!--#include file="camera_value" --> 
+ ;
+ formdata.nextcameraid=formdata.cameraid ;
+ var num_camera = <!--#include file="camera_number" --> ;
+ for(i=1; i<=num_camera; i++ ) {
+    document.write("<li");
+    if( i==formdata.cameraid ) {
+        document.write(" class=\"current\" " );
+    } 
+    document.write("><a onclick=\"on_camera_n_click( "+i+" )\"><span>Camera"+i+"</span></a></li>" );
+ }
+</script>
+
+</ul>
+</div>
+
+<p>&nbsp;</p>
+
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="apply.html">
+
+<input name="page" value="camera" type="hidden" />
+<input id="id_cameraid" name="cameraid" value="1" type="hidden" />
+<input id="id_nextcameraid" name="nextcameraid" value="1" type="hidden" />
+
+<table cellspacing="5">
+<tbody>
+
+<tr>
+<td class="col1"><label for="id_enable_camera">Enable
+Camera :</label> </td>
+<td><input name="enable_camera" id="id_enable_camera" value="on" type="checkbox" /></td>
+</tr>
+
+<tr>
+<td class="col1">Camera Name:</td>
+<td><input name="camera_name" /></td>
+</tr>
+
+<!--
+<tr>
+<td class="col1"><label for="id_disableaudio">Disable Audio:</label> </td>
+<td><input name="disableaudio" id="id_disableaudio" value="on" type="checkbox" /></td>
+</tr>
+-->
+
+<tr>
+<td class="col1">Recording Mode:</td>
+<td>
+<select name="recording_mode">
+    <option value="0">Continue</option>
+    <option value="1">Trigger by sensor</option>
+    <option value="2">Trigger by motion</option>
+    <option value="3">Trigger by sensor/motion</option>
+    <option value="-1">No recording</option>
+</select>
+</td>
+</tr>
+<tr>
+<td>&nbsp; &nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1">Frame Rate:</td>
+<td>
+<select name="frame_rate">
+    <option value="1">1</option>
+    <option value="2">2</option>
+    <option value="5">5</option>
+    <option value="8">8</option>
+    <option value="10">10</option>
+    <option value="12">12</option>
+</select>
+</td>
+</tr>
+
+<!--
+<tr>
+<td class="col1">Key Frame Interval (12-400):</td>
+<td><input name="key_interval" /></td>
+</tr>
+
+<tr>
+<td class="col1">B Frame number (0 or 2):</td>
+<td><input name="b_frames" /></td>
+</tr>
+
+<tr>
+<td class="col1">P Frame number:</td>
+<td><input name="p_frames" /></td>
+</tr>
+-->
+
+<tr>
+<td class="col1">Bit Rate Mode:</td>
+<td>
+<select name="bit_rate_mode">
+ <option value="0">Disable</option>
+ <option value="1">VBR</option>
+ <option value="2">CBR</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Bit Rate:</td>
+<td>
+<select name="bit_rate">
+    <option value="20000">20 Kbps</option>
+    <option value="32000">32 Kbps</option>
+    <option value="48000">48 Kbps</option>
+    <option value="64000">64 Kbps</option>
+    <option value="128000">128 Kbps</option>
+    <option value="256000">256 Kbps</option>
+    <option value="384000">384 Kbps</option>
+    <option value="512000">512 Kpbs</option>
+    <option value="768000">768 Kbps</option>
+    <option value="1000000">1 Mbps</option>
+    <option value="1250000">1.25 Mbps</option>
+    <option value="1500000">1.5 Mbps</option>
+    <option value="1750000">1.75 Mbps</option>
+    <option value="2000000">2 Mbps</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Picture Quality:</td>
+<td>
+<select name="picture_quaity">
+    <option value="8">highest</option>
+    <option value="7">high</option>
+    <option value="6">medium</option>
+    <option value="5">low</option>
+    <option value="4">lowest</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Brightness:</td>
+<td>
+<select name="brightness">
+    <option value="0">0</option>
+    <option value="1">1</option>
+    <option value="2">2</option>
+    <option value="3">3</option>
+    <option value="4">4</option>
+    <option value="5">5</option>
+    <option value="6">6</option>
+    <option value="7">7</option>
+    <option value="8">8</option>
+    <option value="9">9</option>
+    <option value="10">10</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Contrast:</td>
+<td>
+<select name="contrast">
+    <option value="0">0</option>
+    <option value="1">1</option>
+    <option value="2">2</option>
+    <option value="3">3</option>
+    <option value="4">4</option>
+    <option value="5">5</option>
+    <option value="6">6</option>
+    <option value="7">7</option>
+    <option value="8">8</option>
+    <option value="9">9</option>
+    <option value="10">10</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Saturation:</td>
+<td>
+<select name="saturation">
+  <option value="0">0</option>
+  <option value="1">1</option>
+  <option value="2">2</option>
+  <option value="3">3</option>
+  <option value="4">4</option>
+  <option value="5">5</option>
+  <option value="6">6</option>
+  <option value="7">7</option>
+  <option value="8">8</option>
+  <option value="9">9</option>
+  <option value="10">10</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Hue:</td>
+<td>
+<select name="hue">
+  <option value="0">0</option>
+  <option value="1">1</option>
+  <option value="2">2</option>
+  <option value="3">3</option>
+  <option value="4">4</option>
+  <option value="5">5</option>
+  <option value="6">6</option>
+  <option value="7">7</option>
+  <option value="8">8</option>
+  <option value="9">9</option>
+  <option value="10">10</option>
+</select>
+</td>
+</tr>
+
+<script type="text/javascript">
+
+var sensor_value = 
+<!--#include file="sensor_value" -->
+;
+
+function getsensornumber() {
+    return sensor_value.sensor_number ;
+}
+
+function getsensorname( sensor ) 
+{
+    return sensor_value["sensor"+sensor+"_name"] ;
+}
+
+var num_sensor = getsensornumber() ;
+ 
+for( i=1; i<=num_sensor; i++ ) {
+    document.write( 
+        "<tr>" ,
+        "<td class=\"col1\">",
+        "<select name=\"sensor"+i+"\" value=\"0\">" );
+    for( j=1; j<=num_sensor; j++ ) {
+        document.write( "<option value=\""+j+"\">"+getsensorname(j)+"</option>" );
+    }
+    document.write( 
+        "</select>",
+        "</td>",
+        "<td>",
+        "<input name=\"sensor"+i+"_trigger\" value=\"on\" id=\"id_sensor"+i+"_trigger\" type=\"checkbox\" /> " ,
+        "<label for=\"id_sensor"+i+"_trigger\">Trigger</label> &nbsp; &nbsp; &nbsp; &nbsp; ",
+        "<input name=\"sensor"+i+"_osd\" id=\"id_sensor"+i+"_osd\" value=\"on\" type=\"checkbox\" />",
+        "<label for=\"id_sensor"+i+"_osd\">OSD</label>",
+        "</td>",
+        "</tr>" );
+}
+</script>
+
+<tr>
+<td class="col1">Pre-Recording Time (s):</td>
+<td><input name="pre_recording_time" /></td>
+</tr>
+
+<tr>
+<td class="col1">Post-Recording Time (s):</td>
+<td><input name="post_recording_time" /></td>
+</tr>
+
+<tr>
+<td>&nbsp; &nbsp;<br />
+</td>
+<td>
+<br />
+</td>
+</tr>
+
+<tr>
+<td class="col1"><label for="id_show_gps">Show
+GPS Speed On
+OSD:</label></td>
+<td><input id="id_show_gps" name="show_gps" value="on" type="checkbox" /><br />
+</td>
+</tr>
+
+<tr>
+<td class="col1">Speed Display:</td>
+<td>
+<select name="speed_display"><option value="0">mph</option><option value="1">km/h</option></select>
+<br />
+</td>
+</tr>
+
+<tr>
+<td class="col1"><label for="id_show_gps_coordinate">Show GPS Coordinate On OSD:</label></td>
+<td><input id="id_show_gps_coordinate" name="show_gps_coordinate" value="on" type="checkbox" /><br />
+</td>
+</tr>
+
+<tr>
+<td>&nbsp;&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1">Recording Alarm:</td>
+<td>Mode:
+<select name="record_alarm_mode">
+  <option value="0">OFF</option>
+  <option value="1">ON</option>
+  <option value="2">0.5s Flash</option>
+  <option value="3">1s Flash</option>
+  <option value="4">2s Flash</option>
+  <option value="5">4s Flash</option>
+  <option value="6">8s Flash</option>
+</select>
+LED:
+<select name="record_alarm_led">
+<script type="text/javascript">
+var led_number = <!--#include ln="led_number" --> ;
+for(i=0;i<led_number; i++) {
+document.write("<option value=\""+i+"\"> "+(i+1)+" </option>" );
+}
+</script>
+</select>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Video Lost Alarm:</td>
+<td>Mode:
+<select name="video_lost_alarm_mode">
+  <option value="0">OFF</option>
+  <option value="1">ON</option>
+  <option value="2">0.5s Flash</option>
+  <option value="3">1s Flash</option>
+  <option value="4">2s Flash</option>
+  <option value="5">4s Flash</option>
+  <option value="6">8s Flash</option>
+</select>
+LED:
+<select name="video_lost_alarm_led">
+<script type="text/javascript">
+for(i=0;i<led_number; i++) {
+document.write("<option value=\""+i+"\"> "+(i+1)+" </option>" );
+}
+</script>
+</select>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Motion Alarm:</td>
+<td>Mode:
+<select name="motion_alarm_mode">
+  <option value="0">OFF</option>
+  <option value="1">ON</option>
+  <option value="2">0.5s Flash</option>
+  <option value="3">1s Flash</option>
+  <option value="4">2s Flash</option>
+  <option value="5">4s Flash</option>
+  <option value="6">8s Flash</option>
+</select>
+LED:
+<select name="motion_alarm_led">
+<script type="text/javascript">
+  for(i=0;i<led_number; i++) {
+     document.write("<option value=\""+i+"\"> "+(i+1)+" </option>" );
+ }
+</script>
+</select>
+</td>
+</tr>
+
+<tr>
+<td></td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1">Motion Sensitivity:</td>
+<td>
+<select name="motion_sensitivity">
+<option value="1">1</option>
+<option value="2">2</option>
+<option value="3">3</option>
+<option value="4">4</option>
+<option value="5">5</option>
+<option value="6">6</option>
+<option value="7">7</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<td>&nbsp;&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td>
+</td>
+<td> <input id="id_apply" value="Apply" type="submit" />
+</td>
+</tr>
+
+</tbody>
+</table>
+</form>
+
+<script type="text/javascript">
+  JSONinitfield( formdata );
+</script>
+
+</body>
+</html>

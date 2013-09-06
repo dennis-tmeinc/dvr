@@ -212,6 +212,32 @@ int main()
             fprintf(fvalue, "\"file_time\":\"%s\",", (char *)value );
         }
 
+        // check and format CF card
+        value = dvrconfig.getvalue("system", "fscktimeout");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"fscktimeout\":\"%s\",", (char *)value );
+        }
+
+        ivalue = dvrconfig.getvalueint("system", "checkinternalCF");
+        if( ivalue ) {
+            fprintf(fvalue, "\"checkinternalCF\":\"on\"," );
+        }
+
+        ivalue = dvrconfig.getvalueint("system", "formatinternalCF");
+        if( ivalue ) {
+            fprintf(fvalue, "\"formatinternalCF\":\"on\"," );
+        }
+
+        ivalue = dvrconfig.getvalueint("system", "checkexternalCF");
+        if( ivalue ) {
+            fprintf(fvalue, "\"checkexternalCF\":\"on\"," );
+        }
+
+        ivalue = dvrconfig.getvalueint("system", "formatexternalCF");
+        if( ivalue ) {
+            fprintf(fvalue, "\"formatexternalCF\":\"on\"," );
+        }
+
         // pre_lock_time
         value = dvrconfig.getvalue("system", "prelock");
         if( value.length()>0 ) {

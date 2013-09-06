@@ -28,8 +28,7 @@ mkdir /etc/dvr
 ln -sf /davinci/dvr/dvrsvr.conf /etc/dvr/dvr.conf
 
 # set debugging ip address
-boardid=`cat /davinci/ID/BOARDID`
-ifconfig eth0 192.168.243.${boardid}
+ifconfig eth0 172.27.236.41
 
 # setup initial TZ environment
 cd /davinci/dvr

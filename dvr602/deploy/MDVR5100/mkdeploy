@@ -1,0 +1,372 @@
+#!/bin/sh
+
+# Changes:
+# 08/13/2009 Harrison
+#   1. changed filebuffersize to 1024k for mDVR602
+# 09/11/2009 Harrison
+#   1. added tab102, smartupload
+# 09/18/2009 Harrison
+#   1. added special version 3
+#      - fixed resolution 528x320
+#      - frame rate up to only 12fps
+#      - fixed minimum disk space 2000M
+# 09/28/2009 Harrison
+#   1. added fw_printenv
+#   2. changed major version to 2
+# 10/08/2009 Harrison
+#   1. GPS disabled on 602 by default
+# 11/17/2009 Harrison
+#   1. Special verion for 602: Disable wifi during IGN On
+# 11/19/2009 Harrison
+#   1. Removed HOST version for special versions
+# 3/2/2010 Harrison
+#   1. Added GForce support
+# 3/8/2012 Harrison
+#   1. added broadcast
+
+if [ $# -lt 2 ]; then
+  echo 'Usage mkdeplay <APPID> <boardnumber>'
+  exit 1
+fi
+
+PATH=~/proj/eagle32/hik_toolchain/bin:/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin
+
+DEPROOT=$PWD
+
+DATENTIME=`date +%y.%m%d.%H`
+#DATENTIME=11.0421.17
+
+OUTPUTDIR=${DEPROOT}/${DATENTIME}
+
+appid=$1
+
+app602="0"
+if [ ${appid} = "MDVR602" -o ${appid} = "MDVR602m" ]; then
+  app602="1"
+fi
+
+mss="0"
+if [ ${appid} = "MDVR5102m" -o \
+     ${appid} = "MDVR5104m"  -o \
+     ${appid} = "MDVR5108m"  -o \
+     ${appid} = "MDVR602m" ]; then
+  mss="1"
+fi
+
+if [ ${appid} = "clean" ]; then
+
+# clean configure file
+  cd ${DEPROOT}/host/dvr
+  rm -f dvrsvr.conf
+  cd ${DEPROOT}/host/dvr/www
+  rm -f camera.html
+
+# clean slave firmware files
+    cd ${DEPROOT}/slave/dvr
+    rm -f dvrsvr libfbdraw.so nfile slaveip
+    rm -f firmwareid
+    cd ..
+    rm -f sfxrun
+    rm -f ../host/dvr/slvfw
+
+# clean host www files
+    cd ${DEPROOT}/host/dvr/www
+    rm -f applysetup eagle_setup eaglehttpd getsetup cfgdown.cgi dvrstatus.cgi
+    rm ../httpd.sfx
+
+# clean host firmware files
+    cd ${DEPROOT}/host/dvr
+    rm -f dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer libfbdraw.so tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
+    rm -f ../sfxrun  
+
+    exit 0
+fi
+
+if [ -z $2 ] ; then
+  boardnumber=1
+else
+  boardnumber=$2
+fi
+
+if [ -z $3 ] ; then
+ special="0"
+else
+ special=$3
+fi
+
+www_depfile=${DEPROOT}/www_depfile
+slvfw_depfile=${DEPROOT}/slvfw_depfile
+
+if [ $appid = "clean" ]; then
+    if [ -f ${www_depfile} ]; then
+        rm ${www_depfile}
+    fi
+    if [ -f ${slvfw_depfile} ]; then
+        rm ${slvfw_depfile}
+    fi
+
+    exit 0
+fi
+
+mkdir ${OUTPUTDIR}
+
+slvfirmwareid=MDVR5100.2.0.${DATENTIME}
+
+if [ ${special} = "1" ]; then
+  firmwareid=${appid}.2.1.${DATENTIME}
+  echo "Firmware ID: " $firmwareid
+  cd ${DEPROOT}/host/dvr
+  cp dvrsvr.conf.0 dvrsvr.tail
+  cd ${DEPROOT}/host/dvr/www
+  cp system_s0.html system.html
+  cp camera_s1.html camera.html
+  cp sensor_s0.html sensor.html
+  cd  ${DEPROOT}
+
+elif [ ${special} = "2" ]; then
+  firmwareid=${appid}.2.2.${DATENTIME}
+  echo "Firmware ID: " $firmwareid
+  cd ${DEPROOT}/host/dvr
+#  cp dvrsvr.conf.2 dvrsvr.conf
+  cp dvrsvr.conf.0 dvrsvr.conf
+  cd ${DEPROOT}/host/dvr/www
+  cp system_s0.html system.html
+  cp camera_s2.html camera.html
+  cp sensor_s0.html sensor.html
+  cd  ${DEPROOT}
+
+elif [ ${special} = "3" ]; then
+  firmwareid=${appid}.2.3.${DATENTIME}
+  echo "Firmware ID: " $firmwareid
+  cd ${DEPROOT}/host/dvr
+  cp dvrsvr.conf.0 dvrsvr.conf
+  cd ${DEPROOT}/host/dvr/www
+  cp system_s3.html system.html
+  cp camera_s3.html camera.html
+  cp sensor_s0.html sensor.html
+  cd  ${DEPROOT}
+
+elif [ ${special} = "4" ]; then
+  firmwareid=${appid}.2.4.${DATENTIME}
+  echo "Firmware ID: " $firmwareid
+  cd ${DEPROOT}/host/dvr
+  cp dvrsvr.conf.0 dvrsvr.conf
+  cd ${DEPROOT}/host/dvr/www
+  if [ $app602 = "1" ] ; then
+    cp system_s4.html system.html
+  else
+    cp system_s0.html system.html
+  fi
+  cp camera_s0.html camera.html
+  cp sensor_s0.html sensor.html
+  cd  ${DEPROOT}
+
+elif [ ${special} = "5" ]; then
+  firmwareid=${appid}.2.5.${DATENTIME}
+  echo "Firmware ID: " $firmwareid
+  cd ${DEPROOT}/host/dvr
+  cp dvrsvr.conf.0 dvrsvr.conf
+  cd ${DEPROOT}/host/dvr/www
+  cp system_s5.html system.html
+  cp camera_s0.html camera.html
+  cp sensor_s5.html sensor.html
+  cd  ${DEPROOT}
+
+elif [ ${special} = "cycle" ]; then
+  firmwareid=${appid}.2.cycle.${DATENTIME}
+  echo "Firmware ID: " $firmwareid
+  cd ${DEPROOT}/host/dvr
+  cp dvrsvr.conf.0 dvrsvr.conf
+  cd ${DEPROOT}/host/dvr/www
+  if [ $app602 = "1" ] ; then
+    cp system_s4.html system.html
+  else
+    cp system_s0.html system.html
+  fi
+  cp camera_s1.html camera.html
+  cp sensor_s0.html sensor.html
+  cd  ${DEPROOT}
+
+else
+  firmwareid=${appid}.2.0.${DATENTIME}
+  echo "Firmware ID: " $firmwareid
+  cd ${DEPROOT}/host/dvr
+  cp dvrsvr.conf.0 dvrsvr.conf
+  cd ${DEPROOT}/host/dvr/www
+  if [ $app602 = "1" ] ; then
+    cp system_s4.html system.html
+  else
+    cp system_s0.html system.html
+  fi
+  cp camera_s0.html camera.html
+  cp sensor_s0.html sensor.html
+  cd ${DEPROOT}
+
+fi
+
+if [ $app602 = "1" ] ; then
+  ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set system mindiskspace 200M
+  ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set system filebuffersize 2048k
+  ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set glog gpsdisable 1
+  ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set glog tab102b_enable 0
+  ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set glog gforce_log_enable 0
+  if [ ${special} = "3" ]; then
+    ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set system mindiskspace 2000M
+    ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set camera1 framerate 12
+    ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set camera2 framerate 12
+  fi
+  if [ ${special} = "4" ]; then
+    ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set glog gpsdisable 0
+    ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set glog serialport /dev/ttyUSB1
+    ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set network disable_wifi 1
+  fi
+  if [ ${special} = "5" ]; then
+    ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set io inputnum 14
+    ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set glog gpsdisable 0
+    ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set glog serialport /dev/ttyUSB1
+    ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set network disable_wifi 1
+    ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set glog tab102b_enable 1
+    ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set glog tab102b_port /dev/ttyUSB0
+    ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/dvrsvr.conf set glog gforce_log_enable 0
+  fi
+fi
+
+#
+arm-linux-strip sfx
+
+# make slave firmware
+echo Making slave firmware...
+cd ${DEPROOT}/slave/dvr
+
+echo copy executable files.
+cp -v ~/proj/eagle32/dvr/dvrsvr/dvrsvr .
+cp -v ~/proj/eagle32/dvr/dvrsvr/libfbdraw.so .
+cp -v ~/proj/eagle32/dvr/nfile/nfile .
+cp -v ~/proj/eagle32/dvr/eaglehost/slaveip .
+arm-linux-strip dvrsvr libfbdraw.so nfile slaveip
+cd ${DEPROOT}/slave
+echo ${firmwareid} > dvr/firmwareid
+cp sfxrun.upd sfxrun
+${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.slv ../host/dvr/slvfw 
+chmod a+x ../host/dvr/slvfw
+
+cp sfxrun.dep sfxrun
+# make second board deploy firmware
+if [ ${boardnumber} -ge 2 ] ; then
+  slvfwfile=${OUTPUTDIR}/SLV2_DEP_${slvfirmwareid}.FW
+  if [ ! -f ${slvfwfile} ]; then
+    echo "Makeing 2nd board deploy firmware..."
+    echo 2 > ID/BOARDID
+    echo "slave.2.firmware" > dvr/firmwareid
+    ${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.dep ${slvfwfile}
+    chmod a+x ${slvfwfile}
+  fi
+fi
+
+# make 3rd board deploy firmware
+if [ ${boardnumber} -ge 3 ] ; then
+  slvfwfile=${OUTPUTDIR}/SLV3_DEP_${slvfirmwareid}.FW
+  if [ ! -f ${slvfwfile} ]; then
+    echo "Makeing 3rd board deploy firmware..."
+    echo 3 > ID/BOARDID
+    echo "slave.3.firmware" > dvr/firmwareid
+    ${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.dep ${slvfwfile}
+    chmod a+x ${slvfwfile}
+  fi
+fi
+
+# make 4th board deploy firmware
+if [ ${boardnumber} -ge 4 ] ; then
+  slvfwfile=${OUTPUTDIR}/SLV4_DEP_${slvfirmwareid}.FW
+  if [ ! -f ${slvfwfile} ]; then
+    echo "Makeing 4th board deploy firmware..."
+    echo 4 > ID/BOARDID
+    echo "slave.4.firmware" > dvr/firmwareid
+    ${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.dep ${slvfwfile}
+    chmod a+x ${slvfwfile}
+  fi
+fi
+
+# makeing host board deploy firmware
+cd ${DEPROOT}/host/dvr
+if   [ ${boardnumber} -eq 1 ] ; then
+  ${DEPROOT}/cfgpc -f./dvrsvr.conf set system totalcamera 2
+elif [ ${boardnumber} -eq 2 ] ; then
+  ${DEPROOT}/cfgpc -f./dvrsvr.conf set system totalcamera 4
+elif [ ${boardnumber} -eq 3 ] ; then
+  ${DEPROOT}/cfgpc -f./dvrsvr.conf set system totalcamera 6
+elif [ ${boardnumber} -eq 4 ] ; then
+  ${DEPROOT}/cfgpc -f./dvrsvr.conf set system totalcamera 8
+else
+  echo "Error! Unsupported boardnumber - " ${boardnumber}
+  exit 1
+fi
+
+cp ${DEPROOT}/host/dvr/dvrsvr.conf ${DEPROOT}/host/dvr/default.conf
+
+cd ${DEPROOT}/host/dvr/www
+echo "Build http files"
+cp -v ~/proj/eagle32/dvr/httpd/eaglehttpd .
+cp -v ~/proj/eagle32/dvr/httpd/getsetup/getsetup .
+cp -v ~/proj/eagle32/dvr/httpd/getsetup/applysetup .
+cp -v ~/proj/eagle32/dvr/httpd/eagle_setup/eagle_setup .
+cp -v ~/proj/eagle32/dvr/httpd//cfgdown/cfgdown.cgi .
+cp -v ~/proj/eagle32/dvr/httpd//cfgdown/dvrstatus.cgi .
+arm-linux-strip applysetup eagle_setup eaglehttpd getsetup cfgdown.cgi dvrstatus.cgi
+
+${DEPROOT}/mksfx ${DEPROOT}/sfx wwwlist ../httpd.sfx
+
+chmod a+x ../httpd.sfx
+
+cd ${DEPROOT}/host/ID
+echo ${boardnumber} > BOARDNUM
+echo ${appid} > APPID
+echo 1 > BOARDID
+
+echo Building Host deploy firmware.
+cd ${DEPROOT}/host/dvr
+echo copy dvr host files
+cp -v ~/proj/eagle32/dvr/dvrsvr/dvrsvr .
+cp -v ~/proj/eagle32/dvr/dvrsvr/libfbdraw.so .
+cp -v ~/proj/eagle32/dvr/dvrtime/dvrtime .
+cp -v ~/proj/eagle32/dvr/eaglehost/eaglehost .
+cp -v ~/proj/eagle32/dvr/glog/glog .
+cp -v ~/proj/eagle32/dvr/ioprocess/ioprocess .
+cp -v ~/proj/eagle32/dvr/ioprocess/devicepower  .
+cp -v ~/proj/eagle32/dvr/ioprocess/panelled  .
+cp -v ~/proj/eagle32/dvr/ioprocess/buzzer  .
+cp -v ~/proj/eagle32/dvr/tdev/tdevd .
+cp -v ~/proj/eagle32/dvr/tdev/tdevmount .
+cp -v ~/proj/eagle32/dvr/usbgenkey/usbcheck .
+cp -v ~/proj/eagle32/dvr/tmeft/tmefile .
+cp -v ~/proj/eagle32/dvr/volumeid/md5check .
+cp -v ~/proj/eagle32/dvr/volumeid/volumeid .
+cp -v ~/proj/eagle32/dvr/cfg/cfg .
+cp -v ~/proj/eagle32/dvr/cfgsync/cfgsync .
+cp -v ~/proj/eagle32/dvr/tab102/tab102 .
+cp -v ~/proj/eagle32/dvr/smartupload/smartftp .
+if [ $mss = "1" ] ; then
+cp -v ~/proj/eagle32/dvr/smartupload2/smartftp .
+fi
+cp -v ~/proj/eagle32/dvr/fw_env/fw_printenv .
+cp -v ~/proj/eagle32/dvr/udhcp/udhcpc .
+cp -v ~/proj/eagle32/dvr/gforce_conv/gforce_conv .
+cp -v ~/proj/eagle32/dvr/vter/vter .
+cp -v ~/proj/eagle32/dvr/broadcast/broadcast .
+
+arm-linux-strip dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer libfbdraw.so tdevd tdevmount usbcheck tmefile md5check volumeid cfg cfgsync tab102 smartftp fw_printenv udhcpc gforce_conv vter broadcast
+cd ${DEPROOT}/host
+echo ${firmwareid} > dvr/firmwareid
+cp  sfxrun.dep  sfxrun
+${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.dep ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW
+chmod a+x ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW
+
+if [ ${special} = "0" -o ${special} = "4" -o ${special} = "5" ]; then
+  echo Building Host update firmware
+  cp  sfxrun.upd  sfxrun
+  ${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.upd ${OUTPUTDIR}/HOST_${firmwareid}.FW
+  chmod a+x ${OUTPUTDIR}/HOST_${firmwareid}.FW
+fi
+
+echo Finish!
+

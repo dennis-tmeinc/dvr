@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<root>
+	<network_config>
+		<net_type>static</net_type>
+		<ip_addr>192.168.1.221</ip_addr>
+		<subnet_mask>255.255.0.0</subnet_mask>
+		<gateway>172.17.0.1</gateway>
+		<pri_nameserver>192.168.0.20</pri_nameserver>
+		<sec_nameserver></sec_nameserver>
+		<dns>
+			<fromDHCP>false</fromDHCP>
+			<searchdomain>
+				<name id="0">VN.com</name>
+			</searchdomain>
+		</dns>
+		<pppoe>
+			<username></username>
+			<password></password>
+		</pppoe>
+		<zero_config>
+			<enable>false</enable>
+			<address></address>
+		</zero_config>
+	</network_config>
+</root>

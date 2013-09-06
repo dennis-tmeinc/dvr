@@ -1,0 +1,84 @@
+#!/bin/sh
+
+echo Start update MDVR614 firmware...
+echo Kill processes...
+if [ -f /var/dvr/dvrsvr.pid ] ; then
+  kill `cat /var/dvr/dvrsvr.pid` 
+fi
+
+if [ -f /var/dvr/glog.pid ] ; then
+  kill `cat /var/dvr/glog.pid`
+fi
+
+if [ -f /var/dvr/ioprocess.pid ] ; then
+   kill `cat /var/dvr/ioprocess.pid`
+fi
+
+for i in 1 2 3 4 5 6 7 8 9 10 ; do
+  if [ -f /var/dvr/ioprocess.pid ] ; then
+    sleep 2
+  else
+    break;
+  fi
+done
+
+for i in 1 2 3 4 5 6 7 8 9 10 ; do
+  if [ -f /var/dvr/dvrsvr.pid ] ; then
+    sleep 2
+  else
+    break;
+  fi
+done
+
+for i in 1 2 3 4 5 6 7 8 9 10 ; do
+  if [ -f /var/dvr/glog.pid ] ; then
+    sleep 2
+  else
+    break;
+  fi
+done
+
+# copy fw_printenv to ram in case downgrading
+#cp /davinci/dvr/fw_printenv /var
+#ln -s /var/fw_printenv /var/fw_setenv
+
+# remove old files
+#rm -f -r /dav/dvr/*
+
+# start copying files
+echo Copying file to /dav, please wait.
+cp -rf  * /mnt/nand
+rm /mnt/nand/sfxrun
+sync
+
+
+cd /mnt/nand/dvr
+
+echo Firmware update complete. 
+echo New Version:
+cat firmwareid
+echo
+echo Turn off system power and turn on power again.
+
+# check if we are downgrading from 2.xxx to 1.xxx
+#v1=`cat /davinci/dvr/firmwareid`
+#v2=${v1#*.}
+#v3=${v2%%.*}
+#if [ $v3 = "1" ]; then
+#  v_bootargs=`/var/fw_printenv bootargs`
+#  old_bootargs=${v_bootargs#bootargs=}
+#  old_console=${old_bootargs%%initrd*M}
+#  old_initrd=${old_bootargs#console=*n8}
+#  if [ $old_console = console=ttyS2,115200n8 ]; then
+#    new_bootargs="console=ttyS0,115200n8 "$old_initrd 
+#    echo $new_bootargs
+#    /var/fw_setenv bootargs $new_bootargs
+#  fi
+#fi
+
+if [ -f /var/dvr/mcuversion ] ; then
+  cd /mnt/nand/dvr
+ ./ioprocess -reboot 8
+fi
+
+

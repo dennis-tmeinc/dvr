@@ -89,6 +89,13 @@ wifi_on=0
 # pwii police ID list file
 pwii_policeidlistfile=/davinci/dvr/policeidlist
 
+fscktimeout=200
+internaldisk=../../devices/platform/musb_hdrc/usb1/1-1/1-1.4/1-1.4:1.0/host0/target0:0:0/0:0:0:0
+checkinternalCF=1
+formatinternalCF=1
+checkexternalCF=0
+formatexternalCF=0
+
 [network]
 port=15112
 livefifo=20000
@@ -538,7 +545,7 @@ startchannel=0
 keepcapture=1
 resource=/dav/dvr/resource
 nostartmenu=1
-nomenu=1
+nomenu=0
 
 [pwii]
 front=0

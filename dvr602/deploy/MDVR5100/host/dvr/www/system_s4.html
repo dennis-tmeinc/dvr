@@ -1,0 +1,315 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<link href="eagle510x.css" rel="stylesheet" type="text/css" /><title>System Setup Page</title>
+
+<script type="text/javascript" src="eagle510x.js"></script>
+</head>
+
+<body>
+<!--#include file="header.i"-->
+<div class="tabs">
+<ul>
+<li class="current"><a onclick="on_system_click()"><span>System</span></a></li>
+<li><a onclick="on_camera_click()"><span>Camera</span></a></li>
+<li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
+<li><a onclick="on_network_click()"><span>Network</span></a></li>
+<li><a onclick="on_status_click()"><span>Status</span></a></li>
+<li><a onclick="on_tools_click()"><span>Tools</span></a></li>
+</ul>
+</div>
+<p>&nbsp;</p>
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="apply.html">
+<input name="page" value="system" type="hidden" />
+<table>
+<tbody>
+<tr>
+<td class="col1">DVR Server Name:</td>
+<td><input name="dvr_server_name" /></td>
+</tr>
+<tr>
+<td class="col1">Admin Password:</td>
+<td><input name="password" value="" type="password" /></td>
+</tr>
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+<tr>
+<td class="col1">DVR Time Zone:</td>
+<td>
+</td>
+</tr>
+<tr>
+<td colspan="2">
+&nbsp; &nbsp;&nbsp; &nbsp;
+<select size="1" name="dvr_time_zone" id="id_dvr_time_zone"><!--#include file="tz_option" --></select>
+</td>
+<td></td>
+</tr>
+<tr>
+<td class="col1">Shutdown Delay
+(seconds):</td>
+<td><input name="shutdown_delay" /></td>
+</tr>
+<tr>
+<td class="col1">Standby Time
+(seconds):</td>
+<td><input name="standbytime" /></td>
+</tr>
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+<tr>
+<td class="col1">Maximum File Size(MB):</td>
+<td><input name="file_size" /></td>
+</tr>
+<tr>
+<td class="col1">Maximum File Time(s):</td>
+<td><input name="file_time" /></td>
+</tr>
+
+<tr>
+<td class="col1">Minimum Available Disk Space(MB):</td>
+<td><input name="minimun_disk_space" /></td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+<tr>
+<td class="col1">Event Pre-Lock Time (s):</td>
+<td><input name="pre_lock_time" /></td>
+</tr>
+<tr>
+<td class="col1">Event Post-Lock Time (s):</td>
+<td><input name="post_lock_time" /></td>
+</tr>
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1"><label for="id_norecplayback">Stop Recording When Play Back:</label></td>
+<td><input name="norecplayback" id="id_norecplayback" value="on" type="checkbox" /></td>
+</tr>
+<tr>
+
+<tr>
+<td class="col1"><label for="id_noreclive">Stop Recording When Live View:</label></td>
+<td><input name="noreclive" id="id_noreclive" value="on" type="checkbox" /></td>
+</tr>
+<tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+
+<tr>
+<td class="col1"><label for="id_en_file_encryption">Enable
+File Encryption:</label></td>
+<td><input name="en_file_encryption" id="id_en_file_encryption" value="on" type="checkbox" /></td>
+</tr>
+<tr>
+<td class="col1">File Encryption
+Password:</td>
+<td><input name="file_password" type="password" /></td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1"><label for="id_en_gpslog">Enable GPS:</label></td>
+<td><input name="en_gpslog" id="id_en_gpslog" value="on" type="checkbox" /></td>
+</tr>
+
+<tr>
+<td class="col1">GPS port:</td>
+<td>
+<select name="gpsport">
+    <option value="/dev/ttyS0">COM1</option>
+    <option value="/dev/ttyUSB0">USB0</option>
+    <option value="/dev/ttyUSB1">USB1</option>
+</select>
+</td>
+</tr>
+
+
+<tr>
+<td class="col1">GPS Baudrate:</td>
+<td>
+<select name="gpsbaudrate">
+    <option value="4800">4800</option>
+    <option value="9600">9600</option>
+    <option value="19200">19200</option>
+    <option value="38400">38400</option>
+    <option value="57600">57600</option>
+</select>
+</td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1"><label for="id_en_buzzer">Enable Buzzer:</label></td>
+<td><input name="en_buzzer" id="id_en_buzzer" value="on" type="checkbox" /></td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1"><label for="id_en_upload">Enable Smart Upload:</label></td>
+<td><input name="en_upload" id="id_en_upload" value="on" type="checkbox" /></td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1"><label for="id_en_gforce">Enable Gforce(reboot required):</label></td>
+<td><input name="en_gforce" id="id_en_gforce" value="on" type="checkbox" /></td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr id="id_gforce_forward" >
+<td class="col1">G-Force Direction - Forward:</td>
+<td>
+<select name="gforce_forward">
+    <option value="0">Front</option>
+    <option value="1">Back</option>
+    <option value="2">Right</option>
+    <option value="3">Left</option>
+    <option value="4">Bottom</option>
+    <option value="5">Top</option>
+</select>
+</td>
+</tr>
+
+<tr id="id_gforce_upward" >
+<td class="col1">G-Force Direction - Upward:</td>
+<td>
+<select name="gforce_upward">
+    <option value="0">Front</option>
+    <option value="1">Back</option>
+    <option value="2">Right</option>
+    <option value="3">Left</option>
+    <option value="4">Bottom</option>
+    <option value="5">Top</option>
+</select>
+</td>
+</tr>
+
+<tr id="id_gforce_forward_trigger" >
+<td class="col1">G-Force Forward Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_forward_base" size="5" />&nbsp;
+Peak&nbsp;<input name="gforce_forward_trigger" size="5" />&nbsp;
+Upload&nbsp;<input name="gforce_forward_event" size="5" />&nbsp;
+Crash&nbsp;<input name="gforce_forward_crash" size="5" />
+</td>
+</tr>
+<tr id="id_gforce_backward_trigger" >
+<td class="col1">G-Force Backward Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_backward_base" size=5 />&nbsp;
+Peak&nbsp;<input name="gforce_backward_trigger" size=5 />&nbsp;
+Upload&nbsp;<input name="gforce_backward_event" size=5 />&nbsp;
+Crash&nbsp;<input name="gforce_backward_crash" size=5 />
+</td>
+</tr>
+<tr id="id_gforce_right_trigger" >
+<td class="col1">G-Force Right Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_right_base" size=5 />&nbsp;
+Peak&nbsp;<input name="gforce_right_trigger" size=5 />&nbsp;
+Upload&nbsp;<input name="gforce_right_event" size=5 />&nbsp;
+Crash&nbsp;<input name="gforce_right_crash" size=5 />
+</td>
+</tr>
+<tr id="id_gforce_left_trigger" >
+<td class="col1">G-Force Left Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_left_base" size=5 />&nbsp;
+Peak&nbsp;<input name="gforce_left_trigger" size=5 />&nbsp;
+Upload&nbsp;<input name="gforce_left_event" size=5 />&nbsp;
+Crash&nbsp;<input name="gforce_left_crash" size=5 />
+</td>
+</tr>
+<tr id="id_gforce_downward_trigger" >
+<td class="col1">G-Force Downward Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_downward_base" size=5 />&nbsp;
+Peak&nbsp;<input name="gforce_downward_trigger" size=5 />&nbsp;
+Upload&nbsp;<input name="gforce_downward_event" size=5 />&nbsp;
+Crash&nbsp;<input name="gforce_downward_crash" size=5 />
+</td>
+</tr>
+<tr id="id_gforce_upward_trigger" >
+<td class="col1">G-Force Upward Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_upward_base" size=5 />&nbsp;
+Peak&nbsp;<input name="gforce_upward_trigger" size=5 />&nbsp;
+Upload&nbsp;<input name="gforce_upward_event" size=5 />&nbsp;
+Crash&nbsp;<input name="gforce_upward_crash" size=5 />
+</td>
+</tr>
+
+<tr id="id_gforce_enable_peak" >
+<td class="col1"><label for="id_en_peak">Show Impact Value On OSD:</label></td>
+<td><input name="en_peak" id="id_en_peak" value="on" type="checkbox" /></td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td></td>
+<td> <input id="id_apply" value="Apply" type="submit" />
+</td>
+</tr>
+</tbody>
+</table>
+</form>
+<script type="text/javascript">
+var formdata = 
+<!--#include file="system_value" --> 
+;
+JSONinitfield( formdata );
+
+if( formdata.en_gforce != "on" ) {
+    document.getElementById('id_gforce_forward').style.display="none" ;
+    document.getElementById('id_gforce_upward').style.display="none" ;
+    document.getElementById('id_gforce_forward_trigger').style.display="none" ;
+    document.getElementById('id_gforce_backward_trigger').style.display="none" ;
+    document.getElementById('id_gforce_right_trigger').style.display="none" ;
+    document.getElementById('id_gforce_left_trigger').style.display="none" ;
+    document.getElementById('id_gforce_upward_trigger').style.display="none" ;
+    document.getElementById('id_gforce_downward_trigger').style.display="none" ;
+    document.getElementById('id_gforce_enable_peak').style.display="none" ;
+}
+</script>
+</body>
+</html>

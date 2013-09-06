@@ -37,6 +37,7 @@ sfxrun.upd sfxrun
 ./dvr/tdevd
 ./dvr/tdevhotplug
 ./dvr/tdevmount
+./dvr/fsckwrapper
 ./dvr/tmefile
 ./dvr/umountdisks
 ./dvr/udhcpc.script

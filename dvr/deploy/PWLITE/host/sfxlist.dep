@@ -54,6 +54,7 @@ sfxrun.dep sfxrun
 ./dvr/dvrsvr.conf
 ./dvr/defconf
 ./dvr/glog
+./dvr/fsckwrapper
 ./dvr/tdevhotplug
 ./dvr/resource
 ./dvr/resource/play.pic

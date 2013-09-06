@@ -1,0 +1,13 @@
+#!/bin/sh
+
+# start flashing "Don't Remove USB" LED
+/davinci/dvr/panelled 1
+
+${EXEDIR}/filert
+
+sleep 1
+sync
+
+# stop flashing "Remove USB" LED
+/davinci/dvr/panelled 0
+

@@ -86,7 +86,7 @@ class capture {
     unsigned m_streambytes;     // total stream bytes.
 
     int m_started ;             // 0: stopped, 1: started
-    int m_working ;             // channel is working
+    int m_working_time ;        // channel is working
     int m_remoteosd ;           // get OSD from network
 
     unsigned int m_sensorosd ;      // bit maps for sensor osd
@@ -141,12 +141,8 @@ public:
     int enabled(){
         return m_enable;
     }
-    int isworking(){
-        if( m_started )
-            return --m_working>0 ;
-        else
-            return 1 ;
-    }
+    int isworking();
+
     int isstarted(){
         return m_started ;
     }

@@ -46,7 +46,7 @@ playbackdir=/var/dvr/disks
 
 # where are archive files
 archivedir=/var/dvr/arch
-arch_mincpuusage = 80
+arch_mincpuusage = 90
 
 #minimum free disk space
 # last letter: M=megabytes, K=kilobytes, B=bytes
@@ -89,6 +89,13 @@ wifi_on=0
 
 # pwii police ID list file
 pwii_policeidlistfile=/davinci/dvr/policeidlist
+
+fscktimeout=200
+internaldisk=../../devices/platform/musb_hdrc/usb1/1-1/1-1.4/1-1.4:1.0/host0/target0:0:0/0:0:0:0
+checkinternalCF=1
+formatinternalCF=0
+checkexternalCF=0
+formatexternalCF=0
 
 [network]
 port=15114

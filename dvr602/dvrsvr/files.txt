@@ -1,0 +1,135 @@
+LINUX DVR PROJECT SOURCE FILES
+
+main.cpp	-	program entry
+			* Start program
+			* Initialize every module
+			* call event module for tasks schedule
+			* Clean modules and quit program
+			* miscellaneous functions and variables
+			
+capture.cpp	-	video/audio capturing
+			* initial capture card
+			* start/stop capture video/audio stream data
+			* send video/audio stream data to network module for realtime preview
+			* send video/audio stream data to record module for recording
+
+config.cpp	-	
+
+disk.cpp	-	disk/file managment
+			* manage disk hot-plug
+			* maintain file list
+			* monitor disk space, free old stream data files
+
+dvrfile.cpp	-	dvr file operating
+			* video/audio stream data files operation
+			* read stream data frame by frame
+			* fast locating to specified time
+
+dvr.h		-	main header
+			* include file for all .cpp files
+			* exported functions and variables
+			* classes definitions
+
+dvrsvr.cpp	-	dvr network protocol
+			* dvr network protocl communicate with DVRClient
+			* receiving request from DVRClient
+			* receiving real video data from capture module
+			* support real time preview
+			* support play back of recorded video/audio data
+			* support PTZ control
+			* support video stream informations and server informations
+
+memory.cpp	-	memory managment
+			* managed dynamic memory allocation
+			* add reference to every memory block instead of copy memory, this is to improve performance when multiple instance access same memory contents (video frame data).
+
+netsvr.cpp	-	network service
+			* network interface to support dvrsvr module
+			* a seperate thread for network processing
+			* support IPV6
+
+ptz.cpp		-	ptz control
+			* PTZ camera support
+			* pelco-D, pelco-P
+
+record.cpp	-	video recording
+			* receiving video/audio data from capture module
+			* start/stop recording
+			* pre-recording video data (to support trigger recording mode)
+			  (store pre-recording data in memory if possible)
+			
+playback.cpp	-	play back support
+			* recorded data play back support
+			* fast locate video files by specified time
+			* fast locate file location by specified time
+			* keep key-frame index in memory to improve performations
+			* keep video availability information in memory
+
+event.cpp	-	message loop, scheduler
+			* manage event input/output
+			* event marker management
+			* trigger mode recording
+			* video signal monitor
+			* video motion detection monitor
+			* timers
+			* video recording management
+			* email message monitor
+			* network availabiliy monitor
+
+
+DVR SETUP HTTP SERVER
+			* a simple http server (included in busybox package)
+			* web pages to view/modify DVR setup
+				. dvr setup
+				. camera setup
+				. sensor/alarm setup
+				. schedule setup
+				. time zone information / time synchronize
+				. dvr status
+			* send command to DVR to reinitialize proper modules
+			* restart DVR
+	
+				
+LINUX IMAGE
+
+  Kernel:
+	linux-2.6.18.8-TME.0.1	- compiled from linux kernel version 2.6.18.8
+				  support IDE, USB, TCP/IP/IPV6 network
+  library:
+	ld-linux.so.2
+	libcrypt.so.1
+	libc.so.6
+	libdl.so.2
+	libfuse.so.2
+	libgcc_s.so.1
+	libhistory.so.5
+	libm.so.6
+	libncurses.so.5
+	libncursesw.so.5
+	libnsl.so.1
+	libnss_compat.so.2
+	libnss_dns.so.2
+	libnss_files.so.2
+	libnss_hesiod.so.2
+	libnss_nisplus.so.2
+	libnss_nis.so.2
+	libntfs-3g.so.0
+	libntfs.so.9
+	libpthread.so.0
+	libreadline.so.5
+	libresolv.so.2
+	librt.so.1
+	libselinux.so.1
+	libsepol.so.1
+	libstdc++.so.6
+	libthread_db.so.1
+
+  pre-install package:
+	busybox-1.4.2		- A small "all-included" linux utility
+	fuse-2.6.0		- user space fils sytem, to support NTFS file system
+	ntfsprogs-1.13.1	- NTFS file system utilities
+	ntfs-3g-1.0		- NTFS file system write support
+	e2fsprogs-1.39		- ext2 file system utilities. 
+	(same utilities from busybox have serious problem, will damage file system)
+
+

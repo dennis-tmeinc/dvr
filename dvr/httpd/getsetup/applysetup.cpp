@@ -299,6 +299,39 @@ int main()
             dvrconfig.setvalueint( "system", "maxfilelength", i );
         }
 
+        // check and format CF card
+        v = getsetvalue ("fscktimeout");
+        if( v ) {
+            sscanf( v, "%d", &i);
+            if( i<10 ) i=10 ;
+            if( i>1800 ) i=1800 ;
+            dvrconfig.setvalueint( "system", "fscktimeout", i );
+        }
+
+        v = getsetvalue ("bool_checkinternalCF");
+        if( v ) {
+            v = getsetvalue ("checkinternalCF");
+            dvrconfig.setvalueint( "system", "checkinternalCF", v==NULL?0:1 );
+        }
+
+        v = getsetvalue ("bool_formatinternalCF");
+        if( v ) {
+            v = getsetvalue ("formatinternalCF");
+            dvrconfig.setvalueint( "system", "formatinternalCF", v==NULL?0:1 );
+        }
+
+        v = getsetvalue ("bool_checkexternalCF");
+        if( v ) {
+            v = getsetvalue ("checkexternalCF");
+            dvrconfig.setvalueint( "system", "checkexternalCF", v==NULL?0:1 );
+        }
+
+        v = getsetvalue ("bool_formatexternalCF");
+        if( v ) {
+            v = getsetvalue ("formatexternalCF");
+            dvrconfig.setvalueint( "system", "formatexternalCF", v==NULL?0:1 );
+        }
+
         // pre lock time
         v = getsetvalue ("pre_lock_time");
         if( v ) {
@@ -933,6 +966,9 @@ int main()
     // write network_value
     fvalue = fopen( "network_value", "r");
     if( fvalue ) {
+        unsigned int n_ip, n_mask, n_bcast ;
+        unsigned int ip1, ip2, ip3, ip4 ;
+
         r=fread( buf, 1, sizeof(buf), fvalue );
         buf[r]=0;
         fclose(fvalue);
@@ -943,30 +979,26 @@ int main()
         v=getsetvalue("eth_ip");
         if( v ) {
             dvrconfig.setvalue( section, "eth_ip", v);
+            sscanf(v, "%d.%d.%d.%d",  &ip1, &ip2, &ip3, &ip4 ) ;
+            n_ip = (ip1<<24) | (ip2<<16) | (ip3<<8) | ip4 ;
         }
 
         // eth_mask
         v=getsetvalue("eth_mask");
         if( v ) {
             dvrconfig.setvalue( section, "eth_mask", v);
-        }
-
-        // eth_bcast
-        v=getsetvalue("eth_bcast");
-        if( v ) {
-            dvrconfig.setvalue( section, "eth_bcast", v);
+            sscanf(v, "%d.%d.%d.%d",  &ip1, &ip2, &ip3, &ip4 ) ;
+            n_mask = (ip1<<24) | (ip2<<16) | (ip3<<8) | ip4 ;
+            n_bcast = n_ip | (~n_mask) ;
+            string bcast ;
+            sprintf(bcast.setbufsize(20), "%d.%d.%d.%d", (n_bcast>>24)&0xff , (n_bcast>>16)&0xff, (n_bcast>>8)&0xff, n_bcast&0xff );
+            dvrconfig.setvalue( section, "eth_bcast", bcast);
         }
 
         // gateway
         v=getsetvalue("gateway_1");
         if( v ) {
             dvrconfig.setvalue( section, "gateway", v);
-        }
-
-        // wifi_ip
-        v=getsetvalue("wifi_ip");
-        if( v ) {
-            dvrconfig.setvalue( section, "wifi_ip", v);
         }
 
         // wifi_dhcp
@@ -980,17 +1012,26 @@ int main()
             }
         }
 
+        // wifi_ip
+        v=getsetvalue("wifi_ip");
+        if( v ) {
+            dvrconfig.setvalue( section, "wifi_ip", v);
+            sscanf(v, "%d.%d.%d.%d",  &ip1, &ip2, &ip3, &ip4 ) ;
+            n_ip = (ip1<<24) | (ip2<<16) | (ip3<<8) | ip4 ;
+        }
+
         // wifi_mask
         v=getsetvalue("wifi_mask");
         if( v ) {
             dvrconfig.setvalue( section, "wifi_mask", v);
+            sscanf(v, "%d.%d.%d.%d",  &ip1, &ip2, &ip3, &ip4 ) ;
+            n_mask = (ip1<<24) | (ip2<<16) | (ip3<<8) | ip4 ;
+            n_bcast = n_ip | (~n_mask) ;
+            string bcast ;
+            sprintf(bcast.setbufsize(20), "%d.%d.%d.%d", (n_bcast>>24)&0xff , (n_bcast>>16)&0xff, (n_bcast>>8)&0xff, n_bcast&0xff );
+            dvrconfig.setvalue( section, "wifi_bcast", bcast);
         }
 
-        // wifi_bcast
-        v=getsetvalue("wifi_bcast");
-        if( v ) {
-            dvrconfig.setvalue( section, "wifi_bcast", v);
-        }
 
         // wifi_essid
         v=getsetvalue("wifi_essid");

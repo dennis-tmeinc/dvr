@@ -1,0 +1,11 @@
+#!/bin/sh
+echo Start update firmware ...
+echo Removing old firmware ...
+rm -r /davinci/dvr
+echo Copying file to /davinci, please wait...
+cp -f -a * /davinci
+echo Removing temperary files
+rm /davinci/sfxrun
+rm -r *
+echo Firmware update finish.
+
