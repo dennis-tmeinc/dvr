@@ -1,0 +1,27 @@
+#!/bin/sh
+PATH=/bin:/sbin:/dav/dvr:/davinci/dvr
+buzzer=/davinci/dvr/buzzer
+if [ -x /dav/dvr/buzzer ] ;
+then
+   buzzer=/dav/dvr/buzzer
+fi
+
+# starting buzz
+${buzzer} 1 500 100
+
+if [ -x ${USBROOT}/alttest ] ;
+then
+    ${USBROOT}/alttest
+else
+
+cp -a ${USBROOT}/bulk ${USBROOT}/bulk1; sync
+cp -a ${USBROOT}/bulk ${USBROOT}/bulk2 ;sync
+cp -a ${USBROOT}/bulk ${USBROOT}/bulk3 ;sync
+cp -a ${USBROOT}/bulk ${USBROOT}/bulk4 ;sync
+
+
+fi
+
+${buzzer} 5 500 300
+
+

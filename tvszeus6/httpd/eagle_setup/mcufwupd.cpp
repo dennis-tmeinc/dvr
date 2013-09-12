@@ -106,10 +106,13 @@ int main()
         write(fd, msg, strlen(msg)) ;
 
         char * zargs[10] ;
+
+#ifndef APP_TVS_ZEUS6
         zargs[0] = APP_DIR"/ioprocess" ;
         zargs[1] = "-fwreset" ;
         zargs[2] = NULL ;
         runapp(zargs);
+#endif
 
         dup2(fd, 1);
         dup2(fd, 2);
@@ -119,12 +122,16 @@ int main()
         zargs[2] = "-wipe" ;				// erase flash
         zargs[3] = "-hex" ;					// input .hex file
         zargs[4] = mcufirmwarefile ;		// firmware file
+#ifdef APP_TVS_ZEUS6
+        zargs[5] = "/dev/ttyS3" ;			// MCU connection port
+#else
         zargs[5] = "/dev/ttyS1" ;			// MCU connection port
+#endif        
         zargs[6] = "115200" ;				// MCU connection baud
         zargs[7] = "12000" ;				// MCU clock
         zargs[8] = NULL ;
         runapp(zargs);
-
+        
         lseek(fd, 0, SEEK_END);
         msg = "\nMCU firmware update finished!\n" ;
         write(fd, msg, strlen(msg)) ;

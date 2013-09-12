@@ -804,6 +804,10 @@ int main()
 
         }
 
+        if(dvrconfig.getvalueint("io","sensor_powercontrol")){
+            fprintf(fvalue, "\"sensor_powercontrol\":\"on\",");
+        }
+
         fprintf(fvalue, "\"objname\":\"sensor_value\" }" );
         fclose( fvalue );
     }

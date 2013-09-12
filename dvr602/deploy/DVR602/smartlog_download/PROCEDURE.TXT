@@ -1,0 +1,79 @@
+
+Here is "smartlog" USB download program.  Two files are zipped into attached file.  "dlsmartlog" is a script file to do smartlog downloading. "usbgenkey" is a LINUX PC application to generate USB key memory stick. 
+ 
+Usage of "usbgenkey"
+ 
+    usbgenkey <auto-execute file name> [usb stick device name] [MDVR ID]
+        auto-execute file name  :  file to execute when usb stick plug into DVR
+        usb stick device name  :  device name of this usb stick. I use it to generate encrypted key. Put "none" here will make key file un-encrypted.
+        MDVR ID : target DVR ID, now we have 3 ID in use, MDVR5102, MDVR5104, MDVR5108, it is the model name of the DVR
+  
+   "usbgenkey" would  generate a file named "usbkey" on the root of USB stick.
+ 
+ 
+Following is the procedure to build such USB memory stick.
+ 
+1.  Prepare the USB memory stick for "smartlog" downloading, unzip those two file mention above to the root of this USB memory stick.
+2.  Plug in this USB memory stick to a LINUX PC, find out the device name of this USB stick, for example  /dev/sdb
+3.  Assume Type and run following command
+            cd  /mnt
+            mkdir usbkey
+            mount -t vfat /dev/sdb1 usbkey        #    mount the usb key here
+            cd usbkey
+            ./usbgenkey dlsmartlog /dev/sdb MDVR5104    #  generate file "usbkey"
+            rm usbgenkey                               #   this file can be deleted now
+            cd ..
+            umount usbkey
+4.  Remove this USB memory, it can be used to download smartlog file
+ 
+Following is the procedure to download "smartlog" files
+ 
+1. While DVR is fully running, plug-in the USB key.
+2. The LED beside the USB port will flash, (LED marked "DO NOT REMOVE USB DEVICE WHEN FLASHING")
+3. When LED stop flash, remove the USB key. "smartlog" files are copied to /smartlog directory of the USB key.
+ 
+ 
+This program ("usbgenkey") also make firmware updating USB stick.  Copy usbgenkey and firmware file (ex: HOST_MDVR5104.1.0.09.0327.17.FW) the the root of USB stick. Follow the same procedure of making "smartlog" downloading USB stick. Replace filename "dlsmartlog" with "HOST_MDVR5104.1.0.09.0327.17.FW".
+ 
+Please call me for more detail explanations.
+ 
+ 
+Regards,
+ 
+Dennis Chen
+Toronto MicroElectronics Inc.
+ 
+
+
+From: Phu Van 
+Sent: Tuesday, April 07, 2009 10:49 AM
+To: Chen, Dennis ; tongrui 
+Cc: quangn@tme-inc.com ; larryn@247securityinc.com 
+Subject: 510x gps log retrieval and event retrieval programs
+
+
+ Hi Dennis,
+Per  our yesterday brief discussion, please work with Tongrui to implement the gps log retrieval 
+as following to make sure that memory stick work in similar fashion as dvr500 series's
+handling of Minitrack gps log retrieval and convertion.
+So this is what I would expect from your program:
+1. Check for a valid TME key on memory stick. We need John to provide the TME key for each 51xx similar to what he did for dvr500.
+2- copy Tongrui's gpslogconverter program to memory stick drive, e.g f:
+3- copy \smartlog folder from DVR to memory stick drive f:\
+4- execute gpslogconverter from memory stick drive f:\
+5- copy f:\gps_log_tme_01 to dvr drive. (We need this step is to allow minitrack sync to work from DVRViewer directly without
+uploading gps data to minitrack server) 
+We also need to implement the event log retrieval memory stick ASAP in similar way as the dvr500/400 was
+implemented. 
+Can you also work with Harrison or whomever implemented the event log retrieval on this?
+Please setup a conference call later today or when you have a chance.
+
+Thanks.
+
+Phu Van
+
+
+
+----------------------- 
+Phu Van Nguyen 
+phuvann@247securityinc

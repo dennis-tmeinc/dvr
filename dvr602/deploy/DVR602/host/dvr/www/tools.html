@@ -1,0 +1,92 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<link href="eagle510x.css" rel="stylesheet" type="text/css" /><title>Tools</title>
+
+<script type="text/javascript" src="eagle510x.js"></script>
+<script type="text/javascript">
+function defaultcfg(form)
+{
+  var answer = confirm("Are you sure to restore factory defaut settings?");
+  if (answer) {
+    form.submit();
+    return true;
+  } 
+  return false;
+}
+</script>
+</head>
+<body>
+<!--#include file="header.i"-->
+<div class="tabs">
+<ul>
+<li><a onclick="on_system_click()"><span>System</span></a></li>
+<li><a onclick="on_camera_click()"><span>Camera</span></a></li>
+<li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
+<li><a onclick="on_network_click()"><span>Network</span></a></li>
+<li><a onclick="on_status_click()"><span>Status</span></a></li>
+<li class="current"><a onclick="on_tools_click()"><span>Tools</span></a></li>
+</ul>
+</div>
+<p>&nbsp;</p>
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="tools.html">
+<input name="page" value="tools" type="hidden" />
+</form>
+<table>
+<tbody>
+<form id="id_down_cfg" enctype="application/x-www-form-urlencoded" method="get" action="cfgdown.cgi">
+<tr>
+<td class="col1">Download Configuration:</td>
+<td valign="middle">
+<input value="Download" title="Download current configuration." type="submit" />
+</td>
+</tr>
+</form>
+
+<form id="dvrsetup" enctype="multipart/form-data" method="post" action="cfgupload.html" onsubmit="return validate_config(this)">
+<input name="page" value="tools" type="hidden" />
+<tr>
+<td class="col1" rowspan="2">Upload Configuration:</td>
+<td>
+<input name="cfgupload_file" type="file" />
+</td>
+</tr>
+<tr>
+<td><input value="Upload" title="Upload configuration." type="submit" /></td>
+</tr>
+</form>
+
+<form method="post" action="restoredef.html" name="frmdefault">
+<input type="hidden" name="action" value="Restore">
+<tr>
+<td class="col1">Restore Defaults:</td>
+<td valign="middle">
+<input type="button" name="btndefaults" value="Restore Factory Defaults" onclick="defaultcfg(this.form)">
+</td>
+</tr>
+</form>
+
+<form enctype="multipart/form-data" method="post" action="firmware.html" onsubmit="return validate_firmware(this)">
+<tr>
+<td class="col1" rowspan="2">Firmware:</td>
+<td><input name="firmware_file" type="file" /></td>
+</tr>
+<tr>
+<td><input type="submit" value="Update Firmware" /></td>
+</tr>
+</form>
+
+<form enctype="multipart/form-data" method="post" action="mcufirmware.html" onsubmit="return validate_mcu(this);">
+<tr>
+<td class="col1" rowspan="2">MCU Firmware:<br />(with FORCE-ON loopback cable plugged in)</td>
+<td><input name="mcu_firmware_file" type="file" /></td>
+</tr>
+<tr>
+<td><input value="Update MCU Firmware" type="submit" /></td>
+</tr>
+</form>
+
+</tbody>
+</table>
+</body></html>

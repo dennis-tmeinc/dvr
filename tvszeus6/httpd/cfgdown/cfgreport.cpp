@@ -457,7 +457,11 @@ int print_cfgreport()
             "352x240",
             "704x240",
             "528x320",
-            "704x480",
+#ifdef APP_TVS_ZEUS6            
+            "720x480",
+#else
+			"704x480",
+#endif            
             "" } ;
         ivalue = dvrconfig.getvalueint(section, "resolution");
         printf("Picture resolution : %s\n", picres[ivalue] );

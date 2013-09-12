@@ -13,6 +13,12 @@
 // application TVS
 #define TVS_APP
 
+// extra app macro
+#define APP_TVS
+#define APP_TVS_ZEUS6
+
+#define MCU_ZEUS
+
 // yet another g-force
 //#define SUPPORT_YAGF
 

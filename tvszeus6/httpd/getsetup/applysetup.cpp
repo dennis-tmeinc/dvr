@@ -263,6 +263,17 @@ int main()
             }
 
         }
+
+#ifdef	TVS_APP        
+       v=getsetvalue("sensor_powercontrol");
+       if(v){
+           dvrconfig.setvalueint("io","sensor_powercontrol",1);
+       }
+       else {
+           dvrconfig.setvalueint("io","sensor_powercontrol",0);
+       }
+#endif
+               
     }
 
     // set camera_value

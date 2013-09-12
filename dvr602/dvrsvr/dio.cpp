@@ -215,6 +215,15 @@ int dio_get_nodiskcheck()
   return -1;
 }
 
+// to support MERGE_LOGFILE
+int dio_isstandbymode()
+{
+  if( p_dio_mmap && p_dio_mmap->iopid ) {
+  	return p_dio_mmap->current_mode == APPMODE_STANDBY ;
+  }
+  return 0;
+}
+
 // checking io maps and dvr commands, return if io pins changed after last check
 int dio_check()
 {

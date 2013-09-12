@@ -1,0 +1,123 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<link href="eagle510x.css" rel="stylesheet" type="text/css" /><title>Network Setup Page</title>
+<script type="text/javascript" src="eagle510x.js"></script></head>
+<body>
+<!--#include file="header.i"-->
+<div class="tabs">
+<ul>
+<li><a onclick="on_system_click()"><span>System</span></a></li>
+<li><a onclick="on_camera_click()"><span>Camera</span></a></li>
+<li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
+<li class="current"><a onclick="on_network_click()"><span>Network</span></a></li>
+<li><a onclick="on_status_click()"><span>Status</span></a></li>
+<li><a onclick="on_tools_click()"><span>Tools</span></a></li>
+</ul>
+</div>
+<p>&nbsp;</p>
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="apply.html">
+<input name="page" value="network" type="hidden" />
+<table>
+<tbody>
+<tr>
+<td class="col1">Ethernet IP Address:</td>
+<td><input name="eth_ip" /> </td>
+</tr>
+<tr>
+<td class="col1">Ethernet Subnet Mask:</td>
+<td><input name="eth_mask" /> </td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+</tr>
+<tr>
+  <td class="col1">Wireless IP Setup Method:</td>
+  <td>
+      <select name="wifi_proto">
+        <option value="0">Static </option>
+        <option value="1">DHCP </option>
+        <option value="2">Disabled </option>
+      </select>
+  </td>
+</tr>
+<tr>
+<td class="col1">Wireless IP Address:</td>
+<td><input name="wifi_ip" /> </td>
+</tr>
+<tr>
+<td class="col1">Wireless Subnet Mask:</td>
+<td><input name="wifi_mask" /> </td>
+</tr>
+<tr>
+<td class="col1">Wireless Essid:</td>
+<td><input name="wifi_essid" /></td>
+</tr>
+<tr>
+  <td class="col1">Auth/Encryption:</td>
+  <td>
+      <select name="wifi_enc">
+        <option value="0">Open/None </option>
+        <option value="1">Open/WEP </option>
+        <option value="2">Shared/WEP </option>
+        <option value="3">Auto/WEP </option>
+        <option value="4">WPA-PSK/TKIP </option>
+        <option value="5">WPA-PSK/AES </option>
+        <option value="6">WPA2-PSK/TKIP </option>
+        <option value="7">WPA2-PSK/AES </option>
+      </select>
+  </td>
+</tr>
+<tr>
+<td class="col1">Wireless Encryption Key:</td>
+<td> 
+<input name="wifi_key" id="id_wifi_key" type="password" />
+<input value="on" name="wifi_showkey" id="id_wifi_showkey" type="checkbox" />
+<label for="id_wifi_showkey">Show Key</label>
+</td>
+</tr>
+<tr>
+<td>&nbsp;</td>
+<td><span id="id_wifi_key_display" style="background-color: #55e0e0;"></span></td>
+</tr>
+<tr>
+<td class="col1">Default Gateway:</td>
+<td><input name="gateway_1" /> </td>
+</tr>
+<tr>
+<td> </td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td> <input id="id_apply" value="Apply" type="submit" />
+</td>
+</tr>
+</tbody>
+</table>
+</form>
+<script type="text/javascript">
+var formdata = 
+<!--#include file="network_value" --> 
+;
+JSONinitfield( formdata );
+
+function show_wifikey()
+{
+    if( document.getElementById("id_wifi_showkey").checked ) {
+        document.getElementById("id_wifi_key_display").innerHTML=document.getElementById("id_wifi_key").value ;
+    }
+    else {
+        document.getElementById("id_wifi_key_display").innerHTML="" ;
+    }
+    var nt=setTimeout("show_wifikey()", 400);
+}
+show_wifikey();
+</script>
+</body></html>

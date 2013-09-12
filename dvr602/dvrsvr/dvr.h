@@ -1177,6 +1177,7 @@ int dio_inputnum();
 int dio_outputnum();
 int dio_input( int no );
 void dio_output( int no, int v);
+int dio_isstandbymode();
 // return 1 for poweroff switch turned off
 int dio_poweroff();
 //int dio_lockpower();

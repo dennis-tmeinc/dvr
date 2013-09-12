@@ -10,3 +10,6 @@
 // to enable power cycling test firmware
 // #define POWERCYCLETEST
 
+
+#define MERGE_LOGFILE
+

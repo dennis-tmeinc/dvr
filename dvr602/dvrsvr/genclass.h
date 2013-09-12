@@ -384,6 +384,10 @@ class string {
             }
             return m_str;
         }
+    	 operator char * (){
+			return getstring() ;
+		 }
+		 
         string(const char *str) {
             m_str = NULL;
             setstring(str);

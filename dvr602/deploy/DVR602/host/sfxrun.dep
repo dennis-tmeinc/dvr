@@ -1,0 +1,109 @@
+#!/bin/sh
+
+echo Start update MDVR5104 firmware...
+echo Kill processes...
+
+if [ -f /var/dvr/vter.pid ] ; then
+  kill -INT `cat /var/dvr/vter.pid` 
+fi
+
+if [ -f /var/dvr/dvrsvr.pid ] ; then
+  kill `cat /var/dvr/dvrsvr.pid` 
+fi
+
+if [ -f /var/dvr/glog.pid ] ; then
+  kill `cat /var/dvr/glog.pid`
+fi
+
+if [ -f /var/dvr/ioprocess.pid ] ; then
+   kill `cat /var/dvr/ioprocess.pid`
+fi
+
+for i in 1 2 3 4 5 6 7 8 9 10 ; do
+  if [ -f /var/dvr/ioprocess.pid ] ; then
+    sleep 2
+  else
+    break;
+  fi
+done
+
+if [ -f /var/dvr/mcuversion ] ; then
+
+  sleep 1
+  ./dvr/ioprocess
+
+  sleep 1
+  # flashing panel leds
+  ./dvr/panelled 07
+
+fi
+
+for i in 1 2 3 4 5 6 7 8 9 10 ; do
+  if [ -f /var/dvr/dvrsvr.pid ] ; then
+    sleep 2
+  else
+    break;
+  fi
+done
+
+for i in 1 2 3 4 5 6 7 8 9 10 ; do
+  if [ -f /var/dvr/glog.pid ] ; then
+    sleep 2
+  else
+    break;
+  fi
+done
+
+for i in 1 2 3 4 5 6 7 8 9 10 ; do
+  if [ -f /var/dvr/vter.pid ] ; then
+    sleep 2
+  else
+    break;
+  fi
+done
+
+# copy fw_printenv to ram in case downgrading
+#cp /davinci/dvr/fw_printenv /var
+#ln -s /var/fw_printenv /var/fw_setenv
+
+# remove old files
+rm -f -r /davinci/*
+
+# start copying files
+echo Copying file to /davinci, please wait.
+cp -f -a * /davinci
+rm /davinci/sfxrun
+sync
+
+# stop panel led flashing
+./dvr/panelled 0
+
+cd /davinci/dvr
+
+echo Firmware update complete. 
+echo New Version:
+cat firmwareid
+echo
+echo Turn off system power and turn on power again.
+
+# check if we are downgrading from 2.xxx to 1.xxx
+#v1=`cat /davinci/dvr/firmwareid`
+#v2=${v1#*.}
+#v3=${v2%%.*}
+#if [ $v3 = "1" ]; then
+#  v_bootargs=`/var/fw_printenv bootargs`
+#  old_bootargs=${v_bootargs#bootargs=}
+#  old_console=${old_bootargs%%initrd*M}
+#  old_initrd=${old_bootargs#console=*n8}
+#  if [ $old_console = console=ttyS2,115200n8 ]; then
+#    new_bootargs="console=ttyS0,115200n8 "$old_initrd 
+#    echo $new_bootargs
+#    /var/fw_setenv bootargs $new_bootargs
+#  fi
+#fi
+
+if [ -f /var/dvr/mcuversion ] ; then
+ ./ioprocess -reboot 8
+fi
+
+

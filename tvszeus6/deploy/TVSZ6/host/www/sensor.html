@@ -40,6 +40,14 @@
 -->
 
 <tr>
+<td class="col1">Select Power Control  Enable </td>
+<td>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input name="sensor_powercontrol" type="checkbox" value="on">
+</td>
+</tr>
+
+
+<tr>
 <td class="col1">Sensor 1</td>
 <td> Name: <input name="sensor1_name" value="Panic" readonly="readonly" />
 <input name="bool_sensor1_inverted" type="hidden" value="on" />
@@ -86,11 +94,11 @@ function show_sensor_table()
     var i;
     var sensor_table = document.getElementById('id_sensor_table') ;
     for( i=0; i<sensornum; i++ ) {
-        sensor_table.rows[i].style.display="" ;
+        sensor_table.rows[i+1].style.display="" ;
     }
     
     for( ; i<32; i++ ) {
-        sensor_table.rows[i].style.display="none" ;
+        sensor_table.rows[i+1].style.display="none" ;
     }
 }
 

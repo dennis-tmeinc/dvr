@@ -11,123 +11,43 @@
 #    1. added vter, gforce_conv
 #
 
-application: 
+include config
 
-#cfg/cfg:
-	cd cfg ; make 
+SUBDIRS = cfg\
+       	dvrsvr\
+       	fb\
+       	dvrtime\
+       	eaglehost\
+	   	glog\
+		httpd\
+		ioprocess\
+		nfile\
+		sfx\
+		tdev\
+		usbgenkey\
+		volumeid\
+		tab102\
+		smartupload\
+		smartupload2\
+		filert\
+		gforce_conv\
+		vter
 
-#dvrsvr/dvrsvr:
-	cd dvrsvr ; make 
+.PHONY : $(SUBDIRS) applications
 
-#dvrsvr/libfbdraw.so:
-	cd fb ; make  
-    
-#dvrtime/dvrtime:
-	cd dvrtime ; make
+applications: $(SUBDIRS)
 
-#eaglehost/eaglehost:
-#eaglehost/slaveip:
-	cd eaglehost; make 
+$(SUBDIRS) :
+	$(MAKE) -C $@
 
-#glog/glog:
-	cd glog;make
-
-#httpd/eaglehttpd:
-	cd httpd;make
-    
-#ioprocess/ioprocess:
-	cd ioprocess;make
-
-#nfile/nfile:
-	cd nfile; make 
-    
-#sfx/sfx:
-#sfx/mksfx:
-	cd sfx;	make
-    
-#tdev/tdevd:
-#tdev/tdevmount:
-	cd tdev;make
-    
-#usbgenkey/usbgenkey:
-#usbgenkey/usbcheck :
-	cd usbgenkey;make
-
-#volumeid/md5check
-	cd volumeid; make
-
-#tab102/tab102
-	cd tab102; make
-
-#smartupload/smartftp
-	cd smartupload; make
-	cd smartupload2; make
-
-#filert/filert
-	cd filert; make
-
-#gforce_conv
-	cd gforce_conv; make
-
-#vter
-	cd vter; make
+rel:
+	date +%y.%m%d.%H > release
 
 firmware:
-	cp cfg.h.m cfg.h ; make application 
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR602 1 
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5102 1
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5104 2 
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5108 4 
-
-firmware_special:
-	cp cfg.h.m cfg.h ; make application 
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR602 1
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR602 1 4
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR602 1 5
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5102 1
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5104 2 
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5108 4 
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR602m 1
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR602m 1 4
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5102m 1
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5104m 2 
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5108m 4 
-
-firmware_cycle:
-	cp cfg.h.cycle cfg.h ; make application 
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR602 1  cycle
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5102 1 cycle
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5104 2 cycle
-	cd deploy/MDVR5100 ; ./mkdeploy MDVR5108 4 cycle
+	$(MAKE) applications 
+	$(MAKE) -C deploy/$(proj) 
 
 clean:
-	cd cfg;make clean
-
-	cd dvrsvr;make clean
-
-	cd fb;make clean
-
-	cd dvrtime;make clean
-
-	cd eaglehost;make clean
-
-	cd glog;make clean
-    
-	cd httpd;make clean
-    
-	cd ioprocess;make clean
-
-	cd nfile;make clean
-    
-	cd sfx;make clean
-    
-	cd tdev;make clean
-    
-	cd usbgenkey;make clean
-	cd volumeid;make clean
-	cd tab102;make clean
-	cd smartupload;make clean
-	cd filert;make clean
-	cd gforce_conv; make clean
-	cd vter; make clean    
-	cd deploy/MDVR5100 ; ./mkdeploy clean 0
+	for dir in $(SUBDIRS); do $(MAKE) -C $$dir clean ; done
+	$(MAKE) -C deploy/$(proj) clean
+	find -name \*~ -delete

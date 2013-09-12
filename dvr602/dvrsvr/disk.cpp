@@ -2512,6 +2512,10 @@ void disk_check()
 {
     int i;
 
+#ifdef MERGE_LOGFILE
+	int mark_curdisk = 0 ;
+#endif    
+
     /* check if all disks are temporarily unmounted for tab102 download */
     if (g_nodiskcheck) {
       check_hybridcopy();
@@ -2577,6 +2581,11 @@ void disk_check()
             dvr_log("Recording disk : %s.", rec_basedir.getstring()) ;
             // mark current disk
 	    mark_current_disk(rec_basedir.getstring());
+
+#ifdef MERGE_LOGFILE
+		mark_curdisk = 1 ;
+#endif   
+	    
         }
     }
 
@@ -2585,6 +2594,128 @@ void disk_check()
             // un-mark current disk
             unlink( disk_curdiskfile.getstring() );
         }
+    
+
+#ifdef MERGE_LOGFILE
+
+	else if ( mark_curdisk || dio_isstandbymode() ) {		// standby mode , to merge all log files
+
+		char logfilename[256] ;
+		char tmplogfile[256] ;
+		char line[512] ;
+		
+		struct stat logfilestat ;
+
+		// merge dvrlog.txt
+
+		array < int > logdisklist ;		
+		array < time_t > logtimelist ;		
+		int i ;
+		for( i = 0 ; i< disk_disklist.size(); i++ ) {
+			sprintf( logfilename, "%s/dvrlog.txt", (char *)(disk_disklist[i].basedir ));
+			if( stat( logfilename, &logfilestat )==0 ) {
+				int x = logdisklist.size();
+				logdisklist[x] = i ;
+				logtimelist[x] = logfilestat.st_mtime ;
+			}
+		}
+		if( logdisklist.size()>1 || 
+			( logdisklist.size()==1 && 
+			  strcmp( disk_disklist[ logdisklist[0] ].basedir, rec_basedir )!=0 ) ) 
+		{
+			// to merge 
+			sprintf( tmplogfile, "%s/dvrlog.tmp.txt", (char *)rec_basedir ) ;
+			FILE * tmpfile = fopen( tmplogfile, "w") ;
+			if( tmpfile ) {
+				while( logdisklist.size()>0 ) {
+					// find oldest log file
+					int old = 0 ;
+					int j ;
+					for( j=1 ; j< logdisklist.size(); j++ ) {
+						if( logtimelist[j] < logtimelist[old] ) {
+							old=j ;
+						} 
+					}
+					sprintf( logfilename, "%s/dvrlog.txt", (char *)(disk_disklist[logdisklist[old]].basedir ));
+					// copy logfile to tmp log
+					FILE * lfile = fopen( logfilename, "r") ;
+					if( lfile ) {
+						while( fgets( line, sizeof(line), lfile ) ) {
+							fputs(line, tmpfile ) ;
+						}
+						fclose( lfile );
+					}					
+					// delete log file
+					remove( logfilename );
+										
+					// remove old log entry
+					logdisklist.remove(old);
+					logtimelist.remove(old);
+					
+				}
+				fclose( tmpfile ) ;
+				// rename log file
+				sprintf( logfilename, "%s/dvrlog.txt", (char *)(rec_basedir));
+				rename( tmplogfile, logfilename );
+			}
+		}
+				
+		// merge smartlog files
+		for( i = 0 ; i< disk_disklist.size(); i++ ) {
+			if( strcmp( disk_disklist[i].basedir, rec_basedir)==0 ) continue ;
+			sprintf( logfilename, "%s/../smartlog/", (char *)(disk_disklist[i].basedir ));
+			dir_find df( logfilename ) ;
+			while( df.find() ) {
+				if( fnmatch( "*L.001", df.filename(), 0 )==0 ) {
+					// find a smart log file on other disk, copy or merge to current disk
+					sprintf( logfilename, "%s/../smartlog/%s", (char *)(disk_disklist[i].basedir), df.filename());
+					if( stat( logfilename, &logfilestat)!=0 ) {
+						// copy log file
+						FILE * smlog = fopen( logfilename, "w" ) ;
+						if( smlog ) {
+							FILE * smlogother = fopen( df.pathname(), "r") ;
+							if( smlogother ) {
+								while( fgets( line, sizeof(line), smlogother ) ) {
+									fputs(line, smlog ) ;
+								}
+								fclose( smlogother );
+								remove( df.pathname() );
+							}
+							fclose( smlog );
+						}
+					}
+				}
+			}
+		}
+		
+#ifdef TVS_APP
+		// merge / copy tvs log file
+		extern string g_keylogfile ;
+        sprintf(logfilename, "%s/%s", (char *)rec_basedir, (char *)g_keylogfile);
+       	FILE * tvslogfile = fopen( logfilename, "a");
+       	if( tvslogfile ) {
+			for( i = 0 ; i< disk_disklist.size(); i++ ) {
+				if( strcmp( disk_disklist[i].basedir, rec_basedir)==0 ) continue ;
+				sprintf( tmplogfile, "%s/%s", (char *)(disk_disklist[i].basedir), (char *)g_keylogfile);          		
+           		FILE * tlogfile = fopen(tmplogfile,"r");
+           		if( tlogfile ) {
+					while( fgets( line, sizeof(line), tlogfile ) ) {
+						fputs(line, tvslogfile ) ;
+					}
+           			fclose( tlogfile );
+           			remove( tmplogfile );
+           		}
+           	}
+           	fclose( tvslogfile );
+        }
+#endif
+						
+	}
+	
+	
+#endif	
+        
+        
 }
 
 /*
