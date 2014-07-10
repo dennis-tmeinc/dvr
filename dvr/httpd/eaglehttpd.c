@@ -58,7 +58,7 @@ char * document_root="/home/www" ;
 #define KEEP_ALIVE          (30)
 
 int    http_keep_alive ;
-long   http_etag ;           // Etag of request document
+unsigned int http_etag ;           // Etag of request document
 time_t http_modtime ;        // last modified time
 int    http_cachemaxage ;    // cache max age (in seconds)
 
@@ -365,10 +365,9 @@ void cache_upd(char * pagefile)
         if( http_modtime<filest.st_mtime ) {
             http_modtime=filest.st_mtime ;
         }
-        http_etag+=(long)filest.st_ino ;
-        http_etag+=(long)filest.st_mode ;
-        http_etag+=(long)filest.st_size ;
-        http_etag+=(long)filest.st_ctime ;
+        http_etag+=(unsigned int)filest.st_ino ;
+        http_etag+=(unsigned int)filest.st_size ;
+        http_etag+=(unsigned int)filest.st_mtime ;
     }
     else {
         http_modtime=time(NULL);
@@ -546,7 +545,7 @@ int smallssi_gettoken(FILE * fp, char * token, int bufsize)
     int r=0;
     int c = fgetc(fp);
     if( c==EOF ) return 0;
-    http_etag+=(long)c ;
+    http_etag+=(unsigned int)c ;
     token[r] = c ;
     if( token[r] == '<' ) {
         r++;
@@ -1323,6 +1322,7 @@ void http()
 http_done:
 
     fflush(stdout);
+	fsync(1);
 
     // remove all HTTP_* environment and POST files
     unsethttpenv() ;

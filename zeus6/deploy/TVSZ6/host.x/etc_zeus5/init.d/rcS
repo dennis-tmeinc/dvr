@@ -1,0 +1,18 @@
+#!/bin/sh
+/sbin/start-udev
+/sbin/udevadm settle
+
+HOSTNAME=`/usr/bin/fw_printenv -n modelname`
+echo "rcS file for  $HOSTNAME"
+/bin/hostname $HOSTNAME
+
+#/sbin/ifconfig eth0 | md5sum > /dev/urandom
+
+/usr/sbin/ubiattach /dev/ubi_ctrl -m 8 -O 2048
+/bin/mount -t ubifs ubi0:dvr /mnt/nand
+
+if [ -f "/mnt/nand/etc/rc.local" ]; then
+  /mnt/nand/etc/rc.local
+else
+  /etc/rc.local
+fi

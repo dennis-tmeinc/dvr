@@ -1,0 +1,243 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<link href="eagle.css" rel="stylesheet" type="text/css" /><title>Status</title>
+<script type="text/javascript" src="eagle.js"></script>
+</head>
+<body>
+<!--#include file="header.i"-->
+<div class="tabs">
+<ul>
+<li><a onclick="on_system_click()"><span>System</span></a></li>
+<li><a onclick="on_camera_click()"><span>Camera</span></a></li>
+<li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
+<li><a onclick="on_network_click()"><span>Network</span></a></li>
+<li class="current"><a onclick="on_status_click()"><span>Status</span></a></li>
+<li><a onclick="on_tools_click()"><span>Tools</span></a></li>
+</ul>
+</div>
+<p>&nbsp;</p>
+<table>
+<tbody>
+<tr>
+<td class="col1">Firmware Version:</td>
+<td> <!--#include file="firmware_version"--> </td>
+</tr>
+<tr>
+<td class="col1">MCU Firmware Version:</td>
+<td> <!--#include file="/var/dvr/mcuversion"--> </td>
+</tr>
+<tr>
+<td class="col1">Tab102b/101b Firmware Version:</td>
+<td> <!--#include file="/var/dvr/tab102version"--> </td>
+</tr>
+<tr>
+<td class="col1">Camera Number:</td>
+<td> <!--#include cameranumber="camera_number" --> </td>
+</tr>
+<tr>
+<td class="col1">Sensor Number:</td>
+<td> <!--#include sensornumber="sensor_number" --> </td>
+</tr>
+<tr>
+<td class="col1">Alarm Number:</td>
+<td> <!--#include lednumber="led_number" --></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td class="col1">DVR Time:</td>
+<td><span id="id_dvr_time"> </span>
+</td>
+</tr>
+<tr>
+<td class="col1">Computer Time:</td>
+<td><span id="id_local_time"> </span></td>
+</tr>
+<tr>
+<td></td>
+<td>
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="status.html">
+ <input name="page" value="status" type="hidden" />
+ <input name="synctime" id="id_synctime" value="0" type="hidden" />
+ <input onclick="on_sync_time()" value="Synchronize DVR Time" type="button" />
+</form>
+</td>
+</tr>
+<tr>
+<td>&nbsp;</td>
+<td><br />
+</td>
+</tr>
+<form id="dvrstatus">
+
+<script type="text/javascript">
+var camera_num = <!--#include cameranumber="camera_number" --> ;
+for( i=1; i<=camera_num; i++ ) {
+ var name ;
+ document.write( "<tr><td class=\"col1\">Camera "+i+" Status:</td>" );
+ name = "camera_"+i+"_signal_lost" ;
+ document.write( "<td><input name=\""+name+"\" type=\"checkbox\" />Signal Lost " );
+ name = "camera_"+i+"_recording" ;
+ document.write( "<input name=\""+name+"\" type=\"checkbox\" >Recording " ); 
+ name = "camera_"+i+"_motion" ;
+ document.write( "<input name=\""+name+"\" type=\"checkbox\" />Motion " );
+ document.write( "&nbsp;&nbsp;&nbsp;&nbsp;Bitrate: <span id=\"id_bitrate_"+i+"\"> </span> Kbps</td></tr>" );
+}
+</script>
+
+<tr>
+<td></td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1">CPU Usage:</td>
+<td>
+<span id="id_cpu_usage"> </span>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Total Memory:</td>
+<td>
+<span id="id_total_memory"> </span>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Free Memory:</td>
+<td>
+<span id="id_free_memory"> </span>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Total Storage Space:</td>
+<td>
+<span id="id_total_disk"> </span>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Current Recording SD Free Space:</td>
+<td>
+<span id="id_free_disk"> </span>
+</td>
+</tr>
+
+<tr>
+<td class="col1">System Temperature:</td>
+<td>
+<span id="id_sys_temperature"> </span>
+</td>
+</tr>
+
+<!--
+<tr>
+<td class="col1">Hard Disk Temperature:</td>
+<td>
+<span id="id_hd_temperature1"> </span>
+</td>
+</tr>
+-->
+</form>
+
+</tbody>
+</table>
+<script type="text/javascript">
+
+var count=0 ;
+var timer ;
+var systime=new Date();
+var dvrtime=new Date();
+
+function statusvalue( statusvalue )
+{
+    var sval = eval("(" + statusvalue + ")") ;
+    systime=new Date();
+    dvrtime=Date.parse( sval.dvrtime );
+    document.getElementById("dvrstatus").reset();
+    JSONinitfield( sval );
+
+    document.getElementById("id_cpu_usage").innerHTML=sval.cpu_usage + "%";
+    document.getElementById("id_total_memory").innerHTML=sval.memory_total + " Mbytes" ;
+    document.getElementById("id_free_memory").innerHTML=sval.memory_free + " Mbytes" ;
+    document.getElementById("id_total_disk").innerHTML=sval.disk_total + " Mbytes" ;
+    document.getElementById("id_free_disk").innerHTML=sval.disk_free + " Mbytes" ;
+    document.getElementById("id_sys_temperature").innerHTML=sval.temperature_system_f + " \u00B0F / "+ sval.temperature_system_c + " \u00B0C" ; 
+    var i ;
+    for( i=1; i<=camera_num; i++ ) {
+	document.getElementById("id_bitrate_"+i ).innerHTML= sval["camera_"+i+"_bitrate"] ;
+    }
+    
+    timefunc();
+}
+
+var xmlhttp;
+function loadXMLDoc(url)
+{
+ xmlhttp=null;
+ if (window.XMLHttpRequest)
+ { // code for Firefox, Opera, IE7, etc.
+  xmlhttp=new XMLHttpRequest();
+ }
+ else if (window.ActiveXObject)
+ { // code for IE6, IE5
+  xmlhttp=new ActiveXObject("Microsoft.XMLHTTP");
+ }
+ if (xmlhttp!=null)
+ {
+  xmlhttp.onreadystatechange=state_Change;
+  xmlhttp.open("GET",url,true);
+  xmlhttp.send(null);
+ }
+ else
+ {
+  alert("Your browser does not support XMLHTTP.");
+ }
+}
+
+function state_Change()
+{
+ if (xmlhttp.readyState==4)
+ { // 4 = "loaded"
+  if (xmlhttp.status==200)
+  { // 200 = "OK"
+   statusvalue( xmlhttp.responseText ) ;
+  }
+  else
+  {
+   alert("Problem retrieving data:" + xmlhttp.statusText);
+  }
+ }
+}
+
+function timefunc()
+{
+    var stime = new Date();
+    var diff = stime.getTime() - systime.getTime();
+    var dtime = new Date();
+    dtime.setTime( dvrtime+diff );
+    
+    document.getElementById("id_dvr_time").innerHTML=dtime.toDateString()+" "
+                                                     +dtime.toLocaleTimeString() + " " 
+                                                     +"(<!--#include file="timezone"-->)" ;
+    document.getElementById("id_local_time").innerHTML=stime.toDateString()+" "
+                                                     +stime.toLocaleTimeString() ;
+
+    if( ++count%25 == 0 ) {
+        loadXMLDoc( "dvrstatus.cgi" ) ;
+    }
+    else {
+        timer=setTimeout("timefunc()", 200);
+    }
+}
+
+loadXMLDoc( "dvrstatus.cgi" ) ;
+
+</script>
+</body></html>

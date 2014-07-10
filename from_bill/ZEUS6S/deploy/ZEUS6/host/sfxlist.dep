@@ -1,0 +1,14 @@
+./sfxrun
+./mkdosfs
+./dosfsck
+./dosfsckcheck
+./parted
+./xinetd
+./firmwareid
+
+./ID
+./ID/APPID
+./ID/BOARDID
+./ID/BOARDNUM
+./etc.tar.gz
+./dvr.tar.gz

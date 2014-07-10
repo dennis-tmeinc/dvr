@@ -1,0 +1,115 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<link href="eagle3.css" rel="stylesheet" type="text/css" />
+<title>Tools</title>
+<!--#exec cmd="cgi/pagevalue"-->
+<script type="text/javascript" src="eagle3.js"></script>
+<script type="text/javascript">
+  var submitform ;
+  function iframeload()
+  {
+      if( submitform ) {
+         submitform.submit();
+      }
+  }
+  
+  function on_uploadsubmit( fileid )
+  {
+        var ifile = document.getElementById(fileid);
+        if( ifile.value == "" ) {
+           alert( "Please select uploading file!" );
+        }
+        else {
+           frame=document.getElementById("id_uploadprog") ;
+           submitform=ifile.form ;
+           frame.src="uploading.html";
+           frame.style.display="";
+        }
+  }
+</script>
+</head>
+
+<body>
+<!--#include file="header.i"-->
+<div class="tabs">
+<ul>
+<li><a onclick="on_system_click()"><span>System</span></a></li>
+<li><a onclick="on_camera_click()"><span>Camera</span></a></li>
+<li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
+<!-- <li><a onclick="on_network_click()"><span>Network</span></a></li> -->
+<li><a onclick="on_status_click()"><span>Status</span></a></li>
+<li class="current"><a onclick="on_tools_click()"><span>Tools</span></a></li>
+</ul>
+</div>
+<p>&nbsp;</p>
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="tools.html">
+<input name="page" value="tools" type="hidden" />
+</form>
+
+<iframe id="id_uploadprog" style="width:60%;height:180px;display:none;position:absolute;left:20%;top:32%;z-index:10;background-color:#b0c4de;" onload="iframeload()">
+  <p>Your browser does not support iframes.</p>
+</iframe>
+
+<table>
+<tbody>
+<tr>
+<td class="col1">Download Configuration:</td>
+<td>
+<form id="id_down_cfg" enctype="application/x-www-form-urlencoded" method="get" action="cgi/cfgdown.cgi">
+<input value="Download" title="Download current configuration." type="submit" />
+</form>
+</td>
+</tr>
+
+<form id="dvrsetup" enctype="multipart/form-data" method="post" action="cfgupload.html">
+<input name="page" value="tools" type="hidden" />
+<tr>
+<td class="col1" rowspan="2">Upload Configuration:</td>
+<td>
+<input name="cfgupload_file" id="id_cfgupload_file" type="file" />
+</td>
+</tr>
+<tr>
+<td><input value="Upload" title="Upload configuration." type="button" onclick="on_uploadsubmit('id_cfgupload_file')" /></td>
+</tr>
+</form>
+
+<form enctype="multipart/form-data" method="post" action="firmware.html">
+<tr>
+<td class="col1" rowspan="2">Firmware:</td>
+<td><input name="firmware_file" id="id_firmware_file" type="file" /></td>
+</tr>
+<tr>
+<td><input value="Update Firmware" type="button" onclick="on_uploadsubmit('id_firmware_file')"/></td>
+</tr>
+</form>
+
+<form enctype="multipart/form-data" method="post" action="mcufirmware.html">
+<tr>
+<td class="col1" rowspan="2">MCU Firmware:<br />(with FORCE-ON loopback cable plugged in)</td>
+<td><input name="mcu_firmware_file" id="id_mcu_firmware_file" type="file" /></td>
+</tr>
+<tr>
+<td><input value="Update MCU Firmware" type="button" onclick="on_uploadsubmit('id_mcu_firmware_file')" /></td>
+</tr>
+</form>
+
+<tr>
+<td></td>
+<td>
+<form enctype="multipart/form-data" method="post" action="reset.cgi">
+<input name="mcu_reboot" title="Reboot Unit" type="submit" value="Reboot" />
+</form>
+</td>
+</tr>
+
+<!--#exec cmd="./master_form.cgi"-->
+</tbody>
+</table>
+<script type="text/javascript">
+JSONinitfield();
+</script>
+</body></html>

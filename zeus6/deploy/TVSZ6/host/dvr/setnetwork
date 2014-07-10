@@ -1,0 +1,30 @@
+#!/bin/sh
+
+#cd /dav
+
+# reconfigure wifi
+#ifconfig rausb0 down 
+#/bin/rmmod rt73
+#/bin/insmod rt73.ko
+
+cd /mnt/nand/dvr 
+
+
+ifconfig eth0 `cat /mnt/nand/dvr/eth_ip`
+ifconfig eth0 netmask `cat /mnt/nand/dvr/eth_mask`
+ifconfig eth0 broadcast `cat /mnt/nand/dvr/eth_broadcast`
+
+sleep 3
+
+route del default
+
+for gw in `ls gateway*` ; do 
+   route add default gw `cat $gw`   
+done
+
+ifconfig wlan0 `cat /mnt/nand/dvr/wifi_ip` netmask `cat /mnt/nand/dvr/wifi_mask` up
+ifconfig wlan0 broadcast `cat /mnt/nand/dvr/wifi_broadcast`
+#ifconfig wlan0 0.0.0.0 up
+wpaconf
+
+killall -HUP wpa_supplicant

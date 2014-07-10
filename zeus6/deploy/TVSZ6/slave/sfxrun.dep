@@ -1,0 +1,11 @@
+#!/bin/sh
+echo Start update firmware ...
+echo Removing old firmware ...
+rm -r /dav/dvr
+echo Copying file to /dav, please wait...
+cp -f -a * /dav
+echo Removing temperary files
+rm /dav/sfxrun
+rm -r *
+echo Firmware update finish.
+

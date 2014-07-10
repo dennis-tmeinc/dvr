@@ -132,6 +132,32 @@ void RC4_KSA( struct RC4_seed * seed, unsigned char * k )
     seed->i=seed->j=0;
 }
 
+// RC4 key-scheduling algorithm, (addition)
+//     seed: RC4 seed
+//     key: key string
+//     klen: key length
+void RC4_KSA_A(struct RC4_seed * seed, unsigned char * key, int klen )
+{
+	// PRGA
+	unsigned char i,j,k ;
+	int n ;
+	i=seed->i ;
+	j=seed->j ;
+	for( n=0; n<klen; n++) {
+		i++ ;
+		j+=seed->s[i]; 
+		if( key ) {
+			j+=key[n];
+		}
+		// swap( s[i], s[j] )
+		k=seed->s[i] ;
+		seed->s[i]=seed->s[j] ;
+		seed->s[j]=k ;
+	}
+	seed->i=i;
+	seed->j=j;
+}
+
 // RC4 stream data cryption.
 //     seed: RC4 seed
 //     text: data to be encrypt/decrypt

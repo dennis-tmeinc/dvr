@@ -130,14 +130,27 @@ int dio_setstate( int status )
                 // start recording
                 struct dvrtime cliptime ;
                 time_now(&cliptime) ;
-                sprintf( g_vri, "%s-%02d%02d%02d%02d%02d",
-                        (char *)g_servername,
-                        cliptime.year%100,
-                        cliptime.month,
-                        cliptime.day,
-                        cliptime.hour,
-                        cliptime.minute
-                        );
+                if( g_policeid[0] ) {
+					sprintf( g_vri, "%s-%02d%02d%02d%02d%02d-%s",
+							(char *)g_servername,
+							cliptime.year%100,
+							cliptime.month,
+							cliptime.day,
+							cliptime.hour,
+							cliptime.minute,
+							g_policeid
+							);
+				}
+				else {
+					sprintf( g_vri, "%s-%02d%02d%02d%02d%02d",
+							(char *)g_servername,
+							cliptime.year%100,
+							cliptime.month,
+							cliptime.day,
+							cliptime.hour,
+							cliptime.minute
+							);
+                }
                 memcpy( p_dio_mmap->pwii_VRI, g_vri, sizeof(p_dio_mmap->pwii_VRI) );
                 rstart = 1 ;
         }

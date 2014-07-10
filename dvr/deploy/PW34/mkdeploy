@@ -37,7 +37,7 @@ if [ ${appid} = "clean" ]; then
 
     cd ${DEPROOT}/host/dvr
     rm -f httpd.sfx firmwareid
-    rm -f udhcpc dvrsvr eaglesvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg fsckwrapper
+    rm -f udhcpc dvrsvr eaglesvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg fsckwrapper usbid officerid
 
     cd ${DEPROOT}/host/ID
     rm -f BOARDNUM APPID BOARDID
@@ -146,8 +146,11 @@ cp -v ${APPROOT}/volumeid/volumeid .
 cp -v ${APPROOT}/cfg/cfg .
 cp -v ${APPROOT}/dhcp/udhcpc .
 cp -v ${APPROOT}/fsckwrapper/fsckwrapper .
+cp -v ${APPROOT}/usbid/usbid .
+cp -v ${APPROOT}/usbid/officerid .
+cp -v ${APPROOT}/usbid/officerkey .
 
-${STRIP} dvrsvr eaglesvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg fsckwrapper
+${STRIP} dvrsvr eaglesvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg fsckwrapper officerid usbid
 
 cd ${DEPROOT}/host
 # copy dos fs tools

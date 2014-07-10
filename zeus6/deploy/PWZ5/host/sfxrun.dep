@@ -1,0 +1,64 @@
+#!/bin/sh
+
+echo Start update TVS ZEUS6 firmware...
+echo Kill processes...
+if [ -f /var/dvr/dvrsvr.pid ] ; then
+  kill `cat /var/dvr/dvrsvr.pid` 
+fi
+
+if [ -f /var/dvr/glog.pid ] ; then
+  kill `cat /var/dvr/glog.pid`
+fi
+
+if [ -f /var/dvr/ioprocess.pid ] ; then
+   kill `cat /var/dvr/ioprocess.pid`
+fi
+
+for i in 1 2 3 4 5 6 7 8 9 10 ; do
+  if [ -f /var/dvr/ioprocess.pid ] ; then
+    sleep 2
+  else
+    break;
+  fi
+done
+
+for i in 1 2 3 4 5 6 7 8 9 10 ; do
+  if [ -f /var/dvr/dvrsvr.pid ] ; then
+    sleep 2
+  else
+    break;
+  fi
+done
+
+for i in 1 2 3 4 5 6 7 8 9 10 ; do
+  if [ -f /var/dvr/glog.pid ] ; then
+    sleep 2
+  else
+    break;
+  fi
+done
+
+# remove old files
+rm -rf /davinci/dvr/*
+
+# start copying files
+echo Copying file to /davinci, please wait.
+cp -rf  * /davinci/
+cd /davinci
+tar xzf etc.tar.gz
+rm etc.tar.gz
+
+rm /davinci/sfxrun
+
+sync
+
+echo Firmware update complete. 
+echo New Version:
+cat /davinci/dvr/firmwareid
+echo
+echo Turn off system power and turn on power again.
+
+if [ -f /var/dvr/mcuversion ] ; then
+  cd /mnt/nand/dvr
+ ./ioprocess -reboot 8
+fi

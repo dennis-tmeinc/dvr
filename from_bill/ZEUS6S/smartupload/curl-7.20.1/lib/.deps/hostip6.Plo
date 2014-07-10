@@ -1,0 +1,331 @@
+hostip6.lo: hostip6.c setup.h curl_config.h ../include/curl/curlbuild.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/types.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/features.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uClibc_config.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/cdefs.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/types.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/wordsize.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/lib/gcc/arm-unknown-linux-uclibcgnueabi/4.3.5/include/stddef.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/typesizes.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/pthreadtypes.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/sched.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/time.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/endian.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/endian.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/select.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/select.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/sigset.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/time.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/sysmacros.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/stdint.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/wchar.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/inttypes.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/socket.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/uio.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uio.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/socket.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/lib/gcc/arm-unknown-linux-uclibcgnueabi/4.3.5/include-fixed/limits.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/lib/gcc/arm-unknown-linux-uclibcgnueabi/4.3.5/include-fixed/syslimits.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/limits.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/posix1_lim.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/local_lim.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/linux/limits.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uClibc_local_lim.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/posix2_lim.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/sockaddr.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/asm/socket.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/asm/sockios.h \
+  ../include/curl/curlrules.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/stdio.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uClibc_stdio.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/wchar.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uClibc_mutex.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/pthread.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sched.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uClibc_clk_tck.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/signal.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/initspin.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/sigthread.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uClibc_pthread.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/lib/gcc/arm-unknown-linux-uclibcgnueabi/4.3.5/include/stdarg.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/stdio_lim.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/assert.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/errno.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/errno.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/linux/errno.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/asm/errno.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/asm-generic/errno.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/asm-generic/errno-base.h \
+  setup_once.h /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/stdlib.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/alloca.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/string.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/ctype.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uClibc_touplow.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/stat.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/stat.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/time.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/lib/gcc/arm-unknown-linux-uclibcgnueabi/4.3.5/include/stdbool.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/netinet/in.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/in.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/byteswap.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/byteswap-common.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/netdb.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/rpc/netdb.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/netdb.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/arpa/inet.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/unistd.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/posix_opt.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/confname.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/getopt.h \
+  urldata.h cookie.h ../include/curl/curl.h ../include/curl/curlver.h \
+  ../include/curl/curlbuild.h ../include/curl/curlrules.h \
+  ../include/curl/easy.h ../include/curl/multi.h ../include/curl/curl.h \
+  ../include/curl/typecheck-gcc.h formdata.h timeval.h http_chunks.h \
+  hostip.h hash.h llist.h curl_addrinfo.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/setjmp.h \
+  /opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/setjmp.h splay.h \
+  imap.h pingpong.h pop3.h smtp.h ftp.h file.h ssh.h http.h rtsp.h \
+  sendf.h share.h strerror.h url.h inet_pton.h connect.h nonblock.h \
+  ../include/curl/mprintf.h curl_memory.h memdebug.h
+
+setup.h:
+
+curl_config.h:
+
+../include/curl/curlbuild.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/types.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/features.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uClibc_config.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/cdefs.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/types.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/wordsize.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/lib/gcc/arm-unknown-linux-uclibcgnueabi/4.3.5/include/stddef.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/typesizes.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/pthreadtypes.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/sched.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/time.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/endian.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/endian.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/select.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/select.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/sigset.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/time.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/sysmacros.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/stdint.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/wchar.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/inttypes.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/socket.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/uio.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uio.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/socket.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/lib/gcc/arm-unknown-linux-uclibcgnueabi/4.3.5/include-fixed/limits.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/lib/gcc/arm-unknown-linux-uclibcgnueabi/4.3.5/include-fixed/syslimits.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/limits.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/posix1_lim.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/local_lim.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/linux/limits.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uClibc_local_lim.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/posix2_lim.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/sockaddr.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/asm/socket.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/asm/sockios.h:
+
+../include/curl/curlrules.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/stdio.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uClibc_stdio.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/wchar.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uClibc_mutex.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/pthread.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sched.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uClibc_clk_tck.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/signal.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/initspin.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/sigthread.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uClibc_pthread.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/lib/gcc/arm-unknown-linux-uclibcgnueabi/4.3.5/include/stdarg.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/stdio_lim.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/assert.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/errno.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/errno.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/linux/errno.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/asm/errno.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/asm-generic/errno.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/asm-generic/errno-base.h:
+
+setup_once.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/stdlib.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/alloca.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/string.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/ctype.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/uClibc_touplow.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/stat.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/stat.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/sys/time.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/lib/gcc/arm-unknown-linux-uclibcgnueabi/4.3.5/include/stdbool.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/netinet/in.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/in.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/byteswap.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/byteswap-common.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/netdb.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/rpc/netdb.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/netdb.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/arpa/inet.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/unistd.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/posix_opt.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/confname.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/getopt.h:
+
+urldata.h:
+
+cookie.h:
+
+../include/curl/curl.h:
+
+../include/curl/curlver.h:
+
+../include/curl/curlbuild.h:
+
+../include/curl/curlrules.h:
+
+../include/curl/easy.h:
+
+../include/curl/multi.h:
+
+../include/curl/curl.h:
+
+../include/curl/typecheck-gcc.h:
+
+formdata.h:
+
+timeval.h:
+
+http_chunks.h:
+
+hostip.h:
+
+hash.h:
+
+llist.h:
+
+curl_addrinfo.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/setjmp.h:
+
+/opt/Mozart_Toolchain/arm-eabi-uclibc/usr/include/bits/setjmp.h:
+
+splay.h:
+
+imap.h:
+
+pingpong.h:
+
+pop3.h:
+
+smtp.h:
+
+ftp.h:
+
+file.h:
+
+ssh.h:
+
+http.h:
+
+rtsp.h:
+
+sendf.h:
+
+share.h:
+
+strerror.h:
+
+url.h:
+
+inet_pton.h:
+
+connect.h:
+
+nonblock.h:
+
+../include/curl/mprintf.h:
+
+curl_memory.h:
+
+memdebug.h:

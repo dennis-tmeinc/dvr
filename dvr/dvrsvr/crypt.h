@@ -30,6 +30,12 @@ struct RC4_seed {
 // initialize RC4 seed with key block
 void RC4_KSA( struct RC4_seed * seed, unsigned char * k );
 
+// RC4 key-scheduling algorithm, (addition)
+//     seed: RC4 seed
+//     key: key string
+//     klen: key length
+void RC4_KSA_A(struct RC4_seed * seed, unsigned char * key, int klen );
+
 // RC4 stream data cryption. 
 //     seed: RC4 seed
 //     text: data to be encrypt/decrypt

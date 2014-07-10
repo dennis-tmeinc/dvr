@@ -29,9 +29,10 @@ if [ $# -lt 2 ]; then
   exit 1
 fi
 
-PATH=~/proj/eagle32/hik_toolchain/bin:/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin
+PATH=~/proj/eagle32/hik_toolchain/bin:/bin:/usr/bin
 
 DEPROOT=$PWD
+PROJDIR=${DEPROOT}/../..
 
 #DATENTIME=`date +%y.%m%d.%H`
 DATENTIME=`cat ../../release`
@@ -239,10 +240,10 @@ echo Making slave firmware...
 cd ${DEPROOT}/slave/dvr
 
 echo copy executable files.
-cp -v ~/proj/eagle32/dvr/dvrsvr/dvrsvr .
-cp -v ~/proj/eagle32/dvr/dvrsvr/libfbdraw.so .
-cp -v ~/proj/eagle32/dvr/nfile/nfile .
-cp -v ~/proj/eagle32/dvr/eaglehost/slaveip .
+cp -v ${PROJDIR}/dvrsvr/dvrsvr .
+cp -v ${PROJDIR}/dvrsvr/libfbdraw.so .
+cp -v ${PROJDIR}/nfile/nfile .
+cp -v ${PROJDIR}/eaglehost/slaveip .
 arm-linux-strip dvrsvr libfbdraw.so nfile slaveip
 cd ${DEPROOT}/slave
 echo ${firmwareid} > dvr/firmwareid
@@ -306,12 +307,12 @@ cp ${DEPROOT}/host/dvr/dvrsvr.conf ${DEPROOT}/host/dvr/default.conf
 
 cd ${DEPROOT}/host/dvr/www
 echo "Build http files"
-cp -v ~/proj/eagle32/dvr/httpd/eaglehttpd .
-cp -v ~/proj/eagle32/dvr/httpd/getsetup/getsetup .
-cp -v ~/proj/eagle32/dvr/httpd/getsetup/applysetup .
-cp -v ~/proj/eagle32/dvr/httpd/eagle_setup/eagle_setup .
-cp -v ~/proj/eagle32/dvr/httpd//cfgdown/cfgdown.cgi .
-cp -v ~/proj/eagle32/dvr/httpd//cfgdown/dvrstatus.cgi .
+cp -v ${PROJDIR}/httpd/eaglehttpd .
+cp -v ${PROJDIR}/httpd/getsetup/getsetup .
+cp -v ${PROJDIR}/httpd/getsetup/applysetup .
+cp -v ${PROJDIR}/httpd/eagle_setup/eagle_setup .
+cp -v ${PROJDIR}/httpd//cfgdown/cfgdown.cgi .
+cp -v ${PROJDIR}/httpd//cfgdown/dvrstatus.cgi .
 arm-linux-strip applysetup eagle_setup eaglehttpd getsetup cfgdown.cgi dvrstatus.cgi
 
 ${DEPROOT}/mksfx ${DEPROOT}/sfx wwwlist ../httpd.sfx
@@ -326,33 +327,33 @@ echo 1 > BOARDID
 echo Building Host deploy firmware.
 cd ${DEPROOT}/host/dvr
 echo copy dvr host files
-cp -v ~/proj/eagle32/dvr/dvrsvr/dvrsvr .
-cp -v ~/proj/eagle32/dvr/dvrsvr/libfbdraw.so .
-cp -v ~/proj/eagle32/dvr/dvrtime/dvrtime .
-cp -v ~/proj/eagle32/dvr/eaglehost/eaglehost .
-cp -v ~/proj/eagle32/dvr/glog/glog .
-cp -v ~/proj/eagle32/dvr/ioprocess/ioprocess .
-cp -v ~/proj/eagle32/dvr/ioprocess/devicepower  .
-cp -v ~/proj/eagle32/dvr/ioprocess/panelled  .
-cp -v ~/proj/eagle32/dvr/ioprocess/buzzer  .
-cp -v ~/proj/eagle32/dvr/tdev/tdevd .
-cp -v ~/proj/eagle32/dvr/tdev/tdevmount .
-cp -v ~/proj/eagle32/dvr/usbgenkey/usbcheck .
-cp -v ~/proj/eagle32/dvr/tmeft/tmefile .
-cp -v ~/proj/eagle32/dvr/volumeid/md5check .
-cp -v ~/proj/eagle32/dvr/volumeid/volumeid .
-cp -v ~/proj/eagle32/dvr/cfg/cfg .
-cp -v ~/proj/eagle32/dvr/cfgsync/cfgsync .
-cp -v ~/proj/eagle32/dvr/tab102/tab102 .
-cp -v ~/proj/eagle32/dvr/smartupload/smartftp .
+cp -v ${PROJDIR}/dvrsvr/dvrsvr .
+cp -v ${PROJDIR}/dvrsvr/libfbdraw.so .
+cp -v ${PROJDIR}/dvrtime/dvrtime .
+cp -v ${PROJDIR}/eaglehost/eaglehost .
+cp -v ${PROJDIR}/glog/glog .
+cp -v ${PROJDIR}/ioprocess/ioprocess .
+cp -v ${PROJDIR}/ioprocess/devicepower  .
+cp -v ${PROJDIR}/ioprocess/panelled  .
+cp -v ${PROJDIR}/ioprocess/buzzer  .
+cp -v ${PROJDIR}/tdev/tdevd .
+cp -v ${PROJDIR}/tdev/tdevmount .
+cp -v ${PROJDIR}/usbgenkey/usbcheck .
+cp -v ${PROJDIR}/tmeft/tmefile .
+cp -v ${PROJDIR}/volumeid/md5check .
+cp -v ${PROJDIR}/volumeid/volumeid .
+cp -v ${PROJDIR}/cfg/cfg .
+cp -v ${PROJDIR}/cfgsync/cfgsync .
+cp -v ${PROJDIR}/tab102/tab102 .
+cp -v ${PROJDIR}/smartupload/smartftp .
 if [ $mss = "1" ] ; then
-cp -v ~/proj/eagle32/dvr/smartupload2/smartftp .
+cp -v ${PROJDIR}/smartupload2/smartftp .
 fi
-cp -v ~/proj/eagle32/dvr/fw_env/fw_printenv .
-cp -v ~/proj/eagle32/dvr/udhcp/udhcpc .
-cp -v ~/proj/eagle32/dvr/gforce_conv/gforce_conv .
-cp -v ~/proj/eagle32/dvr/vter/vter .
-cp -v ~/proj/eagle32/dvr/broadcast/broadcast .
+cp -v ${PROJDIR}/fw_env/fw_printenv .
+cp -v ${PROJDIR}/udhcp/udhcpc .
+cp -v ${PROJDIR}/gforce_conv/gforce_conv .
+cp -v ${PROJDIR}/vter/vter .
+cp -v ${PROJDIR}/broadcast/broadcast .
 
 arm-linux-strip dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer libfbdraw.so tdevd tdevmount usbcheck tmefile md5check volumeid cfg cfgsync tab102 smartftp fw_printenv udhcpc gforce_conv vter broadcast
 cd ${DEPROOT}/host

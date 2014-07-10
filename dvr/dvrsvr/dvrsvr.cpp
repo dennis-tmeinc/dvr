@@ -1639,6 +1639,56 @@ struct usbkey_plugin_st {
     char mountpoint[128] ;
 } ;
 
+
+// put usb key plug in process here for convieniece
+void dvr_usbkey_plugin()
+{
+#ifdef PWII_APP
+	int rb ;
+	char officerid[128] ;
+    FILE * fpw = fopen("/var/dvr/pwofficerid", "r" );
+    if( fpw ) {
+		rb = fread( officerid, 1, 120, fpw );
+		fclose( fpw );
+		if( rb > 0 ) {
+			officerid[rb]=0 ;	// null terminate
+
+            // select a new offer ID.
+			strcpy( g_policeid, officerid ) ;
+
+			// generate new id list
+			array <string> idlist ;
+			FILE * fid ;
+			int ididx = 0 ;
+			idlist[ididx++] = g_policeid ;
+			fid=fopen(g_policeidlistfile, "r");
+			if( fid ) {
+				while( fgets(officerid, 100, fid) ) {
+					str_trimtail(officerid);
+					if( strlen(officerid)<=0 ) continue ;
+					if( strcmp(officerid, g_policeid)==0 ) continue ;
+					idlist[ididx++]=officerid ;
+				}
+				fclose(fid);
+			}
+
+			// writing new id list to file
+			fid=fopen(g_policeidlistfile, "w");
+			if( fid ) {
+				for( ididx=0; ididx<idlist.size(); ididx++) {
+					fprintf(fid, "%s\n", (char *)idlist[ididx] );
+				}
+				fclose( fid ) ;
+			}
+
+			// let screen display new policeid
+			dvr_log( "New Police ID detected : %s", g_policeid );
+			screen_menu(1);
+		}
+	}
+#endif
+}
+
 void dvrsvr::ReqUsbkeyPlugin()
 {
     int res = 0 ;

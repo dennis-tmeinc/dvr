@@ -1,35 +1,34 @@
 
-# Makefile for Eagle32 DVR ioprocess app 
+# Makefile for Eagle32 sfx app 
 #
 
 CROSS_COMPILE_PREFIX=~/proj/eagle32/hik_toolchain/bin/arm-linux-
 CC=$(CROSS_COMPILE_PREFIX)gcc
 STRIP=$(CROSS_COMPILE_PREFIX)strip
 
+include ../config
+
 SOURCES=sfx.c lzmadec.c LzmaDecode.c
 
 HEADERS=
 
-OBJS = $(patsubst %.c, %.o, $(SOURCES))
+OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
-#LDFLAGS= -lstdc++ -L./eagle32 -lsdk -ldadsp ./eagle32/dsplink.lib
-LDFLAGS= 
-CCFLAGS=
+all: sfx mksfx
 
-all: sfx mksfx sfx86 extractsfx
-
-sfx : $(SOURCES)
-	$(CC) $(CCFLAGS) -o $@ $(SOURCES) $(LDFLAGS)
+sfx : sfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
+	$(CC) $(CFLAGS) -o $@ sfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c $(LDFLAGS)
 	$(STRIP) sfx
 
-sfx86 : $(SOURCES)
-	gcc -o $@ $(SOURCES) $(LDFLAGS)
+sfx86 : sfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
+	gcc -o $@ sfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c 
+	strip sfx86
 
-mksfx : mksfx.c
-	gcc -o mksfx mksfx.c
+mksfx : mksfx.cpp ../lzmasdk/enc.cpp ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c
+	gcc -o $@ mksfx.cpp ../lzmasdk/enc.cpp ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c 
 
-extractsfx : extractsfx.c
-	gcc -o extractsfx extractsfx.c lzmadec.c LzmaDecode.c
+extractsfx : extractsfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
+	gcc -o $@ -g extractsfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c 
 
 clean :
 	rm -f mksfx

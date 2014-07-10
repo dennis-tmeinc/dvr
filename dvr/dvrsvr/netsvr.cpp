@@ -133,6 +133,10 @@ void net_message()
             }
             sendto(msgfd, &dts, sizeof(dts), 0, &(from.addr), from.addrlen);
         }
+        else if ( memcmp( msgbuf, "ofid", 4 )==0 ) {
+			extern void dvr_usbkey_plugin() ;
+			dvr_usbkey_plugin();
+        }
         else if (strncmp(msgbuf, "iamserver", 9)==0) {
             // received response from a smartserver
 

@@ -1,0 +1,66 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<link href="eagle.css" rel="stylesheet" type="text/css" /><title>Power Cycling Test Setup Page</title>
+<script type="text/javascript" src="eagle.js"></script>
+</head>
+<body>
+<!--#include file="header.i"-->
+<div class="tabs">
+<ul>
+<li><a onclick="on_system_click()"><span>System</span></a></li>
+<li><a onclick="on_camera_click()"><span>Camera</span></a></li>
+<li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
+<li><a onclick="on_network_click()"><span>Network</span></a></li>
+<li><a onclick="on_status_click()"><span>Status</span></a></li>
+<li><a onclick="on_tools_click()"><span>Tools</span></a></li>
+<li class="current"><a><span>Cycle</span></a></li>
+</ul>
+</div>
+
+<p>&nbsp;</p>
+
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="apply.html">
+
+<input name="page" value="cycletest" type="hidden" />
+
+<table cellspacing="5">
+
+<tr>
+<td class="col1"><label for="id_cycletest">Enable Power Cycling Test:</label> </td>
+<td><input name="cycletest" id="id_cycletest" value="on" type="checkbox" /></td>
+</tr>
+
+<tr>
+<td class="col1">Cycle Test File:</td>
+<td><input name="cyclefile" /></td>
+</tr>
+
+<tr>
+<td class="col1">Cycle Test Server:</td>
+<td><input name="cycleserver" /></td>
+</tr>
+
+<tr>
+<td class="col1"><label for="id_norecord">Disable Recording:</label> </td>
+<td><input name="norecord" id="id_norecord" value="on" type="checkbox" /></td>
+</tr>
+
+<tr>
+<td></td>
+<td> <input id="id_apply" value="Apply" type="submit" />
+</td>
+</tr>
+
+</table>
+</form>
+
+<script type="text/javascript">
+var formdata = 
+<!--#include file="cycletest_value" --> 
+;
+JSONinitfield( formdata );
+</script>
+</body>
+</html>

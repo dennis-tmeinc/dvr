@@ -1,0 +1,2 @@
+首先将davinci的启动方式改成nfs启动，nfs的根目录可以使用开发广盘中的根文件系统
+然后davinci和statr.sh拷贝到/davinci/目录；最后运行statr.sh脚本即可

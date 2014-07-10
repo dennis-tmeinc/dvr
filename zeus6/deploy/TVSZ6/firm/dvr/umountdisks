@@ -1,0 +1,57 @@
+#!/bin/sh
+
+#  dvrsvr information?
+dvrpidfile=/var/dvr/dvrsvr.pid
+
+#  dvrsvr current working disk.
+dvrcurdisk=/var/dvr/dvrcurdisk
+
+# where dvr disks mounted.
+dvrmountdir=/var/dvr/disks
+
+# hotplug disk mounted here.
+xmountdir=/var/dvr/xdisk
+
+dvrsvrdown=0
+dvrpid=0
+
+# suspend dvrsvr
+if [ -f ${dvrpidfile} -a -f ${dvrcurdisk} ]; then
+    dvrpid=`cat ${dvrpidfile}`
+    kill -USR1 ${dvrpid}
+    for x in 1 2 3 4 5 6 7 8 9 10 ; do
+        if [ -f ${dvrcurdisk} ]; then
+            sleep 3
+        else
+            break
+        fi
+    done
+    dvrsvrdown=1
+fi
+
+cd $xmountdir
+for disks in `ls mount_*` ; do
+    mountdir=`cat ${disks}`
+    for x in 1 2 3 4 5 6 7 8 ; do
+        if [ -d ${mountdir} ] ; then
+           sync;
+           if umount ${mountdir} ; then
+              rm -r ${mountdir}
+           else
+              sleep 1
+           fi
+        else
+           break
+        fi ;
+    done ;
+done
+
+for disks in `ls mount_*` ; do
+    rm ${disks}
+done
+
+# restart dvrsvr
+if [ $dvrsvrdown = 1 ]; then
+kill -USR2 $dvrpid
+fi
+

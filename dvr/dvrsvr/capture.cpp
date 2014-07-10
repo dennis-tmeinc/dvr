@@ -950,7 +950,7 @@ void capture::updateOSD()
 #endif
     line=0 ;
 
-    // prepare first line, Date/time
+    // prepare first line, Date/time , police id
     i=0;
     osd.osdline[line][i++]=8 ;           // x position
     if( linepos[line]>=0 ) {

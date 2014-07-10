@@ -1,0 +1,50 @@
+#!/bin/sh
+
+# ** MDVR514M **
+# Downloading smartlog file to USB stick.
+# 247 Security Inc. 2009
+#
+# Changes:
+# 09/18/2009 Harrison
+#   1. added support for Impact data
+# 11/09/2009 Harrison
+#   1. added support for Multiple/Hybrid disk
+
+if [ ! -d ${USBROOT}/smartlog ] ; then
+ mkdir ${USBROOT}/smartlog
+fi
+
+# start flashing "Don't Remove USB" LED
+/dav/dvr/panelled 1
+
+disk=`cat /var/dvr/dvrcurdisk`
+
+	if [ -d ${disk}/smartlog ]; then
+		for lfile in `ls ${disk}/smartlog/*_L.001`
+		do
+			echo ${lfile}
+			cp -f ${lfile} ${USBROOT}/smartlog/
+			mv ${lfile} ${lfile%L.001}N.001
+		done
+		for lfile in `ls ${disk}/smartlog/*_L.log`
+		do
+			echo ${lfile}
+			cp -f ${lfile} ${USBROOT}/smartlog/
+			mv ${lfile} ${lfile%L.log}N.log
+		done
+		for lfile in `ls ${disk}/smartlog/*_L.peak`
+		do
+			echo ${lfile}
+			cp -f ${lfile} ${USBROOT}/smartlog/
+			mv ${lfile} ${lfile%L.peak}N.peak
+		done
+	fi
+
+sleep 1
+sync
+cd /
+umount ${USBROOT}
+
+# stop flashing "Remove USB" LED
+/dav/dvr/panelled 0
+

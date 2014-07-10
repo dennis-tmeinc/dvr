@@ -1,0 +1,132 @@
+#!/bin/sh
+
+if [ $# -lt 2 ]; then
+  echo 'Usage mkdeploy <APPID> <boardnumber>'
+  exit 1
+fi
+
+DEPROOT=$PWD
+BASEROOT=/home/billzhou/zeus5/ZEUS6S
+
+DATENTIME=`date +%y.%m%d.%H`
+
+OUTPUTDIR=${DEPROOT}/${DATENTIME}
+
+appid=$1
+
+if [ ${appid} = "clean" ]; then
+
+# clean configure file
+    cd ${DEPROOT}/host/www
+    rm -f camera.html
+
+# clean host www files
+    cd ${DEPROOT}/host/www
+    rm -f applysetup eagle_setup eaglehttpd getsetup cfgdown.cgi dvrstatus.cgi mcufwupd
+    cd ${DEPROOT}/host/dvr
+    rm -f httpd.sfx
+
+# clean host firmware files
+    cd ${DEPROOT}/host
+    rm -f dosfsckcheck
+    cd ${DEPROOT}/host/dvr
+    rm -f dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer libfbdraw.so tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
+    rm -f ../sfxrun  
+
+    exit 0
+fi
+
+if [ -z $2 ] ; then
+  boardnumber=1
+else
+  boardnumber=$2
+fi
+
+if [ -z $3 ] ; then
+ special="0"
+else
+ special=$3
+fi
+
+
+mkdir ${OUTPUTDIR}
+
+firmwareid=${appid}.1.0.${DATENTIME}
+echo "Firmware ID: " $firmwareid
+#cd ${DEPROOT}/host/dvr
+#cp dvrsvr.conf.0 dvrsvr.conf
+cd ${DEPROOT}/host/www
+#cp system_s3.html system.html
+cp camera_s3.html camera.html
+cd ${DEPROOT}
+#
+arm-linux-strip sfx
+
+# makeing host board deploy firmware
+cd ${DEPROOT}/host/dvr
+
+cd ${DEPROOT}/host/www
+echo "Build http files"
+cp -v ${BASEROOT}/httpd/eaglehttpd .
+cp -v ${BASEROOT}/httpd/getsetup/getsetup .
+cp -v ${BASEROOT}/httpd/getsetup/applysetup .
+cp -v ${BASEROOT}/httpd/eagle_setup/eagle_setup .
+cp -v ${BASEROOT}/httpd/eagle_setup/mcufwupd .
+cp -v ${BASEROOT}/httpd/eagle_setup/partition .
+cp -v ${BASEROOT}/httpd/cfgdown/cfgdown.cgi .
+cp -v ${BASEROOT}/httpd/cfgdown/dvrstatus.cgi .
+arm-linux-strip applysetup eagle_setup eaglehttpd getsetup cfgdown.cgi dvrstatus.cgi mcufwupd
+arm-linux-strip partition
+
+${DEPROOT}/mksfx ${DEPROOT}/sfx wwwlist ../dvr/httpd.sfx
+
+chmod a+x ../dvr/httpd.sfx
+
+cd ${DEPROOT}/host/ID
+echo ${boardnumber} > BOARDNUM
+echo ${appid} > APPID
+echo 1 > BOARDID
+
+echo Building Host deploy firmware.
+cd ${DEPROOT}/host
+cp -v ${BASEROOT}/dosfsck_check/dosfsckcheck .
+cd ${DEPROOT}/host/dvr
+echo copy dvr host files
+cp -v ${BASEROOT}/dvrsvr/dvrsvr .
+cp -v ${BASEROOT}/dvrsvr/libfbdraw.so .
+cp -v ${BASEROOT}/dvrtime/dvrtime .
+cp -v ${BASEROOT}/eaglehost/eaglehost .
+cp -v ${BASEROOT}/glog/glog .
+cp -v ${BASEROOT}/ioprocess/ioprocess .
+cp -v ${BASEROOT}/ioprocess/devicepower  .
+cp -v ${BASEROOT}/ioprocess/panelled  .
+cp -v ${BASEROOT}/ioprocess/buzzer  .
+cp -v ${BASEROOT}/tdev/tdevd .
+cp -v ${BASEROOT}/tdev/tdevmount .
+cp -v ${BASEROOT}/usbgenkey/usbcheck .
+cp -v ${BASEROOT}/tmeft/tmefile .
+cp -v ${BASEROOT}/volumeid/md5check .
+cp -v ${BASEROOT}/volumeid/volumeid .
+cp -v ${BASEROOT}/cfg/cfg .
+cp -v ${BASEROOT}/tab102/tab102 .
+cp -v ${BASEROOT}/smartupload/smartftp .
+cp -v ${BASEROOT}/fw_env/fw_printenv .
+cp -v ${BASEROOT}/lpc21isp/lpc21isp .
+
+arm-linux-strip dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer libfbdraw.so tdevd tdevmount usbcheck tmefile md5check volumeid cfg tab102 smartftp fw_printenv
+cd ${DEPROOT}/host
+echo ${firmwareid} > dvr/firmwareid
+
+tar -czf dvr.tar.gz dvr
+
+cp  sfxrun.dep  sfxrun
+${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.dep ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW
+chmod a+x ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW
+
+echo Building Host update firmware
+cp  sfxrun.upd  sfxrun
+${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.upd ${OUTPUTDIR}/HOST_${firmwareid}.FW
+chmod a+x ${OUTPUTDIR}/HOST_${firmwareid}.FW
+
+echo Finish!
+

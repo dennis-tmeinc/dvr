@@ -1,0 +1,2007 @@
+/*
+ * Impact data upload: uploadFileFunc thread (to bkserver:5001)
+ * Peak data : main -> wdd (to wdd port 12334)
+ * power off, query : wdd --> main (port 12338)
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/time.h>
+#include <time.h>
+#include <fcntl.h>
+#include <termios.h>
+#include <ctype.h>
+#include <netdb.h>
+#include <pthread.h>
+#include "../dvrsvr/genclass.h"
+#include "../dvrsvr/cfg.h"
+
+#define MCUCMD_SETRTC              0x07
+#define MCUCMD_BOOTREADY           0x08
+#define MCUCMD_ENABLEPEAK          0x0f
+#define MCUCMD_UPLOADACK           0x1A
+#define MCUCMD_ENABLEDI            0x1B
+#define MCUCMD_GET0G               0x18
+#define MCUCMD_UPLOAD              0x19
+
+#define MCULEN 0 /* index of mcu length in the packet */
+#define MCUCMD 3 /* index of mcu command in the packet */
+#define MAX_MCU_QUEUE 16
+#define MAX_MCU_SEND_BUF 13
+#define MAX_MCU_RECV_BUF 13
+#define MCU_BUF_SIZE (4 * 1024)
+
+#define UPLOAD_ACK_SIZE 10
+
+#define YEAR2001 978391063
+
+#define WDD_PORT 12334
+#define TAB102_PORT 12338
+#define BACKUP_PORT 5001
+#define DEBUG_PORT 11330
+
+#define MYDEBUG
+#ifdef MYDEBUG
+#define dprintf(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define dprintf(...)
+#endif
+
+//#define NET_DEBUG
+int dfd = -1;
+
+char tab102b_port_dev[64] = "/dev/ttyUSB1";
+int tab102b_port_baudrate = 19200;     // tab102b default baud
+char hostname[128] = "BUS001";
+#if 0
+struct mcuCommand {
+  unsigned char msg[MAX_MCU_SEND_BUF];
+  struct timeval tvSent;
+  unsigned char len;
+  unsigned char needAck;
+  int maxRetry;
+};
+
+struct mcuCommand g_mcuSendQ[MAX_MCU_QUEUE];
+int g_mcuSendQSize;
+unsigned char mcubuf[MCU_BUF_SIZE];
+int mcudatasize;
+unsigned char g_setRTCAcked, g_uploadAcked, g_end, g_uploadDone;
+unsigned short g_refX, g_refY, g_refZ, g_peakX;
+unsigned short g_peakY, g_peakZ;
+unsigned char g_diHi, g_diLo, g_order, r2;
+int g_uploadSize;
+FILE *g_fp;
+pthread_t g_uploadThreadID;
+char *g_hostaIP;
+int g_sfd = -1;
+int g_uploadConfirmAcked; // MCU send this ack twice
+
+void *uploadFileFunc(void *arg);
+#endif
+#define WIDTH   16
+#define DBUFSIZE 1024
+int dump(unsigned char *s, int len)
+{
+    char buf[DBUFSIZE],lbuf[DBUFSIZE],rbuf[DBUFSIZE];
+    unsigned char *p;
+    int line,i;
+
+    p =(unsigned char *)s;
+    for(line = 1; len > 0; len -= WIDTH, line++) {
+      memset(lbuf, '\0', DBUFSIZE);
+      memset(rbuf, '\0', DBUFSIZE);
+      for(i = 0; i < WIDTH && len > i; i++,p++) {
+	sprintf(buf,"%02x ",(unsigned char) *p);
+	strcat(lbuf,buf);
+	sprintf(buf,"%c",(!iscntrl(*p) && *p <= 0x7f) ? *p : '.');
+	strcat(rbuf,buf);
+      }
+      dprintf("%04x: %-*s    %s\n",line - 1, WIDTH * 3, lbuf, rbuf);
+    }
+    if(!(len%16)) {
+	dprintf("\n");
+    }
+    return line;
+}
+
+int connectNonBlockingTcp(char *addr, short port, int timeout_sec)
+{
+  int sfd, flags, ret, xerrno;
+  socklen_t len;
+  struct sockaddr_in destAddr;
+  fd_set rset, wset;
+  struct timeval timeout;
+
+  sfd = socket(PF_INET, SOCK_STREAM, 0);
+  if (sfd == -1)
+    return -1;
+
+  flags = fcntl(sfd, F_GETFL, 0);
+  if (fcntl(sfd, F_SETFL, flags | O_NONBLOCK) == -1) {
+    close(sfd);
+    return -1;
+  }
+
+  destAddr.sin_family = AF_INET;
+  destAddr.sin_port = htons(port);
+  destAddr.sin_addr.s_addr = inet_addr(addr);
+  memset(&(destAddr.sin_zero), '\0', 8);
+
+  ret = connect(sfd, (struct sockaddr *)&destAddr,
+		sizeof(struct sockaddr));
+  if (ret == 0) {
+    return sfd;
+  } else if ((ret == -1) && (errno != EINPROGRESS)) {
+    close(sfd);
+    return -1;
+  }
+
+  FD_ZERO(&rset);
+  FD_SET(sfd, &rset);
+  wset = rset;
+  timeout.tv_sec = timeout_sec;
+  timeout.tv_usec = 0;
+
+  select(sfd + 1, &rset, &wset, NULL, &timeout);
+
+  if (FD_ISSET(sfd, &rset) || FD_ISSET(sfd, &wset)) {
+    len = sizeof(xerrno);
+    if (getsockopt(sfd, SOL_SOCKET, SO_ERROR, &xerrno, &len) < 0) {
+      close(sfd);
+      return -1;
+    }
+
+    if (xerrno != 0) {
+      close(sfd);
+      return -1;
+    }
+
+    return sfd;
+  }
+
+  close(sfd);
+  return -1;
+
+}
+
+static int blockUntilReadable(int socket, struct timeval* timeout) {
+  int result = -1;
+  do {
+    fd_set rd_set;
+    FD_ZERO(&rd_set);
+    if (socket < 0) break;
+    FD_SET((unsigned) socket, &rd_set);
+    const unsigned numFds = socket+1;
+
+    result = select(numFds, &rd_set, NULL, NULL, timeout);
+    if (timeout != NULL && result == 0) {
+      break; // this is OK - timeout occurred
+    } else if (result <= 0) {
+#if defined(__WIN32__) || defined(_WIN32)
+#else
+      if (errno == EINTR || errno == EAGAIN) continue;
+#endif
+      dprintf("select() error: \n");
+      break;
+    }
+
+    if (!FD_ISSET(socket, &rd_set)) {
+      dprintf("select() error - !FD_ISSET\n");
+      break;
+    }
+  } while (0);
+
+  return result;
+}
+
+/* returns time difference in milliseconds */
+long long timeval_diff(struct timeval *second, struct timeval *first)
+{
+	return (second->tv_sec - first->tv_sec) * 1000LL +
+			(second->tv_usec - first->tv_usec) / 1000LL;
+}
+
+/* x: 0 - 99,999 */
+int binaryToBCD(int x)
+{
+  int m, I, b, cc;
+  int bcd;
+
+  cc = (x % 100) / 10;
+  b = (x % 1000) / 100;
+  I = (x % 10000) / 1000;
+  m = x / 10000;
+
+  bcd = (m * 9256 + I * 516 + b * 26 + cc) * 6 + x;
+
+  return bcd;
+}
+
+static int connectTcp(char *addr, short port)
+{
+  int sfd;
+  struct sockaddr_in destAddr;
+
+  sfd = socket(PF_INET, SOCK_STREAM, 0);
+  if (sfd == -1)
+    return -1;
+
+  destAddr.sin_family = AF_INET;
+  destAddr.sin_port = htons(port);
+  destAddr.sin_addr.s_addr = inet_addr(addr);
+  memset(&(destAddr.sin_zero), '\0', 8);
+
+  if (connect(sfd, (struct sockaddr *)&destAddr,
+	      sizeof(struct sockaddr)) == -1) {
+    close(sfd);
+    return -1;
+  }
+
+  return sfd;
+}
+
+int makeServerSocket(int type, unsigned short port, int enableBroadcast)
+{
+  int sock, yes = 1;
+  struct sockaddr_in name;
+
+  /* Create the socket. */
+  sock = socket (PF_INET, type, 0);
+  if (sock < 0) {
+    perror ("socket");
+    return -1;
+  }
+
+  if (type == SOCK_DGRAM && enableBroadcast) {
+    if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &yes, sizeof(int)) < 0) {
+      perror("setsockopt");
+      close(sock);
+      return -1;
+    }
+  }
+
+  yes = 1;
+  if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) < 0) {
+    perror("setsockopt");
+    close(sock);
+    return -1;
+  }
+ 
+  /* Give the socket a name. */
+  name.sin_family = AF_INET;
+  name.sin_port = htons (port);
+  name.sin_addr.s_addr = htonl (INADDR_ANY);
+  memset(&(name.sin_zero), '\0', 8);
+  if (bind (sock, (struct sockaddr *) &name, sizeof (name)) < 0) {
+    perror ("tab102:bind");
+    close(sock);
+    return -1;
+  }
+
+  if (type == SOCK_DGRAM) {
+    return sock;
+  }
+
+  /* listen */
+  if (listen(sock, 20) == -1) {
+    perror("listen");
+    close(sock);
+    return -1;
+  }
+
+  return sock;
+}
+
+speed_t get_baudrate(int speed)
+{
+  speed_t baudrate = 0;
+  switch (speed) {
+  case 110:
+    baudrate = B110;
+    break;
+  case 300:
+    baudrate = B300;
+    break;
+  case 600:
+    baudrate = B600;
+    break;
+  case 1200:
+    baudrate = B1200;
+    break;
+  case 2400:
+    baudrate = B2400;
+    break;
+  case 4800:
+    baudrate = B4800;
+    break;
+  case 9600:
+    baudrate = B9600;
+    break;
+   case 19200:
+    baudrate = B19200;
+    break;
+  case 38400:
+    baudrate = B38400;
+    break;
+  case 57600:
+    baudrate = B57600;
+    break;
+  case 115200:
+    baudrate = B115200;
+    break;
+  default:
+    break;
+  }
+
+  return baudrate;
+}
+
+int openCom(char *dev, int speed)
+{
+  int fd;
+  struct termios tio;
+  speed_t baudrate;
+  
+  baudrate = get_baudrate(speed);
+  if (!baudrate) {
+    return -1;
+  }
+
+  fd = open((char *)dev, O_RDWR | O_NOCTTY | O_NDELAY);
+  if (fd == -1) {
+    perror(dev);
+    return -1;
+  }
+  dprintf("%s opened\n", dev);
+
+  tcgetattr(fd, &tio);
+
+  /* set speed */
+  cfsetispeed(&tio, baudrate);
+  cfsetospeed(&tio, baudrate);
+  tio.c_cflag |= (CLOCAL | CREAD); /* minimum setting */
+  /* 8N1 setting */
+  tio.c_cflag &= ~PARENB; /* No parity */
+  tio.c_cflag &= ~CSTOPB; /* 1 stop bit */
+  tio.c_cflag &= ~CSIZE; /* Mask character size bits and */
+  tio.c_cflag |= CS8; /* set the size to 8 bit */
+    
+  tio.c_cflag &= ~CRTSCTS; /* Use CNEW_RTSCTS, No hardware flowcontrol */
+  tio.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG); /* raw input */
+  tio.c_iflag &= ~(IXON | IXOFF | IXANY| ICRNL); /* no software flowcontrol */
+  tio.c_oflag &= ~OPOST; /* raw output */
+    
+  tio.c_cc[VINTR] = 0;
+  tio.c_cc[VQUIT] = 0;
+  tio.c_cc[VERASE] = 0;
+  tio.c_cc[VKILL] = 0;
+  tio.c_cc[VEOF] = 4;
+  tio.c_cc[VTIME] = 0;
+  tio.c_cc[VMIN] = 1; /* minimum number of characters to read */
+  tio.c_cc[VSWTC] = 0;
+  tio.c_cc[VSTART] = 0;
+  tio.c_cc[VSTOP] = 0;
+  tio.c_cc[VSUSP] = 0;
+  tio.c_cc[VEOL] = 0;
+  tio.c_cc[VREPRINT] = 0;
+  tio.c_cc[VDISCARD] = 0;
+  tio.c_cc[VWERASE] = 0;
+  tio.c_cc[VLNEXT] = 0;
+  tio.c_cc[VEOL2] = 0;
+  
+  tcflush(fd, TCIFLUSH);
+  tcsetattr(fd, TCSANOW, &tio);
+
+  return fd;
+}
+
+static unsigned char getChecksum(unsigned char *buf, int size)
+{
+  unsigned char cs = 0;
+  int i;
+
+  for (i = 0; i < size; i++) {
+    cs += buf[i];
+  }
+
+  cs = 0xff - cs;
+  cs++;
+
+  return  cs;
+}
+
+static int verifyChecksum(unsigned char *buf, int size)
+{
+  unsigned char cs = 0;
+  int i;
+
+  for (i = 0; i < size; i++) {
+    cs += buf[i];
+  }
+
+  if (cs)
+    return 1;
+
+  return  0;
+}
+
+/* can be called many times until it returns 0 */
+int getOnePacketFromBuffer(unsigned char *buf, int bufsize,
+			   unsigned char *rbuf, int rLen) {
+  int packetSize;
+
+  if (!rLen) {
+    return 0;
+  } else {
+    /* can't handle too big data */
+    if (rLen > MCU_BUF_SIZE)
+      rLen = MCU_BUF_SIZE;
+
+    /* add received data to the mcu buffer */
+    if (mcudatasize + rLen > MCU_BUF_SIZE) {
+      /* we are receiving garbages or not handling fast enough */
+      dprintf("overflow:giving up %d b\n", mcudatasize);
+      mcudatasize = 0;
+    }
+
+    //fprintf(stderr, "copying %d b to mcubuf(size:%d)\n",rLen,mcudatasize);
+    memcpy(mcubuf + mcudatasize, rbuf, rLen);
+    mcudatasize += rLen;
+  }
+
+  if (mcudatasize == 0)
+    return 0;
+
+  packetSize = mcubuf[MCULEN];
+  if (g_uploadAcked >= 2) {
+    /* upload data */
+    packetSize = mcudatasize;
+#if 0
+  } else if (mcubuf[MCULEN] == 0xf1) { /* peak data */
+    packetSize = 10;
+#endif
+  } else if (mcubuf[MCULEN] > MAX_MCU_RECV_BUF) {
+    /* check the length, if it's too long, it's a wrong byte */
+    if (mcudatasize < 4) {
+      return 0;
+    }
+    
+    dprintf("length %d too big for cmd %02x\n",
+	    mcubuf[MCULEN],mcubuf[MCUCMD]);
+    /* discard the data */
+    mcudatasize = 0;
+    return 0;
+  }
+
+  //fprintf(stderr, "len:%d,bufsize:%d\n",packetSize, mcudatasize);
+  if (mcudatasize >= packetSize) {
+    if (bufsize < packetSize) {
+      /* buf too small */
+      mcudatasize = 0;
+      return 0;
+    }
+
+    /* copy one frame to the buffer */
+    memcpy(buf, mcubuf, packetSize);
+    //fprintf(stderr, "copied one frame(%d)\n",packetSize);
+    /* save the size to return in a temporary variable */
+    bufsize = packetSize;
+    if (mcudatasize > packetSize) {
+      /* copy remaining bytes to the head of mcubuffer */
+      //fprintf(stderr, "saving remainging(%d)\n",mcudatasize-packetSize);
+      memmove(mcubuf, mcubuf + packetSize, mcudatasize - packetSize);
+    }
+    mcudatasize -= packetSize;
+
+    return bufsize;
+  }
+
+  return 0;
+}
+
+static int writeCom(int fd, unsigned char *buf, int size)
+{
+  int ret;
+
+  if (fd < 0)
+    return -1;
+
+  ret = write(fd, buf, size);
+  if (ret < 0) {
+    perror("writeCom");
+    return -1;
+  }
+
+  dprintf("DM-->MCU(%d)\n", ret);
+  dump(buf, ret);
+
+  return ret;
+}
+
+/* remove the 1st message from the queue */
+void popMsgOut()
+{
+  int i;
+
+  if (!g_mcuSendQSize)
+    return;
+
+  for (i = 0; i < g_mcuSendQSize - 1; i++) {
+    g_mcuSendQ[i].needAck = g_mcuSendQ[i+1].needAck;
+    g_mcuSendQ[i].maxRetry = g_mcuSendQ[i+1].maxRetry;
+    g_mcuSendQ[i].tvSent = g_mcuSendQ[i+1].tvSent;
+    g_mcuSendQ[i].len = g_mcuSendQ[i+1].len;
+    memcpy(g_mcuSendQ[i].msg, g_mcuSendQ[i+1].msg, g_mcuSendQ[i+1].len);
+  }
+  g_mcuSendQSize--;
+  if (g_mcuSendQSize < 0)
+    g_mcuSendQSize = 0;
+  g_mcuSendQ[g_mcuSendQSize].len = 0;
+  g_mcuSendQ[g_mcuSendQSize].needAck = 0;
+  g_mcuSendQ[g_mcuSendQSize].maxRetry = 0;
+  g_mcuSendQ[g_mcuSendQSize].tvSent.tv_sec = 0;
+}
+
+/* send messages until a message requiring Ack is encoutered */
+int sendMessagesInMcuQ(int fd)
+{
+  while (1) {
+    if (g_mcuSendQSize <= 0) {
+      g_mcuSendQSize = 0;
+      return 1;
+    }
+    
+    /* message alread sent and need ack? */
+    if (g_mcuSendQ[0].tvSent.tv_sec)
+      return 1;
+    
+    dprintf("sendMessagesInMcuQ:%d\n", g_mcuSendQSize);
+    if (writeCom(fd, g_mcuSendQ[0].msg, g_mcuSendQ[0].len) == -1) {
+      perror("mcu write");
+      return 1;
+    }
+    
+    if (g_mcuSendQ[0].needAck) {
+      gettimeofday(&g_mcuSendQ[0].tvSent, NULL);
+      break;
+    } else {
+      popMsgOut(); /* no need to wait for ack */
+    }
+
+    usleep(50);
+  }
+
+  return 0;
+}
+
+/* add command to send to the queue.
+ * send right away if there is no command in the queue,
+ * and save the time sent
+ */
+int addToMcuQ(int fd, unsigned char *buf, int size, int needAck, int retry)
+{
+  if (size > MAX_MCU_SEND_BUF)
+    return 1;
+
+  if (g_mcuSendQSize >= MAX_MCU_QUEUE) {
+    dprintf("mcu send Q full\n");
+    return 1;
+  }
+
+  memcpy(g_mcuSendQ[g_mcuSendQSize].msg, buf, size);
+  g_mcuSendQ[g_mcuSendQSize].len = size;
+  g_mcuSendQ[g_mcuSendQSize].needAck = (unsigned char)needAck;
+  g_mcuSendQ[g_mcuSendQSize].maxRetry = (unsigned char)retry;
+  g_mcuSendQ[g_mcuSendQSize].tvSent.tv_sec = 0;
+  g_mcuSendQSize++;
+
+  dprintf("cmd %02x added to Q(len:%d,%d)\n",
+	  buf[MCUCMD], size, g_mcuSendQSize);
+
+  if (g_mcuSendQSize == 1) {
+    sendMessagesInMcuQ(fd);
+  }
+
+  return 0;
+}
+
+int checkMcuSendQ(int fd, int cmdRcvd)
+{
+  struct timeval tv;
+
+  gettimeofday(&tv, NULL);
+
+  if (cmdRcvd) {
+    if (!g_mcuSendQSize) {
+      fprintf(stderr, "Ack not expected:%02x\n", cmdRcvd);
+      return 1;
+    }
+
+    if (g_mcuSendQ[0].msg[MCUCMD] == cmdRcvd) {
+      /* got ack */
+      popMsgOut();
+      fprintf(stderr, "%02x popout:%d\n", cmdRcvd, g_mcuSendQSize);
+    }
+  }
+
+  /* check time out for already sent message if any.
+   * 1. message with time stamp: message sent requiring Ack
+   * 2. message without time   : message to be sent
+   */
+  if (g_mcuSendQSize &&
+      g_mcuSendQ[0].tvSent.tv_sec &&
+      timeval_diff(&tv, &g_mcuSendQ[0].tvSent) >= 3000) {
+    /* time out */
+    fprintf(stderr, "mcu %02x timed out:%d\n",
+	    g_mcuSendQ[0].msg[MCUCMD], g_mcuSendQSize);
+    if (g_mcuSendQ[0].maxRetry > 0) {
+      g_mcuSendQ[0].maxRetry--;
+      g_mcuSendQ[0].tvSent.tv_sec = 0; /* send again */
+    } else {
+      popMsgOut();
+      g_uploadDone = 1;
+    }
+  } else if (g_mcuSendQSize &&
+	     g_mcuSendQ[0].tvSent.tv_sec &&
+	     (tv.tv_sec < g_mcuSendQ[0].tvSent.tv_sec)) {
+    /* in case user changed time backward */
+    fprintf(stderr, "mcu %02x timed out\n", g_mcuSendQ[0].msg[MCUCMD]);
+    popMsgOut();
+    g_uploadDone = 1;
+  }
+
+  sendMessagesInMcuQ(fd);
+
+  return 0;
+}
+
+int sendUploadRequest(int fd, int sendNow)
+{
+  int bi;
+  unsigned char txbuf[32];
+
+  bi = 0;
+  txbuf[bi++] = 0x06; // len
+  txbuf[bi++] = 0x04; // dest addr
+  txbuf[bi++] = 0x00; // my addr
+  txbuf[bi++] = MCUCMD_UPLOAD; // cmd
+  txbuf[bi++] = 0x02; // req
+  txbuf[bi] = getChecksum(txbuf, bi); // checksum
+  bi++;
+
+  if (sendNow) {
+    return writeCom(fd, txbuf, bi);
+  }
+
+  return addToMcuQ(fd, txbuf, bi, 1, 2);
+}
+
+int sendSetRTC(int fd, struct tm *t, int sendNow)
+{
+  int bi;
+  unsigned char txbuf[32];
+
+  bi = 0;
+  txbuf[bi++] = 0x0d; // len
+  txbuf[bi++] = 0x04; // dest addr
+  txbuf[bi++] = 0x00; // my addr
+  txbuf[bi++] = MCUCMD_SETRTC; // cmd
+  txbuf[bi++] = 0x02; // req
+  txbuf[bi++] = (unsigned char)binaryToBCD(t->tm_sec);  // sec
+  txbuf[bi++] = (unsigned char)binaryToBCD(t->tm_min);  // min
+  txbuf[bi++] = (unsigned char)binaryToBCD(t->tm_hour); // hour
+  txbuf[bi++] = t->tm_wday + 1; // day of week
+  txbuf[bi++] = (unsigned char)binaryToBCD(t->tm_mday); // day
+  txbuf[bi++] = (unsigned char)binaryToBCD(t->tm_mon + 1); // month
+  txbuf[bi++] = (unsigned char)binaryToBCD(t->tm_year - 100); // year
+  txbuf[bi] = getChecksum(txbuf, bi); // checksum
+  bi++;
+
+  if (sendNow) {
+    return writeCom(fd, txbuf, bi);
+  }
+
+  return addToMcuQ(fd, txbuf, bi, 1, 0);
+}
+
+int send0GRequest(int fd)
+{
+  int bi;
+  unsigned char txbuf[32];
+
+  bi = 0;
+  txbuf[bi++] = 0x06; // len
+  txbuf[bi++] = 0x04; // RF module addr
+  txbuf[bi++] = 0x00; // my addr
+  txbuf[bi++] = MCUCMD_GET0G; // cmd
+  txbuf[bi++] = 0x02; // req
+  txbuf[bi] = getChecksum(txbuf, bi); // checksum
+  bi++;
+
+  return addToMcuQ(fd, txbuf, bi, 1, 2);
+}
+
+int sendBootReady(int fd, int sendNow)
+{
+  int bi;
+  unsigned char txbuf[32];
+
+  bi = 0;
+  txbuf[bi++] = 0x06; // len
+  txbuf[bi++] = 0x04; // RF module addr
+  txbuf[bi++] = 0x00; // my addr
+  txbuf[bi++] = MCUCMD_BOOTREADY; // cmd
+  txbuf[bi++] = 0x02; // req
+  txbuf[bi] = getChecksum(txbuf, bi); // checksum
+  bi++;
+
+  if (sendNow) {
+    return writeCom(fd, txbuf, bi);
+  }
+
+  return addToMcuQ(fd, txbuf, bi, 1, 2);
+}
+
+int sendEnablePeak(int fd)
+{
+  int bi;
+  unsigned char txbuf[32];
+
+  bi = 0;
+  txbuf[bi++] = 0x06; // len
+  txbuf[bi++] = 0x04; // RF module addr
+  txbuf[bi++] = 0x00; // my addr
+  txbuf[bi++] = MCUCMD_ENABLEPEAK; // cmd
+  txbuf[bi++] = 0x02; // req
+  txbuf[bi] = getChecksum(txbuf, bi); // checksum
+  bi++;
+
+  return addToMcuQ(fd, txbuf, bi, 1, 2);
+}
+
+int sendUploadAck(int fd, int sendNow)
+{
+  int bi;
+  unsigned char txbuf[32];
+
+  g_uploadConfirmAcked = 0;
+  
+  bi = 0;
+  txbuf[bi++] = 0x07; // len
+  txbuf[bi++] = 0x04; // RF module addr
+  txbuf[bi++] = 0x00; // my addr
+  txbuf[bi++] = MCUCMD_UPLOADACK; // cmd
+  txbuf[bi++] = 0x02; // req
+  txbuf[bi++] = 0x01;
+  txbuf[bi] = getChecksum(txbuf, bi); // checksum
+  bi++;
+
+  if (sendNow) {
+    return writeCom(fd, txbuf, bi);
+  }
+
+  return addToMcuQ(fd, txbuf, bi, 1, 2);
+}
+
+int sendEnableDI(int fd, unsigned char enable)
+{
+  int bi;
+  unsigned char txbuf[32];
+
+  bi = 0;
+  txbuf[bi++] = 0x07; // len
+  txbuf[bi++] = 0x04; // RF module addr
+  txbuf[bi++] = 0x00; // my addr
+  txbuf[bi++] = MCUCMD_ENABLEDI; // cmd
+  txbuf[bi++] = 0x02; // req
+  txbuf[bi++] = enable; // DI enable:0x40, disable:0
+  txbuf[bi] = getChecksum(txbuf, bi); // checksum
+  bi++;
+
+  return addToMcuQ(fd, txbuf, bi, 1, 2);
+}
+
+static int freadAll(FILE *fp, unsigned char *buf, int len)
+{
+  int total = 0, n;
+  int left = len;
+
+  while (total < len) {
+    n = fread(buf, 1, left, fp);
+    //fprintf(stderr, "fread:%d\n", n);
+    if (!n) break;
+    total += n;
+    left -=n;
+  }
+
+  return total;
+}
+
+static int sendDI()
+{
+  unsigned char buf[32];
+  int ret;
+
+  buf[0] = 0x02;
+  buf[1] = 'D';
+  buf[2] = g_diHi;
+  buf[3] = g_diLo;
+  buf[4] = 0x03;
+  ret = send(g_sfd, buf, 5, MSG_NOSIGNAL);
+  if (ret < 0) {
+    close(g_sfd);
+    g_sfd = connectTcp(g_hostaIP, WDD_PORT);
+    if (g_sfd > 0) {
+      ret = send(g_sfd, buf, 5, MSG_NOSIGNAL);
+    }
+  }
+
+  return ret;
+}
+
+void writePeakData() {
+    FILE *fp;
+    
+    fp = fopen("/var/dvr/disks/d_sda1/test.txt", "a");
+    if (fp) {
+      fprintf(fp, "testfile..xkkckdkssiekekdd:%d,%d,%d\n", g_peakX,g_peakY,g_peakZ);
+      fclose(fp);
+    }
+}
+
+static int sendPeakData()
+{
+  unsigned char buf[32];
+  int ret;
+
+  buf[0] = 0x02;
+  buf[1] = 'P';
+  if (((g_order & 0xf0) == 0x10) || ((g_order & 0xf0) == 0x20)) {
+    if (((g_order & 0x0f) == 0x01) || ((g_order & 0x0f) == 0x02)) {
+      buf[2] =  (g_refX >> 8) & 0xff;
+      buf[3] =  (g_refX << 0) & 0xff;
+      buf[4] =  (g_refY >> 8) & 0xff;
+      buf[5] =  (g_refY << 0) & 0xff;
+      buf[6] =  (g_refZ >> 8) & 0xff;
+      buf[7] =  (g_refZ << 0) & 0xff;
+      buf[8] =  (g_peakX >> 8) & 0xff;
+      buf[9] =  (g_peakX << 0) & 0xff;
+      buf[10] = (g_peakY >> 8) & 0xff;
+      buf[11] = (g_peakY << 0) & 0xff;
+      buf[12] = (g_peakZ >> 8) & 0xff;
+      buf[13] = (g_peakZ << 0) & 0xff;
+    } else {
+      buf[2] =  (g_refY >> 8) & 0xff;
+      buf[3] =  (g_refY << 0) & 0xff;
+      buf[4] =  (g_refX >> 8) & 0xff;
+      buf[5] =  (g_refX << 0) & 0xff;
+      buf[6] =  (g_refZ >> 8) & 0xff;
+      buf[7] =  (g_refZ << 0) & 0xff;
+      buf[8] =  (g_peakY >> 8) & 0xff;
+      buf[9] =  (g_peakY << 0) & 0xff;
+      buf[10] = (g_peakX >> 8) & 0xff;
+      buf[11] = (g_peakX << 0) & 0xff;
+      buf[12] = (g_peakZ >> 8) & 0xff;
+      buf[13] = (g_peakZ << 0) & 0xff;
+    }
+  } else if (((g_order & 0xf0) == 0x30) || ((g_order & 0xf0) == 0x40)) {
+    if (((g_order & 0x0f) == 0x01) || ((g_order & 0x0f) == 0x02)) {
+      buf[2] =  (g_refY >> 8) & 0xff;
+      buf[3] =  (g_refY << 0) & 0xff;
+      buf[4] =  (g_refZ >> 8) & 0xff;
+      buf[5] =  (g_refZ << 0) & 0xff;
+      buf[6] =  (g_refX >> 8) & 0xff;
+      buf[7] =  (g_refX << 0) & 0xff;
+      buf[8] =  (g_peakY >> 8) & 0xff;
+      buf[9] =  (g_peakY << 0) & 0xff;
+      buf[10] = (g_peakZ >> 8) & 0xff;
+      buf[11] = (g_peakZ << 0) & 0xff;
+      buf[12] = (g_peakX >> 8) & 0xff;
+      buf[13] = (g_peakX << 0) & 0xff;
+    } else {
+      buf[2] =  (g_refZ >> 8) & 0xff;
+      buf[3] =  (g_refZ << 0) & 0xff;
+      buf[4] =  (g_refY >> 8) & 0xff;
+      buf[5] =  (g_refY << 0) & 0xff;
+      buf[6] =  (g_refX >> 8) & 0xff;
+      buf[7] =  (g_refX << 0) & 0xff;
+      buf[8] =  (g_peakZ >> 8) & 0xff;
+      buf[9] =  (g_peakZ << 0) & 0xff;
+      buf[10] = (g_peakY >> 8) & 0xff;
+      buf[11] = (g_peakY << 0) & 0xff;
+      buf[12] = (g_peakX >> 8) & 0xff;
+      buf[13] = (g_peakX << 0) & 0xff;
+    }
+  } else if (((g_order & 0xf0) == 0x50) || ((g_order & 0xf0) == 0x60)) {
+    if (((g_order & 0x0f) == 0x01) || ((g_order & 0x0f) == 0x02)) {
+      buf[2] =  (g_refX >> 8) & 0xff;
+      buf[3] =  (g_refX << 0) & 0xff;
+      buf[4] =  (g_refZ >> 8) & 0xff;
+      buf[5] =  (g_refZ << 0) & 0xff;
+      buf[6] =  (g_refY >> 8) & 0xff;
+      buf[7] =  (g_refY << 0) & 0xff;
+      buf[8] =  (g_peakX >> 8) & 0xff;
+      buf[9] =  (g_peakX << 0) & 0xff;
+      buf[10] = (g_peakZ >> 8) & 0xff;
+      buf[11] = (g_peakZ << 0) & 0xff;
+      buf[12] = (g_peakY >> 8) & 0xff;
+      buf[13] = (g_peakY << 0) & 0xff;
+    } else {
+      buf[2] =  (g_refZ >> 8) & 0xff;
+      buf[3] =  (g_refZ << 0) & 0xff;
+      buf[4] =  (g_refX >> 8) & 0xff;
+      buf[5] =  (g_refX << 0) & 0xff;
+      buf[6] =  (g_refY >> 8) & 0xff;
+      buf[7] =  (g_refY << 0) & 0xff;
+      buf[8] =  (g_peakZ >> 8) & 0xff;
+      buf[9] =  (g_peakZ << 0) & 0xff;
+      buf[10] = (g_peakX >> 8) & 0xff;
+      buf[11] = (g_peakX << 0) & 0xff;
+      buf[12] = (g_peakY >> 8) & 0xff;
+      buf[13] = (g_peakY << 0) & 0xff;
+    }
+  }
+  buf[14] = 0x03;
+  ret = send(g_sfd, buf, 15, MSG_NOSIGNAL);
+  if (ret < 0) {
+    close(g_sfd);
+    g_sfd = connectTcp(g_hostaIP, WDD_PORT);
+    if (g_sfd > 0) {
+      ret = send(g_sfd, buf, 15, MSG_NOSIGNAL);
+    }
+  }
+
+  return ret;
+}
+
+void writeDebug(char *msg)
+{
+  if (dfd != -1) {
+    send(dfd, msg, strlen(msg) + 1, MSG_NOSIGNAL);
+  } else {
+    FILE *fp;
+    
+    fp = fopen("/var/run/tab102", "a");
+    if (fp) {
+      fprintf(fp, "%s\n", msg);
+      fclose(fp);
+    }
+  }
+}
+
+int uploadSize, fileSize, total;
+#define MAX_MCU_PACKET_SIZE (4 * 1024)
+int handle_mcu(int fd, unsigned char *rxbuf, int len)
+{
+  int packetLen;
+  unsigned char buf[MAX_MCU_PACKET_SIZE];
+
+  fprintf(stderr, "handle_mcu:%d\n", len);
+  total += len;
+  //dump(rxbuf, len);
+
+  while (1) {
+    packetLen = getOnePacketFromBuffer(buf, MAX_MCU_PACKET_SIZE, rxbuf, len);
+    if (len)
+      len = 0; // used the buffer. Don't use it again.
+
+    if ((g_uploadAcked < 2) && (packetLen < 6))
+      break;
+
+
+    if (g_uploadAcked < 2) { /* we are not uploading */
+      dump(buf, packetLen);
+      if (verifyChecksum(buf, packetLen)) {
+	fprintf(stderr, "*Checksum Error*\n");
+	continue;
+      }
+    } else {
+      if (!g_fp) {
+	//g_fp = fopen("/var/run/ipdata", "w");
+	g_fp = fopen("/var/dvr/disks/d_sda1/ipdata", "w");
+      }
+      if (g_fp) {
+	int written;
+	written = fwrite(buf, sizeof(unsigned char), packetLen, g_fp);
+	if (written > 0)
+	  fileSize += written;
+      }
+      
+      //if (!uploadSize)
+      //dump(buf, packetLen);
+      
+      fprintf(stderr, ".");
+      uploadSize += packetLen;
+      if (uploadSize >= (g_uploadSize + 7 + 1)) {
+	fprintf(stderr, "uploaded:%d, filesize:%d\n", uploadSize, fileSize);
+	g_uploadAcked = 0;
+	if (g_fp) fclose(g_fp); g_fp = NULL;
+	/* verify checksum */
+	unsigned char *tempBuf;
+	tempBuf = (unsigned char *)malloc(uploadSize);
+	if (tempBuf) {
+	  g_fp = fopen("/var/run/ipdata", "r");
+	  if (g_fp) {
+	    int ret;
+	    ret = freadAll(g_fp, tempBuf, uploadSize);
+	    if (ret == uploadSize) {
+	      fprintf(stderr, "read ipdata success\n");
+	      if (verifyChecksum(tempBuf, uploadSize)) {
+		fprintf(stderr, "*Checksum Error*\n");
+		fclose(g_fp); g_fp = NULL;
+		continue;
+	      }
+	    }
+	  }
+	  free(tempBuf);
+	}
+	if (g_fp) fclose(g_fp);
+	g_fp = NULL;
+	sendUploadAck(fd, 0);
+	/* do file upload */
+	g_uploadDone = 0;
+#if 0
+	if (!g_uploadThreadID) {
+	  pthread_create(&g_uploadThreadID, NULL, uploadFileFunc, NULL);
+	  pthread_detach(g_uploadThreadID);
+	}
+#endif
+      }
+      return 0;
+    }
+    
+    if ((buf[0] == 0x06) &&
+	(buf[1] == 0x00) &&
+	(buf[2] == 0x04) &&
+	(buf[3] == MCUCMD_SETRTC) &&
+	(buf[4] == 0x03)) {
+      g_setRTCAcked = 1;
+      writeDebug("rtc\n");
+      checkMcuSendQ(fd, MCUCMD_SETRTC);     
+      sendUploadRequest(fd, 0);
+#if 0
+    } else if ((buf[0] == 0xf1) &&
+	       (buf[3] == 0xf2)) {
+      if ((packetLen < 10) || (buf[6] != 0xf3))
+	continue;
+
+      g_peakX = (buf[1] << 8) | buf[2];
+      g_peakY = (buf[4] << 8) | buf[5];
+      g_peakZ = (buf[7] << 8) | buf[8];
+      fprintf(stderr, "peak x:%d, y:%d, z:%d\n", g_peakX,g_peakY,g_peakZ);
+#endif
+    } else if ((buf[0] == 0x0c) &&
+	       (buf[1] == 0x00) &&
+	       (buf[2] == 0x04) &&
+	       (buf[3] == 0x1e) &&
+	       (buf[4] == 0x02)) {
+      if (packetLen < 12)
+	continue;
+
+      g_peakX = (buf[5] << 8) | buf[6];
+      g_peakY = (buf[7] << 8) | buf[8];
+      g_peakZ = (buf[9] << 8) | buf[10];
+      fprintf(stderr, "peak x:%d, y:%d, z:%d\n", g_peakX,g_peakY,g_peakZ);
+      //sendPeakData();
+      writePeakData();
+    } else if ((buf[0] == 0x08) &&
+	       (buf[1] == 0x00) &&
+	       (buf[2] == 0x04) &&
+	       (buf[3] == 0x1c) &&
+	       (buf[4] == 0x02)) {
+      if (packetLen < 8)
+	continue;
+
+      g_diHi = buf[5]; /* bit 8-11 */
+      g_diLo = buf[6]; /* bit 0- 7 */
+      fprintf(stderr, "DI %02x %02x\n", g_diHi, g_diLo);
+      //sendDI();
+    } else if ((buf[0] == 0x06) &&
+	       (buf[1] == 0x00) &&
+	       (buf[2] == 0x04) &&
+	       (buf[3] == MCUCMD_BOOTREADY) &&
+	       (buf[4] == 0x03)) {
+      fprintf(stderr, "boot ready\n");
+      checkMcuSendQ(fd, MCUCMD_BOOTREADY);     
+      sendEnablePeak(fd);
+    } else if ((buf[0] == 0x06) &&
+	       (buf[1] == 0x00) &&
+	       (buf[2] == 0x04) &&
+	       (buf[3] == MCUCMD_UPLOADACK) &&
+	       (buf[4] == 0x03)) {
+      fprintf(stderr, "upload confirm acked\n");
+      // MCU send this twice
+      checkMcuSendQ(fd, MCUCMD_UPLOADACK);     
+      if (!g_uploadConfirmAcked) {
+	g_uploadConfirmAcked = 1;
+	if (!g_end) send0GRequest(fd);
+      }
+    } else if ((buf[0] == 0x06) &&
+	       (buf[1] == 0x00) &&
+	       (buf[2] == 0x04) &&
+	       (buf[3] == MCUCMD_ENABLEPEAK) &&
+	       (buf[4] == 0x03)) {
+      fprintf(stderr, "Enable peak acked\n");
+      checkMcuSendQ(fd, MCUCMD_ENABLEPEAK);     
+      sendEnableDI(fd, 0x40);
+    } else if ((buf[0] == 0x06) &&
+	       (buf[1] == 0x00) &&
+	       (buf[2] == 0x04) &&
+	       (buf[3] == MCUCMD_ENABLEDI) &&
+	       (buf[4] == 0x03)) {
+      fprintf(stderr, "Enable DI acked\n");
+      checkMcuSendQ(fd, MCUCMD_ENABLEDI);     
+    } else if ((buf[0] == 0x0d) &&
+	       (buf[1] == 0x00) &&
+	       (buf[2] == 0x04) &&
+	       (buf[3] == MCUCMD_GET0G) &&
+	       (buf[4] == 0x03)) {
+      if (packetLen < 12)
+	continue;
+
+      g_refX = (buf[5] << 8) | buf[6];
+      g_refY = (buf[7] << 8) | buf[8];
+      g_refZ = (buf[9] << 8) | buf[10];
+      g_order = buf[11];
+      fprintf(stderr, "0G x:%d, y:%d, z:%d\n", g_refX,g_refY,g_refZ);
+      checkMcuSendQ(fd, MCUCMD_GET0G);  
+      sendBootReady(fd, 0);
+    } else if ((buf[0] == 0x0a) &&
+	       (buf[1] == 0x00) &&
+	       (buf[2] == 0x04) &&
+	       (buf[3] == MCUCMD_UPLOAD) &&
+	       (buf[4] == 0x03)) {
+      if (packetLen < 10)
+	continue;
+      
+      uploadSize = fileSize = total = 0;
+      g_uploadSize = (buf[5] << 24) | (buf[6] << 16) | 
+	(buf[7] << 8) | buf[8];
+      fprintf(stderr, "UPLOAD acked:%d\n", g_uploadSize);
+      if (!g_uploadAcked)
+	checkMcuSendQ(fd, MCUCMD_UPLOAD);  
+      if (g_uploadSize) {
+	g_uploadDone = 0;
+	g_uploadAcked++;
+      } else {
+	g_uploadDone = 1;
+	fprintf(stderr, "g_uploadDone:%d\n", g_uploadDone);
+	if (!g_end) send0GRequest(fd); 
+      }      
+    }
+  }
+
+  return 0;
+}
+
+int checkHostConnection(char *dstname)
+{
+  int sfd;
+  int connected = 0, retry = 0;
+
+  while (!connected && (retry < 100)) {
+    sfd = connectTcp(dstname, BACKUP_PORT);
+    if (sfd == -1) {
+      sleep(1);
+      retry++;
+      continue;
+    }
+    fprintf(stderr, "connected to %s for verification\n", dstname);
+    connected = 1;
+    close(sfd);
+  }
+
+  return connected;
+}
+
+void connectDebug()
+{
+#ifdef NET_DEBUG
+  int connected = 0, retry = 0;
+
+  while (!connected && (retry < 20)) {
+    dfd = connectNonBlockingTcp("192.168.1.220", DEBUG_PORT, 3);
+    if (dfd == -1) {
+      sleep(1);
+      retry++;
+      continue;
+    }
+    fprintf(stderr, "connected for debugging\n");
+    connected = 1;
+  }
+#endif
+}
+
+void appinit() {
+  int i;
+  string s ;
+  config dvrconfig("/etc/dvr/dvr.conf");
+
+  // get tab102b serial port setting
+  s = dvrconfig.getvalue( "system", "hostname");
+  if( s.length()>0 ) {
+    strncpy( hostname, s.getstring(), sizeof(hostname) );
+  } 
+    
+  // get tab102b serial port setting
+  s = dvrconfig.getvalue( "glog", "tab102b_port");
+  if( s.length()>0 ) {
+    strcpy( tab102b_port_dev, s.getstring() );
+  } 
+    
+  i = dvrconfig.getvalueint("glog", "tab102b_baudrate");
+  if( i>=1200 && i<=115200 ) {
+    tab102b_port_baudrate=i ;
+  }
+    
+  // initialize time zone
+  string tz ;
+  string tzi ;
+  char *p ;
+
+  tz=dvrconfig.getvalue( "system", "timezone" );
+  if( tz.length()>0 ) {
+    tzi=dvrconfig.getvalue( "timezones", tz.getstring() );
+    if( tzi.length()>0 ) {
+      p=strchr(tzi.getstring(), ' ' ) ;
+      if( p ) {
+	*p=0;
+      }
+      p=strchr(tzi.getstring(), '\t' ) ;
+      if( p ) {
+	*p=0;
+      }
+      setenv("TZ", tzi.getstring(), 1);
+    }
+    else {
+      setenv("TZ", tz.getstring(), 1);
+    }
+  }
+}
+
+/* return:
+ *    n: # of bytes received
+ *   -1: bad size parameters
+ */  
+
+int read_nbytes(int fd, unsigned char *buf, int bufsize,
+		int rx_size, int timeout_in_secs,
+		int showdata, int showprogress)
+{
+  struct timeval tv;
+  int total = 0, bytes;
+
+  if (bufsize < rx_size)
+    return -1;
+
+  while (1) {
+    bytes = 0;
+    tv.tv_sec = timeout_in_secs;
+    tv.tv_usec = 0;
+    if (blockUntilReadable(fd, &tv) > 0) {
+      bytes = read(fd, buf + total, bufsize - total);
+      if (bytes > 0) {
+	if (showdata)
+	  dump(buf + total, bytes);
+	total += bytes;
+	if (showprogress) dprintf(".");
+      }
+
+      if (total >= rx_size)
+	break;
+    }
+
+    if (bytes <= 0) { // timeout without receiving any data
+      break;
+    }
+  }
+
+  return total;
+}
+
+void setTab102RTC(int fd)
+{
+  int retry = 3;
+  struct timeval tv;
+  struct tm bt;
+  unsigned char buf[1024];
+
+  while (retry > 0) {
+    gettimeofday(&tv, NULL);
+    localtime_r(&tv.tv_sec, &bt);
+    tcflush(fd, TCIOFLUSH);
+    sendSetRTC(fd, &bt, 1);
+
+    if (read_nbytes(fd, buf, sizeof(buf), 6, 1, 1, 0) >= 6) {
+      if ((buf[0] == 0x06) &&
+	  (buf[1] == 0x00) &&
+	  (buf[2] == 0x04) &&
+	  (buf[3] == MCUCMD_SETRTC) &&
+	  (buf[4] == 0x03)) {
+	if (verifyChecksum(buf, 6)) {
+	  dprintf("checksum error\n");
+	} else {
+	  FILE *fp;
+	  fp = fopen("/var/dvr/tab102", "w");
+	  if (fp) {
+	    fprintf(fp, "rtc\n");
+	    fclose(fp);
+	  }
+	  break;
+	}
+      }
+    }
+    retry--;
+  }
+}
+
+void sendUploadConfirm(int fd)
+{
+  int retry = 3;
+  unsigned char buf[1024];
+
+  while (retry > 0) {
+    tcflush(fd, TCIOFLUSH);
+    sendUploadAck(fd, 1);
+
+    if (read_nbytes(fd, buf, sizeof(buf), 6, 3, 1, 0) >= 6) {
+      if ((buf[0] == 0x06) &&
+	  (buf[1] == 0x00) &&
+	  (buf[2] == 0x04) &&
+	  (buf[3] == MCUCMD_UPLOADACK) &&
+	  (buf[4] == 0x03)) {
+	if (verifyChecksum(buf, 6)) {
+	  dprintf("checksum error\n");
+	} else {
+	  dprintf("Upload confirm Acked\n");
+	  break;
+	}
+      }
+    }
+    retry--;
+  }
+}
+
+static size_t safe_fwrite(void *ptr, size_t size, size_t nmemb, FILE *stream)
+{
+  size_t ret = 0;
+  
+  do {
+    clearerr(stream);
+    ret += fwrite((char *)ptr + (ret * size), size, nmemb - ret, stream);
+  } while (ret < nmemb && ferror(stream) && errno == EINTR);
+  
+  return ret;
+}
+
+static char *safe_fgets(char *s, int size, FILE *stream)
+{
+  char *ret;
+  
+  do {
+    clearerr(stream);
+    ret = fgets(s, size, stream);
+  } while (ret == NULL && ferror(stream) && errno == EINTR);
+  
+  return ret;
+}
+
+void writeContinuousData(unsigned char *buf, int len)
+{
+  char filename[256];
+  struct tm tm;
+
+  time_t t = time(NULL);
+  localtime_r(&t, &tm);
+  snprintf(filename, sizeof(filename),
+	   "/var/dvr/%s_%04d%02d%02d%02d%02d%02d_TAB102log_L.log",
+	   hostname,
+	   tm.tm_year + 1900,
+	   tm.tm_mon + 1,
+	   tm.tm_mday,
+	   tm.tm_hour,
+	   tm.tm_min,
+	   tm.tm_sec);
+  FILE *fp;   
+  fp = fopen(filename, "w");
+  if (fp) {
+    safe_fwrite(buf, 1, len, fp);
+    fclose(fp);
+  }
+}
+
+void checkContinuousData(int fd)
+{
+  int retry = 3;
+  unsigned char buf[1024];
+  int nbytes, surplus = 0, uploadSize;
+  while (retry > 0) {
+    tcflush(fd, TCIOFLUSH);
+    sendUploadRequest(fd, 1);
+    
+    nbytes = read_nbytes(fd, buf, sizeof(buf), UPLOAD_ACK_SIZE, 3, 0, 0);
+    if (nbytes >= UPLOAD_ACK_SIZE) {
+      if ((buf[0] == 0x0a) &&
+	  (buf[1] == 0x00) &&
+	  (buf[2] == 0x04) &&
+	  (buf[3] == MCUCMD_UPLOAD) &&
+	  (buf[4] == 0x03)) {
+	if (verifyChecksum(buf, UPLOAD_ACK_SIZE)) {
+	  dprintf("checksum error\n");
+	} else {
+	  //uploadSize = fileSize = total = 0;
+	  uploadSize = (buf[5] << 24) | (buf[6] << 16) | 
+	    (buf[7] << 8) | buf[8];
+	  dprintf("UPLOAD acked:%d\n", uploadSize);
+	  if (uploadSize) {
+	    //1024 for room, actually UPLOAD_ACK_SIZE(upload ack) + 8(ask zhen)
+	    int bufsize = uploadSize + 1024;
+	    unsigned char *tbuf = (unsigned char *)malloc(bufsize);
+	    if (!tbuf)
+	      return;
+  
+	    // just in case we got more data 
+	    if (nbytes > UPLOAD_ACK_SIZE) {
+	      surplus = nbytes - UPLOAD_ACK_SIZE;
+	      memcpy(tbuf, buf + UPLOAD_ACK_SIZE, surplus);
+	      //dprintf("surplus moved:%d\n", surplus);
+	    }
+
+	    nbytes = read_nbytes(fd, tbuf + surplus, bufsize - surplus,
+				 uploadSize + UPLOAD_ACK_SIZE + 8 - surplus,
+				 3, 0, 1);
+	    int downloaded = nbytes + surplus - UPLOAD_ACK_SIZE;
+	    dprintf("UPLOAD data:%d(%d,%d)\n", downloaded,uploadSize + UPLOAD_ACK_SIZE + 8 - surplus, nbytes);
+	    if (downloaded >= uploadSize + 8) {
+	      if (!verifyChecksum(tbuf + 10, uploadSize + 8)) {
+		sendUploadConfirm(fd);
+		writeContinuousData(tbuf + 10, uploadSize + 8);
+	      }
+	    }
+	    free(tbuf);
+	  }
+	  break;
+	}      
+      }
+    }
+    retry--;
+  }
+}
+
+void startADC(int fd)
+{
+  int retry = 3;
+  unsigned char buf[1024];
+
+  while (retry > 0) {
+    tcflush(fd, TCIOFLUSH);
+    sendBootReady(fd, 1);
+
+    if (read_nbytes(fd, buf, sizeof(buf), 6, 1, 1, 0) >= 6) {
+      if ((buf[0] == 0x06) &&
+	  (buf[1] == 0x00) &&
+	  (buf[2] == 0x04) &&
+	  (buf[3] == MCUCMD_BOOTREADY) &&
+	  (buf[4] == 0x03)) {
+	if (verifyChecksum(buf, 6)) {
+	  dprintf("checksum error\n");
+	} else {
+	  dprintf("ADC started\n");
+	  break;
+	}
+      }
+    }
+    retry--;
+  }
+}
+
+int checkTab102()
+{
+  char line[64];
+  FILE *fp;   
+  char *str = NULL;
+
+  fp = fopen("/var/dvr/tab102", "r");
+  if (fp) {
+    str = safe_fgets(line, sizeof(line), fp);
+    fclose(fp);
+  }
+
+  if (str && !strncmp(str, "rtc", 3)) {
+    return 1;
+  }
+
+  return 0;
+}
+
+int main(int argc, char **argv)
+{
+  int comFd;
+  fd_set master;
+  fd_set read_fds;
+  int fdmax = 0;
+  struct timeval tv;
+  struct tm bt;
+  int i, bytes;
+  unsigned char buf[1024 * 2];
+  int listener, newfd;
+  struct sockaddr_in remoteAddr;
+  socklen_t addrlen;
+  int retry = 0;
+
+  appinit();
+
+  comFd = openCom(tab102b_port_dev, tab102b_port_baudrate);
+  if (comFd == -1) {
+    exit(1);
+  }
+
+  if ((argc >= 2) && !strcmp(argv[1], "-rtc")) {
+    setTab102RTC(comFd);
+    checkContinuousData(comFd);
+    startADC(comFd);
+  } else {
+    if (checkTab102()) {
+      checkContinuousData(comFd);
+    }
+  }
+
+  close(comFd);
+  exit(1);
+
+  /* initialize fd sets for select call */
+  FD_ZERO(&master);
+  FD_ZERO(&read_fds);
+
+  FD_SET(comFd, &master);
+  fdmax = comFd;
+
+  listener = makeServerSocket(SOCK_STREAM, TAB102_PORT, 0);
+  FD_SET(listener, &master);
+  if (listener > fdmax) fdmax = listener;
+
+
+  unsigned int counter = 0;
+  while (1) {
+    counter++;
+
+    read_fds = master;
+    tv.tv_sec = 1;
+    tv.tv_usec = 0;
+
+    i = select(fdmax + 1, &read_fds, NULL, NULL, &tv);
+    if (i == -1) {
+      perror("select");
+      exit(1);
+    }
+ 
+    for (i = 0; i <= fdmax; i++) {
+      if (FD_ISSET(i, &read_fds)) {
+	if (i == comFd) {
+	  bytes = read(comFd, buf, sizeof(buf));
+	  if (bytes > 0) {
+	    handle_mcu(comFd, buf, bytes);
+	  }
+	} else if (i == listener) {
+	  addrlen = sizeof(remoteAddr);
+	  if ((newfd = accept(listener, (struct sockaddr *)&remoteAddr,
+			      &addrlen)) == -1) {
+	    perror("accept");
+	  } else {
+	    FD_SET(newfd, &master);
+	    if (newfd > fdmax)
+	      fdmax = newfd;
+	  }
+	} else {
+	  if ((bytes = recv(i, buf, sizeof(buf), 0)) <= 0) {
+	    if (bytes == 0) {
+	      //fprintf(stderr, "connection closed\n");
+	    } else {
+	      perror("recv");
+	    }
+	    close(i);
+	    FD_CLR(i, &master);
+	  } else {
+	    if ((bytes == 3) && (buf[0] == 0x02) && 
+		(buf[1] == 'q') && (buf[2] == 0x03)) {
+	      send(i, "OK", 2, 0);
+	      g_end = 1;
+	      /* system is shutting down, send upload request */
+	      g_uploadDone = 0;
+	      sendUploadRequest(comFd, 0);
+	    } else if ((bytes == 3) && (buf[0] == 0x02) && 
+		(buf[1] == 'Q') && (buf[2] == 0x03)) {
+	      fprintf(stderr, "sending for g_uploadDone:%d \n",g_uploadDone);
+	      if (!g_setRTCAcked || g_uploadDone) {
+		send(i, "0", 1, 0);
+	      } else {
+		send(i, "1", 1, 0);
+	      }
+	    }
+	  }
+	}
+      }
+    }
+
+    /* send pending messages to MCU */
+    checkMcuSendQ(comFd, 0);
+
+    /* Not handled in the retry mechanism, as new time is required */
+    if (!g_setRTCAcked && (counter % 10 == 0)) {
+      retry++;
+      if (retry < 3) {
+	gettimeofday(&tv, NULL);
+	gmtime_r(&tv.tv_sec, &bt);
+	sendSetRTC(comFd, &bt, 0);
+      }
+    }
+
+  } /* while */
+
+  close(comFd);
+
+  return 0;
+}
+
+ssize_t safe_read(int fd, void *buf, size_t count)
+{
+  ssize_t n;
+  
+  do {
+    n = read(fd, buf, count);
+  } while (n < 0 && errno == EINTR);
+  
+  return n;
+}
+
+ssize_t safe_write(int fd, const void *buf, size_t count)
+{
+  ssize_t n;
+  
+  do {
+    n = write(fd, buf, count);
+  } while (n < 0 && errno == EINTR);
+  
+  return n;
+}
+
+/*
+ * Write all of the supplied buffer out to a file.
+ * This does multiple writes as necessary.
+ * Returns the amount written, or -1 on an error.
+ */
+ssize_t full_write(int fd, const void *buf, size_t len)
+{
+  ssize_t cc;
+  ssize_t total;
+  
+  total = 0;
+  
+  while (len) {
+    cc = safe_write(fd, buf, len);
+    
+    if (cc < 0)
+      return cc;	/* write() returns -1 on failure. */
+    
+    total += cc;
+    buf = ((const char *)buf) + cc;
+    len -= cc;
+  }
+  
+  return total;
+}
+
+static off_t bb_full_fd_action(int src_fd, int dst_fd, off_t size)
+{
+  int status = -1;
+  off_t total = 0;
+  char buffer[BUFSIZ];
+  
+  if (src_fd < 0)
+    goto out;
+  
+  if (!size) {
+    size = BUFSIZ;
+    status = 1; /* copy until eof */
+  }
+  
+  while (1) {
+    ssize_t rd;
+    
+    rd = safe_read(src_fd, buffer, size > BUFSIZ ? BUFSIZ : size);
+    
+    if (!rd) { /* eof - all done */
+      status = 0;
+      break;
+    }
+    if (rd < 0) {
+      perror("read");
+      break;
+    }
+    /* dst_fd == -1 is a fake, else... */
+    if (dst_fd >= 0) {
+      ssize_t wr = full_write(dst_fd, buffer, rd);
+      if (wr < rd) {
+	perror("write");
+	break;
+      }
+    }
+    total += rd;
+    if (status < 0) { /* if we aren't copying till EOF... */
+      size -= rd;
+      if (!size) {
+	/* 'size' bytes copied - all done */
+	status = 0;
+	break;
+      }
+    }
+  }
+ out:
+  return status ? -1 : total;
+}
+
+static int xconnect_stream(struct sockaddr_in *serveraddr)
+{
+  int fd;
+
+  fd = socket(PF_INET, SOCK_STREAM, 0);
+  if (fd == -1) {
+    perror("socket");
+    return -1;
+  }
+
+  if (connect(fd, (struct sockaddr *)serveraddr, sizeof(*serveraddr)) < 0) {
+    perror("connect");
+    close(fd);
+    return -1;
+  }
+
+  return fd;
+}
+
+//static void ftp_die(const char *msg, const char *remote) ATTRIBUTE_NORETURN;
+static void ftp_die(const char *msg, const char *remote)
+{
+	/* Guard against garbage from remote server */
+	const char *cp = remote;
+	while (*cp >= ' ' && *cp < '\x7f') cp++;
+	fprintf(stderr, "unexpected server response%s%s: %.*s\n",
+			msg ? " to " : "", msg ? msg : "",
+			(int)(cp - remote), remote);
+	//exit(1);
+}
+
+static int ftpcmd(const char *s1, const char *s2, FILE *stream, char *buf)
+{
+  unsigned n;
+
+  fprintf(stderr, "cmd %s %s\n", s1, s2);
+
+  if (s1) {
+    if (s2) {
+      fprintf(stream, "%s %s\r\n", s1, s2);
+    } else {
+      fprintf(stream, "%s\r\n", s1);
+    }
+  }
+ 
+  do {
+    char *buf_ptr;
+    
+    if (fgets(buf, 510, stream) == NULL) {
+      // work-around 
+      if (!strcmp(s1, "QUIT")) {
+	return 0;
+      }
+      perror("fgets");
+      return 0;
+      //exit(1);
+    }
+    buf_ptr = strstr(buf, "\r\n");
+    if (buf_ptr) {
+      *buf_ptr = '\0';
+    }
+  } while (!isdigit(buf[0]) || buf[3] != ' ');
+  
+  buf[3] = '\0';
+  n = atoi(buf);
+  buf[3] = ' ';
+  return n;
+}
+
+static int xconnect_ftpdata(struct sockaddr_in *server, char *buf)
+{
+  char *buf_ptr;
+  unsigned short port_num;
+  int num;
+
+  /* Response is NNN garbageN1,N2,N3,N4,P1,P2[)garbage]
+   * Server's IP is N1.N2.N3.N4 (we ignore it)
+   * Server's port for data connection is P1*256+P2
+   */
+  buf_ptr = strrchr(buf, ')');
+  if (buf_ptr) *buf_ptr = '\0';
+
+  buf_ptr = strrchr(buf, ',');
+  *buf_ptr = '\0';
+  num = atoi(buf_ptr + 1);
+  if ((num > 255) || (num < 0))
+    return -1;
+  port_num = num;
+
+  buf_ptr = strrchr(buf, ',');
+  *buf_ptr = '\0';
+  num = atoi(buf_ptr + 1);
+  if ((num > 255) || (num < 0))
+    return -1;
+  port_num += num * 256;
+
+  server->sin_port = htons(port_num);
+
+  return xconnect_stream(server);
+}
+
+static
+int ftp_send(struct sockaddr_in *server, FILE *control_stream,
+		const char *server_path, char *local_path)
+{
+  //struct stat sbuf;
+	char buf[512];
+	int fd_data;
+	int fd_local;
+	int response;
+
+	/*  Connect to the data socket */
+	if (ftpcmd("PASV", NULL, control_stream, buf) != 227) {
+		ftp_die("PASV", buf);
+		return EXIT_FAILURE;
+	}
+	fd_data = xconnect_ftpdata(server, buf);
+	if (fd_data == -1)
+	  return EXIT_FAILURE; 
+
+	/* get the local file */
+	fd_local = open(local_path, O_RDONLY);
+	if (fd_local == -1)
+	  return EXIT_FAILURE; 
+#if 0
+	        fstat(fd_local, &sbuf);
+
+		sprintf(buf, "ALLO %"OFF_FMT"u", sbuf.st_size);
+		response = ftpcmd(buf, NULL, control_stream, buf);
+		switch (response) {
+		case 200:
+		case 202:
+			break;
+		default:
+			close(fd_local);
+			ftp_die("ALLO", buf);
+			break;
+		}
+#endif
+	response = ftpcmd("STOR", server_path, control_stream, buf);
+	switch (response) {
+	case 125:
+	case 150:
+		break;
+	default:
+		close(fd_local);
+		ftp_die("STOR", buf);
+		return EXIT_FAILURE;
+	}
+
+	/* transfer the file  */
+	if (bb_full_fd_action(fd_local, fd_data, 0) == -1) {
+	  close(fd_local);
+	  close(fd_data);
+	  return EXIT_FAILURE;
+	}
+
+	//fprintf(stderr, "closing local file\n");
+	close(fd_local);
+
+	/* close it all down */
+	//fprintf(stderr, "closing fd_data\n");
+	close(fd_data);
+	if (ftpcmd(NULL, NULL, control_stream, buf) != 226) {
+		ftp_die("close", buf);
+		return EXIT_FAILURE;
+	}
+	//fprintf(stderr, "sending QUIT\n");
+	ftpcmd("QUIT", NULL, control_stream, buf);
+
+	return EXIT_SUCCESS;
+}
+
+void *uploadFileFunc(void *arg)
+{
+  int fd;
+  FILE *fp;
+  struct sockaddr_in server_addr;
+  char buf[512];
+
+  fprintf(stderr, "uploadFileFunc\n"); 
+
+#if 0
+  struct hostent *he;
+  if ((he = gethostbyname(g_hostaIP)) == NULL) {
+    herror("gethostbyname");
+    g_uploadDone = 1;
+    writeDebug("err1\n");
+    pthread_exit(NULL);
+  }
+#endif
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_port = htons(BACKUP_PORT);
+  server_addr.sin_addr.s_addr = inet_addr(g_hostaIP);
+  memset(server_addr.sin_zero, '\0', sizeof(server_addr.sin_zero));
+
+  fd = xconnect_stream(&server_addr);
+  if (fd == -1) {
+    g_uploadDone = 1;
+    writeDebug("connect error\n");
+    pthread_exit(NULL);
+  }
+
+  writeDebug("upload connect ok\n");
+
+  fp = fdopen(fd, "r+");
+  if (fp == NULL) {
+    perror("fdopen");
+    g_uploadDone = 1;
+    writeDebug("err3\n");
+    pthread_exit(NULL);
+  }
+
+  // don't send command, and receive 220 answer
+  if (ftpcmd(NULL, NULL, fp, buf) != 220) {
+    ftp_die(NULL, buf);
+    g_uploadDone = 1;
+    writeDebug("err4\n");
+    pthread_exit(NULL);
+  }
+  
+  /*  Login to the server */
+  switch (ftpcmd("USER", username, fp, buf)) {
+  case 230:
+    break;
+  case 331:
+    if (ftpcmd("PASS", password, fp, buf) != 230) {
+      ftp_die("PASS", buf);
+      g_uploadDone = 1;
+      writeDebug("err5\n");
+      pthread_exit(NULL);
+    }
+    break;
+  default:
+    ftp_die("USER", buf);
+    g_uploadDone = 1;
+    writeDebug("err6\n");
+    pthread_exit(NULL);
+  }
+  
+  writeDebug("ftpstart\n");
+  ftpcmd("TYPE I", NULL, fp, buf); // binary mode
+
+  int ret = ftp_send(&server_addr, fp,
+		     "ipdata.log"/*server*/, "/var/run/ipdata"/*local*/);
+
+  close(fd);
+
+  if (ret)
+    writeDebug("ftperror\n");
+  else 
+    writeDebug("ftpok\n");
+  
+  unlink("/var/run/ipdata"); // delete the file
+  g_uploadDone = 1;
+  pthread_exit(NULL);
+}

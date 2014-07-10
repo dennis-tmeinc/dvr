@@ -55,6 +55,9 @@ sfxrun.upd sfxrun
 ./dvr/tdevhotplug
 ./dvr/defconf
 ./dvr/fsckwrapper
+./dvr/officerid
+./dvr/officerkey
+./dvr/usbid
 ./dvr/resource
 ./dvr/resource/play.pic
 ./dvr/resource/console_l.font

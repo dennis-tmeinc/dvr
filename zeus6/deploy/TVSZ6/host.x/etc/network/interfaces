@@ -1,0 +1,12 @@
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet static
+    address 192.168.1.221
+    netmask 255.255.0.0
+    gateway 172.17.0.1
+    up      /usr/sbin/setdns  192.168.0.20
+    up      /usr/sbin/parsenetif eth0
+
+

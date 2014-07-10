@@ -1,0 +1,22 @@
+#!/bin/sh
+
+PATH=$PATH:/mnt/nand/dvr
+
+eth_ipaddr=`cfg get network eth_ip`
+eth_mask=`cfg get network eth_mask`
+eth_brd=`broadcast $eth_ipaddr $eth_mask`
+gateway_dev=`cfg get network gateway_dev`
+gateway_addr=`cfg get network gateway_1`
+
+ifconfig eth0 $eth_ipaddr netmask $eth_mask broadcast $eth_brd up
+
+if [ $gateway_dev = "0" ]
+then
+  route del default
+  route add default gw $gateway_addr eth0
+fi
+
+ifconfig wlan0 0.0.0.0 up
+wpaconf
+
+killall -HUP wpa_supplicant

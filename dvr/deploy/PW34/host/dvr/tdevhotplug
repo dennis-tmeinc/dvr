@@ -123,6 +123,14 @@ case $1 in
 		rm /dev/${devname}
 	    fi
 	    mknod /dev/${devname} b ${devnum%%:*} ${devnum##*:}
+	    
+	    if [ -f ${devpath}/removable -a -f ${devpath}/device/vendor -a -f ${devpath}/device/model -a -f ${devpath}/device/rev ] ; then
+			# check PW34 police key
+			if officerid ${devname} ; then
+				officerkey ofid `cfg get network port`
+			fi
+	    fi
+	    
 
 	    partition=${devname##*[a-z]}
 	    if [ ${partition:-0} -ge 1 -a ! -f ${xmountdir}/mount_${devname} ]; then

@@ -1,0 +1,73 @@
+#!/bin/sh
+
+/sbin/ifconfig eth0 down
+/sbin/ifconfig eth0 hw ether `/usr/bin/fw_printenv -n ethaddr`
+
+mount --bind /mnt/nand/etc /etc
+mkdir -p /dev/shm
+/bin/mount -a
+mkdir -p /dev/shm/sem.tmp
+/usr/sbin/mount_as_tmpfs /var/
+/usr/sbin/mount_as_tmpfs /usr/
+
+PATH=$PATH:/mnt/nand/dvr:/mnt/nand
+mkdir -p /var/dvr/disks
+
+
+if [ -d  /var/lib/dpkg  ];then
+  echo "dir /var/lib/dpkg exist!!" > /dev/null
+else
+  mkdir -p /var/lib/dpkg > /dev/null
+fi
+
+if [ -d  /var/lib/dpkg/info  ];then
+  echo "dir /var/lib/dpkg/info exist!!" > /dev/null
+else
+  mkdir -p /var/lib/dpkg/info > /dev/null
+fi
+
+
+if [ -f  /var/lib/dpkg/status  ];then
+  echo "file /var/lib/dpkg/status exist!!" > /dev/null
+else
+  touch /var/lib/dpkg/status
+
+fi
+
+cd /mnt/nand/dvr/drivers
+
+/bin/sh drivers.sh > /dev/null 2>&1
+mkdir -p /tmp/venc/c0 # for rtsps and serverpush
+mkdir -p /tmp/venc/c1 # for rtsps and serverpush
+mkdir -p /tmp/venc/c2 # for rtsps and serverpush
+mkdir -p /tmp/venc/c3 # for rtsps and serverpush
+mkdir -p /tmp/venc/c4 # for rtsps and serverpush
+mkdir -p /tmp/venc/c5 # for rtsps and serverpush
+mkdir -p /tmp/venc/c6 # for rtsps and serverpush
+mkdir -p /tmp/venc/c7 # for rtsps and serverpush
+
+mkdir -p /tmp/event/ # for event used 
+
+#tdevd /mnt/nand/dvr/tdevhotplug
+
+/bin/run-parts -a start /etc/rcS.d #> /dev/null 2>&1
+
+/sbin/ifconfig lo 127.0.0.1
+
+cfgsync >/dev/null 2>&1
+sync
+
+#tar -xvzf /mnt/nand/dvr/www.tar.gz -C /home >/dev/null 2>&1
+
+echo "ctrl_interface=/var/run/wpa_supplicant" > /var/run/wpa.conf
+LD_LIBRARY_PATH=/mnt/nand/dvr/lib wpa_supplicant -Dwext -iwlan0 -c/var/run/wpa.conf -B
+wpa_cli -B -i wlan0 -a /mnt/nand/dvr/wpa_cli-action.sh
+
+setnetwork
+#ifconfig eth0 > /dev/urandom
+#ifconfig eth0 192.168.1.100
+/mnt/nand/dvr/start.sh
+
+#ioprocess
+#dvrsvr
+#glog

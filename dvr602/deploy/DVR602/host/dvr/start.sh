@@ -106,13 +106,13 @@ insmod /davinci/ext2.ko
 insmod /davinci/ext3.ko
 
 # mount debugging disks
-mount -t nfs 192.168.247.100:/home/dennis/nfsroot /mnt/nfs0 -o nolock
+# mount -t nfs 192.168.247.100:/home/dennis/nfsroot /mnt/nfs0 -o nolock
 
 # see if I want to debug it
-if [ -f /mnt/nfs0/eagletest/debugon ]; then
-    echo Enter debugging mode.
-    exit ;
-fi
+# if [ -f /mnt/nfs0/eagletest/debugon ]; then
+#    echo Enter debugging mode.
+#    exit ;
+# fi
 
 # install usb-serial driver
 insmod /davinci/usbserial.ko
@@ -143,7 +143,7 @@ mknod /dev/ttyUSB3 c 188 3
 /davinci/dvr/tab102 -down >/dev/null 2>&1
 
 # setup ip network for ipcamera board. (slave boards)
-/davinci/dvr/eaglehost `cat /davinci/ID/BOARDNUM`
+# /davinci/dvr/eaglehost `cat /davinci/ID/BOARDNUM`
 
 # wait until the gforce download is done
 while [ -f /var/dvr/gforcecheck ]
