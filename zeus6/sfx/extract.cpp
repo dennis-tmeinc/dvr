@@ -51,7 +51,7 @@ int extract( const char * sfxfile )
         }
         fread( filename, 1, fhd.namesize, fp);
         filename[fhd.namesize]=0;
-        if(  S_ISDIR(fhd.filemode) && fhd.compsize==0 ) {
+        if( S_ISDIR(fhd.filemode) && fhd.compsize==0 ) {
             mkdir( filename, 0777 );
             printf("dir:%s\n", filename);
         }

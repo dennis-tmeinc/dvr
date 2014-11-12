@@ -86,9 +86,9 @@ int extract( const char * sfxfile )
             bufcomp = (unsigned char *)malloc( fhd.compsize+1 ) ;
             fread( bufcomp, 1, fhd.compsize, fp );
             bufcomp[ fhd.compsize ]=0;
-        		symlink( (char *)bufcomp, filename );
-            printf("symbolic link : %s -> %s\n", filename, bufcomp );
-        		free( bufcomp );
+			symlink( (char *)bufcomp, filename );
+			printf("symbolic link : %s -> %s\n", filename, bufcomp );
+			free( bufcomp );
         }        
     }
 

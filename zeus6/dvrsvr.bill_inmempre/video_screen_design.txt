@@ -1,0 +1,93 @@
+
+	Eagle32 Video Out Screen Design
+
+
+Eagle32 Video Output Capability
+	
+	Each single Eagle32 board provide one video output. 
+		(Power on default output PAL signal, is it possible to ask provide change it to NTSC)
+
+	Eagle32 provide video preview and decode hardware support. 
+		Available screen format include 1 screen, 2x2, 3x3 and 4x4 screens. Maximum 2 screens, either preview or decode can be display on any position privided by supported screen format.
+		A decoding channel would affect performance of encoding channels. Encoding channel may need to be paused when any decoding is playing.
+
+	Eagle32 provide frame buffer device to support graphics output. This frame buffer provide overlay layer with transparency on top of preview screen.
+
+	USB mosue are supported .
+		USB mouse can be used as primary user input device.
+		Keypad or remote control device to be designed as another external input device
+
+
+Eagle32 Video Screen
+
+Two output screen
+
+	 --------------------------------------------------------
+	|                            |                            |
+	|            [full screen]   |             [full screen]  |
+	|                            |                            |
+	|                            |                            |
+	|         Screen 1           |         Screen 2           |
+	|                            |                            |
+	|                            |                            |
+	|       (channel select)     |        (channel select)    |
+	|  X             1 2 3 4     |  X            1 2 3 4      |
+	|-------------------------------------------------------- |
+	|  Preview | Playback |   ====[]========================= |
+    |---------- ----------          (playback timebar)        |
+	|    (mode select)     [ year ] [ month ] [ day ]  day/hour
+	|                             (date select)               |
+	|  September 12, 2008 14:01:01                            |
+	|                              ---------------------      |
+	|   ---------                 |                     |     |
+	|  |  Setup  |                |   Product Logo Pic  |     |
+	|   ---------                 |                     |     |
+     --------------------------------------------------------
+
+
+	Screen1/Screen2
+		Preivew and playback screen area. User may select any available channel for preview or playback
+		Recording status show on left buttom of preview screen. (a red light) 
+
+	preview/Playback
+		Mode selection buttons. To switch between preview mode or playback mode
+
+    Playback time bar
+		Appear when in playback mode. 
+		User can drag the knob on timebar to select playback time
+		Time bar have selectable time range of one day or one hour by clicking day/hour button
+		Time bar show different color to indicate video availablity and locked files. (use same code on DVRViewer)
+
+	Setup button
+		Bring up setup screen. 
+		Setup screen analog to DVRViewer
+		Setup screen are half transparent over preview screen
+
+	Full screen mode
+		User click on full screen button on each screen to display on full screen mode
+		Full screen button only appear when mouse is moved onto the button
+		On full screen mode, all other controls are hidden.
+		
+	Screen Format relocation
+		Some control positon may be relocated.
+		Setting are saved on DVR setting file. (dvr.conf)
+
+			Primary Eagle32 board settings on dvr.conf:
+
+				[VideoOut]
+
+				screennum=4						; 2x2 screen mode, only top 2 screen are used
+				logo=<filename>,x,y				; logo picture location
+				control=x,y,w,h					; control panel location
+			
+
+			Secondary Eagle32 board settings on dvr.conf:
+
+				[VideoOut]
+
+				screennum=2						; 2 screen mode, preview screen will show on the middle of screen
+				logo=<filename>,x,y				; logo picture location, may move to top of screen
+				control=0						; control panel location, set to 0 to disable all control. 
+												  (only preview screens avaialbe on secondary board)
+
+	

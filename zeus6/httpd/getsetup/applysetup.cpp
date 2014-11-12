@@ -19,7 +19,7 @@ pid_t  dvrpid=0 ;
 void dvrsvr_down()
 {
     dvrpid = 0 ;
-    FILE * fdvrpid = fopen( VAR_DIR"/dvrsvr.pid", "r");
+    FILE * fdvrpid = fopen( VAR_DIR "/dvrsvr.pid", "r");
     if( fdvrpid ) {
         fscanf(fdvrpid, "%d", &dvrpid );
         fclose( fdvrpid );
@@ -151,7 +151,7 @@ void setuserpassword()
         }
         fclose( fpasswd);
     }
-    system("cp /etc/passwd "APP_DIR"/passwd");
+    system("cp /etc/passwd " APP_DIR "/passwd");
 }
 
 // c64 key should be 400bytes
@@ -175,6 +175,31 @@ void run( char * cmd, char * argu, int background )
     }
 }
 
+#include <arpa/inet.h>
+
+char * getbroadcastaddr(char* ipaddr,char* ipmask)
+{
+    struct in_addr ip;
+    struct in_addr netmask;
+    struct in_addr network;
+    struct in_addr broadcast; 
+    char* ipbroadcast;
+    inet_aton(ipaddr, &ip);
+    inet_aton(ipmask, &netmask);  
+    network.s_addr = ip.s_addr & netmask.s_addr;
+    broadcast.s_addr = network.s_addr | ~netmask.s_addr;
+    return inet_ntoa(broadcast);
+}
+
+static void savefile( char * filename, char * v )
+{
+	FILE * f ;
+	f = fopen( filename, "w" );
+    if( f ) {
+		fputs( v, f ) ;
+		fclose( f );
+	}
+}
 
 int main()
 {
@@ -216,6 +241,13 @@ int main()
 #endif	// TVS_APP
 
 #ifdef	PWII_APP
+
+		// PW recording method
+        v=getsetvalue("pw_recordmethod");
+        if( v ) {
+            dvrconfig.setvalue( "system", "pw_recordmethod", v );
+        }
+
         v=getsetvalue("vehicleid");
         if( v ) {
             dvrconfig.setvalue( "system", "id1", v );
@@ -283,6 +315,12 @@ int main()
             dvrconfig.setvalueint( "system", "maxfilelength", i );
         }
 
+		// totalcamera
+        v = getsetvalue ("totalcamera");
+        if( v ) {
+            dvrconfig.setvalue( "system", "totalcamera", v );
+        }
+        
         // pre lock time
         v = getsetvalue ("pre_lock_time");
         if( v ) {
@@ -390,6 +428,15 @@ int main()
             else {
                 dvrconfig.setvalueint(section, "inverted", 0 );
             }
+            
+			sprintf( sensorkey, "sensor%d_eventmarker", i );
+			v = getsetvalue(sensorkey);
+			if( v && strcmp( v, "on" )==0 ) {
+				dvrconfig.setvalueint(section, "eventmarker", 1 );
+			}
+			else {
+				dvrconfig.setvalueint(section, "eventmarker", 0 );
+			}
 
         }
 
@@ -437,7 +484,25 @@ int main()
             if( v ) {
                 dvrconfig.setvalue(section,"name",v);
             }
+            
+            
+            // Physical channel
+            v=getsetvalue( "channel" );
+            if( v ) {
+                dvrconfig.setvalue(section,"channel",v);
+            }
+            
+			// recording_mode
+            v=getsetvalue( "recording_mode" );
+            if( v ) {
+                dvrconfig.setvalue(section,"recordmode",v);
+            }            
 
+			// resolution
+            v=getsetvalue( "resolution" );
+            if( v ) {
+                dvrconfig.setvalue(section,"resolution",v);
+            }
 
             // frame_rate
             v=getsetvalue( "frame_rate" );
@@ -445,6 +510,22 @@ int main()
                 dvrconfig.setvalue(section,"framerate",v);
             }
 
+			// bit_rate_mode
+            v=getsetvalue( "bit_rate_mode" );
+            if( v ) {
+				if( *(char *)v == '0' ) {
+					dvrconfig.setvalueint(section,"bitrateen", 0);
+				}
+				else if( *(char *)v == '1' ) {
+					dvrconfig.setvalueint(section,"bitrateen", 1);
+					dvrconfig.setvalueint(section,"bitratemode", 0);
+				}
+				else {
+					dvrconfig.setvalueint(section,"bitrateen", 1);
+					dvrconfig.setvalueint(section,"bitratemode", 1);
+				}
+            }
+            
             // bit_rate
             v=getsetvalue( "bit_rate" );
             if( v ) {
@@ -496,6 +577,36 @@ int main()
               dvrconfig.setvalueint(section, trigger, tr);
 
             }
+            
+            // gforce_trigger
+            v=getsetvalue( "gforce_trigger" );
+            if( v ) {
+                dvrconfig.setvalueint(section,"gforce_trigger", 1 );
+            }            
+            else {
+                dvrconfig.setvalueint(section,"gforce_trigger", 0 );
+            }
+
+            // gforce_trigger_value
+            v=getsetvalue( "gforce_trigger_value" );
+            if( v ) {
+                dvrconfig.setvalue(section,"gforce_trigger_value", v );
+            }            
+
+            // speed_trigger
+            v=getsetvalue( "speed_trigger" );
+            if( v ) {
+                dvrconfig.setvalueint(section,"speed_trigger", 1 );
+            }            
+            else {
+                dvrconfig.setvalueint(section,"speed_trigger", 0 );
+            }
+
+            // speed_trigger_value
+            v=getsetvalue( "speed_trigger_value" );
+            if( v ) {
+                dvrconfig.setvalue(section,"speed_trigger_value", v );
+            }            
 
             // pre_recording_time
             v=getsetvalue( "pre_recording_time" );
@@ -602,6 +713,83 @@ int main()
 
         }
     }
+    
+    // write network_value
+    fvalue = fopen( "network_value", "r");
+	if( fvalue ) {
+		r=fread( buf, 1, sizeof(buf), fvalue );
+		buf[r]=0;
+		fclose(fvalue);
+
+		char netname[30] ;
+		char ipmask[30];
+		char tempmask[30]="255.255.255.0";
+		FILE * nfile ;
+
+		// eth_mask
+		v=getsetvalue("eth_mask");
+		if( v ) {
+			savefile( "/davinci/dvr/eth_mask", v );
+			sprintf(ipmask,"%s",v);
+		}
+		else {
+			sprintf(ipmask,"%s",tempmask);
+		} 
+
+		// eth_ip
+		v=getsetvalue("eth_ip");
+		if( v ) {
+			savefile( "/davinci/dvr/eth_ip", v );
+			savefile( "/davinci/dvr/eth_broadcast", getbroadcastaddr(v,ipmask) );
+		}
+		
+		// wifi_mask
+		v=getsetvalue("wifi_mask");
+		if( v ) {
+			savefile( "/davinci/dvr/wifi_mask", v );
+			sprintf(ipmask,"%s",v);
+		}
+		else {
+			sprintf(ipmask,"%s",tempmask);
+		} 
+
+		// wifi_ip
+		v=getsetvalue("wifi_ip");
+		if( v ) {
+			savefile( "/davinci/dvr/wifi_ip", v );
+			savefile( "/davinci/dvr/wifi_broadcast", getbroadcastaddr(v,ipmask) );
+		}
+		
+		// gateway
+		v=getsetvalue("gateway_1");
+		if( v ) {
+			savefile( "/davinci/dvr/gateway_1", v );
+		}
+
+		// wifi authentication/encription
+		v=getsetvalue("wifi_enc");
+		if( v ) {
+			int value;
+			sscanf(v, "%d", &value);
+			if( value<0 || value>7 ) {
+				value=0 ;
+			}
+			dvrconfig.setvalueint( "network", "wifi_enc", value );
+		}
+
+		// wifi_essid
+		v = getsetvalue("wifi_essid");
+		if( v ) {
+			dvrconfig.setvalue( "network", "wifi_essid", v);
+		}
+
+		// wifi_key
+		v = getsetvalue("wifi_key");
+		if( v ) {
+			dvrconfig.setvalue( "network", "wifi_key", v);
+		}
+    }
+    
 
     // save setting
     sync();

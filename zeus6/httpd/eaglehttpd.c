@@ -1176,11 +1176,13 @@ void http_document()
         return ;
     }
     fname=uri+1 ;
-    // if file available ?
+    
+    // is file available ?
     if ( stat( fname, &sb ) < 0 ) {
         http_error( 404, NULL );
         return ;
     }
+    
     if ( S_ISDIR( sb.st_mode ) )    // do not support directory list
     {
         http_error( 403, NULL );

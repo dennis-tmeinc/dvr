@@ -20,11 +20,9 @@ static int file_bufsize;								// file buffer size
 static int file_syncreq;
 static int file_encrypt ;
 //static int file_nodecrypt;                              // do not decrypt file when read
+unsigned char g_filekey[260] ;
 static unsigned char file_encrypt_RC4_table[1024] ;		// RC4 encryption table
 static int file_repaircut=FILETRUNCATINGSIZE ;
-
-unsigned char g_filekey[260] ;
-
 
 // convert timestamp value to milliseconds
 /*
@@ -155,7 +153,7 @@ int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt
         }
     }
     if( strchr(mode, 'r')) {
-     //   dvr_log("open file:%s to read",filename);
+      //  dvr_log("open file:%s to read",filename);
         if( fstat( fileno(m_handle), &dvrfilestat)==0 ) {
 	    setvbuf(m_handle, (char *)NULL, _IOFBF, dvrfilestat.st_blksize );
             m_filesize=dvrfilestat.st_size ;
@@ -231,7 +229,6 @@ void dvrfile::close()
 		}
             }
             file_syncreq = 1;
-         //   sync();
 	    fdatasync( fileno(m_handle) );
             if( fclose(m_handle)!=0 ) {
                 dvr_log("Close file failed : %s %d",m_filename.getstring(),errno);
@@ -481,6 +478,7 @@ int dvrfile::skipnextnbytes(int n)
    return 0;
 }
 
+#if 0
 int dvrfile::frametypeandsize(int* size)
 {
     int readbytes;
@@ -552,6 +550,104 @@ int dvrfile::frametypeandsize(int* size)
     seek(framepos);
     return type;
 }
+#endif
+
+#if 1
+int dvrfile::frametypeandsize(int* size)
+{
+    int readbytes;
+    int framepos ;
+    int curpos;
+    unsigned int mValue;
+    int type=FRAMETYPE_UNKNOWN;
+    unsigned char nextbyte;
+    unsigned int mPesLength;
+    unsigned int mHigh;
+    unsigned int mLow;
+    int framesize;
+    framepos = tell();
+    if( framepos >= m_filesize ) {
+        framepos = m_filesize;
+	
+    }            
+    if( framepos < m_filestart ) {
+        framepos=m_filestart ;
+    }
+    
+    if( m_keyarray.size()>0 ){
+        int i;
+	for (i=0;i<m_keyarray.size();++i){
+	    if(m_keyarray[i].koffset>framepos){
+	        break;	      
+	    }
+	}
+	if(i==m_keyarray.size()){
+	    fseek(m_handle, 0, SEEK_END);
+	    framesize=ftell(m_handle)-framepos;
+	   *size= framesize;
+	    seek(framepos);
+	    if(framesize==0){
+	      return  FRAMETYPE_UNKNOWN;
+	    }
+	} else {
+	   *size=m_keyarray[i].koffset-framepos;	   
+	}
+	return FRAMETYPE_VIDEO;
+      
+    } else {
+          readbytes = read(mBuff,1024);
+	  if(readbytes<1024){
+	    *size=0;
+	    return type;
+	  }
+	  mBuf_Index=3;
+	  mValue=(unsigned int)mBuff[0]<<16 | \
+		(unsigned int)mBuff[1]<<8 | \
+		(unsigned int)mBuff[2];
+	  while(1){
+	      if(getnextbyte(&nextbyte)<0)
+		  break;
+	      if(mValue==START_CODE){
+		  if(nextbyte==0xe0){
+		    if(getnextbyte(&nextbyte)<0)
+			break;
+		    mHigh=(unsigned int)nextbyte;
+		    if(getnextbyte(&nextbyte)<0)
+			break;
+		    mLow=(unsigned int)nextbyte;
+		    mPesLength=mHigh<<8|mLow;
+		    if(mPesLength>1024){
+			type=FRAMETYPE_VIDEO;
+			break;
+		    }
+		  } else if(nextbyte==0xc0){
+		    if(getnextbyte(&nextbyte)<0)
+			break;
+		    mHigh=(unsigned int)nextbyte;
+		    if(getnextbyte(&nextbyte)<0)
+			break;
+		    mLow=(unsigned int)nextbyte;
+		    mPesLength=mHigh<<8|mLow;
+		    type=FRAMETYPE_AUDIO;
+			break;
+		  }
+	      }
+	      mValue=((mValue<<16)>>8)|(unsigned int) nextbyte;
+	  }
+	  if(type==FRAMETYPE_UNKNOWN){
+	      seek(framepos);
+	      *size=0;
+	      return type;
+	  }
+	  curpos=tell()-1024+mBuf_Index+mPesLength;
+	  if(curpos> m_filesize)
+	    curpos=m_filesize;
+	  *size=curpos-framepos;
+	  seek(framepos);
+	  return type;
+    }
+}
+#endif
 
 #if 0
 // return frame type
@@ -980,6 +1076,20 @@ int dvrfile::repair()
     return 0;
 }
 #endif
+int videoToK(char *filename) {
+  char *ptr = strrchr(filename, '.');
+  if (ptr) {
+    ptr++;
+    if ((*ptr == 'm') || (*ptr == 'M') || (*ptr == '2')) {
+      *ptr = 'k';
+      ptr++;
+      *ptr = '\0';
+      return 0;
+    }
+  }
+  return 1;
+}
+
 int dvrfile::repairpartiallock()
 {
     dvrfile lockfile ;
@@ -1166,6 +1276,51 @@ int  dvrfile::getfileheaderdata(char* pBuf)
 }
 */
 
+FILE * file_open(const char *path, const char *mode)
+{
+    FILE * f ;
+    dvr_lock();
+    f = fopen(path, mode);
+    dvr_unlock();
+    return f ;
+}
+
+int file_read(void *ptr, int size, FILE *stream)
+{
+    int r ;
+    dvr_lock();
+    r = (int)fread( ptr, 1, (size_t)size, stream );
+    dvr_unlock();
+    return r ;
+}
+
+int file_write(const void *ptr, int size, FILE *stream)
+{
+    int r ;
+    dvr_lock();
+    r = (int)fwrite( ptr, 1, (size_t)size, stream );
+    dvr_unlock();
+    return r ;
+}
+
+int file_close(FILE *fp)
+{
+    int r ;
+    dvr_lock();
+    r = fclose( fp );
+    dvr_unlock();
+    return r ;
+}
+
+int file_flush(FILE *stream)
+{
+    int r ;
+    dvr_lock();
+    r = fflush( stream );
+    dvr_unlock();
+    return r ;
+}
+
 void file_sync()
 {
     if (file_syncreq) {
@@ -1180,12 +1335,15 @@ void file_init()
     int iv ;
     string v;
     config dvrconfig(dvrconfigfile);
+    unsigned char file_filekey[260] ;
     
     file_encrypt=dvrconfig.getvalueint("system", "fileencrypt");
     v = dvrconfig.getvalue("system", "filepassword");
     if( v.length()>=342 ) {
+       // c642bin(v.getstring(), file_filekey, 256);
+       // RC4_crypt_table( file_encrypt_RC4_table, 1024, file_filekey);
         c642bin(v.getstring(), g_filekey, 256);
-        RC4_crypt_table( file_encrypt_RC4_table, 1024, g_filekey);
+        RC4_crypt_table( file_encrypt_RC4_table, 1024, g_filekey);		
     }
     else {
         file_encrypt=0;

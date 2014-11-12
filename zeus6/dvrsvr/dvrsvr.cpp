@@ -4,6 +4,7 @@
 #include <sys/wait.h>
 
 #include "dvr.h"
+#include "dir.h"
 
 #if 0
 char Dvr264Header[40] = 
@@ -48,15 +49,15 @@ dvrsvr::dvrsvr(int fd)
     
     // awkward fix for ply266.dll, which don't check key for every connections, so check if there are any existing connection from same ip
     int peer = net_peer(m_sockfd);
-    dvrsvr * walk ;
-    walk = m_head ;
-    while( walk ) {
-    	 if( walk->m_keycheck && peer == net_peer(walk->m_sockfd) ) {
-    	 	m_keycheck = 1 ;
-    	 	break;
-    	 }
-    	 walk=walk->m_next ;
-    }
+	dvrsvr * walk ;
+	walk = m_head ;
+	while( walk ) {
+		 if( walk->m_keycheck && peer == net_peer(walk->m_sockfd) ) {
+			m_keycheck = 1 ;
+			break;
+		 }
+		 walk=walk->m_next ;
+	}
    
     m_fifosize=0;
     m_active=1;
@@ -131,12 +132,12 @@ int dvrsvr::read()
             close();
 	        return 0 ;
         }
-	else if( n<0 ) {
-		if( errno!=EWOULDBLOCK ) {
-			close();
+		else if( n<0 ) {
+			if( errno!=EWOULDBLOCK ) {
+				close();
+			}
+			return 0 ;
 		}
-		return 0 ;
-	}
         m_recvloc += n;
         if (m_recvloc < m_recvlen)
 	        return 1 ;
@@ -165,12 +166,12 @@ int dvrsvr::read()
 		    close();
 	        return 0 ;
         }
-	else if( n<0 ) {
-		if( errno!=EWOULDBLOCK ) {		// error!
-			close();
+		else if( n<0 ) {
+			if( errno!=EWOULDBLOCK ) {		// error!
+				close();
+			}
+			return 0 ;
 		}
-		return 0 ;
-	}
         m_recvloc += n;
         if (m_recvloc < m_recvlen)	// buffer not complete 
         {
@@ -1253,7 +1254,6 @@ void dvrsvr::ReqStreamSeek()
     }
 }
 
-
 void dvrsvr::ReqNextFrame()
 {
     struct dvr_ans ans;
@@ -1361,12 +1361,12 @@ void dvrsvr::ReqStreamGetDataEx()
             struct dvr_ans ans ;
             ans.anscode = ANS2STREAMDATAEX;
             ans.anssize = getsize;
-            ans.data = frametype;
+            ans.data = 0; //frametype;
             Send( &ans, sizeof( struct dvr_ans ) );
             Send( pbuf, ans.anssize );
 
 #ifdef NETDBG
-//            printf( "Stream Data Ex: %d\n", ans.anssize);
+            printf( "Stream Data: %d\n", ans.anssize);
 #endif                
          //    printf( "Stream Data: %d type:%d\n", ans.anssize,frametype);
          //   dvr_log("Stream Data: size=%d type=%d",ans.anssize,frametype);
@@ -2043,28 +2043,108 @@ void dvrsvr::DefaultReq()
     Send(&ans, sizeof(ans));
 }
 
+static char * str_trimtail( char * str )
+{
+	int l = strlen(str);
+	while( l>0 && str[l-1]<=' ' ) {
+		l-- ;
+	}
+	str[l]=0;
+	return str ;
+}
+
+static void setpoliceid( char * newid ) 
+{
+	array <string> idlist ;
+	FILE * fid ;
+	int i  ;
+	char buf[120] ;
+	
+	str_trimtail(newid);
+	strcpy( g_policeid, newid ) ;
+	
+	idlist[0] = newid ;
+	fid=fopen(g_policeidlistfile, "r");
+	if( fid ) {
+		for( i=1; i<20; ) {
+			if( fgets(buf, 110, fid) ) {
+				str_trimtail(buf);
+				if( strcmp(buf, newid)!=0 ) 
+					idlist[i++]=buf ;
+			}
+			else {
+				break;
+			}
+		}
+		fclose(fid);
+	}
+
+	// writing new id list to file
+	fid=fopen(g_policeidlistfile, "w");
+	if( fid ) {
+		for( i=0; i<idlist.size(); i++) {
+			fprintf(fid, "%s\n", (char *)idlist[i] );
+		}
+		fclose( fid ) ;
+	}
+
+	// let screen display new policeid
+	dvr_log( "New Police ID detected : %s", g_policeid );
+}
 
 void dvrsvr::ReqSendData()
 {
-	DefaultReq();
+	struct dvr_ans ans ;
+    
+	switch( m_req.data ) {
+		case PROTOCOL_PW_SETPOLICEID:
+			if( m_recvbuf && m_recvlen>0 ) {
+				// select a new offer ID.
+				setpoliceid( m_recvbuf ) ;
+			}
+		    else {
+				setpoliceid("") ;
+			}    
+			//ans.anscode = ANSGETDATA ;
+			ans.anscode = ANSOK ;
+			ans.data = 0 ;
+			ans.anssize = 0 ;
+			Send( &ans, sizeof(ans));
+			break;
+		
+		case PROTOCOL_PW_SETVRILIST :
+			if( m_recvbuf && m_recvlen>0 ) {
+				// select a new offer ID.
+				vri_setlist( m_recvbuf, m_recvlen ) ;
+			}
+			ans.anscode = ANSOK ;
+			ans.data = 0 ;
+			ans.anssize = 0 ;
+			Send( &ans, sizeof(ans));
+			break;
+			
+		default:
+			DefaultReq();
+	}
 }
 
 void dvrsvr::ReqGetData()
 {
 	struct dvr_ans ans ;
+	int i;
     
 	switch( m_req.data ) {
 		case PROTOCOL_PW_GETSTATUS:
 			// return status in bytes, one bytes for a channel
 			//     in each byte, bit 0: sig, bit 1: motion, bit 2: rec
 			unsigned char chstatus[MAXCHANNEL] ;
-			int i;
 			for( i=0; i<cap_channels; i++ ) {
 				chstatus[i] = 0 ;
 				if( cap_channel !=NULL && cap_channel[i]!=NULL ) {
 					if( cap_channel[i]->getsignal() == 0 ) chstatus[i] |= 1 ;      // signal lost?
 					if( cap_channel[i]->getmotion() )      chstatus[i] |= 2 ;      // motion detections
 					if( rec_state(i) )                     chstatus[i] |= 4 ;      // channel recording?
+					if( rec_forcestate(i) )                chstatus[i] |= 8 ;      // channel force recording mode
 				}
 			}
 			ans.anscode = ANSGETDATA ;
@@ -2074,7 +2154,166 @@ void dvrsvr::ReqGetData()
 			Send( &chstatus, ans.anssize );
 			
 			break;
-	
+			
+		case PROTOCOL_PW_GETSYSTEMSTATUS:
+			{
+				char * xbuf = new char [4096] ;
+				char * pbuf = xbuf ;
+				int    n ;
+					
+				static float x_uptime = 0.0 ;
+				static float x_idletime = 0.0 ;
+				float uptime ;
+				float idletime ;
+					
+				FILE * stfile = fopen("/proc/uptime", "r" );
+				if( stfile ) {
+					fscanf( stfile, "%f %f", &uptime, &idletime ) ;
+					fclose( stfile );
+				}
+
+				float usage ;
+				float s_uptime = uptime - x_uptime ;
+				if( s_uptime < 0.01 ) {
+					usage = 100.0 ;
+				}
+				else {
+					usage = 100.0 * (s_uptime - (idletime-x_idletime)) / s_uptime ;
+				}
+				n = sprintf( pbuf, "CPU_USAGE: %f\n", usage );
+				pbuf+=n ;
+				
+				// Get Mem state
+				int mem_total=0, mem_free=0 ;
+				stfile = fopen("/proc/meminfo", "r");
+				if( stfile ) {
+					char mbuf[256] ;
+					 while (fgets(mbuf, 256, stfile)) {
+						char header[20] ;
+						int  v ;
+						if( sscanf( mbuf, "%19s%d", header, &v )==2 ) {
+							if( strcmp( header, "MemTotal:")==0 ) {
+								 mem_total=v ;
+							}
+							else if( strcmp( header, "MemFree:")==0 ) {
+								mem_free+=v ;
+							}
+							else if( strcmp( header, "Inactive:")==0 ) {
+								mem_free+=v ;
+							}
+						}
+					}
+					fclose(stfile);
+				}
+				n = sprintf( pbuf, "MEM_TOTAL: %d\nMEM_FREE: %d\n", mem_total, mem_free );
+				pbuf+=n ; 
+				
+				// Get Disk Space
+				
+				int disk_free = 0;
+				int disk_total = 0;
+				dir disks(VAR_DIR "/disks");
+				while( disks.find() ) {
+					if( disks.isdir() ) {
+						struct statfs stfs;
+						if (statfs(disks.pathname(), &stfs) == 0) {
+							disk_free += stfs.f_bavail / ((1024 * 1024) / stfs.f_bsize);
+							disk_total += stfs.f_blocks / ((1024 * 1024) / stfs.f_bsize);
+						}	    	
+					}
+				}
+				n = sprintf( pbuf, "DISK_TOTAL: %d\nDISK_FREE: %d\n", disk_total, disk_free );
+				pbuf+=n ; 
+
+				// Get System Temperature
+				n = sprintf( pbuf, "SYSTEM_TEMPERATURE: %d\n", dio_get_temperature(0) );
+				pbuf+=n ; 
+				pbuf++ ;
+				
+				ans.anscode = ANSGETDATA ;
+				ans.data = 0 ;
+				ans.anssize = pbuf-xbuf ;
+				Send( &ans, sizeof(ans));
+				Send( xbuf, ans.anssize );
+				delete xbuf ;
+			}
+
+		
+			break;
+			
+		// get police id list 
+		case PROTOCOL_PW_GETPOLICEIDLIST:
+		
+			char policeid[20][64] ;
+			memset( policeid, 0, sizeof(policeid) );
+		
+			FILE * fpid ;
+			fpid=fopen(g_policeidlistfile, "r");
+			i=0;
+			if( fpid ) {
+				for( i=0; i<20; i++ ) {
+					if( fgets(policeid[i], 63, fpid) ) {
+						str_trimtail(policeid[i]);
+					}
+					else {
+						break;
+					}
+				}
+				fclose(fpid);
+			}
+			ans.anscode = ANSGETDATA ;
+			ans.data = i ;
+			ans.anssize = i*64 ;
+			Send( &ans, sizeof(ans));
+			Send( &policeid, ans.anssize );
+			
+			break;
+
+		// get vri list 
+		case PROTOCOL_PW_GETVRILISTSIZE:
+			{
+				int vs ;
+				int vis ;
+				vs = vri_getlistsize(&vis);
+				char vrics[40] ;
+				sprintf( vrics, "%d,%d", vs, vis );
+				ans.anscode = ANSGETDATA ;
+				ans.data = 0 ;
+				ans.anssize = 40 ;
+				Send( &ans, sizeof(ans));
+				Send( (void *)vrics, 40 );
+			}
+			break ;
+
+		// get vri list 
+		case PROTOCOL_PW_GETVRILIST:
+			{
+				char * vrilist ;
+				int vrisize ;
+				int vs ;
+				int vis ;
+				vs = vri_getlistsize(&vis);
+				vrisize = vs*vis ;
+				if( vrisize>0 ) {
+					vrilist = new char [vrisize] ;
+					vrisize = vri_getlist(vrilist,vrisize);
+				}
+				else {
+					vrilist = NULL ;
+					vrisize = 0;
+				}
+				ans.anscode = ANSGETDATA ;
+				ans.data = 0 ;
+				ans.anssize = vrisize ;
+				Send( &ans, sizeof(ans));
+				if( vrisize>0 ) {
+					Send( (void *)vrilist, vrisize );
+				}
+				if( vrilist )
+					delete [] vrilist ;
+			}
+			break ;
+			
 		default:
 			DefaultReq();
 	}
@@ -2115,7 +2354,7 @@ void dvr_onkey( int keycode, int keydown ) 	// keyboard/keypad event
         }
         else {
             dvr_log("TraceMark released!");
-            event_tm = 0 ;
+            // event_tm = 0 ;  // to be cleared by event.cpp after rec_update()	
          }
     }
     else if( keycode==(int)VK_LP ) {                             // LP key
@@ -2159,7 +2398,6 @@ void dvrsvr::Req2PanelLights()
         return ;
     }
 }
-
 
 #endif
 
@@ -2407,7 +2645,7 @@ int dvr_adjtime(int sockfd, struct dvrtime * dvrt)
 
 // set remote dvr time zone (for IP cam)
 // return 1: success, 0: failed
-int     dvr_settimezone(int sockfd, char * tzenv)
+int dvr_settimezone(int sockfd, char * tzenv)
 {
     struct dvr_req req ;
     struct dvr_ans ans ;

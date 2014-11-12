@@ -47,8 +47,10 @@ sfxrun.upd sfxrun
 ./dvr/tab102
 ./dvr/libfbdraw.so
 ./dvr/dvrsvr
+./dvr/bgarch
 ./dvr/glog
 ./dvr/tdevhotplug
+./dvr/mount_backup
 
 # www binary
 ./dvr/eaglehttpd
@@ -72,3 +74,4 @@ sfxrun.upd sfxrun
 ./dvr/cgi/firmwareupd
 ./dvr/cgi/mcufwupd
 ./dvr/cgi/login
+./dvr/jquery.js  dvr/cgi/jquery.js

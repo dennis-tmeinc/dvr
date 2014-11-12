@@ -77,7 +77,7 @@ void dvr_cleanlogfile(const char * lfilename, int cutsize)
     fclose( flog );
 }
 
-const char *logfilelnk=VAR_DIR"/dvrlogfile" ;
+const char *logfilelnk=VAR_DIR "/dvrlogfile" ;
 
 // write log to log file.
 // return

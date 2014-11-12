@@ -17,7 +17,8 @@ eagle_capture::eagle_capture( int channel, int hikchannel )
     m_type=CAP_TYPE_HIKLOCAL;
     
     // hik eagle32 parameters
-    m_hikhandle=hikchannel+1 ;	// handle = channel+1
+    // m_hikhandle=hikchannel+1 ;	// handle = channel+1
+    m_hikhandle=hikchannel ;
     m_chantype=MAIN_CHANNEL ;
     m_dspdatecounter=0 ;
     
@@ -515,10 +516,10 @@ void eagle_capture::start()
     int contrast;
     if( m_enable ) {
         if( m_attr.disableaudio ) {
-            res = SetStreamType(m_hikhandle-1, m_chantype, STREAM_TYPE_VIDEO);
+            res = SetStreamType(m_hikhandle, m_chantype, STREAM_TYPE_VIDEO);
         }
         else {
-            res = SetStreamType(m_hikhandle-1, m_chantype,  STREAM_TYPE_AVSYN);
+            res = SetStreamType(m_hikhandle, m_chantype,  STREAM_TYPE_AVSYN);
         }
         
         int QuantVal;
@@ -529,38 +530,22 @@ void eagle_capture::start()
             m_attr.PictureQuality = 0 ;
         }
         QuantVal = 12+(10-m_attr.PictureQuality);
-        res = SetDefaultQuant(m_hikhandle-1, m_chantype, QuantVal)	; 
+        res = SetDefaultQuant(m_hikhandle, m_chantype, QuantVal)	; 
        // quality should be between 12 to 30
 
-#if 0
-        // set frame mode
-        if( m_attr.key_interval<=0 ) {
-            m_attr.key_interval = 3 * m_attr.FrameRate ;
-        }
-        if( m_attr.key_interval<12 || m_attr.key_interval>400 ) {
-            m_attr.key_interval=12 ;
-        }
-
-        if( m_attr.b_frames <=0  && m_attr.b_frames > 10 ) {
-            m_attr.b_frames = 2;
-        }
-#endif
-#if 1
-        m_attr.key_interval= m_attr.FrameRate ; //15;
         m_attr.b_frames = 0;
-	//m_attr.FrameRate=12;
-#endif
-      //  dvr_log("set IBP Mode");
-        res= SetIBPMode(m_hikhandle-1, m_chantype, m_attr.key_interval, m_attr.b_frames, m_attr.FrameRate);
+
+		//  dvr_log("set IBP Mode");
+        res= SetIBPMode(m_hikhandle, m_chantype, m_attr.key_interval, m_attr.b_frames, m_attr.FrameRate);
         
 	//dvr_log("set Bitrate Control");
         // setup bitrate control
         if( m_attr.BitrateEn ) {
 	   // dvr_log("set Bitrate Control");
-            res = SetBitrateControl(m_hikhandle-1, m_chantype, m_attr.Bitrate, ( m_attr.BitMode==0 )?MODE_VBR:MODE_CBR  );
+            res = SetBitrateControl(m_hikhandle, m_chantype, m_attr.Bitrate, ( m_attr.BitMode==0 )?MODE_VBR:MODE_CBR  );
         }
         else {
-            res = SetBitrateControl(m_hikhandle-1, m_chantype, 4000000, MODE_VBR  );
+            res = SetBitrateControl(m_hikhandle, m_chantype, 4000000, MODE_VBR  );
         }
 
 #if 0
@@ -586,7 +571,7 @@ void eagle_capture::start()
             m_attr.Resolution = 3 ;
         }
     //    dvr_log("set picture resolution");
-        res = SetEncoderPictureFormat(m_hikhandle-1, m_chantype, m_attr.Resolution);
+        res = SetEncoderPictureFormat(m_hikhandle, m_chantype, m_attr.Resolution);
  
 #if 0	
         if( m_attr.MotionSensitivity>=0 ) {
@@ -604,17 +589,17 @@ void eagle_capture::start()
 #endif        
 #if 1
         if( m_attr.MotionSensitivity>=0 ) {
-            res = SetMotionDetection(m_hikhandle-1,  m_attr.MotionSensitivity);
-            res = EnalbeMotionDetection( m_hikhandle-1, 1);
+            res = SetMotionDetection(m_hikhandle,  m_attr.MotionSensitivity);
+            res = EnalbeMotionDetection( m_hikhandle, 1);
         }
         else {
-            EnalbeMotionDetection( m_hikhandle-1, 0 );
+            EnalbeMotionDetection( m_hikhandle, 0 );
         }
 #endif
         // set color contrl
 //	dvr_log("SetVideoParam");
 #if 0
-        SetVideoParam(m_hikhandle-1, 
+        SetVideoParam(m_hikhandle, 
                       128-80+m_attr.brightness*16, 
                       128-80+m_attr.contrast*16,
                       128-120+m_attr.saturation*24,
@@ -740,7 +725,7 @@ void eagle_capture::start()
 	    break;	  	  
 	}
 	
-        SetVideoParam(m_hikhandle-1, 
+        SetVideoParam(m_hikhandle, 
                       brightness, 
                       contrast,
                       saturation,
@@ -764,9 +749,9 @@ void eagle_capture::start()
         eagle32_tsadjust=0 ;
         
         // start encoder
-        eagle_capture_array[m_hikhandle-1]=this ;
-	//dvr_log("start codec:%d",m_hikhandle-1);
-        StartCodec( m_hikhandle-1, m_chantype );
+        eagle_capture_array[m_hikhandle]=this ;
+	//dvr_log("start codec:%d",m_hikhandle);
+        StartCodec( m_hikhandle, m_chantype );
 
         // Update OSD
     //    updateOSD();
@@ -778,10 +763,10 @@ void eagle_capture::stop()
     int res ;
   //  res=EnalbeMotionDetection(m_hikhandle, 0);	// disable motion detection
     if( m_enable ){
-      //  printf("stop channel:%d",m_hikhandle-1);
-	res=StopCodec(m_hikhandle-1, m_chantype);
+      //  printf("stop channel:%d",m_hikhandle);
+	res=StopCodec(m_hikhandle, m_chantype);
 	//printf("StopCodec return %d\n",res);
-	eagle_capture_array[m_hikhandle-1]=NULL ;
+	eagle_capture_array[m_hikhandle]=NULL ;
     }
 }
 
@@ -794,13 +779,13 @@ void eagle_capture::setosd( struct hik_osd_type * posd )
         osdformat[i]=&(posd->osdline[i][0]) ;
     }
 #if 1    
-    SetOSDDisplayMode(m_hikhandle-1, 
+    SetOSDDisplayMode(m_hikhandle, 
                       posd->brightness,
                       posd->translucent,
                       posd->twinkle,
                       posd->lines,
                       osdformat );
-    EnableOSD(m_hikhandle-1, 1);		// enable OSD
+    EnableOSD(m_hikhandle, 1);		// enable OSD
 #endif    
 }
 
@@ -823,14 +808,14 @@ int eagle_capture::getsignal()
     struct timeval time1;
     if(signalchecked){
       if(m_enable){
-         m_signal=GetVideoSignal(m_hikhandle-1);
+         m_signal=GetVideoSignal(m_hikhandle);
       } 
     }else {
        gettimeofday(&time1, NULL);
        int diff=time1.tv_sec-starttime.tv_sec;
        if(diff>5){
 	  if(m_enable){
-	    m_signal=GetVideoSignal(m_hikhandle-1);
+	    m_signal=GetVideoSignal(m_hikhandle);
 	  }
 	  signalchecked=1;
        } else {

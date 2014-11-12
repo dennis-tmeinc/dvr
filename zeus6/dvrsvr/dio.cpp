@@ -109,6 +109,20 @@ int get_peak_data( float *fb, float *lr, float *ud )
   return 0;
 }
 
+// return gps knots to mph
+float dio_get_gps_speed()
+{
+	if( p_dio_mmap && p_dio_mmap->iopid ){
+		return 1.15078 * p_dio_mmap->gps_speed;
+	}
+   return 0.0;
+}
+
+int dio_get_gforce( float *fb, float *lr, float *ud )
+{
+	return get_peak_data( fb, lr, ud ) ;
+}
+
 int isPeakChanged()
 {
    if( p_dio_mmap && p_dio_mmap->iopid ){
@@ -135,7 +149,7 @@ int dio_outputnum()
 int dio_input( int no )
 {
     if( p_dio_mmap && p_dio_mmap->iopid && no>=0 && no<p_dio_mmap->inputnum ) {
-        p_dio_mmap->dvrwatchdog = 0 ;
+        p_dio_mmap->dvrwatchdog = 0 ;		// serve as kicking watchdog
         return ((p_dio_mmap->inputmap)>>no)&1 ;
     }
     return 0 ;
@@ -154,7 +168,6 @@ void dio_output( int no, int v)
 }
 
 // return 1 for poweroff switch turned off
-
 int dio_poweroff()
 {
     if( p_dio_mmap && p_dio_mmap->iopid ){
@@ -216,14 +229,31 @@ int dio_get_nodiskcheck()
   return -1;
 }
 
+int dio_get_temperature( int idx ) 
+{
+	if( p_dio_mmap && p_dio_mmap->iopid ) {
+		if( idx == 0 ) {
+			return p_dio_mmap->iotemperature;
+		}
+		else if( idx == 1 ) {
+			return p_dio_mmap->hdtemperature1;
+		}
+		else if( idx == 2 ) {
+			return p_dio_mmap->hdtemperature2;
+		}
+	}
+	return 0 ;
+}
+
 // checking io maps and dvr commands, return if io pins changed after last check
 int dio_check()
 {
     int res=0 ;
+
     if( p_dio_mmap && p_dio_mmap->iopid ){
       //dio_lock();
 
-	g_nodiskcheck = p_dio_mmap->nodiskcheck;
+		g_nodiskcheck = p_dio_mmap->nodiskcheck;
 
         // dvrcmd :  1: restart(resume), 2: suspend, 3: stop record, 4: start record
         if( p_dio_mmap->dvrcmd == 1 ) {
@@ -245,8 +275,23 @@ int dio_check()
             dio_standby_mode=0;
             rec_start ();
         } 
-        res = (dio_old_inputmap != p_dio_mmap->inputmap) ;
-        dio_old_inputmap = p_dio_mmap->inputmap ;
+        
+        unsigned int inputmap = p_dio_mmap->inputmap ;
+        res = (dio_old_inputmap != inputmap) ;
+        dio_old_inputmap = inputmap ;
+
+
+#ifdef APP_PWZ5
+		// PWZ5/PWZ6 mic process
+		if( p_dio_mmap->pwii_micinput & 0x05 ) {
+			rec_pwii_force_rec( 0, 1 );		// force ch0 recording
+		}
+		if( p_dio_mmap->pwii_micinput & 0x0a ) {
+			p_dio_mmap->pwii_micinput &= ~0x0a ;
+			event_tm = 1;
+		}
+#endif        
+        
         //dio_unlock();
     }
     return res ;
@@ -255,10 +300,10 @@ int dio_check()
 // set dvr status bits
 int dio_setstate( int status )
 {
-
 #ifdef PWII_APP
     int rstart = 0 ;
 #endif
+    dio_lock();
     if( p_dio_mmap ){
 #ifdef PWII_APP
         if( (status & DVR_LOCK)!=0 &&
@@ -267,20 +312,38 @@ int dio_setstate( int status )
                 // start recording
                 struct dvrtime cliptime ;
                 time_now(&cliptime) ;
-                sprintf( g_vri, "%s-%02d%02d%02d%02d%02d",
-                        (char *)g_hostname,
-                        cliptime.year%100,
-                        cliptime.month,
-                        cliptime.day,
-                        cliptime.hour,
-                        cliptime.minute
-                        );
+                if( g_policeid[0] ) {
+					sprintf( g_vri, "%s-%02d%02d%02d%02d%02d-%s",
+							(char *)g_hostname,
+							cliptime.year%100,
+							cliptime.month,
+							cliptime.day,
+							cliptime.hour,
+							cliptime.minute,
+							g_policeid
+							);
+				}
+				else {
+					sprintf( g_vri, "%s-%02d%02d%02d%02d%02d",
+							(char *)g_hostname,
+							cliptime.year%100,
+							cliptime.month,
+							cliptime.day,
+							cliptime.hour,
+							cliptime.minute
+							);
+                }
                 memcpy( p_dio_mmap->pwii_VRI, g_vri, sizeof(p_dio_mmap->pwii_VRI) );
+                
+                // log new vri
+                vri_log( g_vri ) ;                
+                
                 rstart = 1 ;
         }
 #endif
         p_dio_mmap->dvrstatus |= status ;
     }
+    dio_unlock();
 #ifdef PWII_APP
     if( rstart ) {
         dvr_log( "Recording started, VRI: %s", g_vri);
@@ -288,6 +351,7 @@ int dio_setstate( int status )
 #endif
     return 0 ;
 }
+
 
 // clear dvr status
 int dio_clearstate( int status )
@@ -662,7 +726,8 @@ void dio_pwii_lpzoomin( int on )
             p_dio_mmap->pwii_output |= PWII_LP_ZOOMIN ;
         }
         else {
-            p_dio_mmap->pwii_output &= ~PWII_LP_ZOOMIN ;
+			// auto zoom out
+//            p_dio_mmap->pwii_output &= ~PWII_LP_ZOOMIN ;
         }
         dio_unlock();
     }

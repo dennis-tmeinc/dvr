@@ -25,6 +25,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
+#include <sys/file.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
@@ -105,7 +106,7 @@ extern char g_vri[128];
 extern string g_policeidlistfile ;
 extern char g_policeid[32];
 
-int  dvr_log(const char *str, ...);
+int dvr_log(const char *fmt, ...);
 void dvr_logkey( int op, struct key_data * key ) ;
 //void dvr_lock();
 //void dvr_unlock();

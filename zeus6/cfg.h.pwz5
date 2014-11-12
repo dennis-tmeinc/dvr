@@ -20,6 +20,7 @@
 //#define SUPPORT_YAGF
 
 #define	APPNAME	"PWZ5"
+#define APP_PWZ5
 
 // default config file
 #define	CFG_DEFFILE	"/davinci/dvr/defconf"

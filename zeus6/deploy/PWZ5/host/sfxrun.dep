@@ -45,8 +45,31 @@ rm -rf /davinci/dvr/*
 echo Copying file to /davinci, please wait.
 cp -rf  * /davinci/
 cd /davinci
-tar xzf etc.tar.gz
-rm etc.tar.gz
+
+if [ -f etc.tar.gz ] ; then
+	mkdir etc
+	tar xzf etc.tar.gz
+	rm etc.tar.gz
+fi
+
+# duplicate usr/lib to davinci
+mkdir /davinci/usr
+cp -a /usr/lib /davinci/usr/
+
+cd dvr
+
+if [ -f drivers.tar.gz ] ; then
+	mkdir drivers
+	tar xzf drivers.tar.gz
+	rm drivers.tar.gz
+fi
+
+if [ -f lib.tar.gz ] ; then
+	mkdir lib
+	tar xzf lib.tar.gz
+	rm lib.tar.gz
+	cp -f lib/lib* /davinci/usr/lib/
+fi
 
 rm /davinci/sfxrun
 

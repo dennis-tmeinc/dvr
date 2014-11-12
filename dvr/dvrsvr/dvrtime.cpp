@@ -49,7 +49,7 @@ void time_inittimezone()
         }
         p = getenv("TZ") ;
         if( p ) {
-            tzfile = fopen( VAR_DIR"/TZ", "w" );
+            tzfile = fopen( VAR_DIR "/TZ", "w" );
             if( tzfile ) {
                 fprintf(tzfile, "%s", p );
                 fclose( tzfile );

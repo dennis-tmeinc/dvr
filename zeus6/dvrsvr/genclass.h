@@ -510,7 +510,11 @@ class string {
 		operator char * (){
 			return getstring() ;
 		}
-
+		
+		operator const char * (){
+			return (const char *)getstring() ;
+		}
+		
         string & operator =(const char *str) {
             setstring(str);
             return *this;
@@ -533,9 +537,11 @@ class string {
                 return 0;
             }
         }
+        
         int size() {
 			return m_s ;
 		}
+		
         char * expand(int nsize){
 			if( nsize>m_s ) {
 				char * nbuf = new char [nsize] ;
@@ -549,9 +555,11 @@ class string {
 			}
 			return getstring();
 		}
+		
 		char * setbufsize( int nsize ) {
 			return expand(nsize+1);
 		}
+		
 		string & trim()
         {
 			if( m_str ) {
@@ -568,10 +576,13 @@ class string {
 			}
 			return *this ;
 		}
+		
         int isempty() {
             return (length() == 0);
         }
+        
         char & operator[] (int idx) {
+			setbufsize(idx);
             return m_str[idx] ;
         }
 };

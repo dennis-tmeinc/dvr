@@ -274,7 +274,7 @@ int disk_usage( int * disk_total, int * disk_free)
 {
    *disk_free = 0;
    *disk_total = 0;
-    dir_find disks(VAR_DIR"/disks");
+    dir_find disks(VAR_DIR "/disks");
     while( disks.find() ) {
     	if( disks.isdir() ) {
 		    struct statfs stfs;
@@ -465,7 +465,7 @@ void check_synctime()
                 settimeofday( &tv, NULL );
 
                 // kill -USR2 dvrsvr.pid
-                FILE * fvalue = fopen( VAR_DIR"/dvrsvr.pid", "r" );
+                FILE * fvalue = fopen( VAR_DIR "/dvrsvr.pid", "r" );
                 if( fvalue ) {
                     int i=0 ;
                     fscanf(fvalue, "%d", &i) ;
@@ -475,8 +475,8 @@ void check_synctime()
                     }
                 }
 
-                system( APP_DIR"/dvrtime utctomcu > /dev/null" );
-                system( APP_DIR"/dvrtime utctortc > /dev/null" );
+                system( APP_DIR "/dvrtime utctomcu > /dev/null" );
+                system( APP_DIR "/dvrtime utctortc > /dev/null" );
             }
     }
     return ;

@@ -5,6 +5,9 @@
 
 ifconfig lo 127.0.0.1
 
+#preset ether net address
+ifconfig eth0 192.168.42.42 netmask 255.255.255.0
+
 #copy web files
 mkdir /home/www
 cd /home/www

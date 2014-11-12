@@ -18,6 +18,7 @@
 #include <fnmatch.h>
 #include <termios.h>
 #include <stdarg.h>
+#include <malloc.h>
 
 #include <sys/vfs.h>
 #include <sys/time.h>
@@ -45,6 +46,7 @@ int mem_size(void * pmem);
 void *mem_cpy(void *dst, void const *src, size_t len);
 //void mem_cpy32(void *dest, const void *src, size_t count);
 int mem_available();
+void mem_dropcaches();
 void mem_init();
 void mem_uninit();
 
@@ -109,7 +111,7 @@ struct key_data {
     int keyinfo_size ;
 } ;
 
-extern unsigned char g_filekey[260] ;
+extern unsigned char g_filekey[] ;
 extern char g_mfid[32] ;
 extern int g_keycheck ;
 extern char g_serial[64] ;
@@ -120,12 +122,13 @@ extern char g_id2[64] ;
 extern char g_servername[256] ;
 extern char g_vri[128] ;
 extern char g_policeid[] ;
+extern string g_policeidlistfile ; // Police ID list filename
 
 void dvr_logkey( int op, struct key_data * key ) ;
 
 extern int turndiskon_power;
 extern int powerNum;
-int  dvr_log(char *str, ...);
+int  dvr_log(const char *str, ...);
 int  dvr_logd(char *str, ...);
 void dvr_lock();
 void dvr_unlock();
@@ -803,6 +806,8 @@ void rec_postrecord(int channel);
 void rec_lockstart(int channel);
 void rec_lockstop(int channel);
 int  rec_state(int channel);
+int  rec_forcestate(int channel);
+int  rec_lockstate(int channel);
 void rec_lock(time_t locktime);
 void rec_unlock();
 void rec_break();
@@ -810,6 +815,12 @@ void rec_update();
 void rec_alarm();
 void rec_start();
 void rec_stop();
+
+#ifdef APP_PWZ5
+void rec_pwii_force_rec( int c, int rec );
+void rec_pwii_toggle_rec( int c );
+#endif
+
 int  fileclosed();
 struct nfileinfo {
     int channel;
@@ -978,8 +989,13 @@ void net_uninit();
 #define PROTOCOL_PWEVENT	   (9)
 
 // PWII get channel status
-#define PROTOCOL_PW_GETSTATUS   (1001)
-
+#define PROTOCOL_PW_GETSTATUS   	(1001)
+#define PROTOCOL_PW_GETPOLICEIDLIST	(1002)
+#define PROTOCOL_PW_SETPOLICEID		(1003)
+#define PROTOCOL_PW_GETVRILISTSIZE	(1004)
+#define PROTOCOL_PW_GETVRILIST		(1005)
+#define PROTOCOL_PW_SETVRILIST		(1006)
+#define PROTOCOL_PW_GETSYSTEMSTATUS	(1007)
 
 // dvr net service
 struct dvr_req {
@@ -1415,8 +1431,15 @@ int gps_location( double * latitude, double * longitude );
 extern double g_gpsspeed ;
 extern int dio_standby_mode ;
 int dio_get_nodiskcheck();
+int dio_get_temperature( int idx ) ;
 void dio_hybridcopy(int on);
 void dio_setfileclose(int close);
+
+// return gps knots to mph
+float dio_get_gps_speed();
+// get gforce value
+int dio_get_gforce( float *fb, float *lr, float *ud );
+
 int get_peak_data(float *fb,float *lr,float *ud);
 int isPeakChanged();
 int isInUSBretrieve();
@@ -1436,11 +1459,13 @@ extern float g_ud;
 // sensor
 
 class sensor_t {
+protected:	
 	string m_name ;
 	int m_inputpin ;
 	int m_inverted ;
 	int m_xvalue ;
 	int m_value ;
+    int m_eventmarker ; // 1=this sensor is a event marker
 public:
 	sensor_t(int n);
 	char * name() {
@@ -1456,6 +1481,12 @@ public:
 	int value() {
 		return m_value ;
 	}
+    int eventmarker() {
+        return m_eventmarker ;
+    }	
+    int iseventmarker() {
+        return m_eventmarker ;
+    }	
 } ;
 
 extern sensor_t ** sensors ;
@@ -1485,5 +1516,20 @@ void screen_init();
 void screen_uninit();
 int screen_io(int usdelay);
 
+
+#ifdef PWII_APP
+	// vri functions
+	
+// log new vir	
+void vri_log( char * vri );	
+// get buffer size required to retrieve vri items
+int vri_getlistsize( int * itemsize );
+// retrieve vri list
+int vri_getlist( char * buf, int bufsize );
+// update vri list items
+void vri_setlist( char * buf, int bufsize );
+	
+	
+#endif  // PWII_APP	
 
 #endif							// __dvr_h__

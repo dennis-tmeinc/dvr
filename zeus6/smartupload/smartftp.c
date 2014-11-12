@@ -896,7 +896,7 @@ static int scanSmartFiles(char *dir_path, char *servername)
       ret = sscanf(de->d_name + servernameLen,
 		   "_%04hd%02hhd%02hhd_%c.%03hd",
 		   &year, &month, &day, &lock, &fileno);
-      if ((ret == 5) && (fileno == 1)) {
+      if ((ret == 5) && (fileno == 1 || fileno >= 10 )) {
 	if (lock == 'L') {
 	  snprintf(fullname, sizeof(fullname),
 		   "%s/%s",

@@ -42,7 +42,7 @@ int extract( const char * sfxfile )
     if( fscanf( fp, "%d", &executesize )<1 ) {
         executesize = 0 ;
     }
-    if(executesize<0||executesize>100000){
+    if(executesize<0||executesize>200000){
         executesize=0 ;
     }
 

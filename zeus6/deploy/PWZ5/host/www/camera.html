@@ -17,7 +17,7 @@
 <li><a onclick="on_system_click()"><span>System</span></a></li>
 <li class="current"><a onclick="on_camera_click()"><span>Camera</span></a></li>
 <li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
-<!-- <li><a onclick="on_network_click()"><span>Network</span></a></li> -->
+<li><a onclick="on_network_click()"><span>Network</span></a></li>
 <li><a onclick="on_status_click()"><span>Status</span></a></li>
 <li><a onclick="on_tools_click()"><span>Tools</span></a></li>
 </ul>
@@ -78,6 +78,22 @@ Camera :</label> </td>
 -->
 
 <tr>
+<td class="col1">Physical Channel: </td>
+<td>
+<select name="channel">
+    <option value="0">1</option>
+    <option value="1">2</option>
+    <option value="2">3</option>
+    <option value="3">4</option>
+    <option value="4">5</option>
+    <option value="5">6</option>
+    <option value="6">7</option>
+    <option value="7">8</option>
+</select>
+</td>
+</tr>
+
+<tr>
 <td class="col1">Recording Mode:</td>
 <td>
 <select name="recording_mode">
@@ -99,10 +115,10 @@ Camera :</label> </td>
 <td>
 <select name="resolution">
     <option value="4">176x120</option>
-    <option value="0">352x240</option>
-    <option value="1">704x240</option>
+    <option value="0">360x240</option>
+    <option value="1">720x240</option>
     <option value="2">528x320</option>
-    <option value="3">704x480</option>
+    <option value="3">720x480</option>
 </select>
 </td>
 </tr>
@@ -370,43 +386,34 @@ for( i=1; i<=num_sensor; i++ ) {
 </td>
 </tr>
 
-<script type="text/javascript">
-function oncrashlock()
-{
-    var brec=document.getElementsByName("gforce_record_lock");
-    if( brec[0].checked==true ) {
-        brec=document.getElementsByName("gforce_record_trigger");
-        brec[0].checked=true ;
-    }
-}
-
-function oncrashrec()
-{
-    var brec=document.getElementsByName("gforce_record_trigger");
-    if( brec[0].checked==false ) {
-        brec=document.getElementsByName("gforce_record_lock");
-        brec[0].checked=false ;
-    }
-}
-</script>
-
-<!--
 <tr>
-<td class="col1">Record when crash detected:</td>
+<td class="col1">G-Force sensor trigger:</td>
 <td>
-<input name="gforce_record_trigger" value="on" type="checkbox" onclick="oncrashrec()" />
-<input name="bool_gforce_record_trigger" value="on" type="hidden" />
+<input name="gforce_trigger" value="on" type="checkbox"/>
 </td>
 </tr>
 
 <tr>
-<td class="col1">Lock video when crash detected:</td>
+<td class="col1">G-Force sensor trigger value:</td>
 <td>
-<input name="gforce_record_lock" value="on" type="checkbox" onclick="oncrashlock()"/>
-<input name="bool_gforce_record_lock" value="on" type="hidden" />
+<input name="gforce_trigger_value" /> g
 </td>
 </tr>
--->
+
+<tr>
+<td class="col1">Vehicle speed trigger:</td>
+<td>
+<input name="speed_trigger" value="on" type="checkbox"/>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Vehicle speed trigger value:</td>
+<td>
+<input name="speed_trigger_value" /> MPH
+</td>
+</tr>
+
 
 <tr>
 <td class="col1">Pre-Recording Time (s):</td>

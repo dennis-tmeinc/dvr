@@ -565,8 +565,13 @@ void net_init()
     multicast_en = 0;			// default no multicast
     net_addr("228.229.210.211", 15113, &multicast_addr);
     // fixed multicast address for now
+    
+    pthread_attr_t attr;
+    size_t stacksize = 0 ;
+    pthread_attr_init(&attr);
+    
     net_run = 1;
-    pthread_create(&net_threadid, NULL, net_thread, NULL);
+    pthread_create(&net_threadid, &attr, net_thread, NULL);
     
     dvr_log("Network initialized.");
 }

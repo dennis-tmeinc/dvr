@@ -1329,9 +1329,9 @@ int gps_logprintf1(int logid, char * fmt, ...)
     log_lock();
     logfile = gps_logopen(&t);
     if( logfile==NULL ) {
-	log_unlock();
-	glog_ok=0 ;
-	return 0;
+		log_unlock();
+		glog_ok=0 ;
+		return 0;
     }
     
     fprintf(logfile, "15,%02d:%02d:%02d,%09.6f%c%010.6f%c%.1fD%06.2f,%04x", 
@@ -1461,6 +1461,40 @@ int	sensor_log()
 {
     int i;
 
+
+#ifdef PWII_APP
+    static char st_pwii_VRI[128] ;
+    int log_vri=0 ;
+
+//    dio_lock();
+    if( p_dio_mmap->pwii_VRI[0] && strcmp(st_pwii_VRI, p_dio_mmap->pwii_VRI)!=0 ) {
+        strncpy(st_pwii_VRI, p_dio_mmap->pwii_VRI, sizeof( st_pwii_VRI )-1);
+        log_vri=1 ;
+    }
+//    dio_unlock();
+    if( log_vri ) {
+        gps_logprintf( 18, ",%s", st_pwii_VRI ) ;
+    }
+
+    static unsigned int pwii_buttons = 0 ;
+    unsigned int pwii_xbuttons = p_dio_mmap->pwii_buttons ^ pwii_buttons ;
+    if( pwii_xbuttons ) {
+        pwii_buttons ^= pwii_xbuttons ;
+        if( pwii_xbuttons & 0x100 ) {   // REC
+            if( gps_logprintf( (pwii_buttons&0x100)? 20:21, "" ) );
+        }
+        if( pwii_xbuttons & 0x200 ) {   // C2
+            if( gps_logprintf( (pwii_buttons&0x200)? 22:23, "" ) );
+        }
+        if( pwii_xbuttons & 0x400 ) {   // tm
+            if( gps_logprintf( (pwii_buttons&0x400)? 24:25, "" ) );
+        }
+        if( pwii_xbuttons & 0x800 ) {   // lp
+            if( gps_logprintf( (pwii_buttons&0x800)? 26:27, "" ) );
+        }
+    }
+#endif
+
     if( validgpsdata.year < 1900 ) return 0 ;
 
     // log ignition changes
@@ -1510,6 +1544,7 @@ int	sensor_log()
             sensorbouncevalue[i] = sv ;
         }
     }
+    
     if(p_dio_mmap->inputnum>6&&sensorlogenable>0){
        int tmap=0;
        for(i=6;i<p_dio_mmap->inputnum;++i){
@@ -1538,20 +1573,10 @@ int	sensor_log()
             p_dio_mmap->gforce_log1=0;
         }
     }
-    
+
 	return 1;
 }
 
-static void * sensorlog_thread(void *param)
-{
-    while( app_state ) {
-        if( app_state==1 ) {
-	  sensor_log();
-        }
-        usleep(20000);
-    }
-    return NULL ;
-}
 #if 0
 // TAB102B sensor log
 
@@ -2870,7 +2895,6 @@ static void * tab102b_thread(void *param)
     return NULL ;
 }
 #endif
-pthread_t sensorthreadid=0 ;
 pthread_t tab102b_threadid=0 ;
 
 unsigned char nmeaChecksum(unsigned char *buf, int size)
@@ -3131,8 +3155,6 @@ int appinit()
     fclose( pidf );
   }
   
-  // create sensor log thread
-  pthread_create(&sensorthreadid, NULL, sensorlog_thread, NULL); 
   for(i=0;i<60;++i){
       gps_port_handle = openCom(gps_port_dev, gps_port_baudrate);
       if(gps_port_handle>0){
@@ -3295,11 +3317,6 @@ int re_appinit()
 // app finish, clean up
 void appfinish()
 {
-    // end of sensor log thread,
-    if( sensorthreadid != 0 ) {
-        pthread_join( sensorthreadid, NULL );
-    }
-    sensorthreadid = 0 ;
     
     if( tab102b_threadid!=0 ) {
         pthread_join( tab102b_threadid, NULL );
@@ -3388,6 +3405,7 @@ int main(int argc, char **argv)
 #endif
     }
 
+
     prepare_semaphore();
 #ifdef NET_DEBUG
     connectDebug();
@@ -3435,6 +3453,10 @@ int main(int argc, char **argv)
 	  }
 	  sigcap=0 ;
       }
+      
+      
+	// do sensor log here instead in seperate thread ?
+		sensor_log();
       
       if( app_state==1 && gps_port_disable==0 ) {
 	    if(gps_port_handle<0){

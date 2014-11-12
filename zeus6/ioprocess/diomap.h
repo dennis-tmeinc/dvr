@@ -112,6 +112,7 @@ struct dio_mmap {
                                         //  BIT 12:  blackout, 1: pressed, 0: released
                                         //  BIT 13:  Speaker Mute Botton (virtual) 1: pressed, auto release
                                         //  BIT 14:  Sperker On Botton (virtual) 1: pressed, auto release
+                                 
 
     unsigned int pwii_output ;          // LEDs and device power (outputs)
                                         // BIT 0: C1 LED
@@ -129,6 +130,14 @@ struct dio_mmap {
                                         // BIT 11: LCD power
                                         // BIT 12: standby mode, 1: standby, 0: running		// black out
                                         // BIT 13: WIFI power
+                                        
+    // PWZ6 dual mic status ( inverted from MCU inputs )
+    unsigned int pwii_micinput;         //       all bits implemented as one shot trigger of C1 record for PWZ6
+                                        //  BIT 0:  Mic 1
+                                        //  BIT 1:  EMG 1
+                                        //  BIT 2:  Mic 2
+                                        //  BIT 3:  EMG 2      
+                                        
     int     pwii_error_LED_flash_timer ; // LED flash timer (output),  0: stayon, others in 0.25 second step
     char    pwii_VRI[128] ;             // current VRI(video recording Id)
 

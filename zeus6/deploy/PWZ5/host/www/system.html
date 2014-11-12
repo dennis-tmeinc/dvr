@@ -15,7 +15,7 @@
 <li class="current"><a onclick="on_system_click()"><span>System</span></a></li>
 <li><a onclick="on_camera_click()"><span>Camera</span></a></li>
 <li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
-<!-- <li><a onclick="on_network_click()"><span>Network</span></a></li> -->
+<li><a onclick="on_network_click()"><span>Network</span></a></li>
 <li><a onclick="on_status_click()"><span>Status</span></a></li>
 <li><a onclick="on_tools_click()"><span>Tools</span></a></li>
 </ul>
@@ -75,6 +75,17 @@
 <tr>
 <td>&nbsp;</td>
 <td></td>
+</tr>
+
+<tr>
+<td class="col1">Recording Method:</td>
+<td>
+<select size="1" name="pw_recordmethod" >
+  <option value="0">One disk recording</option>
+  <option value="1">Just in case recording</option>
+  <option value="2">Auto backup</option>
+</select>
+</td>
 </tr>
 
 <tr>
@@ -160,6 +171,10 @@
 <td>&nbsp;</td>
 </tr>
 
+<tr>
+<td class="col1">Number of camera:</td>
+<td><input name="totalcamera" /></td>
+</tr>
 <tr>
 <td class="col1">Pre-Lock Time (s):</td>
 <td><input name="pre_lock_time" /></td>

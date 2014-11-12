@@ -8,7 +8,7 @@
 pthread_mutex_t g_mem_mutex;
 
 // Parse /proc/meminfo
-static int MemTotal, MemFree, Cached, Buffers, SwapTotal, SwapFree;
+static int MemTotal, MemFree, Cached, Buffers, Inactive, SwapTotal, SwapFree;
 static int ParseMeminfo()
 {
     FILE *fproc=NULL;
@@ -30,10 +30,23 @@ static int ParseMeminfo()
             rnum += sscanf(buf + 10, "%d", &SwapTotal);
         } else if (memcmp(buf, "SwapFree:", 9) == 0) {
             rnum += sscanf(buf + 9, "%d", &SwapFree);
+        } else if (memcmp(buf, "Inactive:", 9) == 0) {
+            rnum += sscanf(buf + 9, "%d", &Inactive);
         }
     }
     fclose(fproc);
     return rnum;
+}
+
+// dump cache memory, hope to free up main memory
+//		"echo 1 > /proc/sys/vm/drop_caches"
+void mem_dropcaches()
+{
+	FILE * f=fopen( "/proc/sys/vm/drop_caches", "w" );
+	if( f ) {
+		fwrite( "1", 1, 1, f );
+		fclose( f );
+	}
 }
 
 // return kbytes of available memory (Usable Ram)
@@ -42,7 +55,7 @@ int mem_available()
     int memfree;
     if (ParseMeminfo() == 0)
         return 0;
-    memfree = MemFree + Cached + Buffers ;
+    memfree = MemFree + Inactive ;
     return memfree;
 }
 
@@ -63,7 +76,6 @@ void *mem_alloc(int size)
     pmemblk[0] = size+12 ;		// block size
     pmemblk[1] = 1 ;			// reference counter
     pmemblk[2] = MEMTAG	; 		// memory tag
-    //fprintf(stderr, "xyk-alloc:%p\n",pmemblk); 
     return (void *)(&pmemblk[3]);
 }
 
@@ -82,7 +94,6 @@ void mem_free(void *pmem)
     }
     if( --(pmemblk[1]) <=0 ) {	// reference counter = 0
         pmemblk[2]=0;		// clear memory tag
-	//fprintf(stderr, "xyk-free:%p\n",pmemblk); 
         free( (void *)pmemblk );
     }
     pthread_mutex_unlock(&g_mem_mutex);
@@ -152,55 +163,9 @@ void mem_uninit()
 {
     pthread_mutex_destroy(&g_mem_mutex);
 }
-#if 0
+
 void *mem_cpy(void *dst, void const *src, size_t len)
 {
-  long *plDst = (long *)dst;
-  long const *plSrc = (long const *)src;
-
-  //fprintf(stderr, "mem_cpy:%p,%p\n",plSrc,plDst);
-
-  if (!((unsigned int)plSrc % sizeof(int)) &&
-      !((unsigned int)plDst  % sizeof(int))) {
-    //fprintf(stderr, "mem_cpy2\n");
-    while (len >= 4) {
-      *plDst++ = *plSrc++;
-      len -= 4;
-    }
-  }
-  /*
-  if (len >= 4) {
-    fprintf(stderr, "mem_cpy3\n");
-    exit(1);
-  }
-  */
-  char *pcDst = (char *)plDst;
-  char const *pcSrc = (char const *)plSrc;
-
-  while (len--) {
-    *pcDst++ = *pcSrc++;
-  }
-
-  return (dst);
+	return memcpy( dst, src, len );
 }
-#else
-void *mem_cpy(void *dst, void const *src, size_t len)
-{
-  char *plDst = (char*)dst;
-  char *plSrc = (char*)src;
-  int left=len;
-  
-  int n=left/256;
-  while(n>0){
-    memcpy(plDst,plSrc,256);
-    plDst+=256;
-    plSrc+=256;
-    left-=256;
-    n--;
-  }
-  if(left>0){
-    memcpy(plDst,plSrc,left); 
-  }
-  return (dst);
-}
-#endif
+

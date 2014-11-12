@@ -21,8 +21,6 @@ CFLAGS+= -I../dvrsvr -Wall
 
 mp4live : livecam.cpp ../eagle_setup/getquery.cpp ../net.cpp
 	$(CC) $(CFLAGS) -o $@ livecam.cpp ../net.cpp ../eagle_setup/getquery.cpp $(LDFLAGS) -lcrypt
-	cp $@ $(debug_folder)/www
-
 
 %.o : %.cpp $(HEADERS) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@

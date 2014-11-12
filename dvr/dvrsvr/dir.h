@@ -4,6 +4,9 @@
 #include <fnmatch.h>
 #include <string.h>
 
+#ifndef __DIR_H__
+#define __DIR_H__
+
 class dir_find {
 protected:
     DIR * m_pdir ;
@@ -100,3 +103,6 @@ public:
         return 0;
     }
 };
+
+
+#endif		// __DIR_H__

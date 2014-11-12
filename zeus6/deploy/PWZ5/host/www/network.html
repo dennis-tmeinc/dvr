@@ -7,6 +7,7 @@
 <title>Network Setup Page</title>
 <!--#exec cmd="cgi/pagevalue"-->
 <script type="text/javascript" src="eagle3.js"></script>
+<script type="text/javascript" src="cgi/jquery.js"></script>
 </head>
 <body>
 <!--#include file="header.i"-->
@@ -43,9 +44,6 @@
 <td class="col1">Wireless IP Address:</td>
 <td>
 <input name="wifi_ip" />
-<input name="bool_wifi_dhcp" value="on" type="hidden" />
-<input value="on" name="wifi_dhcp" id="id_wifi_dhcp" type="checkbox" />
-<label for="id_wifi_dhcp">Enable DHCP</label>
 </td>
 </tr>
 
@@ -88,11 +86,6 @@
 <tr>
 <td class="col1">Default Gateway:</td>
 <td><input name="gateway_1" /> </td>
-</tr>
-
-<tr>
-<td class="col1">Smart Server:</td>
-<td><input name="smartserver" /> </td>
 </tr>
 
 <tr>

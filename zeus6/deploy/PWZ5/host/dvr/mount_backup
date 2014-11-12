@@ -1,0 +1,20 @@
+#!/bin/sh
+
+# where dvr disks mounted
+dvrmountdir=/var/dvr/disks
+
+# hotplug disk mounted here
+xmountdir=/var/dvr/xdisk
+
+if [ -f /var/dvr/backupdisk ] ; then
+    backupdisk=`cat /var/dvr/backupdisk`
+    
+	mkdir ${dvrmountdir}
+	mkdir ${dvrmountdir}/d_${backupdisk}
+	mount /dev/${backupdisk} ${dvrmountdir}/d_${backupdisk} -o shortname=winnt
+
+	# mark mounted disk
+	echo  ${dvrmountdir}/d_${devname} > ${xmountdir}/mount_${devname}
+
+fi
+

@@ -23,7 +23,7 @@ if [ ${appid} = "clean" ]; then
 
 # clean host binary files
     cd ${DEPROOT}/host/dvr
-    rm dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg tab102 smartftp fw_printenv lpc21isp
+    rm dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg tab102 smartftp fw_printenv lpc21isp bgarch
     rm eaglehttpd
     rm httpd.sfx
     rm cgi/*
@@ -63,6 +63,7 @@ cp -v ${BASEROOT}/dosfsck_check/dosfsckcheck .
 cd ${DEPROOT}/host/dvr
 echo copy dvr host files
 cp -v ${BASEROOT}/dvrsvr/dvrsvr .
+cp -v ${BASEROOT}/dvrsvr/bgarch .
 cp -v ${BASEROOT}/dvrsvr/libfbdraw.so .
 cp -v ${BASEROOT}/dvrtime/dvrtime .
 cp -v ${BASEROOT}/eaglehost/eaglehost .
@@ -83,7 +84,7 @@ cp -v ${BASEROOT}/smartupload/smartftp .
 cp -v ${BASEROOT}/fw_env/fw_printenv .
 cp -v ${BASEROOT}/lpc21isp/lpc21isp .
 
-${STRIP} dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg tab102 smartftp fw_printenv lpc21isp
+${STRIP} dvrsvr bgarch dvrtime eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg tab102 smartftp fw_printenv lpc21isp
 
 echo copy web files
 cp -v ${BASEROOT}/httpd/eaglehttpd ./

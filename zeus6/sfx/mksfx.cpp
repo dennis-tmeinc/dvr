@@ -22,6 +22,11 @@ struct sfx_head {
 const char * sfxfile ="sfx" ;
 const char * sfxlistfile = "sfxlist";
 
+char outfile[512] ;
+char line[1024] ;
+char ifilename[512] ;
+char ofilename[512] ;
+    
 int main(int argc, char * argv[])
 {
     int executesize ;
@@ -31,10 +36,6 @@ int main(int argc, char * argv[])
     struct stat filestat ;
     unsigned char * buf ;
     int bufsize ;
-    char outfile[256] ;
-    char line[512] ;
-    char ifilename[256] ;
-    char ofilename[256] ;
     int  r ;
 
     if( argc>1 ) {

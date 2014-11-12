@@ -23,6 +23,12 @@ dvrcurdisk=/var/dvr/dvrcurdisk
 # where dvr disks mounted.
 dvrmountdir=/var/dvr/disks
 
+# where archive disks mounted.
+dvrarchdir=/var/dvr/arch
+if [ ! -d ${dvrarchdir} ] ; then
+    mkdir ${dvrarchdir}
+fi
+
 # hotplug disk mounted here.
 xmountdir=/var/dvr/xdisk
 
@@ -42,6 +48,7 @@ case $1 in
     "add")
 
         # hotplug block device (USB disk)
+        
         if [ ${subsys} = "block" -a -r ${devpath}/dev  ] ; then
             devnum=`cat ${devpath}/dev`
             # generate device if not exist
@@ -49,7 +56,11 @@ case $1 in
                 mknod /dev/${devname} b ${devnum%%:*} ${devnum##*:}
             fi
 
-            partition=${devname##*[a-z]}
+			partition=0
+			if [ -f ${devpath}/partition ]; then
+				partition=`cat ${devpath}/partition`
+			fi
+
             if [ ${partition:-0} -ge 1 -a ! -f ${xmountdir}/mount_${devname} ]; then
                 mkdir -p ${xmountdir}/${devname}
 
@@ -87,48 +98,67 @@ case $1 in
                     echo /dev/${devname} > /var/dvr/sddev
                     /mnt/nand/dosfsck -a /dev/${devname}
                     n=$?                    
-		    case $n in
-		    "0")
-		      echo 0 > /var/dvr/fsckreturn
-		      ;;
-		    "1")
-		      echo 1 > /var/dvr/fsckreturn
-		      ;;
-		    "2")
-                       echo 2 > /var/dvr/fsckreturn
-                       echo 0 > /var/dvr/formatsd
-                      /mnt/nand/mkdosfs -F 32 /dev/${devname}
-		      ;;
-		    esac                    
+                    
+					case $n in
+					"0")
+						echo 0 > /var/dvr/fsckreturn
+						;;
+					"1")
+						echo 1 > /var/dvr/fsckreturn
+						;;
+					"2")
+						echo 2 > /var/dvr/fsckreturn
+						echo 0 > /var/dvr/formatsd
+						/mnt/nand/mkdosfs -F 32 /dev/${devname}
+						;;
+					esac                    
 
-                    sleep 3
-                    if [ -f /var/dvr/dosfsckkill ]; then
-                        echo 1 > /var/dvr/formatsd
-                       /mnt/nand/mkdosfs -F 32 /dev/${devname}
-                    else
-                       echo 1 > /var/dvr/noformatsd
-                    fi
+					#	sleep 3
+					#	if [ -f /var/dvr/dosfsckkill ]; then
+					#		echo 1 > /var/dvr/formatsd
+					#	   /mnt/nand/mkdosfs -F 32 /dev/${devname}
+					#	else
+					#	   echo 1 > /var/dvr/noformatsd
+					#	fi
 
-                    echo 1 > /var/dvr/sdcheckdone             
-                    if mount /dev/${devname} ${xmountdir}/${devname} -o shortname=winnt ; then
+						echo 1 > /var/dvr/sdcheckdone             
+						if mount /dev/${devname} ${xmountdir}/${devname} -o shortname=winnt ; then
+						
+			if [ -f ${xmountdir}/${devname}/archive -o -f ${xmountdir}/${devname}/ARCHIVE ] ; then
+
+				if umount ${xmountdir}/${devname} ; then
+					rm -r ${xmountdir}/${devname}
+					# new mount point
+					d_mount=${dvrarchdir}/d_${devname}
+					
+					if [ ! -d ${d_mount} =  ] ; then
+						mkdir ${d_mount} ;
+					fi
+					
+					if mount /dev/${devname} ${d_mount} -o shortname=winnt ; then
+						rm -f ${d_mount}/FSCK*
+						# mark mounted disk
+						echo  ${dvrmountdir}/d_${devname} > ${xmountdir}/mount_${devname}
+					fi
+				fi
 
 			# dvr recording disk ?
-			if [ -f ${xmountdir}/${devname}/dvrdisk -o -f ${xmountdir}/${devname}/DVRDISK ] ; then
+			elif [ -f ${xmountdir}/${devname}/dvrdisk -o -f ${xmountdir}/${devname}/DVRDISK ] ; then
 
 			    if umount ${xmountdir}/${devname} ; then
-				rm -r ${xmountdir}/${devname}
+					rm -r ${xmountdir}/${devname}
 			    fi
 
 			    if [ ! -f ${xmountdir}/mount_${devname} ] ; then
-				# do dosfs check here
-				/mnt/nand/dosfsck -a /dev/${devname}
+					# do dosfs check here
+					/mnt/nand/dosfsck -a /dev/${devname}
 
-				mkdir -p ${dvrmountdir}/d_${devname}
-				mount /dev/${devname} ${dvrmountdir}/d_${devname} -o shortname=winnt
-				rm -f ${dvrmountdir}/d_${devname}/FSCK*
-			    
-				# mark mounted disk
-				echo  ${dvrmountdir}/d_${devname} > ${xmountdir}/mount_${devname}
+					mkdir -p ${dvrmountdir}/d_${devname}
+					mount /dev/${devname} ${dvrmountdir}/d_${devname} -o shortname=winnt
+					rm -f ${dvrmountdir}/d_${devname}/FSCK*
+					
+					# mark mounted disk
+					echo  ${dvrmountdir}/d_${devname} > ${xmountdir}/mount_${devname}
 			    fi
 
 			    
@@ -219,44 +249,75 @@ case $1 in
 				fi
 			      
 			    fi                       
+			
+			elif [ -f ${xmountdir}/${devname}/DISK1 ] ; then		// disk 1 signature
+				echo "${devname}" > /var/dvr/disk1_device
+
+				# unmount the disk
+				if umount ${xmountdir}/${devname} ; then
+					rm -r ${xmountdir}/${devname}
+				fi
+
+			elif [ -f ${xmountdir}/${devname}/DISK2 ] ; then		// disk 2 signature
+				echo "${devname}" > /var/dvr/disk2_device
+
+				# unmount the disk
+				if umount ${xmountdir}/${devname} ; then
+					rm -r ${xmountdir}/${devname}
+				fi
+
+			elif [ -f ${xmountdir}/${devname}/DISK3 ] ; then		// disk 3 signature
+				echo "${devname}" > /var/dvr/disk3_device
+
+				# unmount the disk
+				if umount ${xmountdir}/${devname} ; then
+					rm -r ${xmountdir}/${devname}
+				fi
+														    
 			# other disk
 			else
-			    if umount ${xmountdir}/${devname} ; then
-				rm -r ${xmountdir}/${devname}
-			    fi
+			
+				# PWZ5 backup disk support
+				mmcid=`ls -l ${devpath}/../device`
+				mmcid=${mmcid##*/}
+				mmcid=${mmcid%:*}		# slot 1 : $mmcid = "mmc0", slot 2: $mmcid = "mmc1" , not used for now
 
-			    if [ ! -f ${xmountdir}/mount_${devname} ] ; then
-
-				mkdir -p ${dvrmountdir}/d_${devname}
-				if mount /dev/${devname} ${dvrmountdir}/d_${devname} -o shortname=winnt ; then
-			    
-				# mark mounted disk
-				    echo  ${dvrmountdir}/d_${devname} > ${xmountdir}/mount_${devname}
+				if umount ${xmountdir}/${devname} ; then
+					rm -r ${xmountdir}/${devname}
 				fi
-			    fi         
+
+				if [ ! -f ${xmountdir}/mount_${devname} ] ; then
+
+					mkdir -p ${dvrmountdir}/d_${devname}
+					if mount /dev/${devname} ${dvrmountdir}/d_${devname} -o shortname=winnt ; then
+				
+						# mark mounted disk
+						echo  ${dvrmountdir}/d_${devname} > ${xmountdir}/mount_${devname}
+					fi
+				fi         
 
 			fi
 
 		    else    # can't mount this disk
-                        echo 2 > /var/dvr/formatsd
-                        /mnt/nand/mkdosfs -F 32 /dev/${devname}
-                        if mount /dev/${devname} ${xmountdir}/${devname} -o shortname=winnt ; then
- 			    if umount ${xmountdir}/${devname} ; then
-				rm -r ${xmountdir}/${devname}
-			    fi
+				echo 2 > /var/dvr/formatsd
+				/mnt/nand/mkdosfs -F 32 /dev/${devname}
+				if mount /dev/${devname} ${xmountdir}/${devname} -o shortname=winnt ; then
+					if umount ${xmountdir}/${devname} ; then
+						rm -r ${xmountdir}/${devname}
+					fi
 
-			    if [ ! -f ${xmountdir}/mount_${devname} ] ; then
-				mkdir -p ${dvrmountdir}/d_${devname}
-				if mount /dev/${devname} ${dvrmountdir}/d_${devname} -o shortname=winnt ; then
+					if [ ! -f ${xmountdir}/mount_${devname} ] ; then
+						mkdir -p ${dvrmountdir}/d_${devname}
+						if mount /dev/${devname} ${dvrmountdir}/d_${devname} -o shortname=winnt ; then
 			    
-				# mark mounted disk
-				    echo  ${dvrmountdir}/d_${devname} > ${xmountdir}/mount_${devname}
-				fi
-			    fi                                  
-                        fi
-                    fi   #windows mounted  
+							# mark mounted disk
+							echo  ${dvrmountdir}/d_${devname} > ${xmountdir}/mount_${devname}
+						fi
+					fi                                  
+                fi
+			fi   #windows mounted  
+		fi      # mounted
 
-		 fi      # mounted
             fi      # partitions 
 
         fi	# block device 

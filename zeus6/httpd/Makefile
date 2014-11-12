@@ -12,7 +12,6 @@ all: eaglehttpd eagle_setup- getsetup- cfgdown- livecam-
 
 eaglehttpd: eaglehttpd.c
 	$(CC) $(CFLAGS) -o $@ eaglehttpd.c $(LDFLAGS)
-	cp eaglehttpd  $(debug_folder)/www
 
 httpd: httpd.cpp httpd.h
 	g++ -o $@ httpd.cpp 

@@ -5,11 +5,11 @@
  */
 
 #include "dvr.h"
+#include "sys/file.h"
 
 #define DEAMON
 char dvrconfigfile[] = CFG_FILE ;
 
-static char deftmplogfile[] = "/tmp/dvrlog.txt";
 static char deflogfile[] = "dvrlog.txt";
 static string tmplogfile ;
 static string logfile ;
@@ -135,129 +135,7 @@ void dvr_cleanlog(FILE * flog)
     }
 }
 #endif
-// clean log file
-void dvr_cleanlog(char* logfilename)
-{
-    int i,pos;
-    FILE* flog;
-    array <string> alog ;
-    string line ;
-    char lbuf[1024]; 
-    flog=fopen(logfilename,"r+");
-    if(flog==NULL)
-      return;
-    fseek(flog,0,SEEK_END);
-    pos = ftell(flog);
-  //  printf("current pos:%d\n",pos);
-    if( pos>logfilesize ) {
-        pos = (pos/5) ;	// cut 1/5 file
-        fseek( flog, pos, SEEK_SET );
-	//printf("after seek:%d %d\n",pos,ftell(flog));
-        fgets(lbuf, 1024, flog );
-        while (fgets(lbuf, 1024, flog)) {
-	    line=lbuf;
-            if( line.length()>2 ) {
-                alog.add( line );
-            }
-        }	   
-       // printf("size:%d\n",alog.size());
-        if(alog.size()>10){
-	    ftruncate( fileno(flog), 0);	
-	    fseek( flog, 0, SEEK_SET ) ;		
-	    for( i=0; i<alog.size(); i++ ) {
-		fputs(alog[i].getstring(), flog);
-	    }
-	}
-     //   printf("final length:%d\n",ftell(flog));
-    }
-    fflush(flog);
-    fclose(flog);
-}
-// write log to log file. 
-// return 
-//       1: log to recording hd
-//       0: log to temperary file
-int dvr_log(char *fmt, ...)
-{
-    int res = 0 ;
-    static char logfilename[512] ;
-    char lbuf[512];
-    FILE *flog=NULL;
-    FILE *ftmplog=NULL;
-    int rectemp=0 ;
-    time_t ti;
-    int l;
-    va_list ap ;
-    tmplogfile="/var/dvr/dvrlog";
-    if (rec_basedir.length() > 0) {
-        sprintf(logfilename, "%s/%s", rec_basedir.getstring(), logfile.getstring());
-        if(strcmp(lastrecdirbase.getstring(),rec_basedir.getstring())!=0){
-             if(lastrecdirbase.length()>3)
-                  unlink("/var/dvr/dvrlogfile");
-             lastrecdirbase= rec_basedir.getstring();
-             symlink(logfilename, "/var/dvr/dvrlogfile");
-	     dvr_cleanlog(logfilename); 
-        }      
-    }
-    
-    flog = fopen(logfilename, "a");   
-    if (flog) {
-        ftmplog = fopen("/var/dvr/dvrlog1", "r");	// copy temperary log to disk
-        if (ftmplog) {	  
-            fputs("\n", flog);
-            while (fgets(lbuf, 512, ftmplog)) {
-                fputs(lbuf, flog);
-            }
-            fclose(ftmplog);
-            unlink("/var/dvr/dvrlog1");
-        }            
-        ftmplog = fopen(tmplogfile.getstring(), "r");	// copy temperary log to disk
-        if (ftmplog) {	  
-            fputs("\n", flog);
-            while (fgets(lbuf, 512, ftmplog)) {
-                fputs(lbuf, flog);
-            }
-            fputs("\n", flog);
-            fclose(ftmplog);
-            unlink(tmplogfile.getstring());
-        }
-        res=1 ;
-    } else {
-        flog = fopen(tmplogfile.getstring(), "a");
-        rectemp=1 ;
-    }
 
-    ti = time(NULL);
-    ctime_r(&ti, lbuf);
-    l = strlen(lbuf);
-    if (lbuf[l - 1] == '\n')
-        lbuf[l - 1] = '\0';
-    va_start( ap, fmt );
-    printf("DVR:%s:", lbuf);
-    vprintf(fmt, ap );
-    printf("\n");
-    if (flog) {
-        fprintf(flog, "%s:", lbuf);
-        vfprintf(flog, fmt, ap );
-        if( rectemp ) {
-            fprintf(flog, " *\n");		
-        }
-        else {
-            fprintf(flog, "\n");		
-        }
-        if( fclose(flog)!=0 ) {
-            res = 0 ;
-        }
-    //don't abuse this,system can hang:sync();
-    }
-    va_end( ap );
-    return res ;
-}
-
-
-string g_keylogfile ;
-char g_usbid[32] ;
-static int keylogsettings ;
 
 // clean log file
 void dvr_cleanlogfile(const char * lfilename, int cutsize)
@@ -268,6 +146,9 @@ void dvr_cleanlogfile(const char * lfilename, int cutsize)
     if( flog==NULL ) {
         return ;
     }
+    
+    flock( fileno(flog), LOCK_EX );
+    
     posw=ftell(flog);
     fseek( flog, 0, SEEK_END );
     posr = (int)ftell(flog) - cutsize ;
@@ -275,7 +156,7 @@ void dvr_cleanlogfile(const char * lfilename, int cutsize)
         char fbuf[4096] ;
         fseek( flog, posr, SEEK_SET );
         // skip one line
-        fgets( fbuf, 512, flog );
+        fgets( fbuf, 4096, flog );
         while( (rsize=fread(fbuf, 1, 4096, flog))>0 ) {
             posr = ftell(flog) ;
             fseek( flog, posw, SEEK_SET );
@@ -286,12 +167,117 @@ void dvr_cleanlogfile(const char * lfilename, int cutsize)
             }
             fseek( flog, posr, SEEK_SET );
         }
-        fseek( flog, 0, SEEK_SET );
+        fseek( flog, posw, SEEK_SET );
         fflush( flog );
         ftruncate( fileno(flog), posw );
     }
+    
+    fflush( flog );
+    flock( fileno(flog), LOCK_UN );
     fclose( flog );
 }
+
+const char *logfilelnk=VAR_DIR "/dvrlogfile" ;
+
+// write log to log file.
+// return
+//       1: log to recording hd
+//       0: log to temperary file
+int dvr_log(const char *fmt, ...)
+{
+    char lbuf[512];
+    FILE *flog;
+    FILE *ftmplog;
+    time_t ti;
+    int l;
+    va_list ap ;
+
+    flog=NULL ;
+    // check logfile, it must be a symlink to hard disk
+    if( readlink(logfilelnk, lbuf, 512)>10 ) {
+        flog = fopen(logfilelnk, "a");
+    }
+    else {
+        if (rec_basedir.length() > 0) {
+            sprintf(lbuf, "%s/%s", (char *)rec_basedir, (char *)logfile);
+            unlink(logfilelnk);
+            if( symlink(lbuf, logfilelnk)==0 ) {		// success
+                flog = fopen(logfilelnk, "a");
+            }
+        }
+    }
+
+    // copy over temperay logs
+    if (flog) {
+		
+		flock( fileno(flog), LOCK_EX );
+		    
+        ftmplog = fopen(tmplogfile, "r");	// copy temperary log to logfile
+        if (ftmplog) {
+            while (fgets(lbuf, 512, ftmplog)) {
+                fputs(lbuf, flog);
+            }
+            fclose(ftmplog);
+            unlink(tmplogfile);
+        }
+        
+        fflush( flog );
+   		flock( fileno(flog), LOCK_UN );
+
+    }
+
+    ti = time(NULL);
+    ctime_r(&ti, lbuf);
+    l = strlen(lbuf);
+    if (lbuf[l - 1] == '\n')
+        l-- ;
+    lbuf[l]=':' ;
+    l++ ;
+    va_start( ap, fmt );
+    vsprintf( &(lbuf[l]), fmt, ap );
+    va_end( ap );
+    
+    printf("%s\n", lbuf);
+
+    if (flog) {
+				
+		flock( fileno(flog), LOCK_EX );
+				
+        fprintf(flog, "%s\n", lbuf);
+        
+        fflush( flog );
+   		flock( fileno(flog), LOCK_UN );
+   		
+        if( fclose( flog )==0 ) {
+            dvr_cleanlogfile(logfilelnk, logfilesize);
+            return 1;
+        }
+    }
+
+    // make sure no erro on link
+    unlink(logfilelnk);
+
+    // log to temperary log file
+    flog = fopen(tmplogfile, "a");
+
+    if (flog) {
+		
+		flock( fileno(flog), LOCK_EX );
+				
+        fprintf(flog, "%s *\n", lbuf);
+        
+        fflush( flog );
+   		flock( fileno(flog), LOCK_UN );        
+        fclose( flog ) ;
+        dvr_cleanlogfile(tmplogfile, 100000);
+    }
+
+    return 0 ;
+}
+
+string g_keylogfile ;
+char g_usbid[32] ;
+static int keylogsettings ;
 
 static FILE * dvr_logkey_file()
 {
@@ -300,8 +286,8 @@ static FILE * dvr_logkey_file()
     if( logfilename[0]==0 ) {
         if (rec_basedir.length() > 0) {
             sprintf(logfilename, "%s/%s", (char *)rec_basedir, (char *)g_keylogfile);
-            unlink(VAR_DIR"/tvslogfile" );
-            symlink(logfilename, VAR_DIR"/tvslogfile" );
+            unlink( VAR_DIR "/tvslogfile" );
+            symlink(logfilename, VAR_DIR "/tvslogfile" );
             dvr_cleanlogfile(logfilename, logfilesize);
             lfile=fopen(logfilename,"a");
         }
@@ -403,7 +389,7 @@ void dvr_logkey( int op, struct key_data * key )
     if( op==0  ) {     // disconnect
         if( g_usbid[0] ) {
             g_usbid[0]=0 ;
-            unlink( VAR_DIR"/connectid" );
+            unlink( VAR_DIR "/connectid" );
 			//unlink( WWWSERIALFILE );			// remove setup serial no, so setup page would failed
             if( keylogsettings ) {
                 dvr_logkey_settings();
@@ -420,7 +406,7 @@ void dvr_logkey( int op, struct key_data * key )
             memcmp( TVSchecksum, key->checksum, sizeof( TVSchecksum ) )!=0 ) {
             memcpy( TVSchecksum, key->checksum, sizeof( TVSchecksum ) );
             strcpy( g_usbid, key->usbid );
-            flog = fopen(VAR_DIR"/connectid", "w" ) ;
+            flog = fopen( VAR_DIR "/connectid", "w" ) ;
             if( flog ) {
                 fprintf( flog, "%s", g_usbid );
                 fclose( flog );
@@ -747,7 +733,7 @@ void app_init(int partial)
     // setup log file names
     tmplogfile = dvrconfig.getvalue("system", "temp_logfile");
     if (tmplogfile.length() == 0)
-        tmplogfile = deftmplogfile;
+        tmplogfile = VAR_DIR "/logfile" ;
     logfile = dvrconfig.getvalue("system", "logfile");
     if (logfile.length() == 0)
         logfile = deflogfile;
@@ -755,8 +741,8 @@ void app_init(int partial)
     if( logfilesize< (300*1024 )){
         logfilesize = 300*1024 ;
     } else {
-	if(logfilesize>(10*1024*1024) ) {
-	   logfilesize=10*1024*1024;
+	if(logfilesize>(5*1024*1024) ) {
+	   logfilesize=5*1024*1024;
 	}
     }
     
@@ -806,7 +792,7 @@ void app_init(int partial)
     t = dvrconfig.getvalue("system", "tvsmfid" );
     if( t.length()>0 ) {
         strncpy( g_mfid, t, sizeof(g_mfid) );
-        fid=fopen(VAR_DIR"/tvsmfid", "w");
+        fid=fopen(VAR_DIR "/tvsmfid", "w");
         if( fid ) {
             fprintf(fid, "%s", g_mfid );
             fclose(fid);
@@ -843,7 +829,7 @@ void app_init(int partial)
     t = dvrconfig.getvalue("system", "mfid" );
     if( t.length()>0 ) {
         strncpy( g_mfid, t, sizeof(g_mfid) );
-        fid=fopen(VAR_DIR"/mfid", "w");
+        fid=fopen(VAR_DIR "/mfid", "w");
         if( fid ) {
             fprintf(fid, "%s", g_mfid );
             fclose(fid);

@@ -15,20 +15,21 @@ string rec_basedir;
 static pthread_t rec_threadid;
 static int rec_run = 0 ;           // 0: quit record thread, 1: recording
 
+int    rec_trigger = 0 ;
 int    rec_busy = 0 ;              // 1: recording thread is busy, 0: recording is idle
 int    rec_pause = 0 ;             // 1: to pause recording, while network playback
 static int rec_fifo_size = 4000000 ;
 pthread_mutex_t prelock_mutex;
+static int rec_minimum_inmem = 30000 ;	// 20 M
+static int rec_prerecord_inmem = 60 ;
 
 //#define FRAME_DEBUG
 
 enum REC_STATE {
     REC_STOP,           // no recording
-    REC_RECORD,         // recording
     REC_PRERECORD,      // pre-recording
-    REC_POSTRECORD,     // post-recording
+    REC_RECORD,         // recording
     REC_LOCK,           // recording lock file
-    REC_POSTLOCK        // post locking
 };
 
 
@@ -48,7 +49,7 @@ class rec_channel {
         
         int     m_recordmode ;			// 0: continue mode, 123: triggering mode, other: no recording
 #if defined(TVS_APP) || defined(PWII_APP)
-        unsigned int m_triggersensor[32] ;  // trigger sensor bit maps
+        unsigned int m_triggersensor[32] ;  // trigger sensors
 #endif
 
 #ifdef MDVR_APP
@@ -59,11 +60,13 @@ class rec_channel {
         int     m_recordalarmpattern ;
 
         REC_STATE	m_recstate;
-        REC_STATE   m_filerecstate ;
+        int     m_recreq ;						// recording requested, ( trigger by key frames )
         
         struct rec_fifo *m_fifohead;
         struct rec_fifo *m_fifotail;
         int	   m_fifosize ;
+        
+        int    m_inmemprerecord ;
         
         // pre-record variables
         int m_prerecord_time ;				// allowed pre-recording time
@@ -74,17 +77,21 @@ class rec_channel {
         
         // post-record variables
         int m_postrecord_time ;				// post-recording time	length
-        dvrtime m_postrecord_starttime ;	// post-record start time
         
         // lock record variables
         int m_prelock_time ;				// pre lock time length
         int m_postlock_time ;				// post lock time length
-        dvrtime m_postlock_starttime ;		// post lock start time
-        int m_eventmarker;					// event marker, sensor_no + 1
+        
+        int m_gforce_trigger ;				// gforce trigger enable
+		float m_gforce_trigger_value ;		// gforce trigger value 
+		int m_speed_trigger ;				// enable speed trigger ? 
+		float m_speed_trigger_value ;		// speed trigger value 
+
         
         // variable for file write
         string m_prevfilename ;				// previous recorded file name.
         string m_filename;
+        REC_STATE   m_filerecstate ;
         dvrfile m_file;						// recording file
         
         int m_maxfilesize;
@@ -104,17 +111,15 @@ class rec_channel {
         //	int m_onoff ;				// on/off state
 
         dvrfile m_prelock_file;			// pre-lock recording file
-        array<int>  mSensorState;
-	dvrtime mLasttriggerTime;
-	dvrtime mLastEvTime;
         struct dvrtime m_state_starttime ;	        // record state start time      
         int m_framerate;
-	int m_width;
-	int m_height;
-	int framedroped;
+		int m_width;
+		int m_height;
+		int framedroped;
         struct File_format_info mFileHeader;
-	pthread_mutex_t m_lock;
-    public:
+		pthread_mutex_t m_lock;
+		
+	public:
         rec_channel(int channel);
         ~rec_channel();
         
@@ -127,6 +132,10 @@ class rec_channel {
 		int     m_forcerecordontime ;     // force recording turn on time
 		int     m_lock_endtime ;
 
+#ifdef APP_PWZ5
+		int     m_c_channel ;		// force recording channel
+#endif        
+       
 		// force recording feature for PWII
 		void setforcerecording(int force){
 			int tick = time_gettick();
@@ -139,19 +148,30 @@ class rec_channel {
 				m_lock_endtime = tick ;
 			}
 		}
+		
+		// acturally to check if recording mode is on
+		int checkforcerecording() {
+			return ( m_recstate == REC_RECORD ||
+					// m_recstate == REC_POSTRECORD ||
+					// m_recstate == REC_POSTLOCK ||
+					m_recstate == REC_LOCK );
+		}
 #endif
 
-        struct rec_fifo *getfifo();
+        struct rec_fifo * peekfifo();
+        struct rec_fifo * getfifo();
         void putfifo(rec_fifo * fifo);
+        void releasefifo(struct rec_fifo *fifo);
         int  clearfifo();
         void addfifo(cap_frame * pframe);
+        int setfifotype( REC_STATE t );
         
         void onframe(cap_frame * pframe);
         int dorecord();
         
-        void recorddata(rec_fifo * data);		// record stream data
-        //	void closeprerecord( int lock );				// close precord data, save them to normal video file
-        //	void prerecorddata(rec_fifo * data);			// record pre record data
+        void recorddata(rec_fifo * data);				// record stream data
+        //	void closeprerecord( int lock );			// close precord data, save them to normal video file
+        //	void prerecorddata(rec_fifo * data);		// record pre record data
         void prelock();									// process prelock data
         
         void closefile();
@@ -163,10 +183,14 @@ class rec_channel {
         int  recstate() {
             return( m_file.isopen() &&
 		    (m_filerecstate == REC_RECORD ||
-		     m_filerecstate == REC_LOCK ||
-		     m_filerecstate == REC_POSTRECORD ||
-		     m_filerecstate == REC_POSTLOCK) );
+		     //m_filerecstate == REC_POSTLOCK ||
+		     //m_filerecstate == REC_POSTRECORD ||
+		     m_filerecstate == REC_LOCK) );
         }
+        int  lockstate() {
+            return( m_file.isopen() &&
+		    m_filerecstate == REC_LOCK  );
+		}
         void update();          						// update recording status
         void alarm();						            // set recording alarm.
 
@@ -187,6 +211,7 @@ rec_channel::rec_channel(int channel)
     config dvrconfig(dvrconfigfile);
     char cameraname[80] ;
     int trigger ;
+    string value ;
     
     m_channel = channel;
     sprintf(cameraname, "camera%d", m_channel+1 );
@@ -219,7 +244,32 @@ rec_channel::rec_channel(int channel)
 		m_forcerecordontime = 7200 ;
 	}
 	m_lock_endtime = 0 ;
+	
+	m_gforce_trigger = dvrconfig.getvalueint( cameraname, "gforce_trigger" ) ;
+    value = dvrconfig.getvalue(cameraname, "gforce_trigger_value");
+	if( value.length()>0 ) {
+		sscanf( (char *)value, "%f", &m_gforce_trigger_value );
+	}
+	else {
+		// make it impossible
+		m_gforce_trigger_value = 100.0 ;
+	}
+
+	m_speed_trigger = dvrconfig.getvalueint( cameraname, "speed_trigger" ) ;
+    value = dvrconfig.getvalue(cameraname, "speed_trigger_value");
+	if( value.length()>0 ) {
+		sscanf( (char *)value, "%f", &m_speed_trigger_value );
+	}
+	else {
+		// make it impossible
+		m_speed_trigger_value = 10000.0 ;
+	}
+	
 #endif
+
+#ifdef APP_PWZ5
+	m_c_channel = dvrconfig.getvalueint( cameraname, "forcerecordchannel" ) ;
+#endif        
 
     m_recordalarm = dvrconfig.getvalueint( cameraname, "recordalarm" );
     m_recordalarmpattern = dvrconfig.getvalueint( cameraname, "recordalarmpattern" );
@@ -229,6 +279,7 @@ rec_channel::rec_channel(int channel)
     
     m_fifohead = m_fifotail = NULL;
     m_fifosize = 0 ;
+    m_inmemprerecord = 0 ;
     
     // initialize pre-record variables
     m_prerecord_time = dvrconfig.getvalueint(cameraname, "prerecordtime");
@@ -258,18 +309,10 @@ rec_channel::rec_channel(int channel)
     mFileHeader.video_height=m_height;
     mFileHeader.video_width=m_width;
     
-    time_dvrtime_init( &m_postrecord_starttime, 2000 );
-    
     // initialize lock record variables
-#ifdef SUPPORT_EVENTMARKER
-    m_prelock_time=dvrconfig.getvalueint("eventmarker", "prelock" );
-    m_postlock_time=dvrconfig.getvalueint("eventmarker", "postlock" );
-    m_eventmarker=dvrconfig.getvalueint("eventmarker", "eventmarker");
-    if( m_eventmarker>num_sensors ) {
-        m_eventmarker=0 ;
-    }
-    time_dvrtime_init( &m_postlock_starttime, 2000 );
-#endif
+    
+    m_prelock_time=dvrconfig.getvalueint("system", "prelock" );
+    m_postlock_time=dvrconfig.getvalueint("system", "postlock" );
     
     // initialize variables for file write
     m_maxfilesize = rec_maxfilesize;
@@ -280,9 +323,6 @@ rec_channel::rec_channel(int channel)
     m_lastkeytimestamp = 0 ;
     m_reqbreak = 0 ;
     framedroped=0;
-    mSensorState.empty();
-    time_dvrtime_init( &mLasttriggerTime, 2000 );
-    time_dvrtime_init( &mLastEvTime, 2000 );       
     pthread_mutex_init(&m_lock,NULL);
     // start recording	
     start();
@@ -326,91 +366,86 @@ void rec_channel::addfifo(cap_frame * pframe)
        rec_basedir.length()<=0 ||
        dio_standby_mode )
     {
+		clearfifo();
         if( m_file.isopen() ) {
-            nfifo = (struct rec_fifo *) mem_alloc(sizeof(struct rec_fifo));
-            nfifo->rectype = REC_STOP ;
-            nfifo->buf=NULL ;
-            nfifo->bufsize=0 ;
-            nfifo->key=1 ;
-            time_now(&nfifo->time);
-            putfifo( nfifo );
+			closefile();
         }
         return ;  // if stop recording.
     }
     
-    if(framedroped){
-       if(pframe->frametype == FRAMETYPE_VIDEO){
-#ifdef 	FRAME_DEBUG 
-           printf("ch%d one frame droped\n",m_channel);
-#endif	   
-           return;
-       }     
+	if(framedroped && pframe->frametype == FRAMETYPE_VIDEO ) {			// discard non-key video frames after dropping frames
+		return;
+	}
+	
+    if( (!m_inmemprerecord) && m_fifosize > rec_fifo_size ){
+		if( pframe->frametype == FRAMETYPE_KEYVIDEO ) {
+			if( mem_available() < 20000 ) {	// critical low memory !!!
+				// drop all fifos
+				s = clearfifo();
+				dvr_log("Very low free memory, %d frames of channel % dropped!", s, m_channel);
+			}
+		}
+		else if( pframe->frametype == FRAMETYPE_VIDEO ) {	// non key video frame
+			// to drop non key frames
+			framedroped=1;
+			return;
+		} 
     }
-    if( m_fifosize>rec_fifo_size ){
-
-       if(pframe->frametype == FRAMETYPE_VIDEO){
-	   framedroped=1;
-#ifdef 	FRAME_DEBUG 	   
-           printf("ch%d one frame droped\n",m_channel);
-#endif	   
-           return;
-       }       
-    }
+    
     // build new fifo frame
     nfifo = (struct rec_fifo *) mem_alloc(sizeof(struct rec_fifo));
-    if(nfifo==NULL){
-       //  printf("No buffer in addfifo\n");
-         if(pframe->frametype == FRAMETYPE_KEYVIDEO){
-            int i=0;
-            for(i=0;i<5;++i){
-		 nfifo = (struct rec_fifo *) mem_alloc(sizeof(struct rec_fifo));
-                 if(nfifo)
-                  break;
-            }
-         }
-         if(nfifo==NULL){
-	      if(pframe->frametype == FRAMETYPE_KEYVIDEO){
+	if(nfifo==NULL){
+		// No memory???,
+		s = clearfifo();
+		dvr_log("Memory allocation failed!!! %d frames dropped!", s );
 		framedroped=1;
-	      }
-              return;
-	 }
-    }
+		return ;
+	}
+	memset( nfifo, 0, sizeof( rec_fifo ) );
+
+    time_now(&nfifo->time);
+	nfifo->bufsize = pframe->framesize;
     if (mem_check(pframe->framedata)) {
         nfifo->buf = (char *) mem_addref(pframe->framedata);
-    } else {
+    } 
+    else {
         nfifo->buf = (char *) mem_alloc(nfifo->bufsize);
-        if(nfifo->buf==NULL){
-     //       printf("no buffer in addfifo nfifo->buf\n");
-            mem_free(nfifo->buf);
-            return;
+        if( nfifo->buf ) {
+			mem_cpy(nfifo->buf, pframe->framedata, nfifo->bufsize);
+		}
+		else {
+			// No memory???,
+            mem_free(nfifo);
+
+			// No memory???,
+			s = clearfifo();
+			dvr_log("Memory allocation failed!!! %d frames dropped!", s );
+			framedroped=1;
+			
+			return ;
         }
-        mem_cpy(nfifo->buf, pframe->framedata, nfifo->bufsize);
-      //  mem_cpy32(nfifo->buf, pframe->framedata, nfifo->bufsize);
     }
-    nfifo->bufsize = pframe->framesize;
     
     if( pframe->frametype == FRAMETYPE_KEYVIDEO )   {  // this is a keyframe ?
         framedroped=0;
         nfifo->key=1 ;
-        time_now(&nfifo->time);    // only keyframe have fifo time
+        m_recreq = 1 ;			// to continue recording thread
     }
     else {
         nfifo->key=0 ;
-        time_now(&nfifo->time); 
     }
     
     // set frame recording type
-    if( m_recstate == REC_POSTRECORD ) {
-        nfifo->rectype = REC_RECORD ;
-    }
-    else if( m_recstate == REC_POSTLOCK ) {
-        nfifo->rectype = REC_LOCK ;
-    }
-    else {
-        nfifo->rectype = m_recstate ;
-    }
+    nfifo->rectype = m_recstate ;
     nfifo->timestamp=pframe->timestamp;
     putfifo( nfifo );
+    
+    // get out of in-memory pre-recording
+    if( m_inmemprerecord && nfifo->rectype != REC_PRERECORD ) {
+		// change all pre-record frame to new rec type
+		setfifotype( nfifo->rectype );
+		m_inmemprerecord = 0 ;
+	}
 
 }
 
@@ -441,11 +476,29 @@ struct rec_fifo *rec_channel::getfifo()
         m_fifohead = head->next;
         if (m_fifohead == NULL){
             m_fifotail = NULL;
+            m_fifosize = 0 ;
         }
-        m_fifosize-=head->bufsize ;
+        else {
+			m_fifosize-=head->bufsize ;
+		}
     }
     pthread_mutex_unlock(&m_lock);
     return head;
+}
+
+struct rec_fifo *rec_channel::peekfifo()
+{
+	return m_fifohead ;
+}
+
+void rec_channel::releasefifo(struct rec_fifo *fifo)
+{
+	if( fifo ) {
+		if( fifo->buf ) {
+			mem_free( fifo->buf );
+		}
+		mem_free( fifo );
+	}
 }
 
 // clear fifos, return fifos deleted.
@@ -457,16 +510,27 @@ int rec_channel::clearfifo()
     while (m_fifohead) {
         head = m_fifohead ;
         m_fifohead = head->next ;
-        if( head->buf ) {
-            mem_free(head->buf);
-        }
-        mem_free(head);
+        releasefifo( head );
         c++ ;
     }
     m_fifotail=NULL ;
     m_fifosize=0 ;
     pthread_mutex_unlock(&m_lock);
     return c ;
+}
+
+// set all fifos to new rec type
+int rec_channel::setfifotype( REC_STATE t )
+{
+    struct rec_fifo * w ;
+    pthread_mutex_lock(&m_lock);
+    w = m_fifohead ;
+    while (w) {
+		w->rectype = t ;
+		w=w->next ;
+    }
+    pthread_mutex_unlock(&m_lock);
+    return t ;
 }
 
 void rec_channel::onframe(cap_frame * pframe)
@@ -541,8 +605,8 @@ void rec_channel::closefile()
     
     if (m_file.isopen()) {
         m_file.close();
-	filelength = time_dvrtime_diff(&m_fileendtime, &m_filebegintime);
-        if( filelength<5 || filelength>5000 ) {
+		filelength = time_dvrtime_diff(&m_fileendtime, &m_filebegintime);
+        if( filelength<5 || filelength>10000 ) {
             m_file.remove(m_filename.getstring());
             m_filename="";
             return ;
@@ -557,22 +621,28 @@ void rec_channel::closefile()
             m_file.rename( m_filename.getstring(), newfilename ) ;
             
             if( m_filerecstate == REC_PRERECORD ) {			
-		// remove previous pre-recording clip
+				// remove previous pre-recording clip
                 if( m_prevfilename.length()>0 ) {
                     m_file.remove( m_prevfilename.getstring() );
-                    m_prevfilename = "" ;
                 }
+				// save file name as previous name
+				m_prevfilename = newfilename ;
             }
-            
-            // save file name as previous name
-            m_prevfilename = newfilename ;
-            disk_renew( newfilename );
+            else {
+				m_prevfilename = "" ;
+				disk_renew( newfilename );
+			}
+			
         }
         m_filename="";
+		
+		// drop caches, hope to free up some main memory
+		mem_dropcaches();        
     }
 }
 
 // write frame data to disk
+//  return  0: data not used (keep in fifo), 1: data used or should be discard
 void rec_channel::recorddata(rec_fifo * data)
 {
     char newfilename[512];
@@ -608,9 +678,10 @@ void rec_channel::recorddata(rec_fifo * data)
     if ( (!m_file.isopen()) && data->key ) {	// need to open a new file
         // create new record file
         if (rec_basedir.length() <= 0) {	// no base dir, no recording disk available
-            // frame data is discarded
-            return;
+            // frame data should be discarded
+            return ;
         }
+
       //  if(m_width<320){
 	  m_width=GetVideoWidth(m_channel);
 	  m_height=GetVideoHight(m_channel);   
@@ -668,6 +739,7 @@ void rec_channel::recorddata(rec_fifo * data)
             rec_basedir="";
         }
     }
+    return  ;
 }
 
 // use prelock_lock to ensure only one prelock thread is running. ( to reduce cpu usage and improve performance )
@@ -794,7 +866,7 @@ int rec_channel::dorecord()
 {
     rec_fifo *fifo;
     
-    fifo = getfifo();
+    fifo = peekfifo();
     if (fifo == NULL)	{	// no fifos pending
         if( m_file.isopen() ) {
             if( m_active ) {
@@ -808,18 +880,65 @@ int rec_channel::dorecord()
                 }
             }
         }
-        return 0;
+        m_recreq = 0 ;			//  stop recording until next key frames
+        return 0 ;
     }
-    m_active=1 ;
     
+    if( m_recreq == 0 ) {
+		return 0 ;
+	}
+    
+    // check in-memory pre-recording
+	if( m_inmemprerecord )
+	{
+	    pthread_mutex_lock(&m_lock);			// preview adding filfo to fifo tail
+        while( m_fifohead!=NULL && time_dvrtime_diff( &(m_fifotail->time), &(m_fifohead->time) ) > m_prerecord_time ){
+			// release one key frame blocks
+			while( m_fifohead!=NULL ) {
+				fifo = m_fifohead ;
+				m_fifohead = fifo->next ;
+				m_fifosize-= fifo->bufsize ;
+				releasefifo( fifo ) ;
+				if( m_fifohead == NULL ) {
+					m_fifotail = 0 ;
+					m_fifosize = 0 ;
+					break;
+				}
+				else if( m_fifohead->key ) {
+					break;
+				}
+			}
+		}
+		pthread_mutex_unlock(&m_lock);
+
+		// check avaialbe memory
+		if( mem_available() < rec_minimum_inmem ) {
+			rec_minimum_inmem -= 2000 ;		// lesser, so other channel may continue using inmem
+			if( rec_minimum_inmem<24000 )
+				rec_minimum_inmem = 30000 ;
+			m_inmemprerecord = 0 ;			// stop in-mem pre-record, and fall back to in-file pre-recording
+			m_filerecstate = REC_PRERECORD ;
+			m_recreq = 1 ;					// to dump out all fifos
+		}
+		else {
+	        m_recreq = 0 ;						//  stop pre-recording check until next key frames arrived
+		}
+		return m_recreq ;
+	}
+   
     m_fileendtime=fifo->time ;
     if( fifo->key ) {
-        //m_fileendtime=fifo->time ;
-        
+		
         if( fifo->rectype != m_filerecstate ) {
             if( fifo->rectype == REC_PRERECORD ) {
                 closefile();
                 m_prevfilename = "" ;
+                
+                if( m_prerecord_time <= rec_prerecord_inmem ) {
+					m_inmemprerecord = 1 ;				//  to allow in-memory pre-recording
+					return 1;
+				}
+                
             }
             else if(fifo->rectype == REC_RECORD ) {
                 if( m_filerecstate == REC_LOCK ) {
@@ -838,19 +957,19 @@ int rec_channel::dorecord()
             }
         }
     }
+   
+    m_active=1 ;
+    fifo = getfifo();
     
     if(fifo->rectype == REC_STOP ) {
         closefile();                       
     }
     else {
-        recorddata( fifo );
+        recorddata( fifo ) ;
     }
 
-    // release buffer
-    if( fifo->buf ) {
-        mem_free(fifo->buf);
-    }
-    mem_free(fifo);
+    // release fifo
+	releasefifo( fifo );
 
     return 1 ;
 }
@@ -865,8 +984,8 @@ void *rec_thread(void *param)
     
     while (rec_run) {
         wframes = 0 ;
-        for( ch = 0 ; ch <rec_channels ; ch++ ) {
-            for( i=0; i<10 ; i++ ) {
+        for( ch = 0 ; ch <rec_channels && rec_run ; ch++ ) {
+            for( i=0; i<100 ; i++ ) {
                 if(recchannel[ch]->dorecord()) {
                     wframes++;
                 }
@@ -875,7 +994,7 @@ void *rec_thread(void *param)
                 }
             }
         }
-        if( wframes==0 ) {
+        if( wframes==0 && rec_run ) {
             rec_busy = 0 ;              // recording thread idle
             usleep(100000);
             if( ++norec > 50 ) {
@@ -907,138 +1026,106 @@ void rec_channel::update()
 {
     int i;
     struct dvrtime tnow ;
-    int trigger = 0 ;
-    int msensor=0;
+    int eventmark = 0 ;		// event marker
+    int trigger = 0 ;		// trigger
+
     if( rec_run == 0 ) {
         return ;
     }
 
-    time_now(&tnow);
-
     if( m_recstate == REC_STOP )
         return;
 
-    // check for sensor status change
-
-    if( m_eventmarker > 0 ) {
-        if( sensors[m_eventmarker-1]->value() ) {
-            trigger = 1 ;
-        }
-    }
-    if( event_tm ) {
-		trigger = 1 ;
-	}
 
 #ifdef PWII_APP        
 	int tick = time_gettick();
 	if( tick < m_lock_endtime ) {
-		trigger = 1 ;
+        m_recstate=REC_LOCK;
+        return ;
 	}
 #endif
 
-    if(trigger>0){
-        //   if(time_dvrtime_diff(&tnow,&mLastEvTime)>SENSOR_TRIGGER_MIN){
-        if(m_recstate!=REC_LOCK){
-            mSensorState.empty(); 
+    time_now(&tnow);
+
+	// check lock/record timeout
+	if( m_recstate == REC_LOCK ) {
+        if(time_dvrtime_diff(&tnow, &m_state_starttime) > m_postlock_time){
+			m_recstate = REC_PRERECORD ;
         }
-        mLastEvTime=tnow; 
-        msensor=1;
-        mSensorState.add(msensor);
-        //	}
-
-    } else {
-        if( m_recordmode==1 || m_recordmode==3 ) {	// sensor triggger mode				// sensor triggger mode
-
-#ifdef MDVR_APP        
-            for(i=0; i<num_sensors; i++) {
-                if( ( m_triggersensor & (1<<i) ) && sensors[i]->value() ) {
-                    trigger=1 ;
-                }
-            }	
-#endif
-
-#if defined(TVS_APP) || defined(PWII_APP)
-            for(i=0; (!trigger) && i<num_sensors; i++) {
-            	int sv = sensors[i]->value() ;
-            	int xsv = sensors[i]->xvalue() ;
-            	int tr=m_triggersensor[i] ;
-            	trigger = ( (tr&1) && sv ) ||
-            				 ( (tr&2) && (!sv) ) ||
-            				 ( (tr&4) && sv && (!xsv) ) ||
-            				 ( (tr&8) && (!sv) && xsv ) ;
-
-            }	
-            
-#endif
-
-        }     
-        if( trigger==0 && ( m_recordmode==2 || m_recordmode==3 ) ) {				// motion trigger mode
-            if( cap_channel[m_channel]->getmotion() ) {
-                trigger=1 ;
-            }
-        }
-
-        if(trigger==1){
-            if(mSensorState.size()<3){
-                mLasttriggerTime=tnow;
-                msensor=2;
-                mSensorState.add(msensor);
-            }	       	  
+	}
+	else if( m_recstate == REC_RECORD ) {
+        if( time_dvrtime_diff(&tnow,&m_state_starttime) > m_postrecord_time ){
+			m_recstate = REC_PRERECORD ;
         }   
-    }
-    //end of sensor triger check;
-    //check whether the ev happened
-    trigger=0;
-    for(i=0;i<mSensorState.size();++i)
-    {
-        if(mSensorState[i]==1){
-            trigger=1; 
-        }
-    }
-    if(trigger>0){
-        mSensorState.empty();
-        m_recstate=REC_LOCK;
-        m_postlock_starttime = tnow ;
-        //dvr_log("event mark triggered");
-    }
+	}
 
+	// global trigger
+	trigger = rec_trigger ;
 
-    if( m_recstate == REC_LOCK){
-        //     dvr_log("lock recording");
-        if(time_dvrtime_diff(&tnow, &m_postlock_starttime) < m_postlock_time){
-            return ;	
-        } else {
-            start();
-            // dvr_log("channel:%d lock end",m_channel);
-        }							
-    }
+    if( event_tm ) {
+		eventmark = 1 ;
+	}
 
-    if( m_recordmode == 0 ) {			// continue recording mode
-        m_recstate = REC_RECORD ;
-        mSensorState.empty();
-        return;
-    }
+	// G-Force Trigger
+	float fb, lr, ud ;
+	if( eventmark == 0 && m_gforce_trigger && dio_get_gforce( &fb, &lr, &ud ) ) {
+		if( fb > m_gforce_trigger_value ||
+			fb < -m_gforce_trigger_value ||
+			lr > m_gforce_trigger_value ||
+			lr < -m_gforce_trigger_value ||
+			ud > m_gforce_trigger_value ||
+			ud < -m_gforce_trigger_value 
+		){
+			eventmark = 1 ;
+		}
+	}
+		
+	// GPS speed trigger
+	if( eventmark == 0 && m_speed_trigger && dio_get_gps_speed() > m_speed_trigger_value ) {
+		eventmark = 1 ;
+	}
+	
+	// sensor trigger
+     if( m_recordmode==1 || m_recordmode==3 ) {	// sensor triggger mode				// sensor triggger mode
 
-    if(mSensorState.size()>0){
-        m_recstate = REC_RECORD ;
-        m_state_starttime = tnow ;
-        mSensorState.empty();
-        //  mSensorState.remove(0);
-        //  dvr_log("sensor triggered");
-        /*
-        if(m_recstate == REC_RECORD)
-        {
-        dvr_log("channel:%d state:record",m_channel);
-        }*/	
-    }
+		for(i=0; eventmark == 0 && i<num_sensors; i++) {
+			int sv = sensors[i]->value() ;
+			int xsv = sensors[i]->xvalue() ;
+			int tr=m_triggersensor[i] ;
+			int trig = ( (tr&1) && sv ) ||
+						 ( (tr&2) && (!sv) ) ||
+						 ( (tr&4) && sv && (!xsv) ) ||
+						 ( (tr&8) && (!sv) && xsv ) ;
+			if( trig ) {
+				trigger = 1 ;
+				if( sensors[i]->iseventmarker() ) {
+					eventmark = 1 ;
+				}
+			}
 
-    if(m_recstate == REC_RECORD){
-        if( time_dvrtime_diff(&tnow,&m_state_starttime)> m_postrecord_time ){
-            start();
-        }       
-    }
+		}
+
+	}
+	
+	// motion trigger
+	if( eventmark == 0 && trigger==0 && ( m_recordmode==2 || m_recordmode==3 ) ) {				// motion trigger mode
+		if( cap_channel[m_channel]->getmotion() ) {
+			trigger=1 ;
+		}
+	}
+
+	// set record state
+	if( eventmark ) {
+        m_state_starttime = tnow ;		
+		m_recstate = REC_LOCK ;
+	}
+	else if( trigger ) {
+        m_state_starttime = tnow ;		
+        if( m_recstate == REC_PRERECORD ) {
+			m_recstate = REC_RECORD ;
+		}
+	}	
 }
-
 
 // updating recording alarms
 void rec_channel::alarm()
@@ -1088,6 +1175,12 @@ void rec_init()
     i=dvrconfig.getvalueint("system", "record_fifo_size");
     if( i>1000000 && i<16000000 ) {
         rec_fifo_size=i ;
+    }
+    
+    // maximum in memory pre-recording length
+    rec_prerecord_inmem=dvrconfig.getvalueint("system", "prerecord_inmem");
+    if( rec_prerecord_inmem<30 || rec_prerecord_inmem>300 ) {
+		rec_prerecord_inmem=60 ;
     }
     
     rec_threadid=0 ;
@@ -1216,6 +1309,34 @@ int  rec_state(int channel)
     return rec_prelock_lock ;       // if pre-lock thread running, also consider busy
 }
 
+// return force recording channel state (requested recording ?)
+//    0: not request recording
+//	  1: request recording
+int  rec_forcestate(int channel)
+{
+    if (channel>=0 && channel < rec_channels)
+        return recchannel[channel]->checkforcerecording() ;
+    return 0 ;
+}
+
+// return recording channel state
+//    0: not recording
+//	  1: recording
+int  rec_lockstate(int channel)
+{
+    if (channel>=0 && channel < rec_channels)
+        return recchannel[channel]->lockstate();
+    else {
+        int i;
+        for( i=0; i<rec_channels; i++ ) {
+            if( recchannel[i]->lockstate() ) {
+                return 1;
+            }
+        }
+    }
+    return 0 ;
+}
+
 void rec_break()
 {
     int i;
@@ -1254,6 +1375,38 @@ FILE * rec_opennfile(int channel, struct nfileinfo * nfi )
 
 #ifdef    PWII_APP
 
+#ifdef APP_PWZ5
+
+void rec_pwii_force_rec( int c, int rec )
+{
+	int i ;
+
+	for( i=0; i<rec_channels ; i++) {
+        if( recchannel[i]->m_c_channel == c ) {
+            recchannel[i]->setforcerecording(rec) ;       // force recording
+		}
+	}	
+
+}
+
+void rec_pwii_toggle_rec( int c )
+{
+	int i ;
+	int rec = 0 ;
+	for( i=0; i<rec_channels ; i++ ) {
+        if( recchannel[i]->m_c_channel == c ) {
+			if( recchannel[i]->checkforcerecording() ) {
+				rec = 0 ;
+			}
+			else {
+				rec = 1 ;
+			}
+			break ;
+		}
+	}
+	rec_pwii_force_rec( c, rec ) ;
+}
+#else
 void rec_pwii_toggle_rec( int ch )
 {
 	int i ;
@@ -1280,6 +1433,7 @@ void rec_pwii_toggle_rec( int ch )
         }
     }
 }
+#endif
 
 #endif
 

@@ -351,6 +351,16 @@ int disk_freespace(char *filename)
     return -1;
 }
 
+// return free disk space in percentage
+int disk_freeratio(char *filename)
+{
+    struct statfs stfs;
+    if (statfs(filename, &stfs) == 0) {
+        return stfs.f_bavail * 100 / stfs.f_blocks ;
+    }
+    return 0;
+}
+
 // return disk size in Megabytes
 int disk_size(char *filename)
 {
@@ -1502,7 +1512,7 @@ void sync_dvrlog_for_hybrid(char *disk_flash, char *disk_sata)
   //check the timestamp in sata_disk
   snprintf(filename, sizeof(filename),
 	     "%s/dvrlog.txt", disk_sata);
-  dvr_cleanlog(filename);    
+
   fp_sata = fopen(filename, "a");
   if(!fp_sata){
       dvr_log("dvr_log.txt in sata can't be created");
@@ -2448,7 +2458,7 @@ dvr_log( "gHDB: %d", gHBD_Recording );
         int mFree=-1;
         for( loop=0; loop<50; loop++ ) {
             mFree=disk_freespace( disk_disklist[recordingDisk].basedir.getstring());
-            if( mFree > ( disk_minfreespace + disk_minfreespace/16 ) ) {
+            if( mFree > ( disk_minfreespace + disk_minfreespace/16 ) && disk_freeratio(disk_disklist[recordingDisk].basedir.getstring()) >= 5 ) {
                 if( disk_testwritable( disk_disklist[recordingDisk].basedir.getstring() ) ) {
                     diskwritableNum=0;
                     return recordingDisk ;              // writable disk!
@@ -2468,6 +2478,7 @@ dvr_log( "gHDB: %d", gHBD_Recording );
                 dvr_log("disk status is wrong");
                 return -1;
             }
+            
             if(disk_size(disk_disklist[recordingDisk].basedir.getstring())<MIN_DISK_SIZE)
             {
                 dvr_log("disk size is wrong");
@@ -3041,7 +3052,7 @@ void detect_all_disks()
   unsigned long long elapsed; /* in millisec */
   long ticks_per_sec = sysconf(_SC_CLK_TCK);
   /* sizeof(clock_t):4, max_clock_t:0x7fffffff */
-  long max_clock_t = (1 << (sizeof(clock_t) * 8 - 1)) - 1;
+  long max_clock_t = (long)(1 << (sizeof(clock_t) * 8 - 1)) - 1;
 
   elapsed = 0;
   ot = times(&tms);
@@ -3253,10 +3264,248 @@ int do_disk_check()
   return ret;
 }
 
+
+#ifdef APP_PWZ5
+// backup disk support, ( if no primary disk being used, mount backup disk )
+static int disk_pw_inittime ;
+
+/*
+
+ There are three methods of system recording on system page setup "One disk recording"
+"Just in case recording"
+"Auto back up"
+
+"One disk recording":
+System record in according to the setup for each cameras One the disk with signature file name "disk one"
+If the "disk one" is not found for 5 minutes after power up, find disk with signature "disk two" to record onto, if "disk two" not found in 5 minutes then declare "no disk found"
+
+In this recording mode, system always has a disk to record on unless both disk are dead
+
+"Just In Case Recording"
+If "disk two" is not found, record as "one disk recording" if "disk two is found"
+All cameras that are enable are recorded to "disk two"regardless the trigger recording setup on the camera as long as ignition signal is on When this mode is set up in system page, all enable camera are treat as continue recording and the trigger sources are EM trigger to create locked files
+
+Copy locked files to "disk one" in background then change L files on "disk two" to N files so when "disk two" is full, oldest files are erased to give room to new files
+
+If "disk one" is not found then continue until the "disk two is full of lock files
+
+"Auto back up"
+This mode is enable only when there are "disk one", "disk two" and  "disk three" in the system "Disk three typical a 512G HDD or bigger
+
+When ignition is off, after delay shut down timer time out, power on " disk three" and move N files from "disk two" to "disk three"
+Then format "disk two"
+
+*/ 
+static int disk_pw_recordmethod ;	// 0: "One disk Recording", 1: "Just in case recording", 2: "Auto back up"
+
+static int disk_pw_disk1_mounted = 0 ;
+static int disk_pw_disk2_mounted = 0 ;
+static int disk_pw_disk3_mounted = 0 ;
+static string disk_pw_disk1 ;
+static string disk_pw_disk2 ;
+static string disk_pw_disk3 ;
+static int disk_pw_autobackup_run = 0 ;
+
+int  disk_pw_diskdev( int no, string & dev )
+{
+	int l = 0 ;
+	string devfile ;
+	FILE * fdev ;
+	sprintf( devfile.setbufsize(200), "/var/dvr/disk%d_device", no );
+	fdev = fopen( devfile, "r");
+	if( fdev ) {
+		if( fscanf( fdev, " %99s", dev.setbufsize(100) )>0 ) {
+			l = strlen(dev);
+		}
+		fclose( fdev );
+	}
+	return l ;
+}	
+
+void disk_pw_runbackup(char * src, char * dest, int type, int mode )
+{
+	if(fork()==0){
+		static char * bgarch = "/davinci/dvr/bgarch" ;
+		// child?
+		char atype[20] , amode[20] ;
+		sprintf( atype, "%d", type );
+		sprintf( amode, "%d", mode );
+		execl( bgarch, bgarch, src, dest, atype, amode, NULL ) ;
+		exit(1);
+	}
+}
+
+void disk_pw_checkmode()
+{
+	string cmd ;
+	string dev ;
+	int t = time_gettick() ;
+	if( disk_pw_recordmethod == 1 ) {		// Just In Case recording
+		if( disk_pw_disk2_mounted == 0 ) {
+			// Try mount disk2 only		( to mount disk 2 as alway recording disk )
+			if( t-disk_pw_inittime < 300000 ) {	// < 5 minutes
+				if( disk_pw_diskdev( 2, dev )>0 ) {
+					// mount disk1 to /var/dvr/disks/${dev}
+					mkdir("/var/dvr/disks",0777);
+					sprintf(disk_pw_disk2.setbufsize(200), "/var/dvr/disks/%s", (char *)dev );
+					mkdir((char*)disk_pw_disk2, 0777);
+					sprintf(cmd.setbufsize(200), "mount /dev/%s %s", (char *)dev, (char *)disk_pw_disk2 );
+					system( cmd );
+					disk_pw_disk2_mounted = 1 ;
+				}
+			}
+			else {
+				// can't mount disk2 for 5 minute, mount disk1 as mode 1 ( one disk mode )
+				if( disk_pw_disk1_mounted == 0 ) {
+					if( disk_pw_diskdev( 1, dev )>0 ) {
+						// mount disk1 to /var/dvr/disks/${dev}
+						mkdir("/var/dvr/disks",0777);
+						sprintf(disk_pw_disk1.setbufsize(200), "/var/dvr/disks/%s", (char *)dev );
+						mkdir((char*)disk_pw_disk1, 0777);
+						sprintf(cmd.setbufsize(200), "mount /dev/%s %s", (char *)dev, (char *)disk_pw_disk1 );
+						system( cmd );
+						disk_pw_disk1_mounted = 1 ;
+					}
+				}
+			}
+		}
+		else {
+			// disk2 mounted, so mount disk1 as lock file archiving
+			if( disk_pw_disk1_mounted == 0 ) {
+				if( disk_pw_diskdev( 1, dev )>0 ) {
+					// mount disk1 to /var/dvr/arch/${dev}
+					mkdir("/var/dvr/arch",0777);
+					sprintf(disk_pw_disk1.setbufsize(200), "/var/dvr/arch/%s", (char *)dev );
+					mkdir((char*)disk_pw_disk1, 0777);
+					sprintf(cmd.setbufsize(200), "mount /dev/%s %s", (char *)dev, (char *)disk_pw_disk1 );
+					system( cmd );
+					disk_pw_disk1_mounted = 1 ;
+					// start archive process
+					// ...    run bgarch disk2 disk1 2 1    ( lock only, unlock _L_ )
+					disk_pw_runbackup( disk_pw_disk2, disk_pw_disk1, 2, 1 );
+					extern int rec_trigger ;
+					// force continue recording
+					rec_trigger = 1;
+				}				
+			}			
+		}
+	}
+	else if( disk_pw_recordmethod == 2 ) { 		// Auto Backup
+		if( disk_pw_disk2_mounted == 0 ) {
+			// Try mount disk2 only
+			if( disk_pw_diskdev( 2, dev )>0 ) {
+				// mount disk1 to /var/dvr/disks/${dev}
+				mkdir("/var/dvr/disks",0777);
+				sprintf(disk_pw_disk2.setbufsize(200), "/var/dvr/disks/%s", (char *)dev );
+				mkdir((char*)disk_pw_disk2, 0777);
+				sprintf(cmd.setbufsize(200), "mount /dev/%s %s", (char *)dev, (char *)disk_pw_disk2 );
+				system( cmd );
+				//disk_pw_disk2_mounted = 1 ;
+			}
+		}
+		else {
+			// disk2 is mounted, so mount disk1 as lock file archiving
+			if( disk_pw_disk1_mounted == 0 ) {
+				if( disk_pw_diskdev( 1, dev )>0 ) {
+					// mount disk1 to /var/dvr/arch/${dev}
+					mkdir("/var/dvr/arch",0777);
+					sprintf(disk_pw_disk1.setbufsize(200), "/var/dvr/arch/%s", (char *)dev );
+					mkdir((char*)disk_pw_disk1, 0777);
+					sprintf(cmd.setbufsize(200), "mount /dev/%s %s", (char *)dev, (char *)disk_pw_disk1 );
+					system( cmd );
+					disk_pw_disk1_mounted = 1 ;
+					// start archive process
+					//disk_pw_startprocess( ? );
+					// ...    run bgarch disk2 disk1 2 1    ( lock only, unlock _L_ )
+					disk_pw_runbackup( disk_pw_disk2, disk_pw_disk1, 2, 1 );
+				}				
+			}				
+					
+			// disk2 mounted, so mount disk3 as auto back disk
+			if( disk_pw_disk3_mounted == 0 ) {
+				if( disk_pw_diskdev( 3, dev )>0 ) {
+					// mount disk3 to /var/dvr/autobak/${dev}
+					mkdir("/var/dvr/autobak",0777);
+					sprintf(disk_pw_disk3.setbufsize(200), "/var/dvr/autobak/%s", (char *)dev );
+					mkdir((char*)disk_pw_disk3, 0777);
+					sprintf(cmd.setbufsize(200), "mount /dev/%s %s", (char *)dev, (char *)disk_pw_disk3 );
+					system( cmd );
+					disk_pw_disk3_mounted = 1 ;
+
+				}				
+			}
+			else {
+				// wait until after shutdown delay
+				if( isstandbymode()  && disk_pw_autobackup_run==0 ) {
+					// start auto backup process
+					// ...    run bgarch disk2 disk3 1 2    ( N file only , delete after copy )
+					disk_pw_runbackup( disk_pw_disk2, disk_pw_disk3, 1, 2 );
+					disk_pw_autobackup_run = 1 ;
+				}
+			}
+
+		}
+	}
+	else {		// 0 or other: One disk recording method
+		if( t-disk_pw_inittime < 300000 ) {	// < 5 minutes
+			// Try mount disk1 only
+			if( disk_pw_disk1_mounted == 0 ) {
+				if( disk_pw_diskdev( 1, dev )>0 ) {
+					// mount disk1 to /var/dvr/disks/${dev}
+					mkdir("/var/dvr/disks",0777);
+					sprintf(disk_pw_disk1.setbufsize(200), "/var/dvr/disks/%s", (char *)dev );
+					mkdir((char*)disk_pw_disk1, 0777);
+					sprintf(cmd.setbufsize(200), "mount /dev/%s %s", (char *)dev, (char *)disk_pw_disk1 );
+					system( cmd );
+					disk_pw_disk1_mounted = 1 ;
+				}				
+			}
+		}
+		else {
+			// Try mount disk1 or disk2
+			if( disk_pw_disk1_mounted == 0 && disk_pw_disk2_mounted == 0 ) {
+				if( disk_pw_diskdev( 1, dev )>0 ) {
+					// mount disk1 to /var/dvr/disks/${dev}
+					mkdir("/var/dvr/disks",0777);
+					sprintf(disk_pw_disk1.setbufsize(200), "/var/dvr/disks/%s", (char *)dev );
+					mkdir((char*)disk_pw_disk1, 0777);
+					sprintf(cmd.setbufsize(200), "mount /dev/%s %s", (char *)dev, (char *)disk_pw_disk1 );
+					system( cmd );
+					disk_pw_disk1_mounted = 1 ;
+				}				
+			}			
+			if( disk_pw_disk1_mounted == 0 && disk_pw_disk2_mounted == 0 ) {
+				if( disk_pw_diskdev( 2, dev )>0 ) {
+					// mount disk1 to /var/dvr/disks/${dev}
+					mkdir("/var/dvr/disks",0777);
+					sprintf(disk_pw_disk2.setbufsize(200), "/var/dvr/disks/%s", (char *)dev );
+					mkdir((char*)disk_pw_disk1, 0777);
+					sprintf(cmd.setbufsize(200), "mount /dev/%s %s", (char *)dev, (char *)disk_pw_disk2 );
+					system( cmd );
+					disk_pw_disk2_mounted = 1 ;
+				}				
+			}
+		}
+	}
+	
+
+}
+
+void disk_pw_init( config &dvrconfig )
+{
+	disk_pw_recordmethod=dvrconfig.getvalueint("system", "pw_recordmethod");
+	disk_pw_inittime = time_gettick() ;
+}
+#endif 
+
 // regular disk check, every 1 seconds
 void disk_check()
 {
     int i;
+    
+#ifdef APP_PWZ5
+	disk_pw_checkmode();
+#endif 
     
 #ifdef TVS_APP
 	int mark_curdisk = 0 ;
@@ -3629,12 +3878,17 @@ void disk_logdir(char * logfilename)
 }
 */
 
+
 void disk_init(int check_only)
 {
     string pcfg;
     int l;
 
     config dvrconfig(dvrconfigfile);
+    
+#ifdef APP_PWZ5
+	disk_pw_init( dvrconfig );
+#endif 
     
 #ifdef TVS_APP_X
 
@@ -5085,10 +5339,4 @@ int copy_smartlog_files(char *from_root,
 
   return 0;
 }
-
-
-
-// for PWII_APP
-
-// to do,  change ID on new media
 

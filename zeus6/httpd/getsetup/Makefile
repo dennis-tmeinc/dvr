@@ -22,11 +22,9 @@ all: getsetup applysetup
 
 getsetup: getsetup.cpp $(EXTSOURCES) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ getsetup.cpp $(EXTSOURCES) $(LDFLAGS)
-	cp getsetup  $(debug_folder)/www
 
 applysetup: applysetup.cpp $(EXTSOURCES) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ applysetup.cpp $(EXTSOURCES) ../../dvrsvr/crypt.cpp $(LDFLAGS)
-	cp applysetup  $(debug_folder)/www
 
 %.o : %.cpp $(HEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@

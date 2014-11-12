@@ -4,7 +4,7 @@
 
 include ../config
 
-SOURCES=ioprocess.cpp
+SOURCES=ioprocess.cpp mcu.cpp mcucmd.cpp serial.cpp
 
 EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h
 EXTSOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp
@@ -16,9 +16,9 @@ OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 #LDFLAGS= -lstdc++  -L../dvrsvr/eagle32 -lsdk -ldadsp ../dvrsvr/eagle32/dsplink.lib
 LDFLAGS= -lstdc++ -lpthread
 
-CFLAGS+= -I../dvrsvr
+CFLAGS+= -I../dvrsvr -Wno-write-strings
 
-all: ioprocess panelled devicepower buzzer
+all: ioprocess panelled devicepower buzzer dvrlog
 
 ioprocess : $(OBJS) $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(EXTSOURCES) $(LDFLAGS)
@@ -37,11 +37,15 @@ buzzer : buzzer.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ buzzer.o $(EXTSOURCES) $(LDFLAGS)
 #	cp buzzer /home/jianpeng/eagle34/dvrtest/
 
+dvrlog : dvrlog.o $(HEADERS) $(EXTHEADERS)
+	$(CC) $(CFLAGS) -o $@ dvrlog.o $(LDFLAGS)
+
+
 %.o : %.cpp $(HEADERS) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean :
 	rm -f *.o
-	rm -f ioprocess panelled devicepower buzzer
+	rm -f ioprocess panelled devicepower buzzer dvrlog
 
 

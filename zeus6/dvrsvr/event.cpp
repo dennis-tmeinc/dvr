@@ -41,6 +41,8 @@ sensor_t::sensor_t(int n)
     if( m_name.length()==0 )
         m_name=section ;
     m_inverted=dvrconfig.getvalueint(section, "inverted");
+    m_eventmarker=dvrconfig.getvalueint(section, "eventmarker");
+        
     m_inputpin=n ;
     m_xvalue=0;
     m_value=0;
@@ -73,7 +75,6 @@ alarm_t::~alarm_t()
 {
     dio_output(m_outputpin,0);
 }
-
 
 void alarm_t::clear()
 {
@@ -239,6 +240,13 @@ void event_check()
         }
         else {
             dio_clearstate (DVR_RECORD);
+        }
+        
+        if( rec_lockstate(-1) ) {
+            dio_setstate (DVR_LOCK);
+        }
+        else {
+            dio_clearstate (DVR_LOCK);
         }
         
         if( net_active>0 ) {

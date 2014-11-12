@@ -25,6 +25,7 @@ SOURCES=main.cpp \
 		live.cpp \
 		crypt.cpp \
 		dio.cpp \
+		vri.cpp \
 		screen.cpp
 
 HEADERS=../cfg.h\
@@ -35,9 +36,12 @@ HEADERS=../cfg.h\
 		crypt.h \
 		mpegps.h \
 		block.h  \
+		dir.h \
 		../ioprocess/diomap.h
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
+
+CFLAGS += -Wno-write-strings
 
 # LIBRARY=libdio.so
 
@@ -50,11 +54,15 @@ LDFLAGS = -lpthread -lm -lstdc++ \
 	-ldeinterlacer -limgbackendprocess -lpbengine -lvideodisp \
 	-lROISelector
 
+all : dvrsvr bgarch
+
 # dvrsvr : $(OBJS) $(LIBRARY)
 dvrsvr : $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
 	#cp dvrsvr /home/jianpeng/eagle34/dvrtest/
 
+bgarch: bgarch.cpp genclass.h dir.h
+	$(CC) $(CFLAGS) -o $@  bgarch.cpp -lstdc++
 
 md5 : md5.cpp
 	$(CC) $(CFLAGS) -o md5 md5.cpp $(LDFLAGS)
@@ -71,3 +79,4 @@ md5 : md5.cpp
 clean :
 	rm -f *.o
 	rm -f dvrsvr
+	rm -f bgarch

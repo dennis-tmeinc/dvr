@@ -39,8 +39,8 @@ int disable_archive ;		// disable archiving to arch disk
 int hdlock=0 ;								// HD lock status
 int hdinserted=0 ;
 
-char dvriomap[100] = VAR_DIR"/dvriomap" ;
-const char pidfile[] = VAR_DIR"/ioprocess.pid" ;
+char dvriomap[100] = "/var/dvr/dvriomap" ;
+const char pidfile[] = "/var/dvr/ioprocess.pid" ;
 
 int shutdowndelaytime ;
 int wifidetecttime ;
@@ -49,7 +49,7 @@ int archivetime ;
 int standbytime ;
 
 // unsigned int outputmap ;	// output pin map cache
-const char logfile[]=VAR_DIR"/dvrlogfile";
+const char logfile[]="/var/dvr/dvrlogfile";
 char temp_logfile[128] ;
 int watchdogenabled=0 ;
 int watchdogtimeout=30 ;

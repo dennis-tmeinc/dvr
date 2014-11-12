@@ -172,6 +172,13 @@ void capture::loadconfig()
     m_attr.hue       =dvrconfig.getvalueint( section, "hue");
 
     m_attr.key_interval = dvrconfig.getvalueint( section, "key_interval" );
+    if( m_attr.key_interval <= 0  || m_attr.key_interval > 400 ) {
+		m_attr.key_interval = 100 ;							// default 100 frames
+		if( m_attr.key_interval > 5*m_attr.FrameRate ) 		// max 5 seconds per key frames
+			m_attr.key_interval = 5*m_attr.FrameRate ;
+		if( m_attr.key_interval < 10 ) 						// minimum 10 frames per key frames
+			m_attr.key_interval = 10 ;
+	}
     
     m_attr.b_frames = dvrconfig.getvalueint( section, "b_frames" );
     m_attr.p_frames = dvrconfig.getvalueint( section, "p_frames" );
@@ -189,15 +196,9 @@ void capture::loadconfig()
         sprintf(buf, "sensorosd%d", i+1);
         sensorosd=dvrconfig.getvalueint( section, buf );
         if( sensorosd>0 && sensorosd<32 ) {
-#ifdef TVS_APP        
             m_sensorosd |= 1<<i;
-#else 
-		// original mdvr
-            m_sensorosd |= (1<<(sensorosd-1));
-#endif            
         }
     }
-
        
     m_motionalarm = dvrconfig.getvalueint( section, "motionalarm" );
     m_motionalarm_pattern = dvrconfig.getvalueint( section, "motionalarmpattern" );
@@ -840,15 +841,15 @@ void capture::updateOSD1(){
             }
         }
     }
-    OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 8 );
+    OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 28 );
 
     // line 4, vri and camera name
     sprintf( osdbuf, "%19s %19s %c",
             m_show_vri?g_vri:" ",           // optional VRI(video referrence id)
             m_attr.CameraName ,
             m_motion?'*':' ');
-    OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 28 );
-                
+    OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 8 );
+
     // line 5, g-force value
     if(m_attr.ShowPeak &&isPeakChanged()){
 		sprintf( osdbuf, "%c%5.2lf,%c%5.2lf,%c%5.2lf  ",
@@ -1249,7 +1250,6 @@ void cap_init()
     int dvrchannels ;
     int enabled_channels ;
     int cap_ch ;
-    int ilocal=0 ;		// local camera idx
     enabled_channels = 0 ;
     
     config dvrconfig(dvrconfigfile);
@@ -1279,8 +1279,10 @@ void cap_init()
         sprintf(cameraid, "camera%d", i+1 );
         cameratype = dvrconfig.getvalueint(cameraid, "type");	
         if( cameratype == 0 ) {			// local capture card
-            if( ilocal<dvrchannels ) {
-                cap_channel[i]=new eagle_capture(i, ilocal++);
+			int lch = dvrconfig.getvalueint(cameraid, "channel");		// local channel, 0-
+			if( lch==-1 ) lch = i ;
+            if( lch>=0 && lch<dvrchannels ) {
+                cap_channel[i]=new eagle_capture(i, lch);
             }
             else {
                 cap_channel[i]=new eagle_capture(i, -1);// dummy channel
