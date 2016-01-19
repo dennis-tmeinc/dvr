@@ -21,7 +21,6 @@ struct sfx_head {
     uint compsize ;
 } ;
 
-
 // firware update page
 int main()
 {
@@ -37,7 +36,7 @@ int main()
         int executesize = -1 ;
         fseek( firmwarefile, -16, SEEK_END );
         if( fscanf( firmwarefile, "%d", &executesize )==1 ) {
-            if( executesize<(int)ftell(firmwarefile) && executesize>0 ) {
+            if( executesize<(int)ftell(firmwarefile) && executesize>=0 ) {
                 struct sfx_head fhd ;
                 char filename[256] ;
 
@@ -77,13 +76,6 @@ int main()
 
         link( firmwarefilename, "firmware_x" );
         if( fork()==0 ) {
-
-            firmwarefile=fopen(updmsgfile, "w");
-            if( firmwarefile ) {
-                fprintf(firmwarefile,"Prepare new firmware...\n");
-                fclose( firmwarefile );
-            }
-
             // disable stdin , stdout
             int fd = open("/dev/null", O_RDWR );
             dup2(fd, 0);                 // set dummy stdin stdout, also close old stdin (socket)
@@ -103,9 +95,23 @@ int main()
                 }
             }
 
+			firmwarefile=fopen(updmsgfile, "a");
+			if( firmwarefile ) {
+				fprintf(firmwarefile,"Prepare new firmware...\n");
+				fclose( firmwarefile );
+			}
+
             // update firmware
             chmod( "firmware_x", 0755 );
-            system( "mkdir updfw; cd updfw; ../firmware_x; sync; sleep 1; sync; reboot;" );
+            system( "mkdir updfw; cd updfw; ../firmware_x; " );
+
+			firmwarefile=fopen(updmsgfile, "a");
+			if( firmwarefile ) {
+				fprintf(firmwarefile,"Firmware update completed! Rebooting system......\n");
+				fclose( firmwarefile );
+			}
+
+            system( "sleep 3; sync; reboot;" );
             exit(0);
         }
     }

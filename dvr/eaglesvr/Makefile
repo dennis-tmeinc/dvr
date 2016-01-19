@@ -13,7 +13,7 @@ SOURCES=	eaglesvr.cpp \
 		screen.cpp \
 		../dvrsvr/memory.cpp \
 		../dvrsvr/string.cpp \
-		../lzmasdk/dec.cpp \
+		../lzmasdk/decx.cpp \
 		../lzmasdk/LzmaDec.c
 
 
@@ -23,7 +23,7 @@ LIBSOURCES=	capture.cpp \
 		screen.cpp \
 		../dvrsvr/memory.cpp \
 		../dvrsvr/string.cpp \
-		../lzmasdk/dec.cpp \
+		../lzmasdk/decx.cpp \
 		../lzmasdk/LzmaDec.c
 
 LDFLAGS=  -lpthread -lstdc++

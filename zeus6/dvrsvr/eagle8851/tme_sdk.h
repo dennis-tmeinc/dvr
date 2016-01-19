@@ -15,10 +15,11 @@ extern "C"{
 #define STREAM_TYPE_AUDIO 	2	
 #define STREAM_TYPE_AVSYN 	3	
 
-#define FRMAE_TYPE_VIDEO_I      1
+#define FRAME_TYPE_VIDEO_I      1
 #define FRAME_TYPE_VIDEO_P      2
 #define FRAME_TYPE_AUDIO        3
-
+#define FRAME_TYPE_SUBVIDEO_I   4
+#define FRAME_TYPE_SUBVIDEO_P   5
 enum picture_format {
 	ENC_QCIF =2,
 	ENC_CIF = 1,
@@ -47,8 +48,8 @@ typedef struct
     int size;     //buffer size
     int frameType;   //frame type, it can be one of FRMAE_TYPE_VIDEO_I,FRMAE_TYPE_VIDEO_P,FRMAE_TYPE_AUDIO
     void * pBuf;     //the buffer pointer
-    //int t_sec;       //seconds part of time stamp. 
-    //int t_msec;      //micro seconds part of time stamp
+   // int t_sec;       //seconds part of time stamp. 
+   // int t_msec;      //micro seconds part of time stamp
     unsigned long int mPTS;
 }CALLBACK_DATA;
 
@@ -130,6 +131,17 @@ int SetEncoderPictureFormat(int channel, int chan_type,int format);
 
 */
 int SetVideoInputStandard(int standard);
+
+/*Notes for SetSecondStreamEnable
+ * INPUTS:
+ * int channel: channel handle
+ * int enable: 1 enable,0 disable
+ */
+int SetSecondStreamEnable(int channel,int enable);
+int SetSecondStreamFramerate(int channel,int framerate);
+int SetSecondStreamBitrate(int channel,int bitrate);
+int SetSecondStreamResolution(int channel,int resolution);
+int SetSecondStreamInterval(int channel,int key_interval);
 
 /* Notes for SetDisplayParams
    Set Display parameters

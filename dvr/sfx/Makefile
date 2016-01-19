@@ -5,29 +5,27 @@
 include ../config
 include $(PROJDIR)/arm_tool
 
-HEADERS=
-
-OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
-
 LDFLAGS=
 
 CFLAGS+= -Wall
 
-all: sfx mksfx extractsfx
+sfxfiles: sfx mksfx
 
-sfx : sfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
-	$(CC) $(CFLAGS) -o $@ sfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c $(LDFLAGS)
+all: sfx mksfx sfx86 extractsfx
+
+sfx : sfx.cpp extract.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
+	$(CC) $(CFLAGS) -Os -o $@ sfx.cpp extract.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c $(LDFLAGS)
 	$(STRIP) sfx
 
-sfx86 : sfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
-	gcc $(CFLAGS) -o $@ sfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c $(LDFLAGS)
+sfx86 : sfx.cpp extract.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
+	gcc -o $@ sfx.cpp extract.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c 
 	strip sfx86
 
 mksfx : mksfx.cpp ../lzmasdk/enc.cpp ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c
-	gcc $(CFLAGS) -o $@ mksfx.cpp ../lzmasdk/enc.cpp ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c $(LDFLAGS)
+	gcc -o $@ mksfx.cpp ../lzmasdk/enc.cpp ../lzmasdk/LzmaEnc.c ../lzmasdk/LzFind.c -lstdc++
 
-extractsfx : extractsfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
-	gcc $(CFLAGS) -o $@ -g extractsfx.cpp lzmasfx.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c $(LDFLAGS)
+extractsfx : extractsfx.cpp extract.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
+	gcc -o $@ -g extractsfx.cpp extract.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c -lstdc++
 
 clean :
 	rm -f mksfx
@@ -35,3 +33,4 @@ clean :
 	rm -f sfx86
 	rm -f extractsfx
 	rm -f *.o
+	

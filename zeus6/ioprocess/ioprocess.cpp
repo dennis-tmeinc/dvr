@@ -1,29 +1,3 @@
-/* --- Changes ---
- *
- * 08/11/2009 by Harrison
- *   1. System reset on <standby --> ignition on> 
- *   2. "smartftp" can finish it job even after standby time expires
- *   3. device power off delayed until "smartftp" exits
- * 08/13/2009 by Harrison
- *   1. Fix: 100% --> 100%% in the log message 
- * 08/14/2009 by Harrison
- *   1. don't start smartftp if wifi module is not detected. 
- *   2. changed timeout value after mcu_reset to 30sec. 
- *
- * 08/24/2009 by Harrison
- *   1. Save current_mode for httpd
- *      to support setup change during standby mode. 
- *
- * 09/11/2009 by Harrison
- *   1. Add tab102 (post processing) support
- *
- * 09/25/2009 by Harrison
- *   1. Make this daemon
- *
- * 09/29/2009 by Harrison
- *   1. Added buzzer_enable setup
- *
- */
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 // MCU POWER DOWN CODE
 //01: software watchdog reset the power
@@ -79,6 +53,11 @@ int wifi_poweron=0;
 int motion_control;
 int gforcechange=0;
 int gevent_on=0;
+float battery_low ;		// low battery voltage
+
+int battery_drop_report = 0 ;
+
+
 unsigned int gforce_start=0;
 unsigned int gRecordMode=0;
 unsigned int gHBDRecording=0;
@@ -111,43 +90,19 @@ unsigned int gHardDiskon=0;
 #define HDINSERTED	(0x40)
 #define HDKEYLOCK	(0x80)
 #define RECVBUFSIZE     (100)
-#define MAXINPUT        (12)
-
-#define UPLOAD_ACK_SIZE 10
-
-enum {TYPE_CONTINUOUS, TYPE_PEAK};
 
 int mTempState=0;
 int mTempPreState=0;
 int mStateNum=0;
 void mcu_event_remove();
-unsigned int input_map_table [MAXINPUT] = {
-    1,          // bit 0
-    (1<<1),     // bit 1
-    (1<<2),     // bit 2
-    (1<<3),     // bit 3
-    (1<<4),     // bit 4
-    (1<<5),     // bit 5
-    (1<<10),    // bit 6
-    (1<<11),    // bit 7
-    (1<<12),    // bit 8
-    (1<<13),    // bit 9
-    (1<<14),    // bit 10
-    (1<<15),    // bit 11
-} ;
+
+unsigned int input_map_table [MCU_INPUTNUM] = 
+	{ 0, 1, 2, 3, 4, 5, 10, 11, 12 };
 
 // translate output bits
 #define MAXOUTPUT    (8)
-unsigned int output_map_table [MAXOUTPUT] = {
-    1,              // bit 0
-    (1<<1),         // bit 1
-    (1<<8),         // bit 2   (buzzer)
-    (1<<3),         // bit 3
-    (1<<4),         // bit 4
-    (1<<5),         // bit 5
-    (1<<6),         // bit 6
-    (1<<7)          // bit 7
-} ;
+unsigned int output_map_table [MAXOUTPUT] = 
+	{ 0, 1, 2, 3, 4, 5, 6, 7 } ;
 
 struct gforce_trigger_point {
   float fb_pos, fb_neg; /* forward: pos */
@@ -199,9 +154,6 @@ int output_inverted=0 ;
 unsigned int iosensor_inverted=0; 
 char shutdowncodestr[256]="";
 
-int app_mode = APPMODE_QUIT ;
-static int app_mode_r = APPMODE_QUIT;
-
 unsigned int panelled=0 ;
 unsigned int devicepower=0xffff;
 
@@ -210,20 +162,31 @@ pid_t   pid_tab102 = 0 ;
 
 #define WRITE_INPUT 0
 
-void set_app_mode(int mode)
+int app_mode = APPMODE_QUIT ;
+static int app_mode_r = APPMODE_QUIT;
+static unsigned int modeendtime = 0;
+static unsigned int runtime;
+    
+void set_app_mode(int mode, int modetimeout)
 {
+  modeendtime = runtime+modetimeout*1000; 	//  in seconds 
   app_mode=mode ;
   p_dio_mmap->current_mode =  mode;
+}
+
+int  mode_timeout()
+{
+	return runtime > modeendtime ;
 }
 
 void sig_handler(int signum)
 {
     if( signum==SIGUSR2 ) {
       app_mode_r = app_mode;
-      set_app_mode(APPMODE_REINITAPP) ;
+      set_app_mode(APPMODE_REINITAPP, 0) ;
    }
     else {
-      set_app_mode(APPMODE_QUIT);
+      set_app_mode(APPMODE_QUIT, 0);
     }
 }
 
@@ -417,28 +380,7 @@ void rtc_set(time_t utctime)
     }
 }
 
-#define MCU_INPUTNUM (6)
-#define MCU_OUTPUTNUM (4)
-
 unsigned int mcu_doutputmap ;
-
-// to receive "Enter a command" , success: return 1, failed: return 0
-int mcu_recv_enteracommand()
-{
-	int r ;
-    int res = 0 ;
-    char enteracommand[200] ;
-    while( mcu_dataready(100000) ) {
-		r = mcu_read( enteracommand, sizeof(enteracommand), 1000000, 100000 ) ;
-		if( r>0 ) {
-			enteracommand[r]=0 ;
-			if( strcasestr( enteracommand, "Enter a command" )) {
-				res=1 ;
-			}
-		}
-    }
-    return res ;
-}
 
 // g value converting vectors , (Forward, Right, Down) = [vecttabe] * (Back, Right, Buttom)
 static signed char g_convert[24][3][3] = 
@@ -583,7 +525,7 @@ static char direction_table[24][2] =
     {5, 0}, {5, 1}, {5, 2}, {5,3},      // Top   -> Forward
 };
 #else
-static char direction_table[24][3] = 
+char direction_table[24][3] = 
 {
   {0, 2, 0x62}, // Forward:front, Upward:right    Leftward:top
   {0, 3, 0x52}, // Forward:Front, Upward:left,    Leftward:bottom
@@ -614,7 +556,7 @@ static char direction_table[24][3] =
 #endif
 
 #define DEFAULT_DIRECTION   (7)
-static int gsensor_direction = DEFAULT_DIRECTION ;
+int gsensor_direction = DEFAULT_DIRECTION ;
 float g_sensor_trigger_forward ;
 float g_sensor_trigger_backward ;
 float g_sensor_trigger_right ;
@@ -639,7 +581,6 @@ int  g_sensor_available ;
 //unsigned short g_refX, g_refY, g_refZ, g_peakX, g_peakY, g_peakZ;
 //unsigned char g_order, g_live, g_mcudebug, g_task;
 //int g_mcu_recverror, g_fw_ver;
-
 
 void convertPeakData(unsigned short peakX,
 		     unsigned short peakY,
@@ -668,951 +609,258 @@ int  check_trigger_event(float gforward,float gright,float gdown)
   return 0;
 }
 
-int mcu_checkinputbuf(char * ibuf)
+// map hardware input to diomap
+static void dinputmap( unsigned int imap ) {
+	unsigned int imap2=0 ;
+	int i;
+	for( i=0; i<MCU_INPUTNUM; i++ ) {
+		if( imap & (1<<input_map_table[i]) )
+			imap2 |= 1<<i ;
+	}		
+
+	// preserver mic status
+    p_dio_mmap->inputmap =  (p_dio_mmap->inputmap & (0xffff<<MCU_INPUTNUM) ) | imap2;
+    
+    // hdlock = (imap1 & (HDINSERTED|HDKEYLOCK) )==0 ;		// HD plugged in and locked
+    hdlock = (imap & (HDKEYLOCK) )==0 ;	                // HD plugged in and locked
+    hdinserted = (imap & HDINSERTED)==0 ;  // HD inserted
+}
+
+// default mic status
+static unsigned int mic_stat = 0 ;
+
+// callback on receive mcu input msg
+int mcu_oninput( char * ibuf )
 {
     unsigned int imap1, imap2 ;
     int i;
     float gback, gright, gbuttom ;
     float gbusforward, gbusright, gbusdown ;
-    
-    if( ibuf[4]=='\x02' ) {                 // mcu initiated message ?
-        switch( ibuf[3] ) {
-        case '\x1c' :                   // dinput event
-            //static char rsp_dinput[7] = "\x06\x01\x00\x1c\x03\xcc" ;
-            //mcu_send(rsp_dinput);
-            
-            mcu_response(ibuf);
-            
-            // get digital input map
-            imap1 = (unsigned char)ibuf[5]+256*(unsigned int)(unsigned char)ibuf[6] ;
-            
-            dvr_log("GPIO input: %04x", (unsigned int)(unsigned short int)imap1 );
-            
-            imap2 = 0 ;
-            for( i=0; i<MAXINPUT; i++ ) {
-                if( imap1 & input_map_table[i] )
-                    imap2 |= (1<<i) ;
-            }
-            // hdlock = (imap1 & (HDINSERTED|HDKEYLOCK) )==0 ;	// HD plugged in and locked
-            hdlock = (imap1 & (HDKEYLOCK) )==0 ;	// HD plugged in and locked
-#ifdef MDVR618
-            hdinserted=ibuf[7]&0x03;
-#else
-            hdinserted = (imap1 & HDINSERTED)==0 ;  // HD inserted
-#endif             
-            p_dio_mmap->inputmap = imap2;
-            break;
 
-        case '\x08' :               // ignition off event
-            //static char rsp_poweroff[10] = "\x08\x01\x00\x08\x03\x00\x00\xcc" ;
-            //mcu_send(rsp_poweroff);
-            
-            mcu_response(ibuf,2,0,0);
-            
-            mcupowerdelaytime = 0 ;
-            p_dio_mmap->poweroff = 1 ;	// send power off message to DVR
-#ifdef MCU_DEBUG
-            printf("Ignition off, mcu delay %d s\n", mcupowerdelaytime );
-#endif            
-            break;
-            
-        case '\x09' :	// ignition on event
-            //static char rsp_poweron[10] = "\x07\x01\x00\x09\x03\x00\xcc" ;
-            //rsp_poweron[5]=(char)watchdogenabled;
-            //mcu_send( rsp_poweron );
-            
-            mcu_response(ibuf,1,watchdogenabled);
-            
-            p_dio_mmap->poweroff = 0 ;	// send power on message to DVR
-#ifdef MCU_DEBUG
-            printf("ignition on\n");
-#endif            
-            break ;
-
-        case '\x40' :               // Accelerometer data
-            //static char rsp_accel[10] = "\x06\x01\x00\x40\x03\xcc" ;
-            //mcu_send(rsp_accel);
-            
-            mcu_response(ibuf);
-            
-            gright  = ((float)(signed char)ibuf[5])/0xe ;
-            gback   = ((float)(signed char)ibuf[6])/0xe ;
-            gbuttom = ((float)(signed char)ibuf[7])/0xe ;
-
-#ifdef MCU_DEBUG
-            printf("Accelerometer, --------- right=%.2f , back   =%.2f , buttom=%.2f .\n",     
-                   gright,
-                   gback,
-                   gbuttom );
-#endif            
-            
-            // converting
-            gbusforward = 
-                ((float)(signed char)(g_convert[gsensor_direction][0][0])) * gback + 
-                ((float)(signed char)(g_convert[gsensor_direction][0][1])) * gright + 
-                ((float)(signed char)(g_convert[gsensor_direction][0][2])) * gbuttom ;
-            gbusright = 
-                ((float)(signed char)(g_convert[gsensor_direction][1][0])) * gback + 
-                ((float)(signed char)(g_convert[gsensor_direction][1][1])) * gright + 
-                ((float)(signed char)(g_convert[gsensor_direction][1][2])) * gbuttom ;
-            gbusdown = 
-                ((float)(signed char)(g_convert[gsensor_direction][2][0])) * gback + 
-                ((float)(signed char)(g_convert[gsensor_direction][2][1])) * gright + 
-                ((float)(signed char)(g_convert[gsensor_direction][2][2])) * gbuttom ;
-
-#ifdef MCU_DEBUG
-            printf("Accelerometer, converted right=%.2f , forward=%.2f , down  =%.2f .\n",     
-                   gbusright,
-                   gbusforward,
-                   gbusdown );
-#endif            
-            // save to log
-            if( p_dio_mmap->gforce_log0==0 ) {
-                p_dio_mmap->gforce_right_0 = gbusright ;
-                p_dio_mmap->gforce_forward_0 = gbusforward ;
-                p_dio_mmap->gforce_down_0 = gbusdown ;
-                if( gforce_log_enable ) {
-                    p_dio_mmap->gforce_log0 = 1 ;
-                }
-            }
-            else {
-                p_dio_mmap->gforce_right_1 = gbusright ;
-                p_dio_mmap->gforce_forward_1 = gbusforward ;
-                p_dio_mmap->gforce_down_1 = gbusdown ;
-                if( gforce_log_enable ) {
-                    p_dio_mmap->gforce_log1 = 1 ;
-                }
-            }                
-
-            break;
-        case '\x1e':	  
-			
-			mcu_response(ibuf);
-			
-			if((ibuf[0]=='\x0c') &&
-			   (ibuf[2]=='\x04')){
-						 //static char rsp_accel[10] = "\x06\x04\x00\x1e\x03\xcc" ;
-						 //mcu_send(rsp_accel);
-				 convertPeakData((ibuf[5] << 8) | ibuf[6],
-						 (ibuf[7] << 8) | ibuf[8],
-								 (ibuf[9] << 8) | ibuf[10],
-						 &gbusforward, &gbusright, &gbusdown);	
-		#ifdef MCU_DEBUG
-					  //  printf("before: [5]:%x [6]:%x [7]:%x [8]:%x [9]:%x [10]:%x\n",ibuf[5],ibuf[6],ibuf[7],ibuf[8],ibuf[9],ibuf[10]);
-						   printf("Accelerometer, converted right=%.2f , forward=%.2f , down  =%.2f .\n",     
-						   gbusright,
-						   gbusforward,
-						   gbusdown );
-		#endif        
-
-				// save to log
-				if( p_dio_mmap->gforce_log0==0 ) {
-					p_dio_mmap->gforce_right_0 = gbusright ;
-					p_dio_mmap->gforce_forward_0 = gbusforward ;
-					p_dio_mmap->gforce_down_0 = gbusdown ;
-					if( gforce_log_enable ) {
-					p_dio_mmap->gforce_log0 = 1 ;
-					}
-				}
-				else {
-					p_dio_mmap->gforce_right_1 = gbusright ;
-					p_dio_mmap->gforce_forward_1 = gbusforward ;
-					p_dio_mmap->gforce_down_1 = gbusdown ;
-					if( gforce_log_enable ) {
-					p_dio_mmap->gforce_log1 = 1 ;
-					}
-				}                
-				
-				//if(check_trigger_event(gbusforward,gbusright,gbusdown)){
-				 //   p_dio_mmap->mcu_cmd=7; 
-				//}
-				
-				p_dio_mmap->gforce_right_d=gbusright;
-				p_dio_mmap->gforce_forward_d=gbusforward;
-				p_dio_mmap->gforce_down_d=gbusdown;		
-				gforcechange=1;
-				p_dio_mmap->gforce_changed=1;
-				gforce_start=getruntime();		
-			}
-			break;
-			
-		case '\x56':	 
-			static unsigned int mic_status ;
-			mcu_response(ibuf);
-
-			imap1 = (unsigned int)(unsigned char)ibuf[5] ;
-			imap2 = (( imap1 ^ mic_status ) & 0x0a ) | (  ~imap1 & 0x05 ) ;
-			mic_status = imap1 ;
-
-			p_dio_mmap->pwii_micinput &= ~0x0f ;
-			p_dio_mmap->pwii_micinput |= imap2  ;
-			
-			dvr_log( "PWZ5 Mic inputs: %08x", p_dio_mmap->pwii_micinput );
-			
-			break;
-			
-		case '\x49' :
-			mcu_response(ibuf);
-			{
-				char *breport[3]={
-					"fully charged." ,
-					"charging.",
-					"disconnected." };
-				dvr_log("Battery report, battery is %s", breport[ibuf[5]] );
-			}
-			break ;
-			
-		case '\x4a' :
-			mcu_response(ibuf);
-			{
-				static int battery_low = 0 ;
-				static int battery_low_time ;
-				// So many battery low alert, so I reduce the log for once every half an hour
-				if( (getruntime()-battery_low_time) > 1800000 ) {
-					dvr_log("Battery voltage dropped." );
-					battery_low_time = getruntime() ;
-				}
-			}
-			break ;
-			
-        default :
-			mcu_response(ibuf);
-			dvr_log( "Unknown msg from MCU: 0x%02x", (int)ibuf[3]);
-            break;
-        }
-        return 1 ;
-    }
-    return 0 ;
-}
-
-int binaryToBCD(int x)
-{
-  int m, I, b, cc;
-  int bcd;
-
-  cc = (x % 100) / 10;
-  b = (x % 1000) / 100;
-  I = (x % 10000) / 1000;
-  m = x / 10000;
-
-  bcd = (m * 9256 + I * 516 + b * 26 + cc) * 6 + x;
-
-  return bcd;
-}
-
-// callback on receive mcu input msg
-int mcu_oninput( char * inputmsg )
-{
-	return mcu_checkinputbuf(inputmsg);
-}
-
-void writeTab102Data(unsigned char *buf, int len, int type)
-{
-  char filename[256];
-  char curdisk[256];
-  char path[256];
-  int copy=0;
-  int r = 0;
-  struct tm tm;
-  // printf("\nstart to write Tab102B data\n");
-  FILE *fp = fopen("/var/dvr/dvrcurdisk", "r");
-  if (fp != NULL) {
-   // r = fread(curdisk, 1, sizeof(curdisk) - 1, fp);
-  //  printf("step1\n ");
-    fscanf(fp, "%s", curdisk);
-   // printf("step2\n");
-    fclose(fp);
-  } else{
-    printf("no /var/dvr/dvrcurdisk");
-    return;
-  }
-  //printf("step3\n");
-  snprintf(path, sizeof(path), "%s/smartlog", curdisk);
-  if(mkdir(path, 0777) == -1 ) {
-    if(errno == EEXIST) {
-      copy = 1; // directory exists
-    }
-  } else {
-    copy = 1; // directory created
-  }
- // printf("step4\n");
-  time_t t = time(NULL);
-  localtime_r(&t, &tm);
-  gethostname(hostname, 128);
-  snprintf(filename, sizeof(filename),
-	   "%s/smartlog/%s_%04d%02d%02d%02d%02d%02d_TAB102log_L.%s",
-	   curdisk,hostname,
-	   tm.tm_year + 1900,
-	   tm.tm_mon + 1,
-	   tm.tm_mday,
-	   tm.tm_hour,
-	   tm.tm_min,
-	   tm.tm_sec,
-	   (type == TYPE_CONTINUOUS) ? "log" : "peak");   
-//  printf("opening %s len=%d\n", filename,len);
-  fp = fopen(filename, "w");
-  if (fp) {
-   // dprintf("OK");
-    fwrite(buf, 1, len, fp);
-    //safe_fwrite(buf, 1, len, fp);
-    fclose(fp);
-  }    
-}
-
-void writeGforceStatus(char *status)
-{
-  FILE *fp;
-  fp = fopen("/var/dvr/gforce", "w");
-  if (fp) {
-    fprintf(fp, "%s\n", status);
-    fclose(fp);
-  }
-}
-
-static int verifyChecksum(unsigned char *buf, int size)
-{
-  unsigned char cs = 0;
-  int i;
-
-  for (i = 0; i < size; i++) {
-    cs += buf[i];
-  }
-
-  if (cs)
-    return 1;
-
-  return  0;
-}
-
-/*
- * read_nbytes:read at least rx_size and as much data as possible with timeout
- * return:
- *    n: # of bytes received
- *   -1: bad size parameters
- */  
-
-int read_nbytes(unsigned char *buf, int bufsize,
-		int rx_size)
-{
-  //struct timeval tv;
-  int total = 0, bytes;
-  int left=0;
-  if (bufsize < rx_size)
-    return -1;
-  left=rx_size;
-  while(mcu_dataready(50000000)){
-      bytes=mcu_read((char *)buf+total,left);
-      if(bytes>0){
-	total+=bytes;
-	left-=bytes;
-      }
-      if(left==0)
-	break;
-  }
-
-  return total;
-}
-
-int Tab102b_SetRTC()
-{
-    int i=0;
-    char responds[RECVBUFSIZE] ;
-	struct timeval tv;
-	struct tm bt;
-
-	gettimeofday(&tv, NULL);
-	gmtime_r(&tv.tv_sec, &bt);
-  
-  printf("tab102 set time\n");
-  
-    if( mcu_cmd(responds, 0x07, 7,
-		(int)(unsigned char)binaryToBCD(bt.tm_sec),
-		(int)(unsigned char)binaryToBCD(bt.tm_min),
-		(int)(unsigned char)binaryToBCD(bt.tm_hour),
-		bt.tm_wday + 1,
-		(int)(unsigned char)binaryToBCD(bt.tm_mday),
-		(int)(unsigned char)binaryToBCD(bt.tm_mon + 1),
-		(int)(unsigned char)binaryToBCD(bt.tm_year - 100) ) > 0 ) {
-			return 0 ;		// success
-	}
-	return -1 ; 			// failed
-}
-
-int Tab102b_sendUploadRequest()
-{
-  char txbuf[32];
-
-  txbuf[0] = 0x06; // len
-  txbuf[1] = 0x04; // dest addr
-  txbuf[2] = 0x00; // my addr
-  txbuf[3] = 0x19; // cmd
-  txbuf[4] = 0x02; // req
-
-  return mcu_send(txbuf);
-}
-
-
-int Tab102b_setTrigger()
-{
-  char txbuf[64];
-  char responds[RECVBUFSIZE] ;
-  int v;
-  int value;
-  int retry=10;
- // printf("inside Tab102b_setTrigger\n");
-  txbuf[0] = 0x2b; // len
-  txbuf[1] = 0x04; // Tab module addr
-  txbuf[2] = 0x00; // my addr
-  txbuf[3] = 0x12; // cmd
-  txbuf[4] = 0x02; // req
-
-  // base trigger
-  v = (int)((g_sensor_base_forward-0.0)* 37.0) + 0x200;
-  txbuf[5] = (v >> 8) & 0xff;
-  txbuf[6] =  v & 0xff;
-  v = (int)((g_sensor_base_backward-0.0)* 37.0) + 0x200;
-  txbuf[7] = (v >> 8) & 0xff;
-  txbuf[8] =  v & 0xff;
-  v = (int)((g_sensor_base_right-0.0) * 37.0) + 0x200;
-  txbuf[9] = (v >> 8) & 0xff;
-  txbuf[10] =  v & 0xff;
-  v = (int)((g_sensor_base_left-0.0) * 37.0) + 0x200;
-  txbuf[11] = (v >> 8) & 0xff;
-  txbuf[12] =  v & 0xff;
-  v = (int)((g_sensor_base_down-0.0) * 37.0) + 0x200;
-  txbuf[13] = (v >> 8) & 0xff;
-  txbuf[14] =  v & 0xff;
-  v = (int)((g_sensor_base_up-0.0)* 37.0) + 0x200;
-  txbuf[15] = (v >> 8) & 0xff;
-  txbuf[16] =  v & 0xff;
-
-  // peak trigger
-  v = (int)((g_sensor_trigger_forward-0.0)* 37.0) + 0x200;
-  txbuf[17] = (v >> 8) & 0xff;
-  txbuf[18] =  v & 0xff;
-  v = (int)((g_sensor_trigger_backward-0.0) * 37.0) + 0x200;
-  txbuf[19] = (v >> 8) & 0xff;
-  txbuf[20] =  v & 0xff;
-  v = (int)((g_sensor_trigger_right-0.0) * 37.0) + 0x200;
-  txbuf[21] = (v >> 8) & 0xff;
-  txbuf[22] =  v & 0xff;
-  v = (int)((g_sensor_trigger_left-0.0) * 37.0) + 0x200;
-  txbuf[23] = (v >> 8) & 0xff;
-  txbuf[24] =  v & 0xff;
-  v = (int)((g_sensor_trigger_down-0.0) * 37.0) + 0x200;
-  txbuf[25] = (v >> 8) & 0xff;
-  txbuf[26] =  v & 0xff;
-  v = (int)((g_sensor_trigger_up-0.0) *37.0) + 0x200;
-  txbuf[27] = (v >> 8) & 0xff;
-  txbuf[28] =  v & 0xff;
-
-  // crash trigger
-  v = (int)((g_sensor_crash_forward-0.0) * 37.0) + 0x200;
-  txbuf[29] = (v >> 8) & 0xff;
-  txbuf[30] =  v & 0xff;
-  v = (int)((g_sensor_crash_backward-0.0) *37.0) + 0x200;
-  txbuf[31] = (v >> 8) & 0xff;
-  txbuf[32] =  v & 0xff;
-  v = (int)((g_sensor_crash_right-0.0) * 37.0) + 0x200;
-  txbuf[33] = (v >> 8) & 0xff;
-  txbuf[34] =  v & 0xff;
-  v = (int)((g_sensor_crash_left-0.0) *37.0) + 0x200;
-  txbuf[35] = (v >> 8) & 0xff;
-  txbuf[36] =  v & 0xff;
-  v = (int)((g_sensor_crash_down-0.0) * 37.0) + 0x200;
-  txbuf[37] = (v >> 8) & 0xff;
-  txbuf[38] =  v & 0xff;
-  v = (int)((g_sensor_crash_up-0.0) *37.0) + 0x200;
-  txbuf[39] = (v >> 8) & 0xff;
-  txbuf[40] =  v & 0xff;
-  txbuf[41] = direction_table[gsensor_direction][2]; // direction
-    
-#if 0  
-  printf("\n trigger value:\n");
-  for(v=0;v<42;++v){
-     printf("%x ",txbuf[v]); 
-  }
-  printf("\nstart sending trigger\n");
-#endif  
-  while( --retry>0 ) {
-        mcu_clear() ;
-        if(mcu_send(txbuf)) {
-            if( mcu_recv( responds, RECVBUFSIZE ) ) {
-                if(responds[0]=='\x06' &&
-		   responds[2]=='\x04' &&
-		   responds[3]=='\x12' &&
-                   responds[4]=='\x03') 
-                {
-                    break;
-                }
-            }
-        }
-        sleep(1);
-   }
-  return (retry > 0) ? 0 : 1 ;
- 
-}
-
-int Tab102b_sendUploadAck()
-{
-
-  char txbuf[32];
-
-  txbuf[0] = 0x07; // len
-  txbuf[1] = 0x04; // dest
-  txbuf[2] = 0x00; // my addr
-  txbuf[3] = 0x1a; // cmd
-  txbuf[4] = 0x02; // req
-  txbuf[5] = 0x01;
-
-  return mcu_send(txbuf);
-}
-
-void Tab102b_sendUploadConfirm()
-{
-  int retry = 3;
-  char responds[RECVBUFSIZE] ;
-
-  while( --retry>0 ) {
-        mcu_clear() ;
-        if(Tab102b_sendUploadAck()) {
-            if( mcu_recv( responds, RECVBUFSIZE ) ) {
-                if(responds[2]=='\x04' &&
-		   responds[3]=='\x1a' &&
-                   responds[4]=='\x03' ) 
-                {
-                    break;
-                }
-            }
-        }
-        sleep(1);
-  }
-  return;
-}
-
-int Tab102b_sendUploadPeakRequest()
-{
-  char txbuf[32];
-
-  txbuf[0] = 0x06; // len
-  txbuf[1] = 0x04; // dest addr
-  txbuf[2] = 0x00; // my addr
-  txbuf[3] = 0x1f; // cmd
-  txbuf[4] = 0x02; // req
-
-  return mcu_send(txbuf);
-}
-
-int Tab102b_sendUploadPeakAck()
-{
-  char txbuf[32];
-
-  txbuf[0] = 0x07; // len
-  txbuf[1] = 0x04; // RF module addr
-  txbuf[2] = 0x00; // my addr
-  txbuf[3] = 0x20; // cmd
-  txbuf[4] = 0x02; // req
-  txbuf[5] = 0x01;
-
-  return mcu_send(txbuf);
-}
-
-void Tab102b_sendUploadPeakConfirm()
-{
-  int retry = 3;
-  char responds[RECVBUFSIZE] ;
-
-  while (--retry > 0) {
-    mcu_clear() ;
-    if(Tab102b_sendUploadPeakAck()){      
-	if( mcu_recv( responds, RECVBUFSIZE ) ) {
-	    if(	responds[2]=='\x04' &&
-		responds[3]=='\x20' &&
-		responds[4]=='\x03' ) 
-	    {
+	switch( ibuf[3] ) {
+	case '\x1c' :                   // digital input event
+		mcu_response(ibuf);
+		
+		// get digital input map
+		imap1 = (unsigned char)ibuf[5]+256*(unsigned int)(unsigned char)ibuf[6] ;
+		dvr_log("GPIO input: %04x", (unsigned int)(unsigned short int)imap1 );
+		dinputmap( imap1 );
 		break;
-	    }
-	}     
-    }
-    sleep(1);
-  }
-}
 
-int Tab102b_sendBootReady()
-{
-  char txbuf[32];
+	case '\x56':
+		mcu_response(ibuf);
 
-  txbuf[0] = 0x06; // len
-  txbuf[1] = 0x04; // RF module addr
-  txbuf[2] = 0x00; // my addr
-  txbuf[3] = 0x08; // cmd
-  txbuf[4] = 0x02; // req
+		imap1 = (~((unsigned int)(unsigned char)ibuf[5])) & 0x0f  ;
+		dvr_log( "PWZ6 Mic inputs: %08x", imap1);
+		imap2 = imap1 ^ mic_stat ;
+		mic_stat = imap1 ;
+		
+		if( imap2 & 1 ) {		//  REC1 (MUTE1)
+			// update virtual digital input
+			if( mic_stat & 1 ) {
+				p_dio_mmap->inputmap |= 1<<(MCU_INPUTNUM) ;
+			}
+			else {
+				p_dio_mmap->inputmap &= ~(1<<(MCU_INPUTNUM)) ;
+				mcu_mic_off( 0 );
+			}
+		}
+		if( imap2 & 2 ) {		//  EMG1
+			p_dio_mmap->pwii_output |= 1<<16 ;
+			p_dio_mmap->inputmap |= 3<<(MCU_INPUTNUM) ;
+			mcu_mic_on( 0 ) ;
+		}
+		if( imap2 & 4 ) {		//  REC2  (MUTE2)
+			// update virtual digital input
+			if( mic_stat & 4 ) {
+				p_dio_mmap->inputmap |= 1<<(MCU_INPUTNUM+2) ;
+			}
+			else {
+				p_dio_mmap->inputmap &= ~(1<<(MCU_INPUTNUM+2)) ;
+				mcu_mic_off( 1 );
+			}
+		}
+		if( imap2 & 8 ) {		//  EMG2
+			p_dio_mmap->pwii_output |= 1<<16 ;
+			p_dio_mmap->inputmap |= 3<<(MCU_INPUTNUM+2) ;
+			mcu_mic_on( 1 ) ;
+		}
+		
+		// to turn off LED on camera
+		if( (mic_stat & 5) == 0 ) {
+			mcu_mic_ledoff();
+		}
 
-  return mcu_send(txbuf);
-}
+		break;
+		
+	case '\x08' :               // ignition off event
+		//static char rsp_poweroff[10] = "\x08\x01\x00\x08\x03\x00\x00\xcc" ;
+		//mcu_send(rsp_poweroff);
+		
+		mcu_response(ibuf,2,0,0);
+		
+		mcupowerdelaytime = 0 ;
+		p_dio_mmap->poweroff = 1 ;	// send power off message to DVR
+		break;
+		
+	case '\x09' :	// ignition on event
+		//static char rsp_poweron[10] = "\x07\x01\x00\x09\x03\x00\xcc" ;
+		//rsp_poweron[5]=(char)watchdogenabled;
+		//mcu_send( rsp_poweron );
+		
+		mcu_response(ibuf,1,watchdogenabled);
+		
+		p_dio_mmap->poweroff = 0 ;	// send power on message to DVR
+          
+		break ;
 
-int Tab102b_sendVersion()
-{
-  char txbuf[32];
+	case '\x40' :               // Accelerometer data
+		//static char rsp_accel[10] = "\x06\x01\x00\x40\x03\xcc" ;
+		//mcu_send(rsp_accel);
+		
+		mcu_response(ibuf);
+		
+		gright  = ((float)(signed char)ibuf[5])/0xe ;
+		gback   = ((float)(signed char)ibuf[6])/0xe ;
+		gbuttom = ((float)(signed char)ibuf[7])/0xe ;
 
-  txbuf[0] = 0x06; // len
-  txbuf[1] = 0x04; // RF module addr
-  txbuf[2] = 0x00; // my addr
-  txbuf[3] = 0x0e; // cmd
-  txbuf[4] = 0x02; // req
+#ifdef MCU_DEBUG
+		printf("Accelerometer, --------- right=%.2f , back   =%.2f , buttom=%.2f .\n",     
+			   gright,
+			   gback,
+			   gbuttom );
+#endif            
+		
+		// converting
+		gbusforward = 
+			((float)(signed char)(g_convert[gsensor_direction][0][0])) * gback + 
+			((float)(signed char)(g_convert[gsensor_direction][0][1])) * gright + 
+			((float)(signed char)(g_convert[gsensor_direction][0][2])) * gbuttom ;
+		gbusright = 
+			((float)(signed char)(g_convert[gsensor_direction][1][0])) * gback + 
+			((float)(signed char)(g_convert[gsensor_direction][1][1])) * gright + 
+			((float)(signed char)(g_convert[gsensor_direction][1][2])) * gbuttom ;
+		gbusdown = 
+			((float)(signed char)(g_convert[gsensor_direction][2][0])) * gback + 
+			((float)(signed char)(g_convert[gsensor_direction][2][1])) * gright + 
+			((float)(signed char)(g_convert[gsensor_direction][2][2])) * gbuttom ;
 
-  return mcu_send(txbuf);
-}
+#ifdef MCU_DEBUG
+		printf("Accelerometer, converted right=%.2f , forward=%.2f , down  =%.2f .\n",     
+			   gbusright,
+			   gbusforward,
+			   gbusdown );
+#endif            
+		// save to log
+		if( p_dio_mmap->gforce_log0==0 ) {
+			p_dio_mmap->gforce_right_0 = gbusright ;
+			p_dio_mmap->gforce_forward_0 = gbusforward ;
+			p_dio_mmap->gforce_down_0 = gbusdown ;
+			if( gforce_log_enable ) {
+				p_dio_mmap->gforce_log0 = 1 ;
+			}
+		}
+		else {
+			p_dio_mmap->gforce_right_1 = gbusright ;
+			p_dio_mmap->gforce_forward_1 = gbusforward ;
+			p_dio_mmap->gforce_down_1 = gbusdown ;
+			if( gforce_log_enable ) {
+				p_dio_mmap->gforce_log1 = 1 ;
+			}
+		}                
 
-int Tab102b_version(char * version)
-{
-    char responds[RECVBUFSIZE] ;
-    int  sz ;
-    int  n=0;
-    int retry=3;
+		break;
+	case '\x1e':	  
+		mcu_response(ibuf);
+		if((ibuf[0]=='\x0c') &&
+		   (ibuf[2]=='\x04')){
+					 //static char rsp_accel[10] = "\x06\x04\x00\x1e\x03\xcc" ;
+					 //mcu_send(rsp_accel);
+			 convertPeakData((ibuf[5] << 8) | ibuf[6],
+					 (ibuf[7] << 8) | ibuf[8],
+							 (ibuf[9] << 8) | ibuf[10],
+					 &gbusforward, &gbusright, &gbusdown);	
+#ifdef MCU_DEBUG
+				  //  printf("before: [5]:%x [6]:%x [7]:%x [8]:%x [9]:%x [10]:%x\n",ibuf[5],ibuf[6],ibuf[7],ibuf[8],ibuf[9],ibuf[10]);
+					   printf("Accelerometer, converted right=%.2f , forward=%.2f , down  =%.2f .\n",     
+					   gbusright,
+					   gbusforward,
+					   gbusdown );
+#endif        
 
-    while(retry>0){
-        retry--;
-        mcu_clear() ;
-        if(Tab102b_sendVersion()) {
-	        if( mcu_recv( responds, RECVBUFSIZE ) ){
-		    if((responds[2]=='\x04') &&
-		       (responds[3]=='\x0e') &&
-		       (responds[4]=='\x03')) {
-		       
-		       memcpy(version,&responds[5],responds[0]-6);
-		       version[responds[0]-6]=0;
-		       return (responds[0]-6);
-		    }		  
-		}	  
-        }
-        usleep(100);
-    }
+			// save to log
+			if( p_dio_mmap->gforce_log0==0 ) {
+				p_dio_mmap->gforce_right_0 = gbusright ;
+				p_dio_mmap->gforce_forward_0 = gbusforward ;
+				p_dio_mmap->gforce_down_0 = gbusdown ;
+				if( gforce_log_enable ) {
+				p_dio_mmap->gforce_log0 = 1 ;
+				}
+			}
+			else {
+				p_dio_mmap->gforce_right_1 = gbusright ;
+				p_dio_mmap->gforce_forward_1 = gbusforward ;
+				p_dio_mmap->gforce_down_1 = gbusdown ;
+				if( gforce_log_enable ) {
+				p_dio_mmap->gforce_log1 = 1 ;
+				}
+			}                
+			
+			//if(check_trigger_event(gbusforward,gbusright,gbusdown)){
+			//    p_dio_mmap->mcu_cmd=7; 
+			//}
+			
+			p_dio_mmap->gforce_right_d=gbusright;
+			p_dio_mmap->gforce_forward_d=gbusforward;
+			p_dio_mmap->gforce_down_d=gbusdown;
+			gforcechange=1;
+			p_dio_mmap->gforce_changed=1;
+			gforce_start=getruntime();
+		}
+		break;
+		
+	case '\x49' :
+		mcu_response(ibuf);
+		{
+			char *breport[]={
+				"fully charged" ,
+				"charging",
+				"disconnected", "unknown" };
+			p_dio_mmap->battery_voltage = 0.016178 * (int)((unsigned char)ibuf[7]+256*(unsigned int)(unsigned char)ibuf[6]) ; 
+			if( ibuf[5]<0 || ibuf[5]>3 )ibuf[5]=3 ;
+			p_dio_mmap->battery_state = ibuf[5] ;
+			dvr_log("Battery report, battery is %s, voltage: %.2f V.", breport[ibuf[5]], p_dio_mmap->battery_voltage );
+		}
+		break ;
+		
+	case '\x4a' :
+		mcu_response(ibuf);
+		{
+			if( battery_drop_report == 0 ) {
+				dvr_log( "Battery voltage dropped... " );
+				battery_drop_report = 1 ;
+			}
+		}
+		break ;
+		
+	default :
+		mcu_response(ibuf);
+		dvr_log( "Unknown msg from MCU: 0x%02x", (int)ibuf[3]);
+		break;
+	}
     return 0 ;
-}
-
-int Tab102b_sendEnablePeak()
-{
-  char txbuf[32];
-  txbuf[0] = 0x06; // len
-  txbuf[1] = 0x04; // RF module addr
-  txbuf[2] = 0x00; // my addr
-  txbuf[3] = 0x0f; // cmd
-  txbuf[4] = 0x02; // req
-
-  return mcu_send(txbuf);
-}
-
-int Tab102b_enablePeak()
-{
-  int retry = 3;
-  char responds[RECVBUFSIZE] ;
-
-  while (--retry > 0) {
-    mcu_clear() ;
-    Tab102b_sendEnablePeak();
-    if( mcu_recv( responds, RECVBUFSIZE ) ){
-       if((responds[2]==0x04) &&
-	  (responds[3]==0x0f) &&
-	  (responds[4]==0x03)) { 
-	  dvr_log("peak enabled");
-          break;
-       }    
-    }
-  }
-
-  return (retry > 0) ? 0 : 1;
-}
-
-int Tab102b_sendUploadStart()
-{
-  char txbuf[32];
-  txbuf[0] = 0x07; // len
-  txbuf[1] = 0x01; // 
-  txbuf[2] = 0x00; // my addr
-  txbuf[3] = 0x42; // cmd
-  txbuf[4] = 0x02; // req
-  txbuf[5] = 0x01; //start
-
-  return mcu_send(txbuf);  
-}
-
-int Tab102b_UploadStart()
-{
-  int retry = 3;
-  char responds[RECVBUFSIZE] ;
-
-  while (--retry > 0) {
-    mcu_clear() ;
-    Tab102b_sendUploadStart();
-    if( mcu_recv( responds, RECVBUFSIZE ) ){
-       if((responds[2]==0x01) &&
-	  (responds[3]==0x42) &&
-	  (responds[4]==0x03)) { 
-	  dvr_log("Upload Start sent");
-          break;
-       }    
-    }
-  }
-
-  return (retry > 0) ? 0 : 1;  
-}
-
-int Tab102b_UploadEnd()
-{
-	char responds[RECVBUFSIZE] ;
-	if( mcu_cmd( responds, 0x42, 1, 0 ) > 0 ) {
-	  dvr_log("Upload End sent");
-	  return 0 ;	// success ;
-	}
-	return -1 ;		// failed ;
-}
-
-int Tab102b_checkContinuousData()
-{
-  int retry = 3;
-  char buf[1024];
-  char log[32];
-  int nbytes, uploadSize;
-  int error = 0;
-
-  while (retry-- > 0) {
-
-    sprintf(log, "read:%d", retry);
-    writeGforceStatus(log);
-
-    mcu_clear() ;
-    Tab102b_sendUploadRequest();
-    if(mcu_recv( buf, RECVBUFSIZE,5000000 )){
-	if(buf[0]==0x0a &&
-	   buf[2]==0x04 &&
-	   buf[3]==0x19 &&
-	   buf[4]==0x03){
-	   uploadSize = ((int)buf[5] << 24) | 
-	                ((int)buf[6] << 16) | 
-	                ((int)buf[7] << 8) |
-	                 (int)buf[8];
-	   printf("UPLOAD acked:%d\n", uploadSize);
-	   if (uploadSize) {
-		writeGforceStatus("load");
-		//1024 for room, actually UPLOAD_ACK_SIZE(upload ack)
-		// + 8(0g + checksum)
-		int bufsize = uploadSize + 1024;
-		unsigned char *tbuf = (unsigned char *)malloc(bufsize);
-		if (!tbuf) {
-		    error = 100;
-		    break;
-		}
-      
-		nbytes = read_nbytes(tbuf, bufsize,
-				    uploadSize + UPLOAD_ACK_SIZE + 8);
-		int downloaded = nbytes;
-		printf("UPLOAD data:%d(%d)\n", downloaded,uploadSize );
-		if (downloaded >= uploadSize + UPLOAD_ACK_SIZE + 8) {
-		    if (!verifyChecksum(tbuf + UPLOAD_ACK_SIZE, uploadSize + 8)) {
-		      
-			writeTab102Data(tbuf, uploadSize + UPLOAD_ACK_SIZE + 8,
-				      TYPE_CONTINUOUS);
-			Tab102b_sendUploadConfirm();		      			     
-		    } else {
-			printf("*********checksum error************\n");
-			error = 2;
-		    }
-		} /* else {
-		    printf("UPLoad date size is less than it should be\n"); 
-		    writeTab102Data(tbuf, downloaded,
-				      TYPE_CONTINUOUS);
-		}*/
- 
-		free(tbuf);
-	  } 
-	  break;	   
-	}
-      
-     } //if(mcu_recv( buf, RECVBUFSIZE )){
-  }
-
-  sprintf(log, "done:%d,%d", retry, error);
-  writeGforceStatus(log);
-
-  return (retry > 0) ? 0 : 1; 
-  
-}
-
-int Tab102b_checkPeakData()
-{
- int retry = 3;
-  char buf[1024];
-  char log[32];
-  int nbytes, uploadSize;
-  int error = 0;
-
-  while (retry-- > 0) {
-
-    sprintf(log, "check peak data:%d", retry);
-    writeGforceStatus(log);
-
-    mcu_clear() ;
-    Tab102b_sendUploadPeakRequest();
-    if(mcu_recv( buf, RECVBUFSIZE )){
-	if(buf[0]==0x0a &&
-	   buf[2]==0x04 &&
-	   buf[3]==0x1f &&
-	   buf[4]==0x03){
-	   uploadSize = ((int)buf[5] << 24) | 
-	                ((int)buf[6] << 16) | 
-	                ((int)buf[7] << 8) |
-	                 (int)buf[8];
-	   printf("UPLOAD acked:%d\n", uploadSize);
-	   if (uploadSize) {
-		writeGforceStatus("load");
-		//1024 for room, actually UPLOAD_ACK_SIZE(upload ack)
-		// + 8(0g + checksum)
-		int bufsize = uploadSize + 1024;
-		unsigned char *tbuf = (unsigned char *)malloc(bufsize);
-		if (!tbuf) {
-		    error = 100;
-		    break;
-		}
-      
-		nbytes = read_nbytes(tbuf, bufsize,
-				    uploadSize + UPLOAD_ACK_SIZE + 8);
-		int downloaded = nbytes;
-		printf("UPLOAD data:%d(%d)\n", downloaded,uploadSize );
-		if (downloaded >= uploadSize + UPLOAD_ACK_SIZE + 8) {
-		    if (!verifyChecksum(tbuf + UPLOAD_ACK_SIZE, uploadSize + 8)) {
-			writeTab102Data(tbuf, uploadSize + UPLOAD_ACK_SIZE + 8,
-				      TYPE_PEAK);
-		    } else {
-			printf("*********checksum error************\n");
-			error = 2;
-		    }
-		}
-		Tab102b_sendUploadPeakConfirm();
-		free(tbuf);
-	  } 
-	  break;	   
-	}
-      
-    } //if(mcu_recv( buf, RECVBUFSIZE )){
-  }
-
-  sprintf(log, "done:%d,%d", retry, error);
-  writeGforceStatus(log);
-
-  return (retry > 0) ? 0 : 1; 
-}
-
-
-int Tab102b_startADC()
-{
-  int retry = 3;
-  char buf[1024];
-
-  while (retry > 0) {
-     mcu_clear() ;
-     Tab102b_sendBootReady();
-     if(mcu_recv( buf, RECVBUFSIZE )){
-         if((buf[2]==0x04) &&
-	    (buf[3]==0x08) &&
-	    (buf[4]==0x03)){
-             writeGforceStatus("ADC Started");
-	    break; 
-	 }
-     }       
-    retry--;
-  }
-
-  return (retry > 0) ? 0 : 1;
-}
-
-int Tab102b_ContinousDownload()
-{
-    if(Tab102b_UploadStart()){
-       dvr_log("Tab102b UploadStart Failed"); 
-       return -1;
-    }
-    if(Tab102b_checkContinuousData()){
-      dvr_log("Tab102b CheckContinousData Failed");
-      if(Tab102b_UploadEnd()){
-	  dvr_log("Tab102b UploadEnd Failed");
-      }     
-      return -1; 
-    }   
-    if(Tab102b_UploadEnd()){
-       dvr_log("Tab102b UploadEnd Failed");
-       return -1;
-    }
-    return 0;
-}
-
-int Tab102b_setup()
-{
-   int ret=0;
-   static struct timeval TimeCur;
-   int starttime0,count;
-   char tab102b_firmware_version[80];
-   //set  RTC for Tab102b
-
-   if(Tab102b_SetRTC()){
-      dvr_log("Tab101b set RTC failed");
-      return -1;
-   }
-
-   //check the continuous data
-#if 0   
-   if(Tab102b_ContinousDownload()){
-      dvr_log("Tab102b Continous Download Failed");
-      return -1; 
-   }
-#endif   
-   //get the version of Tab102b firmware
-   if( Tab102b_version(tab102b_firmware_version) ) {
-	FILE * tab102versionfile=fopen("/var/dvr/tab102version", "w");
-	if( tab102versionfile ) {
-		fprintf( tab102versionfile, "%s", tab102b_firmware_version );
-		fclose( tab102versionfile );
-	}
-   } else {
-      dvr_log("Get Tab101b firmware version failed") ;
-      return -1;
-   }   
-   //set the trigger for Tab102b
-   if(Tab102b_setTrigger()){
-      dvr_log("Tab101b Trigger Setting Failed");
-      return -1;
-   }
-   gettimeofday(&TimeCur, NULL);
-   starttime0=TimeCur.tv_sec;    
-   while(1){
-	sleep(1);
-	gettimeofday(&TimeCur, NULL);
-	if((TimeCur.tv_sec-starttime0)>10)
-	  break;
-   }   
-   
-   if(Tab102b_enablePeak()){
-      dvr_log("Tab101b enablePeak failed") ;
-      return -1;
-   } 
-   
-   if(Tab102b_startADC()){
-       dvr_log("Tab101b StartADC failed") ;
-       return -1;
-   }
-
-   return 0;
 }
 
 // return gsensor available
 int mcu_gsensorinit()
 {
-    static char cmd_gsensorinit[16]="\x0c\x01\x00\x34\x02\x01\x02\x03\x04\x05\x06\xcc" ;
-    char responds[RECVBUFSIZE] ;
-    int retry=10;
-    float trigger_back, trigger_front ;
     float trigger_right, trigger_left ;
+    float trigger_back, trigger_front ;
     float trigger_bottom, trigger_top ;
+    
+    int   t_right, t_left ;
+    int   t_back, t_front ;
+    int   t_bottom, t_top ;
     
     if( !gforce_log_enable ) {
         return 0 ;
@@ -1645,52 +893,72 @@ int mcu_gsensorinit()
         ((float)(g_convert[gsensor_direction][2][2])) * g_sensor_trigger_up ;
     
     if( trigger_right >= trigger_left ) {
-        cmd_gsensorinit[5]  = (signed char)(trigger_right*0xe) ;    // Right Trigger
-        cmd_gsensorinit[6]  = (signed char)(trigger_left*0xe) ;     // Left Trigger
+        t_right  = (signed char)(trigger_right*0xe) ;    // Right Trigger
+        t_left   = (signed char)(trigger_left*0xe) ;     // Left Trigger
     }
     else {
-        cmd_gsensorinit[5]  = (signed char)(trigger_left*0xe) ;     // Right Trigger
-        cmd_gsensorinit[6]  = (signed char)(trigger_right*0xe) ;    // Left Trigger
+        t_right  = (signed char)(trigger_left*0xe) ;     // Right Trigger
+        t_left   = (signed char)(trigger_right*0xe) ;    // Left Trigger
     }
     
     if( trigger_back >= trigger_front ) {
-        cmd_gsensorinit[7]  = (signed char)(trigger_back*0xe) ;    // Back Trigger
-        cmd_gsensorinit[8]  = (signed char)(trigger_front*0xe) ;    // Front Trigger
+        t_back   = (signed char)(trigger_back*0xe) ;    // Back Trigger
+        t_front  = (signed char)(trigger_front*0xe) ;    // Front Trigger
     }
     else {
-        cmd_gsensorinit[7]  = (signed char)(trigger_front*0xe) ;    // Back Trigger
-        cmd_gsensorinit[8]  = (signed char)(trigger_back*0xe) ;    // Front Trigger
+        t_back   = (signed char)(trigger_front*0xe) ;    // Back Trigger
+        t_front  = (signed char)(trigger_back*0xe) ;    // Front Trigger
     }
     
     if( trigger_bottom >= trigger_top ) {
-        cmd_gsensorinit[9]  = (signed char)(trigger_bottom*0xe) ;    // Bottom Trigger
-        cmd_gsensorinit[10] = (signed char)(trigger_top*0xe) ;    // Top Trigger
+        t_bottom  = (signed char)(trigger_bottom*0xe) ;    // Bottom Trigger
+        t_top     = (signed char)(trigger_top*0xe) ;    // Top Trigger
     }
     else {
-        cmd_gsensorinit[9]  = (signed char)(trigger_top*0xe) ;    // Bottom Trigger
-        cmd_gsensorinit[10] = (signed char)(trigger_bottom*0xe) ;    // Top Trigger
+        t_bottom  = (signed char)(trigger_top*0xe) ;    // Bottom Trigger
+        t_top     = (signed char)(trigger_bottom*0xe) ;    // Top Trigger
     }
     
     g_sensor_available = 0 ;
-    while( --retry>0 ) {
-        mcu_clear() ;
-        if(mcu_send(cmd_gsensorinit)) {
-            if( mcu_recv( responds, RECVBUFSIZE ) ) {
-                if( responds[3]=='\x34' &&
-                   responds[4]=='\x03'&&
-                   responds[0]>6 ) 
-                {
-                    g_sensor_available = responds[5] ;
-                    return g_sensor_available ;
-                }
-            }
-        }
-        sleep(1);
-    }
+    char * responds = mcu_cmd( 0x34, 6,
+		t_right, t_left,
+		t_back, t_front,
+		t_bottom, t_top ) ;
+	if( responds ){
+		g_sensor_available = responds[5] ;
+		return g_sensor_available ;
+	}
     return 0 ;
 }
 
-int mcu_doutput()
+int doutput_init()
+{
+	unsigned int outputmap  = 0 ;
+    unsigned int omap = 0 ;
+    unsigned int outputmapx ;
+    int i;
+
+    outputmapx = (outputmap^output_inverted) ;
+
+    // translate output bits ;
+    for(i=0; i<MAXOUTPUT; i++) {
+        if( outputmapx & (1<<output_map_table[i]) ) {
+            omap|=(1<<i) ;
+        }
+    }
+   
+    mcu_dio_output( omap ) ;
+    mcu_doutputmap = outputmap ;
+	return 0;
+}
+
+// try to trigger digital output 
+int doutput_trigger()
+{
+	mcu_doutputmap = ~mcu_doutputmap ;
+}
+
+int doutput()
 {
     unsigned int outputmap  ;
     unsigned int outputmapx ;
@@ -1715,7 +983,7 @@ int mcu_doutput()
     // translate output bits ;
     omap = 0 ;
     for(i=0; i<MAXOUTPUT; i++) {
-        if( outputmapx & output_map_table[i] ) {
+        if( outputmapx & (1<<output_map_table[i]) ) {
             omap|=(1<<i) ;
         }
     }
@@ -1730,22 +998,8 @@ int mcu_doutput()
 // get mcu digital input
 int mcu_dinput()
 {
-    unsigned int imap1, imap2 ;
-    int i;
-    int retry;
-
     mcu_input(10000);
-    
-    imap1 = (unsigned int )mcu_dio_input() ;
-    imap2 = 0 ;
-	for( i=0; i<MAXINPUT; i++ ) {
-		if( imap1 & input_map_table[i] )
-			imap2 |= (1<<i) ;
-	}
-    p_dio_mmap->inputmap = imap2;
-    // hdlock = (imap1 & (HDINSERTED|HDKEYLOCK) )==0 ;	// HD plugged in and locked
-    hdlock = (imap1 & (HDKEYLOCK) )==0 ;	                // HD plugged in and locked
-    hdinserted = (imap1 & HDINSERTED)==0 ;  // HD inserted
+    dinputmap( (unsigned int )mcu_dio_input() ) ;
     return 1 ;
 }
 
@@ -1774,534 +1028,54 @@ int mcu_pwii_output()
 			zoom_in_set_time = zoomtime ;
 		}
 	}
+	
+	// check for mic output
+	
+	// mic1
+	if( (p_dio_mmap->pwii_output & (1<<16) )==0 &&
+		(p_dio_mmap->inputmap & (2<<MCU_INPUTNUM) )!=0 ) 
+	{
+		mcu_mic_off( 0 );
+		p_dio_mmap->inputmap &= ~(2<<(MCU_INPUTNUM)) ;
+		// update virtual digital input
+		if( mic_stat & 1 ) {
+			p_dio_mmap->inputmap |= 1<<(MCU_INPUTNUM) ;
+		}
+		else {
+			p_dio_mmap->inputmap &= ~(1<<(MCU_INPUTNUM)) ;
+		}
+	}
+	
+	// mic2
+	if( (p_dio_mmap->pwii_output & (4<<16) )==0 &&
+		(p_dio_mmap->inputmap & (8<<MCU_INPUTNUM) )!=0 ) 
+	{
+		mcu_mic_off( 1 );
+		p_dio_mmap->inputmap &= ~(8<<(MCU_INPUTNUM)) ;
+		// update virtual digital input
+		if( mic_stat & 4 ) {
+			p_dio_mmap->inputmap |= 4<<(MCU_INPUTNUM) ;
+		}
+		else {
+			p_dio_mmap->inputmap &= ~(4<<(MCU_INPUTNUM)) ;
+		}
+	}
+	
+	// covert mode ?
+	static int covertmode = 0 ;
+	int  xcov = p_dio_mmap->pwii_output & PWII_COVERT_MODE ;
+	if( xcov != covertmode ) {
+		covertmode = xcov ;
+		mcu_covert( covertmode ) ;
+		if( covertmode == 0 ) {
+			// to force ipcam LED back to 'NORMAL', by sending a doutput message
+			doutput_trigger() ;
+		}
+	}
+	
 }
 
 #endif
-
-static int delay_inc = 20 ;
-
-// set more mcu power off delay (keep power alive), (called every few seconds)
-void mcu_poweroffdelay()
-{
-    static char cmd_poweroffdelaytime[10]="\x08\x01\x00\x08\x02\x00\x00\xcc" ;
-    char responds[RECVBUFSIZE] ;
-    int retry;
-    if( mcupowerdelaytime < 80 ) {
-        cmd_poweroffdelaytime[6]=delay_inc;
-    }
-    else {
-        cmd_poweroffdelaytime[6]=0 ;
-    }
-    for(retry=0;retry<3;++retry){
-      
-	if( mcu_send(cmd_poweroffdelaytime) ) {
-	    if( mcu_recv( responds, RECVBUFSIZE ) ) {
-		if( responds[3]=='\x08' &&
-		    responds[4]=='\x03' ) {
-		      mcupowerdelaytime = ((unsigned)(responds[5]))*256+((unsigned)responds[6]) ;
-              return;
-		  }
-	    }
-	}
-    }
-    dvr_log("mcu_poweroffdelay:08");  
-}
-
-void mcu_poweroffdelay_N(int delay)
-{
-    static char cmd_poweroffdelaytime[10]="\x08\x01\x00\x08\x02\x00\x00\xcc" ;
-    char responds[RECVBUFSIZE] ;
-    int retry;
-    cmd_poweroffdelaytime[5]=(delay >> 8) & 0xff;
-    cmd_poweroffdelaytime[6]= delay & 0xff;
-    for(retry=0;retry<3;++retry){
-	if( mcu_send(cmd_poweroffdelaytime) ) {
-	    if( mcu_recv( responds, RECVBUFSIZE ) ) {
-		if( responds[3]=='\x08' &&
-		    responds[4]=='\x03' ) {
-		    mcupowerdelaytime = ((unsigned)(responds[5]))*256+((unsigned)responds[6]) ;
-    #ifdef MCU_DEBUG        
-		      printf("mcu delay %d s\n", mcupowerdelaytime );
-    #endif            
-                      return;
-		  }
-	    }
-	}
-    }
-    dvr_log("MCU power off delay_N:08");
-    
-}
-
-void mcu_setwatchdogtime(int timeout)
-{
-    int retry ;
-    char responds[RECVBUFSIZE] ;
-    static char cmd_watchdogtimeout[10]="\x08\x01\x00\x19\x02\x00\x00\xcc" ;
-    cmd_watchdogtimeout[5] = timeout/256 ;
-    cmd_watchdogtimeout[6] = timeout%256 ;
-    
-    for( retry=0; retry<3; retry++) {
-        if( mcu_send(cmd_watchdogtimeout) ) {
-            // ignor the responds, if any.
-            if( mcu_recv( responds,RECVBUFSIZE )>0 ) {
-                return;
-            }
-        }
-    }   
-    dvr_log("watchdog timeout failed:19");  
-}
-
-void mcu_setwatchdogenable()
-{
-    int retry ;
-    char responds[RECVBUFSIZE] ;
-    static char cmd_watchdogenable[10]="\x06\x01\x00\x1a\x02\xcc" ;
-    for( retry=0; retry<3; retry++) {
-        if( mcu_send(cmd_watchdogenable) ) {
-            // ignor the responds, if any.
-            if( mcu_recv( responds, RECVBUFSIZE )>0 ) {	      
-                return;
-            }
-        }
-     }
-     dvr_log("mcu watchdog enable:1a");    
-}
-
-
-void mcu_watchdogenable()
-{
-    int retry ;
-    char responds[RECVBUFSIZE] ;
-    static char cmd_watchdogtimeout[10]="\x08\x01\x00\x19\x02\x00\x00\xcc" ;
-    static char cmd_watchdogenable[10]="\x06\x01\x00\x1a\x02\xcc" ;
-
-    cmd_watchdogtimeout[5] = watchdogtimeout/256 ;
-    cmd_watchdogtimeout[6] = watchdogtimeout%256 ;
-    
-    for( retry=0; retry<5; retry++) {
-        if( mcu_send(cmd_watchdogtimeout) ) {
-            // ignor the responds, if any.
-            if( mcu_recv( responds,RECVBUFSIZE )>0 ) {
-                break;
-            }
-        }
-     //   dvr_log("mcu watchdog time out failed:19");
-    }
-   
-    for( retry=0; retry<5; retry++) {
-        if( mcu_send(cmd_watchdogenable) ) {
-            // ignor the responds, if any.
-            if( mcu_recv( responds, RECVBUFSIZE )>0 ) {
-	        watchdogenabled = 1 ;
-                return;
-            }
-        }
-   
-    }
-    dvr_log("mcu watchdog enable:1a"); 
-}
-
-void mcu_watchdogdisable()
-{
-    int retry ;
-    char responds[RECVBUFSIZE] ;
-    static char cmd_watchdogdisable[10]="\x06\x01\x00\x1b\x02\xcc" ;
-    for( retry=0; retry<5; retry++) {
-        if( mcu_send(cmd_watchdogdisable) ) {
-            // ignor the responds, if any.
-            if( mcu_recv( responds, RECVBUFSIZE )>0 ) {	      
-	        watchdogenabled = 0 ;      
-                return;
-            }
-        }
-    }
-    dvr_log("mcu watchdog disable:1b");
-
-}
-
-// return 0: error, >0 success
-int mcu_watchdogkick()
-{
-    int retry ;
-    char responds[RECVBUFSIZE] ;
-    static char cmd_kickwatchdog[10]="\x06\x01\x00\x18\x02\xcc" ;
-    for( retry=0; retry<10; retry++ ) {
-        if( mcu_send(cmd_kickwatchdog) ) {
-            if( mcu_recv( responds, RECVBUFSIZE ) > 0 ) {
-                if( responds[3]==0x18 && responds[4]==0x03 ) {
-                    return 1;
-                }
-            }
-        }
-    }
-    dvr_log("mcu watch dog kick:18");
-    return 0;
-}
-
-// get io board temperature
-int mcu_iotemperature()
-{
-    char responds[RECVBUFSIZE] ;
-    static char cmd_iotemperature[8]="\x06\x01\x00\x0b\x02\xcc" ;
-    int retry;
-    for(retry=0;retry<3;++retry){
-	if( mcu_send(cmd_iotemperature) ) {
-	    if( mcu_recv( responds, RECVBUFSIZE ) > 0 ) {
-		if( responds[3]==0x0b && 
-		  responds[4]==3 ) 
-		{
-		    return (int)(signed char)responds[5] ;
-		}
-	    }
-	}
-    }
-    dvr_log("mcu_iotemperature:0b");
-   
-    return -128;
-}
-
-// get hd temperature
-int mcu_hdtemperature(int *hd1,int *hd2)
-{
-    char responds[RECVBUFSIZE] ;
-    static char cmd_hdtemperature[8]="\x06\x01\x00\x0c\x02\xcc" ;
-    int retry;
-    for(retry=0;retry<3;++retry){
-	if( mcu_send(cmd_hdtemperature) ) {
-	    if( mcu_recv( responds,RECVBUFSIZE ) > 0 ) {
-		if( responds[3]==0x0c && 
-		  responds[4]==3 ) 
-		{
-		    *hd1=(int)(signed char)responds[5] ;
-		    *hd2=(int)(signed char)responds[7] ;
-		    return 0 ;
-		}
-	    }
-	}
-    }
-    dvr_log("mcu_hdtemperature:0c");
-    
-    return -1;
-}
-
-void mcu_poepoweron()
-{
-    char responds[RECVBUFSIZE] ;
-    static char cmd_poepoweron[10]="\x07\x01\x00\x3a\x02\x01\xcc" ;
-    int retry=0;
-    for(retry=0;retry<3;++retry){
-	if( mcu_send(cmd_poepoweron) ) {
-	    // ignor the responds, if any.
-	    if(mcu_recv( responds, RECVBUFSIZE )){
-		if( responds[3]==0x3a && 
-		  responds[4]==3 ) {
-		    return;
-		}	      
-	    }
-	} 
-    }
-    dvr_log("mcu_poepoweron:3a");
-    
-}
-
-void mcu_poepoweroff()
-{
-    char responds[RECVBUFSIZE] ;
-    static char cmd_poepoweroff[10]="\x07\x01\x00\x3a\x02\x00\xcc" ;
-    int retry=0;
-    for(retry=0;retry<3;++retry){    
-	if( mcu_send(cmd_poepoweroff) ) {
-	    // ignor the responds, if any.
-	    if(mcu_recv( responds, RECVBUFSIZE )){
-		if( responds[3]==0x3a && 
-		  responds[4]==3 ) {
-		    return;
-		}	      
-	    }
-	}  
-    }
-    dvr_log("mcu_poepoweroff:3a");   
-}
-
-
-void mcu_wifipoweron()
-{
-    char responds[RECVBUFSIZE] ;
-    static char cmd_wifipoweron[10]="\x07\x01\x00\x38\x02\x01\xcc" ;
-    int retry;
-    for(retry=0;retry<3;++retry){
-	if( mcu_send(cmd_wifipoweron) ) {
-	    // ignor the responds, if any.
-	    if(mcu_recv( responds, RECVBUFSIZE )){
-		if( responds[3]==0x38 && 
-		  responds[4]==3 ) {
-		    return;
-		}	      
-	    }
-	}
-   }
-   dvr_log("mcu_wifipoweron:38");
-     
-}
-
-#if 0
-void mcu_wifipoweroff()
-{
-    char responds[RECVBUFSIZE] ;
-    static char cmd_wifipoweroff[10]="\x07\x01\x00\x38\x02\x00\xcc" ;
-    int retry;
-    for(retry=0;retry<3;++retry){
-	if( mcu_send(cmd_wifipoweroff) ) {
-	    // ignor the responds, if any.
-	    if(mcu_recv( responds, RECVBUFSIZE )){
-		if( responds[3]==0x38 && 
-		  responds[4]==3 ) {
-		    return;
-		}	      
-	    }
-	}
-    }
-    dvr_log("mcu_wifipoweroff:38");
-    
-}
-#else
-void mcu_wifipoweroff()
-{
-   
-}
-
-#endif
-void mcu_motioncontrol_enable()
-{
-    char responds[RECVBUFSIZE] ;
-    static char cmd_motioncontrol[10]="\x07\x01\x00\x13\x02\x01\xcc" ;
-    int retry;
-    for(retry=0;retry<3;++retry){
-	if( mcu_send(cmd_motioncontrol) ) {
-	    // ignor the responds, if any.
-	    if(mcu_recv( responds, RECVBUFSIZE )){
-		if( responds[3]==0x13 && 
-		  responds[4]==3 ) {
-		    return;
-		}	      
-	    }
-	}
-    }
-    dvr_log("mcu_motioncontrol_enable:13");
-    
-}
-
-void mcu_motioncontrol_disable()
-{
-    char responds[RECVBUFSIZE] ;
-    static char cmd_motioncontrol[10]="\x07\x01\x00\x13\x02\x00\xcc" ;
-    int retry;
-    for(retry=0;retry<3;++retry){
-	if( mcu_send(cmd_motioncontrol) ) {
-	    // ignor the responds, if any.
-	    if(mcu_recv( responds, RECVBUFSIZE )){
-		if( responds[3]==0x13 && 
-		  responds[4]==3 ) {
-		    return;
-		}	      
-	    }
-	}
-    }
-    dvr_log("mcu_motioncontrol_disable:13");
-    
-}
-
-void mcu_hdpoweron()
-{
-    char responds[RECVBUFSIZE] ;
-#ifdef MDVR618
-    static char cmd_hdpoweron[10]="\x07\x01\x00\x28\x02\x03\xcc" ;  
-#else
-    static char cmd_hdpoweron[10]="\x06\x01\x00\x28\x02\xcc" ;
-#endif    
-    int retry;
-    for(retry=0;retry<3;++retry){
-	if( mcu_send(cmd_hdpoweron) ) {
-	    // ignor the responds, if any.
-	    if(mcu_recv( responds, RECVBUFSIZE )){
-		if( responds[3]==0x28 && 
-		  responds[4]==3 ) {
-		    dvr_log( "HD power on.");
-		    return;
-		}	      
-	    }
-	}
-     }
-     dvr_log("mcu_hdpoweron:28");   
-}
-
-void mcu_hdpoweroff()
-{
-    char responds[RECVBUFSIZE] ;
-#ifdef MDVR618
-    static char cmd_hdpoweroff[10]="\x07\x01\x00\x29\x02\x03\xcc" ; 
-#else
-    static char cmd_hdpoweroff[10]="\x06\x01\x00\x29\x02\xcc" ;
-#endif      
-    int retry;
-    for(retry=0;retry<3;++retry){
-	if( mcu_send(cmd_hdpoweroff) ) {
-	    // ignor the responds, if any.
-	   if(mcu_recv( responds, RECVBUFSIZE )){
-		if( responds[3]==0x29 && 
-		  responds[4]==3 ) {
-		    dvr_log( "HD power off.");
-		    return;
-		}	      
-	    }
-	}
-    }
-    dvr_log("mcu_hdpoweroff:29");   
-}
-
-// return time_t: success
-//             -1: failed
-int mcu_r_rtc( struct tm * ptm,time_t * rtc )
-{
-    int retry ;
-    struct tm ttm ;
-    time_t tt ;
-    int i=0;
-    static char cmd_readrtc[8] = "\x06\x01\x00\x06\x02\xcc" ;
-    unsigned char responds[RECVBUFSIZE] ;
-    for( retry=0; retry<3; retry++ ) {
-        if( mcu_send( cmd_readrtc ) ) {
-            if( mcu_recv( (char *)responds, RECVBUFSIZE ) ) {
-                if( responds[3]==6 &&
-                   responds[4]==3 ) 
-                {
-                    memset( &ttm, 0, sizeof(ttm) );
-                    ttm.tm_year = getbcd(responds[11]) + 100 ;
-                    ttm.tm_mon  = getbcd(responds[10]) - 1;
-                    ttm.tm_mday = getbcd(responds[9]) ;
-                    ttm.tm_hour = getbcd(responds[7]) ;
-                    ttm.tm_min  = getbcd(responds[6]) ;
-                    ttm.tm_sec  = getbcd(responds[5]) ;
-                    ttm.tm_isdst= -1 ;
-                    
-                    if( ttm.tm_year>110 && ttm.tm_year<150 &&
-                       ttm.tm_mon>=0 && ttm.tm_mon<=11 &&
-                       ttm.tm_mday>=1 && ttm.tm_mday<=31 &&
-                       ttm.tm_hour>=0 && ttm.tm_hour<=24 &&
-                       ttm.tm_min>=0 && ttm.tm_min<=60 &&
-                       ttm.tm_sec>=0 && ttm.tm_sec<=60 ) 
-                    {
-                        tt = timegm( &ttm );
-                        if( (int)tt > 0 ) {
-                            if(ptm) {
-                                *ptm = ttm ;
-                            }
-                            if(rtc){
-								*rtc=tt;
-							}
-                            return (int)tt ;
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-    dvr_log("Read clock from MCU failed:06");    
-    
-    printf( "Read clock failed\n");
-
-    return 0;
-}
-
-void mcu_readrtc()
-{
-    time_t t ;
-    struct tm ttm ;
-    int ret;
-    ret = mcu_r_rtc(&ttm,&t) ;
-    if( ret ) {
-        p_dio_mmap->rtc_year  = ttm.tm_year+1900 ;
-        p_dio_mmap->rtc_month = ttm.tm_mon+1 ;
-        p_dio_mmap->rtc_day   = ttm.tm_mday ;
-        p_dio_mmap->rtc_hour  = ttm.tm_hour ;
-        p_dio_mmap->rtc_minute= ttm.tm_min ;
-        p_dio_mmap->rtc_second= ttm.tm_sec ;
-        p_dio_mmap->rtc_millisecond = 0 ;
-        
-        p_dio_mmap->rtc_cmd   = 0 ;	// cmd finish
-        return ;
-    }
-    p_dio_mmap->rtc_cmd   = -1 ;	// cmd error.
-}
-
-// 3 LEDs On Panel
-//   parameters:
-//      led:  0= USB flash LED, 1= Error LED, 2 = Video Lost LED
-//      flash: 0=off, 1=flash
-void mcu_led(int led, int flash)
-{
-    static char cmd_ledctrl[10] = "\x08\x01\x00\x2f\x02\x00\x00\xcc" ;
-    char responds[RECVBUFSIZE] ;
-    int retry;
-    cmd_ledctrl[5]=(char)led ;
-    cmd_ledctrl[6]=(char)(flash!=0) ;
-    for(retry=0;retry<3;++retry){
-	if(mcu_send( cmd_ledctrl )){
-	    if(mcu_recv( responds, RECVBUFSIZE )){
-		if( responds[3]==0x2f && 
-		  responds[4]==3 ) {
-		    return;
-		}	      
-	    }
-	}
-    }
-    dvr_log("mcu_led:2f"); 
-}
-
-// Device Power
-//   parameters:
-//      device:  0= GPS, 1= Slave Eagle boards, 2=Network switch
-//      poweron: 0=poweroff, 1=poweron
-void mcu_devicepower(int device, int poweron )
-{
-    static char cmd_devicepower[10] = "\x08\x01\x00\x2e\x02\x00\x00\xcc" ;
-    char responds[RECVBUFSIZE] ;
-    int retry;
-    cmd_devicepower[5]=(char)device ;
-    cmd_devicepower[6]=(char)(poweron!=0) ;
-    
-    for(retry=0;retry<3;++retry){
-	if(mcu_send( cmd_devicepower )){
-	    if(mcu_recv( responds, RECVBUFSIZE )){
-		if( responds[3]==0x2e && 
-		  responds[4]==3 ) {
-		    return;
-		}	      
-	    }
-	}
-    }
-    dvr_log("mcu_devicepower:2e  device:%d",device);
-    
-}
-
-// ?
-int mcu_reset()
-{
-    static char cmd_reset[8]="\x06\x01\x00\x00\x02\xcc" ;
-    int retry=0;
-    for(retry=0;retry<3;++retry){
-	if( mcu_send( cmd_reset ) ) {
-	    if( mcu_dataready (30000000) ) {
-		if( mcu_recv_enteracommand() ) {
-		    return 1;
-		}
-	    }
-	}
-    }
-    dvr_log("mcu_reset:00");
-    return 0 ;
-}	
 
 #if 0
 void writeDebug(char *str)
@@ -2456,103 +1230,23 @@ static char bcd(int v)
     return (char)(((v/10)%10)*0x10 + v%10) ;
 }
 
-// return 1: success
-//        0: failed
-#if 0
-int mcu_w_rtc(time_t tt)
-{
-    static char cmd_setrtc[16]="\x0d\x01\x00\x07\x02" ;
-    char responds[20] ;
-    int retry;
-    struct tm t ;
-    gmtime_r( &tt, &t);
-    if(t.tm_year>2000){
-      cmd_setrtc[5] = bcd( t.tm_sec ) ;
-      cmd_setrtc[6] = bcd( t.tm_min ) ;
-      cmd_setrtc[7] = bcd( t.tm_hour );
-      cmd_setrtc[8] = bcd( t.tm_wday ) ;
-      cmd_setrtc[9] = bcd(  t.tm_mday );
-      cmd_setrtc[10] = bcd( t.tm_mon + 1 );
-      cmd_setrtc[11] = bcd( t.tm_year ) ;
-      
-      for(retry=0;retry<3;++retry){
-	  if( mcu_send(cmd_setrtc) ) {
-	      if( mcu_recv(responds, 20 ) ) {
-		  if( responds[3]==7 &&
-		    responds[4]==3 ) 
-		  {
-		      return 1;
-		  }
-	      }
-	  }
-      }
-    }
-    dvr_log("mcu_w_rtc:07");
-    
-    return 0 ;
-}
-#else
-int mcu_w_rtc(time_t tt)
-{
-    static char cmd_setrtc[16]="\x0d\x01\x00\x07\x02" ;
-    char responds[20] ;
-    int retry;
-    for(retry=0;retry<3;++retry){
-	struct tm t ; 
-	gmtime_r( &tt, &t);
-	if(t.tm_year>100&&t.tm_year<130){
-	      cmd_setrtc[5] = bcd( t.tm_sec ) ;
-	      cmd_setrtc[6] = bcd( t.tm_min ) ;
-	      cmd_setrtc[7] = bcd( t.tm_hour );
-	      cmd_setrtc[8] = bcd( t.tm_wday ) ;
-	      cmd_setrtc[9] = bcd(  t.tm_mday );
-	      cmd_setrtc[10] = bcd( t.tm_mon + 1 );
-	      cmd_setrtc[11] = bcd( t.tm_year ) ;	
-	      if( mcu_send(cmd_setrtc) ) {
-		  if( mcu_recv(responds, 20 ) ) {
-		      if( responds[3]==7 &&
-			responds[4]==3 ) 
-		      {
-			  return 1;
-		      }
-		  }
-	      }
-	  }
-	  dvr_log("mcu_w_rtc:07");	  
-    }
-  
-    
-    return 0 ;
-}
-#endif
 void mcu_setrtc()
 {
-    static char cmd_setrtc[16]="\x0d\x01\x00\x07\x02" ;
-    int retry;
-    char responds[20] ;
-    cmd_setrtc[5] = bcd( p_dio_mmap->rtc_second ) ;
-    cmd_setrtc[6] = bcd( p_dio_mmap->rtc_minute );
-    cmd_setrtc[7] = bcd( p_dio_mmap->rtc_hour );
-    cmd_setrtc[8] = 0 ;						// day of week ?
-    cmd_setrtc[9] = bcd( p_dio_mmap->rtc_day );
-    cmd_setrtc[10] = bcd( p_dio_mmap->rtc_month) ;
-    cmd_setrtc[11] = bcd( p_dio_mmap->rtc_year) ;
-    p_dio_mmap->synctimestart=0;
-    dvr_log("mcu set rtc:%d:%d:%d",p_dio_mmap->rtc_hour,p_dio_mmap->rtc_minute,p_dio_mmap->rtc_second);
-    for(retry=0;retry<3;++retry){
-	if( mcu_send(cmd_setrtc) ) {
-	    if( mcu_recv(responds, 20 ) ) {
-		if( responds[3]==7 &&
-		  responds[4]==3 ) {
-		      p_dio_mmap->rtc_cmd   = 0 ;	// cmd finish
-		      return ;
-		  }
-	    }
+	if( mcu_cmd( 7, 7,
+		bcd( p_dio_mmap->rtc_second ),
+		bcd( p_dio_mmap->rtc_minute ),
+		bcd( p_dio_mmap->rtc_hour ),
+		0,						// day of week ?
+		bcd( p_dio_mmap->rtc_day ),
+		bcd( p_dio_mmap->rtc_month),
+		bcd( p_dio_mmap->rtc_year) ) ) 
+	{
+		p_dio_mmap->rtc_cmd   = 0 ;	// cmd finish
 	}
-	dvr_log("mcu_setrtc:07");  	
-    }
- 
-    p_dio_mmap->rtc_cmd   = -1 ;	// cmd error.    
+	else {
+		dvr_log("mcu_setrtc:07");  	
+		p_dio_mmap->rtc_cmd   = -1 ;	// cmd error.    
+	}
 }
 
 // sync system time to rtc
@@ -2684,7 +1378,7 @@ void dvrsvr_down()
         while( p_dio_mmap->dvrpid ) {
             p_dio_mmap->outputmap ^= HDLED ;
             mcu_input(200000);
-            mcu_doutput();
+            doutput();
         }
         sync(); 
     }
@@ -2886,19 +1580,11 @@ int tab102_wait()
     return 1;
 }
 
+static char smartftp_dev[64] ;
+
 void smartftp_start()
 {
-    char dev[32];
     int ret;
-    
-    if(wifi_enable_ex){
-      strcpy(dev,"eth0");
-    } else {
-      if(readWifiDeviceName(dev, sizeof(dev))){
-	  //using fixed wifi
-	  strcpy(dev,"wlan0");
-      }      
-    }
   
     dvr_log( "Start smart server uploading.");
     pid_smartftp = fork();
@@ -2911,9 +1597,9 @@ void smartftp_start()
         
       // reset network, this would restart wifi adaptor
  //       system("/mnt/nand/dvr/setnetwork"); 
-        dvr_log("dev:%s hostname:%s",dev,hostname);
+        dvr_log("dev:%s hostname:%s",smartftp_dev,hostname);
         ret=execlp( "/mnt/nand/dvr/smartftp", "/mnt/nand/dvr/smartftp",
-              dev,
+              smartftp_dev,
               hostname,
               "247SECURITY",
               "/var/dvr/disks",
@@ -3051,7 +1737,7 @@ void reloadconfig()
         p_dio_mmap->inputnum = MCU_INPUTNUM ;	
     p_dio_mmap->outputnum = dvrconfig.getvalueint( "io", "outputnum");	
     if( p_dio_mmap->outputnum<=0 || p_dio_mmap->outputnum>32 )
-        p_dio_mmap->outputnum = MCU_INPUTNUM ;	
+        p_dio_mmap->outputnum = MCU_OUTPUTNUM ;	
     
     output_inverted = 0 ;
     
@@ -3075,6 +1761,26 @@ void reloadconfig()
    // gforce_log_enable = dvrconfig.getvalueint( "glog", "gforce_log_enable");
     gforce_log_enable=tab102b_enable;
 }
+
+// check battery voltage
+void battery_check()
+{
+	int battery_state ;
+	int battery_voltage ;
+    battery_state = mcu_battery_check( &battery_voltage );
+    if( battery_state<0 || battery_state>3 ) 
+		battery_state=3 ;
+    p_dio_mmap->battery_state = battery_state ;
+    p_dio_mmap->battery_voltage = 0.016178 * battery_voltage ;
+
+	if( app_mode > APPMODE_RUN && p_dio_mmap->battery_voltage < battery_low ) {
+		set_app_mode(APPMODE_SHUTDOWN, 1) ;
+		dvr_log( "Battery low, voltage: %.1fV, shutdown system..." , (double)(p_dio_mmap->battery_voltage) );
+	}
+    
+}
+
+
 // return 
 //        0 : failed
 //        1 : success
@@ -3300,6 +2006,22 @@ int appinit()
     wifi_poweron=dvrconfig.getvalueint("network", "wifi_poweron");
     gHBDRecording=dvrconfig.getvalueint("system", "hbdrecording");
     // gforce sensor setup
+    
+       
+    // external smart upload device name
+    v = dvrconfig.getvalue( "network", "smartftp_dev");
+    if (v.length() > 0){
+		strncpy( smartftp_dev, v.getstring(), sizeof(smartftp_dev));
+    }
+    else {
+		strcpy(smartftp_dev,"eth0");
+		if(!wifi_enable_ex){
+		  if(readWifiDeviceName(smartftp_dev, sizeof(smartftp_dev))){
+			  //using fixed wifi
+			  strcpy(smartftp_dev,"wlan0");
+		  }
+		}
+	} 
 
     //gforce_log_enable = dvrconfig.getvalueint( "glog", "gforce_log_enable");
     gforce_log_enable=tab102b_enable;
@@ -3476,6 +2198,13 @@ int appinit()
 
     watchdogtimeset=watchdogtimeout;
     
+	battery_low = 7.4 ;
+    v = dvrconfig.getvalue( "system", "battery_low");
+    if( !v.isempty() ) {
+		sscanf( (char *)v, "%f", &battery_low );
+	}
+	if( battery_low < 7.2 ) battery_low = 7.2 ;
+    
     pidf = fopen( pidfile, "w" );
     if( pidf ) {
         fprintf(pidf, "%d", (int)getpid() );
@@ -3599,13 +2328,24 @@ void re_appinit()
     if(mcu_iosensorrequest()){
        mcu_iosensor_send(); 
     }
- 
+
 
     tab102b_enable = dvrconfig.getvalueint( "glog", "tab102b_enable");
     buzzer_enable = dvrconfig.getvalueint( "io", "buzzer_enable");
     wifi_enable_ex= dvrconfig.getvalueint("system", "ex_wifi_enable");
     wifi_poweron=dvrconfig.getvalueint("network", "wifi_poweron");
     gHBDRecording=dvrconfig.getvalueint("system", "hbdrecording");
+    
+           
+    // external smart upload device name
+    v = dvrconfig.getvalue( "network", "smartftp_dev");
+    if (v.length() > 0){
+		strncpy( smartftp_dev, v.getstring(), sizeof(smartftp_dev));
+    }
+    else {
+		strcpy(smartftp_dev,"wlan0");
+	} 
+    
     // gforce sensor setup
 
     //gforce_log_enable = dvrconfig.getvalueint( "glog", "gforce_log_enable");
@@ -3772,6 +2512,13 @@ void re_appinit()
         watchdogtimeout=200 ;
     watchdogtimeset=watchdogtimeout;
     
+	battery_low = 7.4 ;
+    v = dvrconfig.getvalue( "system", "battery_low");
+    if( !v.isempty() ) {
+		sscanf( (char *)v, "%f", &battery_low );
+	}
+	if( battery_low < 7.2 ) battery_low = 7.2 ;
+    
     // initialize timer
     initruntime();
     p_dio_mmap->fileclosed=0;
@@ -3818,16 +2565,6 @@ static char *safe_fgets(char *s, int size, FILE *stream)
   } while (ret == NULL && ferror(stream) && errno == EINTR);
   
   return ret;
-}
-
-void writeTab102Status(char *status)
-{
-  FILE *fp;
-  fp = fopen("/var/dvr/tab102", "w");
-  if (fp) {
-    fprintf(fp, "%s\n", status);
-    fclose(fp);
-  }
 }
 
 void closeall(int fd)
@@ -3946,43 +2683,24 @@ int isHBDRecording()
 
 void mcu_event_ocur()
 {
-    char responds[RECVBUFSIZE] ;
-    int retry;
-    static char cmd_event_ocur[10]="\x07\x01\x00\x43\x02\x01\xcc" ;
     dvr_log("mcu_event_ocur sent to MCU");
-    for(retry=0;retry<3;++retry){
-	if( mcu_send(cmd_event_ocur) ) {
-	    if(mcu_recv( responds, RECVBUFSIZE )>0){
-		  if( responds[3]==0x43 && 
-			responds[4]==3 ) {
-		      gevent_on=1;
-		      return; 
-		  }	    	    
-	    }
+    if( mcu_cmd( 0x43, 1, 1 ) ) {
+      gevent_on=0;
 	}
-     }
-     dvr_log("mcu_event_ocur code:43");   
-  
+	else {
+     dvr_log("mcu_event_remove code:43");     
+	}
 }
 
 void mcu_event_remove()
 {
-    char responds[RECVBUFSIZE] ;
-    int retry;
-    static char cmd_event_remove[10]="\x07\x01\x00\x43\x02\x00\xcc" ;
     dvr_log("mcu_event_remove sent to MCU");
-    for(retry=0;retry<3;++retry){
-	if( mcu_send(cmd_event_remove) ) {
-	    if(mcu_recv( responds, RECVBUFSIZE )>0){
-		  if( responds[3]==0x43 && 
-			responds[4]==3 ) {
-		      gevent_on=0;
-		      return; 
-		  }	    	    
-	    }
+    if( mcu_cmd( 0x43, 1, 0 ) ) {
+      gevent_on=0;
 	}
-     }
+	else {
      dvr_log("mcu_event_remove code:43");     
+	}
 }
 
 int recordingDiskReady()
@@ -4002,11 +2720,9 @@ int main(int argc, char * argv[])
     int i;
     int hdpower=0 ;                             // assume HD power is off
     int hdkeybounce = 0 ;                       // assume no hd
-    unsigned int modeendtime = 0;
     unsigned int gpsavailable = 0 ;
     unsigned int smartftp_endtime = 0;
     unsigned int mstarttime;
-    unsigned int runtime;
     unsigned int gps_check=0;
     unsigned int gps_startcheck=0;
     unsigned int gps_started=0;
@@ -4035,10 +2751,8 @@ int main(int argc, char * argv[])
 //    signal(SIGUSR1, sig_handler);
 //    signal(SIGUSR2, sig_handler);
     
-    // updating watch dog state
-    mcu_setwatchdogtime(240);
-    // kick watchdog
-    mcu_watchdogkick () ;
+	mcu_watchdogenable() ;    
+    mcu_watchdogkick() ;// kick watchdog
 
     // check if we need to update firmware
     if( argc>=2 ) {
@@ -4067,7 +2781,8 @@ int main(int argc, char * argv[])
 //                sleep(delay);
 //                mcu_reboot();
                 watchdogtimeout=delay ;
-                mcu_watchdogenable () ;
+                usewatchdog=1;
+                mcu_watchdogenable() ;
                 sleep(delay+20) ;
                 mcu_reboot ();
                 return 1;
@@ -4079,8 +2794,10 @@ int main(int argc, char * argv[])
         }
     }
   
+    runtime = mcustart = mstarttime = getruntime() ;
+    set_app_mode(APPMODE_RUN,0) ;
+    
     // setup signal handler	
-    set_app_mode(1) ;
     signal(SIGQUIT, sig_handler);
     signal(SIGINT,  sig_handler);
     signal(SIGTERM, sig_handler);
@@ -4093,7 +2810,7 @@ int main(int argc, char * argv[])
     mcu_dinput();
 
     // initialize output
-    mcu_doutputmap=~(p_dio_mmap->outputmap) ;
+    doutput_init() ;
     
     // initialize panel led
     panelled = 0xff ;
@@ -4125,8 +2842,6 @@ int main(int argc, char * argv[])
     p_dio_mmap->synctimestart=0;
     p_dio_mmap->gps_connection=0;
     
-    mstarttime=getruntime() ;
-    mcustart=getruntime() ;
     while( app_mode ) {
 
         // do input pin polling
@@ -4138,89 +2853,90 @@ int main(int argc, char * argv[])
 #endif
 
         // do digital output
-        mcu_doutput();
+        doutput();
   
         runtime=getruntime() ;
-	if( app_mode==APPMODE_RUN ){
-	    if(gps_started==0){
-	        if(runtime-mstarttime>30000){
-		   system("/mnt/nand/dvr/glog");
-		   gps_started=1;
-		   gps_startcheck=runtime;
-		   dvr_log("gps started");
-		}	      
-	    } else {
-		if(gps_check==0){	    
-		    if(runtime-gps_startcheck>60000){   //1minutes
-			if(!p_dio_mmap->gps_valid){
-			  system("/mnt/nand/dvr/glog");
-			  dvr_log("gps first restarted");
-			  p_dio_mmap->gps_connection=0;
+		if( app_mode==APPMODE_RUN ){	
+			if(gps_started==0){
+				if(runtime-mstarttime>30000){
+					system("/mnt/nand/dvr/glog");
+					gps_started=1;
+					gps_startcheck=runtime;
+					dvr_log("gps started");
+				}	      
+			} 
+			else {
+				if(gps_check==0){	    
+					if(runtime-gps_startcheck>60000){   //1minutes
+						if(!p_dio_mmap->gps_valid){
+							system("/mnt/nand/dvr/glog");
+							dvr_log("gps first restarted");
+							p_dio_mmap->gps_connection=0;
+						}
+						gps_check=1;
+					}
+				} 
+				else if(gps_check==1){
+					if(runtime-gps_startcheck>180000){ //2minutes	     
+						if((!p_dio_mmap->gps_connection)&&(!p_dio_mmap->gps_valid)){
+							system("/mnt/nand/dvr/glog");
+							dvr_log("gps second restarted");
+						}
+						gps_check=2;
+					}	  
+				}	      	      	      
 			}
-			gps_check=1;
-		    }
-		} else if(gps_check==1){
-		    if(runtime-gps_startcheck>180000){ //2minutes	     
-		      if((!p_dio_mmap->gps_connection)&&(!p_dio_mmap->gps_valid)){
-                          system("/mnt/nand/dvr/glog");
-			  dvr_log("gps second restarted");
-		      }
-		      gps_check=2;
-		    }	  
-		}	      	      	      
-	    }
-	}
+		}
+	
 #ifdef EXTERNAL_TAB101	
-        if(p_dio_mmap->tab102_ready==0){
-           if((p_dio_mmap->dvrstatus &  DVR_RUN)!=0){
-	      if(runtime-mstarttime>20000){
-		 tab102_ready();
-		 p_dio_mmap->tab102_ready=1;
-	      }
-           }
-        }	
+		if(p_dio_mmap->tab102_ready==0){ 
+			if((p_dio_mmap->dvrstatus & DVR_RUN)!=0){ 
+				if(runtime-mstarttime>20000){ 
+					tab102_ready(); 
+					p_dio_mmap->tab102_ready=1; 
+				} 
+			}
+		}	
 #else	
-	if(gforcechange>0){
-	  if(runtime-gforce_start>5000){
-	     gforcechange=0;
-	     p_dio_mmap->gforce_changed=0;
-	     p_dio_mmap->gforce_forward_d=0.0;
-	     p_dio_mmap->gforce_down_d=0.0;
-	     p_dio_mmap->gforce_right_d=0.0;
-	  }
-	}
+		if(gforcechange>0){
+			if(runtime-gforce_start>5000){
+				gforcechange=0;
+				p_dio_mmap->gforce_changed=0;
+				p_dio_mmap->gforce_forward_d=0.0;
+				p_dio_mmap->gforce_down_d=0.0;
+				p_dio_mmap->gforce_right_d=0.0;
+			}
+		}
 	
         if(p_dio_mmap->tab102_ready==0){
-	  // printf("tab102_0\n");
-	   if( p_dio_mmap->dvrpid>0 && 
+			// printf("tab102_0\n");
+			if( p_dio_mmap->dvrpid>0 && 
               (p_dio_mmap->dvrstatus & DVR_RUN) )
-	   {
-	     // printf("tab102_1\n");
-	      if(recordingDiskReady()){
-		//  printf("tab102b_2\n");
-		  if (gforce_log_enable){
-			//mcu_watchdogdisable();
-			  // kick watchdog
-			mcu_watchdogkick () ;			
-			mcu_setwatchdogtime(240);
-
-			try{
-			  if(Tab102b_setup()<0){
-			    p_dio_mmap->tab102_isLive=0; 
-			  } else {
-			    p_dio_mmap->tab102_isLive=1; 
-			  }
+			{
+				// printf("tab102_1\n");
+				if(recordingDiskReady()){
+					//  printf("tab102b_2\n");
+					if (gforce_log_enable){
+						//mcu_watchdogdisable();
+						// kick watchdog
+						mcu_watchdogkick () ;			
+						try{
+						  if(Tab102b_setup()<0){
+							p_dio_mmap->tab102_isLive=0; 
+						  } else {
+							p_dio_mmap->tab102_isLive=1; 
+						  }
+						}
+						catch(...){
+						   p_dio_mmap->tab102_isLive=0;
+						   dvr_log("Tab101 set up exception is captured");
+						}
+						//watchdogtimeout=watchdogtimeset;
+								   // mcu_watchdogenable();
+					}    
+					p_dio_mmap->tab102_ready=1;
+				}
 			}
-			catch(...){
-			   p_dio_mmap->tab102_isLive=0;
-			   dvr_log("Tab101 set up exception is captured");
-			}
-			//watchdogtimeout=watchdogtimeset;
-                       // mcu_watchdogenable();
-		  }    
-		  p_dio_mmap->tab102_ready=1;
-	      }
-	   }
         }	
 #endif        
         // rtc command check
@@ -4243,38 +2959,37 @@ int main(int argc, char * argv[])
 #if 1
         if( p_dio_mmap->mcu_cmd != 0 ) {
             if( p_dio_mmap->mcu_cmd == 1 ) {
-	     // dvr_log( "HD power off.");
-              mcu_hdpoweroff();
-	      p_dio_mmap->mcu_cmd  = 0 ;	// cmd finish
+				// dvr_log( "HD power off.");
+				mcu_hdpoweroff();
+				p_dio_mmap->mcu_cmd  = 0 ;	// cmd finish
             }
             else if( p_dio_mmap->mcu_cmd == 2 ) {
-	      //	dvr_log( "HD power on.");
+				//	dvr_log( "HD power on.");
              	mcu_hdpoweron();
-		p_dio_mmap->mcu_cmd  = 0 ;	// cmd finish
+				p_dio_mmap->mcu_cmd  = 0 ;	// cmd finish
             } 
             else if(p_dio_mmap->mcu_cmd == 5){
                 dvr_log( "MCU reboot.");
                 p_dio_mmap->mcu_cmd  = 0 ;	// cmd finish
                 mcu_reboot ();
-		exit(1);
-		
-            }else if(p_dio_mmap->mcu_cmd==7){
-	      // dvr_log("Lock event happens") ;
-	       p_dio_mmap->mcu_cmd  = 0 ;	// cmd finish
-	       if(!gevent_on){		  
-		  mcu_event_ocur();
-	       }
-	    }
-	    else if(p_dio_mmap->mcu_cmd==8){
-	      // dvr_log("Lock event removed") ;
-	       p_dio_mmap->mcu_cmd  = 0 ;	// cmd finish
-	     //  if(gevent_on)
-	       mcu_event_remove();
-	    }
-	    else if(p_dio_mmap->mcu_cmd==10){
-               //  dvr_log("flash flash led");
-	         p_dio_mmap->mcu_cmd=0;
-                 p_dio_mmap->outputmap |= FLASHLED ;   
+				exit(1);
+            } else if(p_dio_mmap->mcu_cmd==7){
+				// dvr_log("Lock event happens") ;
+				p_dio_mmap->mcu_cmd  = 0 ;	// cmd finish
+				if(!gevent_on){		  
+					mcu_event_ocur();
+				}
+			}
+			else if(p_dio_mmap->mcu_cmd==8){
+				// dvr_log("Lock event removed") ;
+				p_dio_mmap->mcu_cmd  = 0 ;	// cmd finish
+				//  if(gevent_on)
+				mcu_event_remove();
+			}
+			else if(p_dio_mmap->mcu_cmd==10){
+				//  dvr_log("flash flash led");
+				p_dio_mmap->mcu_cmd=0;
+                p_dio_mmap->outputmap |= FLASHLED ;   
             } else if(p_dio_mmap->mcu_cmd==11){
                 p_dio_mmap->outputmap &= ~FLASHLED;
                 p_dio_mmap->mcu_cmd=0;
@@ -4286,24 +3001,23 @@ int main(int argc, char * argv[])
 #endif
 
         static unsigned int cpuusage_timer ;
-	runtime=getruntime() ;
 #if 0
         if( (runtime - cpuusage_timer)> 5000 ) {    // 5 seconds to monitor cpu usage
             cpuusage_timer=runtime ;
             static int usage_counter=0 ;
             if(p_dio_mmap->isftprun==0&&p_dio_mmap->ishybrid_copy==0){
-		if( cpuusage()>0.995) {
+				if( cpuusage()>0.995) {
 		
-			if( ++usage_counter>12 ) { // CPU keey busy for 1 minites
-				buzzer( 10, 250, 250 );
-				// let system reset by watchdog
-				dvr_log( "CPU usage at 100%% for 60 seconds, system reset.");
-				set_app_mode(APPMODE_REBOOT) ;
-			}
-		}
-		else {
-			usage_counter=0 ;
-		}
+					if( ++usage_counter>12 ) { // CPU keey busy for 1 minites
+						buzzer( 10, 250, 250 );
+						// let system reset by watchdog
+						dvr_log( "CPU usage at 100%% for 60 seconds, system reset.");
+						set_app_mode(APPMODE_REBOOT, 0) ;
+					}
+				}
+				else {
+					usage_counter=0 ;
+				}
             }
         }
 #endif
@@ -4318,9 +3032,7 @@ int main(int argc, char * argv[])
             temperature_timer=runtime ;
 
             i=mcu_iotemperature();
-#ifdef MCU_DEBUG        
-            printf("Temperature: io(%d)",i );
-#endif
+
             if( i > -127 && i < 127 ) {
                 static int saveiotemp = 0 ;
                 if( i>50 && 
@@ -4409,6 +3121,12 @@ int main(int argc, char * argv[])
             }
         }
         
+        // battery check timer
+        static unsigned int battery_timer ;
+        if( (runtime - battery_timer)> 15000 ) {    // 15 seconds battery check interval
+			battery_timer = runtime ;
+			battery_check();
+		}
                 
         static unsigned int appmode_timer ;
         if( (runtime - appmode_timer)> 3000 ) {    // 3 seconds mode timer
@@ -4454,8 +3172,7 @@ int main(int argc, char * argv[])
 			}		      
 		    }		  
 		  
-                    modeendtime = runtime + getshutdowndelaytime()*1000;
-                    set_app_mode(APPMODE_SHUTDOWNDELAY) ;  // hutdowndelay start ;
+                    set_app_mode(APPMODE_SHUTDOWNDELAY, getshutdowndelaytime() ) ;  // hutdowndelay start ;
                     dvr_log("Power off switch, enter shutdown delay (mode %d).", app_mode);
                 }
             }
@@ -4475,15 +3192,17 @@ int main(int argc, char * argv[])
                 //        if( p_dio_mmap->glogpid>0 ) {
                 //            kill( p_dio_mmap->glogpid, SIGUSR1 );
                  //       }
-                        modeendtime = runtime + 90000 ;
-                        set_app_mode(APPMODE_NORECORD) ;    // start standby mode
+                        set_app_mode(APPMODE_NORECORD, 60) ;    // start standby mode
                         dvr_log("Shutdown delay timeout, to stop recording (mode %d).", app_mode);
                     }
                     
                 }
                 else {
                     p_dio_mmap->devicepower = 0xffff ;
-                    set_app_mode(APPMODE_RUN) ;   // back to normal
+                    set_app_mode(APPMODE_RUN, 0) ;   // back to normal
+					
+					battery_drop_report = 0 ;		// to enable battery status report, (this is like cheating but to fix problem)
+					
                     dvr_log("Power on switch, set to running mode. (mode %d)", app_mode);
                     //turn off wifi power
                     if(!wifi_poweron) {
@@ -4522,10 +3241,7 @@ int main(int argc, char * argv[])
 			
 			tab102_start();
 			p_dio_mmap->nodiskcheck = 1;
-			mcu_setwatchdogtime(120);
 			mcu_watchdogkick();
-			// set next app_mode
-			modeendtime = runtime + 600000 ;
 #else
 			// start Tab102 downloading			
 			if (gforce_log_enable) {			  
@@ -4536,7 +3252,7 @@ int main(int argc, char * argv[])
 				  mcu_poweroffdelay_N (600);				
 			          Tab102b_ContinousDownload();
 				  watchdogtimeout=watchdogtimeset;
-                                  mcu_watchdogenable();				 
+                                  mcu_watchdogenable(watchdogtimeout);				 
 			      }			      
 			      //p_dio_mmap->tab102start=0;			
 			}
@@ -4545,14 +3261,13 @@ int main(int argc, char * argv[])
 			if(gHBDRecording){
 			    mcu_poweroffdelay_N (100);			
 			    tab102_start();			
-			    mcu_setwatchdogtime(120);
 			    mcu_watchdogkick();	
 			    modeendtime = runtime + 600000 ;			    
 			} else {
 			   modeendtime = runtime + 10000 ;	
 			}	
 #endif			
-			set_app_mode(APPMODE_PRESTANDBY) ;
+			set_app_mode(APPMODE_PRESTANDBY, 600) ;
 			dvr_log("Enter Pre-standby mode. (mode %d).", app_mode);
 		    }
 		}
@@ -4575,8 +3290,7 @@ int main(int argc, char * argv[])
 #else
                     dvr_log("Power on switch after shutdown delay. System reboot");
                     sync();
-                    watchdogtimeout=10 ;                    // 10 seconds watchdog time out
-                    mcu_watchdogenable() ;
+                    mcu_setwatchdogtime(10);
                     mcu_reboot ();
 		    exit(1);
 #endif                    
@@ -4631,8 +3345,7 @@ int main(int argc, char * argv[])
 				  if(!wifi_enable_ex){
 				     mcu_wifipoweron();
 				  }
-				  set_app_mode(APPMODE_STANDBY) ;
-				  modeendtime = runtime+getstandbytime()*1000;//+30000 ;
+				  set_app_mode(APPMODE_STANDBY, getstandbytime()) ;
 				  if( smartftp_disable==0 ) {
 				    
 				      smartftp_endtime = runtime+4*3600*1000 ;
@@ -4658,8 +3371,7 @@ int main(int argc, char * argv[])
 				   mcu_wifipoweron();
 				}
 			      }
-			      set_app_mode(APPMODE_STANDBY) ;
-			      modeendtime = runtime+getstandbytime()*1000;//+30000 ;
+			      set_app_mode(APPMODE_STANDBY, getstandbytime() ) ;
 			      if( smartftp_disable==0 ) {
 				
 				  smartftp_endtime = runtime+4*3600*1000 ;
@@ -4680,8 +3392,7 @@ int main(int argc, char * argv[])
 			      buzzer( 3, 1000, 500);						
 			  }	
 #else
-			  set_app_mode(APPMODE_STANDBY) ;
-			  modeendtime = runtime+getstandbytime()*1000;//+30000 ;
+			  set_app_mode(APPMODE_STANDBY, getstandbytime()) ;
 #endif			  
 		    }// if( runtime>=modeendtime) 
 		}
@@ -4692,7 +3403,7 @@ int main(int argc, char * argv[])
 			
 			mstarttime=runtime;
 			p_dio_mmap->devicepower=0xffff ;    // turn on all devices power
-			set_app_mode(APPMODE_RUN) ;          // back to normal
+			set_app_mode(APPMODE_RUN, 0) ;          // back to normal
 			dvr_log("Power on switch, set to running mode. (mode %d)", app_mode);	    
 			if( pid_tab102 > 0 ) {
 			    tab102_kill();
@@ -4721,8 +3432,7 @@ int main(int argc, char * argv[])
                     dvr_log("Power on switch after pre_standby. System reboot");
 		    sync();
 		    // just in case...
-                    watchdogtimeout=10 ;                    // 10 seconds watchdog time out
-                    mcu_watchdogenable() ;
+		    mcu_setwatchdogtime(10);                   // 10 seconds watchdog time out
                     mcu_reboot ();
 		    exit(1);
 #endif		    
@@ -4781,7 +3491,7 @@ int main(int argc, char * argv[])
 								// start shutdown
 								p_dio_mmap->devicepower=DEVICEOFF ;    // turn off all devices power
 								modeendtime = runtime+10000;//90000 ;
-								set_app_mode(APPMODE_SHUTDOWN) ;    // turn off mode
+								set_app_mode(APPMODE_SHUTDOWN,0) ;    // turn off mode
 								dvr_log("Standby timeout, system shutdown. (mode %d).", app_mode );
 								buzzer( 5, 1000, 500 );
 
@@ -4814,8 +3524,7 @@ int main(int argc, char * argv[])
 			sync();
 			system("/mnt/nand/dvr/umountdisks") ;
 			// just in case...
-			watchdogtimeout=10 ;                    // 10 seconds watchdog time out
-			mcu_watchdogenable() ;
+			mcu_setwatchdogtime(10);               // 10 seconds watchdog time out
 			sleep(5);
 			mcu_reboot ();
 			exit(1);
@@ -4829,7 +3538,7 @@ int main(int argc, char * argv[])
 			p_dio_mmap->tab102_ready=0;    
 			mstarttime=runtime;
 			p_dio_mmap->devicepower=0xffff ;    // turn on all devices power
-			set_app_mode(APPMODE_RUN) ;          // back to normal
+			set_app_mode(APPMODE_RUN,0) ;          // back to normal
 			dvr_log("Power on switch, set to running mode. (mode %d)", app_mode);
 		
 			tab102_reset();
@@ -4860,11 +3569,10 @@ int main(int argc, char * argv[])
                     // hard ware turn off failed. May be ignition turn on again? Reboot the system
                 //    dvr_log("Hardware shutdown failed. Try reboot by software!" );
                 //    set_app_mode(APPMODE_REBOOT) ;
-		     watchdogtimeout=10 ;                    // 10 seconds watchdog time out
-                     mcu_watchdogenable() ;
-		     mcu_reboot();
-		     exit(1);
-		     set_app_mode(APPMODE_QUIT) ;                 // quit IOPROCESS
+                mcu_setwatchdogtime(10);            // 10 seconds watchdog time out
+				 mcu_reboot();
+				 exit(1);
+				 set_app_mode(APPMODE_QUIT,0) ;                 // quit IOPROCESS
                 }
             }
             else if( app_mode==APPMODE_REBOOT ) {
@@ -4890,7 +3598,7 @@ int main(int argc, char * argv[])
                     mcu_reboot ();
 		    exit(1);
                    // system("/bin/reboot");                  // do software reboot
-                    set_app_mode(APPMODE_QUIT) ;                 // quit IOPROCESS
+                    set_app_mode(APPMODE_QUIT,0) ;                 // quit IOPROCESS
                 }
             }
             else if( app_mode==APPMODE_REINITAPP ) {
@@ -4909,7 +3617,7 @@ int main(int argc, char * argv[])
 		    }
 		    p_dio_mmap->poweroff=1;
 		    p_dio_mmap->tab102_ready=1;
-		    set_app_mode(app_mode_r) ;
+		    set_app_mode(app_mode_r, 0) ;
 		} else {
                     dvr_log("IO re-initialize.");		  
 		   // appfinish();
@@ -4932,23 +3640,20 @@ int main(int argc, char * argv[])
 			   mcu_wifipoweron();
 		      }
 		    }
-		    set_app_mode(APPMODE_RUN) ;
+		    set_app_mode(APPMODE_RUN,0) ;
 		}			      
             }
             else {
                 // no good, enter undefined mode 
                 dvr_log("Error! Enter undefined mode %d.", app_mode );
-                set_app_mode(APPMODE_RUN) ;              // we retry from mode 1
+                set_app_mode(APPMODE_RUN,0) ;              // we retry from mode 1
             }
 
             // updating watch dog state
             if( usewatchdog && watchdogenabled==0 ) {
-	       if(runtime-mcustart>200){
-		 watchdogtimeout=watchdogtimeset;
-                 mcu_watchdogenable();
-	       }
-	       else
-		 mcu_watchdogkick () ;		 
+				mcu_watchdogenable();
+				watchdogenabled = 1 ;
+				mcu_watchdogkick () ;		 
             }
 
             // kick watchdog
@@ -4972,7 +3677,7 @@ int main(int argc, char * argv[])
 				else if( p_dio_mmap->dvrwatchdog > 110 ) {	
 					buzzer( 10, 1000, 500 );
 					dvr_log( "Dvr watchdog failed, system reboot.");
-					set_app_mode(APPMODE_REBOOT) ;
+					set_app_mode(APPMODE_REBOOT,5) ;
 					p_dio_mmap->dvrwatchdog=1 ;
 				}
 			  }
@@ -4987,7 +3692,7 @@ int main(int argc, char * argv[])
 				buzzer( 10, 1000, 500 );
 				// let system reset by watchdog
 				dvr_log( "One or more camera not working, system reset.");
-				set_app_mode(APPMODE_REBOOT) ;
+				set_app_mode(APPMODE_REBOOT,5) ;
 			}
 	    }
 	    else 
@@ -5006,8 +3711,7 @@ int main(int argc, char * argv[])
 		  if( kill( p_dio_mmap->dvrpid, SIGUSR2 )!=0 ) {
 		      dvr_log("No Record, system reboot");
 		      sync();
-                      watchdogtimeout=10 ;            // 10 seconds watchdog time out
-                      mcu_watchdogenable() ;			    
+		      mcu_setwatchdogtime(10);
 		      mcu_reboot ();
 		      exit(0);
 		  } else {
@@ -5054,8 +3758,7 @@ int main(int argc, char * argv[])
 							// turn off HD led
 							p_dio_mmap->outputmap &= ~HDLED ;;
 
-							watchdogtimeout=10 ;            // 10 seconds watchdog time out
-							mcu_watchdogenable() ;			    
+							mcu_setwatchdogtime(10);		       // 10 seconds watchdog time out
 							mcu_reboot ();
 							exit(1);
 						} 	

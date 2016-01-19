@@ -38,7 +38,7 @@ int net_recvok(int fd, int tout)
 }
 
 // tcp connecting
-int net_connect(char *netname, int port)
+int net_connect(const char *netname, int port)
 {
     struct addrinfo hints;
     struct addrinfo *res;
@@ -124,13 +124,7 @@ int net_recv(int sockfd, void * data, int datasize, int ustimeout)
     return 0;
 }
 
-// receive all data
-// return
-//       0: failed (time out)
-//       other: success
 int net_recv(int sockfd, void * data, int datasize)
 {
-	 return net_recv( sockfd, data, datasize, 2000000 );
+	return net_recv(sockfd, data, datasize, 10000000);
 }
-
-

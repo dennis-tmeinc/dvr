@@ -4,7 +4,7 @@
 
 include ../config
 
-SOURCES=ioprocess.cpp mcu.cpp mcucmd.cpp serial.cpp
+SOURCES=ioprocess.cpp mcu.cpp mcucmd.cpp tab102.cpp serial.cpp 
 
 EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h
 EXTSOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp
@@ -18,12 +18,14 @@ LDFLAGS= -lstdc++ -lpthread
 
 CFLAGS+= -I../dvrsvr -Wno-write-strings
 
-all: ioprocess panelled devicepower buzzer dvrlog
+all: ioprocess panelled devicepower buzzer dvrlog dumpio
 
 ioprocess : $(OBJS) $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(EXTSOURCES) $(LDFLAGS)
 #	cp ioprocess /home/jianpeng/eagle34/dvrtest/
 
+dumpio : dumpio.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
+	$(CC) $(CFLAGS) -o $@ dumpio.o $(EXTSOURCES) $(LDFLAGS)
 
 panelled : panelled.o $(EXTSOURCES) $(HEADERS) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ panelled.o $(EXTSOURCES) $(LDFLAGS)

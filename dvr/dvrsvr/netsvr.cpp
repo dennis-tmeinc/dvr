@@ -7,9 +7,6 @@
 
 #include "dvr.h"
 
-int multicast_en;				// multicast enabled?
-struct sockad multicast_addr;	// multicast address
-
 static int serverfd;
 int msgfd;
 static struct sockad loopback;
@@ -78,11 +75,6 @@ int net_onframe(cap_frame * pframe)
 {
     int sends = 0;
     dvrsvr *pconn;
-
-    // see if we can use multicast
-    //    if( multicast_en ) {
-    //        sendto( ) ;
-    //    }
 
     if( net_run == 1 ) {
         net_lock();
@@ -521,36 +513,18 @@ int net_listen(int port, int socktype)
 }
 
 // join a multicast group
-int net_join( int fd, struct sockad *group )
+int net_join( int fd, char * maddr )
 {
-    struct ip_mreq mreq ;
-    struct ifreq ifr;
-    struct sockaddr_in * psin ;
-    int r ;
-
-    memset( &mreq, 0, sizeof(mreq) );
-    memset(&ifr, 0, sizeof(ifr));
-
-    // get eth0 addr
-    int tfd = socket(PF_INET,SOCK_DGRAM,IPPROTO_IP);
-    strcpy(ifr.ifr_name, "eth0:1");
-    ioctl(tfd, SIOCGIFADDR,(void *)&ifr,sizeof(ifr));
-
-    closesocket( tfd );
-
-    psin = (struct sockaddr_in *) &(ifr.ifr_addr) ;
-    memcpy( &(mreq.imr_interface), &(psin->sin_addr), sizeof(mreq.imr_interface.s_addr)  ) ;
-
-    psin = (struct sockaddr_in *) &(group->addr) ;
-    memcpy(&mreq.imr_multiaddr, &(psin->sin_addr), sizeof(mreq.imr_multiaddr));
-
-    if(setsockopt(fd, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char *)&mreq, sizeof(mreq)) < 0) {
-        r = errno ;
-        return 0 ;
+    struct ip_mreq mreq;
+	memset( &mreq, 0, sizeof(mreq));
+	
+    mreq.imr_multiaddr.s_addr=inet_addr(maddr);
+    mreq.imr_interface.s_addr=htonl(INADDR_ANY);
+    if (setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreq,sizeof(mreq)) < 0) {
+		perror("setsockopt");
+	    return 0 ;
     }
-    else {
-        return 1 ;
-    }
+    return 1 ; 
 }
 
 void *net_thread(void *param)
@@ -697,6 +671,7 @@ void net_init(config &dvrconfig)
         dvr_log("Can not initialize network!");
         return;
     }
+    
     msgfd = net_listen(net_port, SOCK_DGRAM);
     if (msgfd == -1) {
         closesocket(serverfd);
@@ -708,16 +683,14 @@ void net_init(config &dvrconfig)
     int broadcast=1 ;
     setsockopt(msgfd, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast));
 
-    multicast_en = dvrconfig.getvalueint("network", "multicast_en");
-    if( multicast_en ) {
+    if( dvrconfig.getvalueint("network", "multicast_en") ) {
         string v ;
         v = dvrconfig.getvalue("network", "multicast_addr");
         if( v.length()>0 ) {
-            net_addr(v, net_port, &multicast_addr);
-            net_join( msgfd, &multicast_addr ) ;
-        }
-        else {
-            multicast_en = 0 ;
+			net_join( msgfd, (char *)v );
+		}
+		else {
+			net_join( msgfd, "228.229.230.231" ) ;
         }
     }
 

@@ -22,6 +22,9 @@ SUBDIRS = cfg\
     smartupload\
     smartupload2\
     filert\
+    zdaemon\
+    rconn\
+    fat32vol\
     dosfsck_check
 
 .PHONY : $(SUBDIRS) applications

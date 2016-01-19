@@ -217,7 +217,7 @@ int dio_kickwatchdog()
     }
     return (0);
 }
-
+	
 extern int g_nodiskcheck;
 int dio_get_nodiskcheck()
 {
@@ -280,18 +280,6 @@ int dio_check()
         res = (dio_old_inputmap != inputmap) ;
         dio_old_inputmap = inputmap ;
 
-
-#ifdef APP_PWZ5
-		// PWZ5/PWZ6 mic process
-		if( p_dio_mmap->pwii_micinput & 0x05 ) {
-			rec_pwii_force_rec( 0, 1 );		// force ch0 recording
-		}
-		if( p_dio_mmap->pwii_micinput & 0x0a ) {
-			p_dio_mmap->pwii_micinput &= ~0x0a ;
-			event_tm = 1;
-		}
-#endif        
-        
         //dio_unlock();
     }
     return res ;
@@ -404,6 +392,23 @@ int dio_clearstate( int status )
  
 */
 
+// set camera status
+//  bits definition
+//         0: signal lost
+//         1: motion
+//         2: recording
+//         3: force-recording
+//         4: lock recording
+//         5: pre-recording
+//         6: in-memory pre-recording
+void dio_set_camera_status(int camera, unsigned int status, unsigned long streambytes )
+{
+    if( p_dio_mmap && camera<16 ){
+		p_dio_mmap->camera_status[camera] = status ;
+		p_dio_mmap->streambytes[camera] = streambytes ;
+	}
+}
+
 // set usb (don't remove) led
 void dio_usb_led(int v)
 {
@@ -451,6 +456,23 @@ void dio_devicepower(int onoffmaps)
         p_dio_mmap->devicepower = onoffmaps ;
     }
 }
+
+#ifdef PWII_APP
+#ifdef PWII_COVERT_MODE
+void dio_covert_mode( int covert )
+{
+    if( p_dio_mmap && p_dio_mmap->iopid ){
+		if( covert ) {
+			p_dio_mmap->pwii_output |= PWII_COVERT_MODE ;
+		}
+		else {
+			p_dio_mmap->pwii_output &= ~PWII_COVERT_MODE ;
+		}
+    }
+}
+#endif
+#endif
+
 int isInUSBretrieve()
 {
     if( p_dio_mmap && p_dio_mmap->iopid ){
@@ -459,6 +481,7 @@ int isInUSBretrieve()
     }
     return 0;
 }
+
 int isInhbdcopying(){
     if( p_dio_mmap && p_dio_mmap->iopid ){
       return p_dio_mmap->ishybrid_copy;
@@ -574,10 +597,20 @@ int dio_syncrtc()
 
 int isignitionoff()
 {
-  if( p_dio_mmap->current_mode==APPMODE_SHUTDOWNDELAY)
+  if( p_dio_mmap->current_mode!=APPMODE_RUN)
      return 1;
   return 0;
 }
+
+int dio_runmode()
+{
+	if( p_dio_mmap ){
+		int r_mode = p_dio_mmap->current_mode ;
+		return ( r_mode == APPMODE_RUN || r_mode == APPMODE_SHUTDOWNDELAY ) ;
+   }
+   return 0 ;
+}
+
 void dio_mcureboot()
 {
    if( p_dio_mmap && p_dio_mmap->iopid ){
@@ -730,6 +763,16 @@ void dio_pwii_lpzoomin( int on )
 //            p_dio_mmap->pwii_output &= ~PWII_LP_ZOOMIN ;
         }
         dio_unlock();
+    }
+}
+
+
+// FOR PWZ6, turn off mic input
+void dio_pwii_mic_off()
+{
+	if( p_dio_mmap ) 
+    {
+		p_dio_mmap->pwii_output &= ~(0xf << 16) ;			// for PWZ6, use 'pwii_output bit16-bit19' to turn off all wireless microphone
     }
 }
 

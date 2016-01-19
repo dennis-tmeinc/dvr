@@ -6,6 +6,7 @@
 #include "../../dvrsvr/dvr.h"
 #include "../../ioprocess/diomap.h"
 
+
 // #define NETDBG
 
 #ifdef NETDBG
@@ -70,12 +71,11 @@ int getchannelstate(struct channelstate * chst, unsigned long * streambytes, int
     net_dprint( "getchannelstate: 2. port = %d\n", port);
 #endif
 
-    sockfd = net_connect("127.0.0.1", port);
+    sockfd = net_connect( (const char *)"127.0.0.1", port);
 
 #ifdef NETDBG
     net_dprint( "getchannelstate: 3. connectted, sockfd = %d\n", sockfd );
 #endif
-
 
     if( sockfd>0 ) {
         req.reqcode=REQGETCHANNELSTATE ;
@@ -302,7 +302,7 @@ int get_temperature( int * sys_temp, int * disk_temp)
 
 struct dvrstat {
     struct timeval checktime ;
-    float uptime, idletime ;
+    long   uptime, idletime ;
     unsigned long streambytes[16] ;
 } savedstat ;
 
@@ -318,6 +318,7 @@ void print_status()
     struct channelstate cs[16] ;
     struct dvrstat stat ;
 
+    memset( &stat, 0, sizeof( stat ) );
     memset( &savedstat, 0, sizeof( savedstat ) );
     statfile = fopen( "savedstat", "rb");
     if( statfile ) {
@@ -381,20 +382,29 @@ void print_status()
     }
 
     // calculate CPU usage
-    FILE * uptimefile = fopen("/proc/uptime", "r" );
-    if( uptimefile ) {
-        fscanf( uptimefile, "%f %f", &stat.uptime, &stat.idletime ) ;
-        fclose( uptimefile );
-    }
+    // use /proc/stat now
+    // cpu  5558 96 14442 17017 1157 46 608 0 0
+    statfile = fopen("/proc/stat", "r" );
+    if( statfile != NULL ) {
+		long vstat[7] ;
+		int r ;
+		r = fscanf( statfile, "cpu%ld %ld %ld %ld %ld %ld %ld", 
+			&vstat[0], &vstat[1], &vstat[2], &vstat[3], 
+			&vstat[4], &vstat[5], &vstat[6] ) ;
+		if( r>=7 ) {
+			// total cpu time
+			stat.uptime = vstat[0] + vstat[1] + vstat[2] + vstat[3] + vstat[4] + vstat[5] + vstat[6] ;
+			stat.idletime = vstat[3] ;
+		}
+		fclose( statfile );
+	}
 
-    float cpuusage = stat.uptime - savedstat.uptime ;
-    if( cpuusage < 0.1 ) {
-        cpuusage = 99.0 ;
-    }
-    else {
-        cpuusage = 100.0 * (cpuusage - (stat.idletime-savedstat.idletime)) / cpuusage ;
-    }
-
+    long up  = stat.uptime - savedstat.uptime ;
+    long idle = stat.idletime - savedstat.idletime ;
+    if( up < 1 ) up = 1 ;
+    if( idle>up ) idle=up ;
+    
+    float cpuusage = 100.0 * ( 1.0 - ((float)idle) / ((float)up) ) ;
     printf("\"cpu_usage\":\"%.1f\",", cpuusage );
 
     // print memory usage
@@ -435,7 +445,48 @@ void print_status()
         printf("\"temperature_disk_c\":\"\"," );
         printf("\"temperature_disk_f\":\"\"," );
     }
-
+	
+	// battery status & voltage
+	printf("\"battery_state\":\"%d\",",  p_dio_mmap->battery_state );
+	printf("\"battery_voltage\":\"%.2f\",", p_dio_mmap->battery_voltage );
+	
+	// GPS coordinates
+	printf("\"gps_valid\":\"%d\",",  p_dio_mmap->gps_valid );
+	printf("\"gps_latitude\":\"%.5f\",", p_dio_mmap->gps_latitude );
+	printf("\"gps_longitude\":\"%.5f\",", p_dio_mmap->gps_longitud );
+	
+	// pre-recording status
+	if( chno > 16 ) chno=16 ;
+    for( i=1; i<=chno ; i++ )
+    {
+		int st = p_dio_mmap->camera_status[i-1] ;
+        printf("\"camera_%d_recordstate\":\"", i );
+        
+		//         2: recording
+		//         3: force-recording
+		//         4: lock recording
+		//         5: pre-recording
+		//         6: in-memory pre-recording
+        
+		if( st & 16 ) {
+            printf("Locked recording\"," );
+		}
+		else if( st & 4 ) {
+            printf("Recording\"," );
+		}
+		else if( st & (1<<5) ) {
+			if( st & (1<<6) ) {
+				printf("In-RAM Pre-Recording\"," );
+			}
+			else {
+				printf("Pre-Recording\"," );
+			}
+		}
+		else {
+			printf("No recording\"," );
+		}
+	}
+	
     dio_munmap();
 
     printf("\"objname\":\"status_value\"}\r\n" );
@@ -488,7 +539,8 @@ int main()
     check_synctime();
 
     // printf headers
-    printf( "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nCache-Control: no-cache\r\n\r\n" );
+    printf( "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n" );
+    
     print_status();
 
     return 1;

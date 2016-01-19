@@ -947,7 +947,6 @@ int mcu_doutput()
     unsigned int dout ;
 
     if( outputmap == mcu_doutputmap ) return 1 ;
-
     outputmapx = (outputmap^output_inverted) ;
 
     // bit 2 is beep. (from July 6, 2009)
@@ -960,7 +959,16 @@ int mcu_doutput()
     }
     if( mcu_cmd(NULL, MCU_CMD_DIGITALOUTPUT, 1, dout) ) {
         mcu_doutputmap=outputmap ;
+        
+
+        printf("Output Map: %x\n", dout );
+
     }
+    else {
+
+        printf("DIO Output Error!");
+
+	}
     return 1;
 }
 

@@ -132,6 +132,20 @@ void RC4_KSA( struct RC4_seed * seed, unsigned char * k )
 	seed->i=seed->j=0;
 }
 
+// RC4 PRGA
+//		The pseudo-random generation algorithm
+unsigned char RC4_PRGA( struct RC4_seed * seed )
+{
+	unsigned char k ;
+	seed->i++;
+	seed->j+=seed->s[seed->i] ;
+	// swap( s[i], s[j])
+	k=seed->s[seed->i] ;
+	seed->s[seed->i]=seed->s[seed->j];
+	seed->s[seed->j]=k ;
+	return seed->s[seed->i] + k ;
+}
+
 // RC4 stream data cryption. 
 //     seed: RC4 seed
 //     text: data to be encrypt/decrypt
@@ -161,20 +175,6 @@ void RC4_crypt(unsigned char * text, int textsize, struct RC4_seed * seed)
 //   Since RC4 is a stream cryption, not a block cryption. 
 // So we use RC4 PRGA to generate a block of pesudo random data, encrypt/decrypt 
 // by xor original message with this data.
-
-// RC4 PRGA
-//		The pseudo-random generation algorithm
-unsigned char RC4_PRGA( struct RC4_seed * seed )
-{
-	unsigned char k ;
-	seed->i++;
-	seed->j+=seed->s[seed->i] ;
-	// swap( s[i], s[j])
-	k=seed->s[seed->i] ;
-	seed->s[seed->i]=seed->s[seed->j];
-	seed->s[seed->j]=k ;
-	return seed->s[seed->i] + k ;
-}
 
 // Generate RC4 cryption table
 //	crypt_table: cryption table for block encryption

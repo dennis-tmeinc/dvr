@@ -14,27 +14,10 @@ if [ -f /var/dvr/glog.pid ] ; then
   kill `cat /var/dvr/glog.pid`
 fi
 
-if [ -f /var/dvr/ioprocess.pid ] ; then
-   kill `cat /var/dvr/ioprocess.pid`
-fi
-
-for i in 1 2 3 4 5 6 7 8 9 10 ; do
-  if [ -f /var/dvr/ioprocess.pid ] ; then
-    sleep 2
-  else
-    break;
-  fi
-done
-
 if [ -f /var/dvr/mcuversion ] ; then
-
-  sleep 1
-  ./dvr/ioprocess &
-
   sleep 1
   # flashing panel leds
-  ./dvr/panelled 07
-
+  /davinci/dvr/panelled 07
 fi
 
 #for i in 1 2 3 4 5 6 7 8 9 10 ; do
@@ -60,9 +43,10 @@ else
     echo "Writing new firmware..."
 fi
 
-cp -f -a * /davinci/
-rm /davinci/sfxrun
-sync
+cd /davinci
+rm -r dvr
+${SFX} '*'
+rm sfxrun 
 
 # stop panel led flashing
 /davinci/dvr/panelled 0

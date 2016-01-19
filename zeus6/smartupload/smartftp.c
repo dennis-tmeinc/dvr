@@ -807,7 +807,6 @@ add_file_to_list(char *path, struct fileInfo *fi)
     node->next = file_list;
     file_list = node;
   }
-
   return 0;
 }
 
@@ -858,24 +857,25 @@ static int scanSmartFiles(char *dir_path, char *servername)
   struct stat st;
 
 
-  fprintf(stderr, "scanSmartFiles\n");
+  fprintf(stderr, "scanSmartFiles : %s\n", dir_path);
 
   //*usbMounted = 1;
   strncpy(dirpath, dir_path, sizeof(dirpath));
 
   sprintf(dname, "%s/smartlog", dirpath);
+  
   dir = opendir(dname);
   if (dir == NULL) {
     perror("scanSmartFiles:opendir");
     if (dvr_type == DVR_TYPE_DM500) {
-      //*usbMounted = 0;
-      strncpy(dirpath, smart_dir, sizeof(dirpath));
-      sprintf(dname, "%s/smartlog", dirpath);
-      dir = opendir(dname);
-      if (dir == NULL) {
-	perror("scanSmartFiles:opendir");
-	return 1;
-      }
+		//*usbMounted = 0;
+		strncpy(dirpath, smart_dir, sizeof(dirpath));
+		sprintf(dname, "%s/smartlog", dirpath);
+		dir = opendir(dname);
+		if (dir == NULL) {
+			perror("scanSmartFiles:opendir");
+			return 1;
+		}
     } else {
       return 1;
     }
@@ -1010,12 +1010,15 @@ int get_wifi_ip(const char *dev,
   return 0;
 }
 
+// default smart server ip
+static char def_smart_server[128] ;
+
 /* send discover message to the specified subnet
  * and get the server's ip/port
  */
-int discover_smart_server(struct in_addr ip,
-			  struct in_addr netmask,
-			  struct in_addr broadcast,
+int discover_smart_server(struct in_addr x_ip,
+			  struct in_addr x_netmask,
+			  struct in_addr x_broadcast,
 			  struct in_addr *serverIp, int *port)
 {
   int yes = 1, tried = 0;
@@ -1025,7 +1028,31 @@ int discover_smart_server(struct in_addr ip,
   struct timeval tv;
   unsigned char buf[256], sendbuf[256];
   socklen_t addrlen;
+  
+  struct broadcast_ips {
+	struct in_addr ip ;
+	struct in_addr netmask ;
+	struct in_addr broadcast ;
+  } bips[8] ;
+  int i;
+  int ips = 0 ;
 
+  // get all network devices
+  DIR * dir = opendir("/sys/class/net");
+  if( dir!=NULL ) {
+	  struct dirent * ent ;
+	  while( ips<8 && (ent=readdir(dir))!=NULL ) {
+		if( ent->d_name[0] != '.' && strcmp( ent->d_name, "lo" ) !=0 ) {		// skip . & .. directory and lo interface
+			get_wifi_ip( ent->d_name, 
+				&(bips[ips].ip),
+				&(bips[ips].netmask),
+				&(bips[ips].broadcast) );
+			ips++ ;
+		}
+	  }
+	  closedir(dir);
+  }
+  
   sockfd = socket(PF_INET, SOCK_DGRAM, 0);
   if (sockfd == -1) {
     perror("socket");
@@ -1069,14 +1096,14 @@ int discover_smart_server(struct in_addr ip,
   int sendit = 1;
   strncpy((char *)sendbuf, "lookingforsmartserver", sizeof(sendbuf));
  
-  while (tried < 60) { 
+  tried = 0 ;
+  while (tried++ < 30 && serverport==0 ) { 
+	  
+	  printf("Try %d\n" , tried );
+
+/*
     if (sendit) {
       hisAddr.sin_addr = broadcast;
-      /* don't use INADDR_BROADCAST,
-       * otherwise broadcast goes through eth1 only
-       */
-      //hisAddr.sin_addr.s_addr = htonl(INADDR_BROADCAST);
-      //writeDebug("discovering smartserver");
       fprintf(stderr, "broadcasting to %s\n", inet_ntoa(hisAddr.sin_addr));
       nbytes = sendto(sockfd, sendbuf, strlen((char *)sendbuf), 0,
 		      (struct sockaddr *)&hisAddr, sizeof(hisAddr));
@@ -1087,48 +1114,71 @@ int discover_smart_server(struct in_addr ip,
 	fprintf(stderr, "broadcast %d bytes\n", nbytes);
       }
     }
-    sendit = 1;
     
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;//500000;
-    readfd = master;
-    ret = select(sockfd + 1, &readfd, NULL, NULL, &tv);
-    if (ret == -1) {
-      perror("select");
-      break;
-    } else if (!ret) {
-      tried++;
-      continue;
-    } else {
-      nbytes = recvfrom(sockfd, buf, sizeof(buf), 0,
-			(struct sockaddr *)&hisAddr, &addrlen);
-      if (nbytes == -1) {
-	perror("recvfrom");
-	break;
-      }
+    sendit = 1;
+*/
 
-      if (nbytes >= sizeof(buf)) {
-	/* message too big */
-	tried++;
-	continue;
-      }
+	// send out broadcast to all interface, by Dennis
+	for( i=0; i<ips; i++ ) {
+		hisAddr.sin_addr = bips[i].broadcast;
 
-      buf[nbytes] = 0;
-      fprintf(stderr, "rcvd %s,%d\n", buf,nbytes);
-      ret = sscanf((char *)buf, "iamserver%d", &serverport);
-      if (ret == 1) {
-	break;
-      } else {
-	if (strncmp((char *)buf, (char *)sendbuf, strlen((char *)sendbuf))) {
-	  tried++;
-	  fprintf(stderr, "trying again %d\n", tried);
-	} else {
-	  /* got echo from we sent, recv again */
-	  sendit = 0;
+		fprintf(stderr, "broadcasting to %s\n", inet_ntoa(hisAddr.sin_addr));
+
+		nbytes = sendto(sockfd, sendbuf, strlen((char *)sendbuf), 0,
+		      (struct sockaddr *)&hisAddr, sizeof(hisAddr));
 	}
-	continue;
-      }
-    }
+    
+    // extra unicast support ! by Dennis
+    if( strlen(def_smart_server)>3 ) {
+		inet_aton( def_smart_server, &(hisAddr.sin_addr) );
+
+		fprintf(stderr, "broadcasting to %s\n", inet_ntoa(hisAddr.sin_addr));
+
+		sendto(sockfd, sendbuf, strlen((char *)sendbuf), 0,
+		      (struct sockaddr *)&hisAddr, sizeof(hisAddr));
+	}
+    // end of unicast
+    
+    // wait for responese
+    while( 1 ) {	
+		tv.tv_sec = 1;
+		tv.tv_usec = 0;	//500000;
+		
+		FD_ZERO(&readfd);
+		FD_SET(sockfd, &readfd);
+		ret = select(sockfd + 1, &readfd, NULL, NULL, &tv);
+		if (ret == -1) {
+			perror("select");
+			break;
+		} 
+		else if (ret==0 ) {		// time out
+			break ;			
+		} 
+		else {
+			addrlen = sizeof(hisAddr) ;
+			nbytes = recvfrom(sockfd, buf, sizeof(buf)-1, 0,
+			(struct sockaddr *)&hisAddr, &addrlen);
+			if (nbytes == -1) {
+				perror("recvfrom");
+				break;
+			}
+			
+			if( nbytes<9 || buf[0] != 'i' ) {
+				continue ;
+			}
+
+			buf[nbytes] = 0;
+			fprintf(stderr, "rcvd %s,%d\n", buf,nbytes);
+			
+			ret = sscanf((char *)buf, "iamserver%d", &serverport);
+			if (ret == 1) {
+				break;
+			} else {
+				continue;
+			}
+		}
+	}
+
   }
   
   close(sockfd);
@@ -1786,88 +1836,91 @@ static int scan_files(char *dir_path, char *servername,
 		      void *arg,
 		      int (*doit)(char*, char*, char*, char*, void*))
 {
-  DIR *dir, *dirCh, *dirFile;
-  struct dirent *de, *deCh, *deFile;
-  char dname[128];
-  struct stat findstat;
+	DIR *dir, *dirCh, *dirFile;
+	struct dirent *de, *deCh, *deFile;
+	char dname[128];
+	struct stat findstat;
 
-  sprintf(dname, "%s/_%s_", dir_path, servername);
-  
-  dir = opendir(dname);
-  if (dir == NULL) {
-    writeDebug("scan_files:opendir %s(%s)", dname,strerror(errno));
-    return 1;
-  }
-  
-  while ((de = readdir(dir)) != NULL) {
-    if (de->d_name[0] == '.')
-      continue;
-    sprintf(dname, "%s/_%s_/%s", dir_path, servername, de->d_name);
-    if(de->d_type==DT_UNKNOWN){
-	if( stat(dname, &findstat )==0 ){
-		if( S_ISDIR(findstat.st_mode) ) {
-		de->d_type = DT_DIR ;
-		}
-		else if( S_ISREG(findstat.st_mode) ) {
-		de->d_type = DT_REG ;
-		}
-	}
-    }
-    if (de->d_type != DT_DIR)
-      continue;
-    
-    sprintf(dname, "%s/_%s_/%s", dir_path, servername, de->d_name);
-    dirCh = opendir(dname);
-    if (dirCh == NULL) {
-      writeDebug("scan_files:opendir %s(%s)", dname,strerror(errno));
-      closedir(dir);
-      return 1;
-    }
-    while ((deCh = readdir(dirCh)) != NULL) {
-      if (deCh->d_name[0] == '.')
-	continue;
-      sprintf(dname, "%s/_%s_/%s/%s",
-	      dir_path, servername,
-	      de->d_name, deCh->d_name);
+	sprintf(dname, "%s/_%s_", dir_path, servername);
 
-      if(deCh->d_type==DT_UNKNOWN){
-             if( stat(dname, &findstat )==0 ){
-                 if( S_ISDIR(findstat.st_mode) ) {
-                       deCh->d_type = DT_DIR ;
-                 }
-                 else if( S_ISREG(findstat.st_mode) ) {
-                     deCh->d_type = DT_REG ;
-                 }
-             }
-      }
-      if (deCh->d_type != DT_DIR)
-	continue;
-      
-      sprintf(dname, "%s/_%s_/%s/%s",
-	      dir_path, servername,
-	      de->d_name, deCh->d_name);
-      dirFile = opendir(dname);
-      if (dirFile == NULL) {
-	writeDebug("scan_files:opendir %s(%s)", dname,strerror(errno));
-	closedir(dirCh);
-	closedir(dir);
-	return 1;
-      }
-      while ((deFile = readdir(dirFile)) != NULL) {
-	if (deFile->d_name[0] == '.') {
-	  continue;
+	dir = opendir(dname);
+	if (dir == NULL) {
+		writeDebug("scan_files:opendir %s(%s)", dname,strerror(errno));
+		return 1;
 	}
-	//if (deFile->d_type != DT_REG) {
-	 // continue;
-	//}
-	(*doit)(dir_path, servername, dname, deFile->d_name, arg);
-      }
-      
-      closedir(dirFile);
-    }
-    
-    closedir(dirCh);
-  }
+  
+	while ((de = readdir(dir)) != NULL) {
+		if (de->d_name[0] == '.')
+			continue;
+		sprintf(dname, "%s/_%s_/%s", dir_path, servername, de->d_name);
+
+		if(de->d_type==DT_UNKNOWN){
+			if( stat(dname, &findstat )==0 ){
+				if( S_ISDIR(findstat.st_mode) ) {
+					de->d_type = DT_DIR ;
+				}
+				else if( S_ISREG(findstat.st_mode) ) {
+					de->d_type = DT_REG ;
+				}
+			}
+		}
+		if (de->d_type != DT_DIR)
+			continue;
+
+		sprintf(dname, "%s/_%s_/%s", dir_path, servername, de->d_name);
+		dirCh = opendir(dname);
+		if (dirCh == NULL) {
+			writeDebug("scan_files:opendir %s(%s)", dname,strerror(errno));
+			closedir(dir);
+			return 1;
+		}
+		while ((deCh = readdir(dirCh)) != NULL) {
+			if (deCh->d_name[0] == '.')
+				continue;
+			sprintf(dname, "%s/_%s_/%s/%s",
+				dir_path, servername,
+				de->d_name, deCh->d_name);
+
+			if(deCh->d_type==DT_UNKNOWN){
+				if( stat(dname, &findstat )==0 ){
+					if( S_ISDIR(findstat.st_mode) ) {
+						deCh->d_type = DT_DIR ;
+					}
+					else if( S_ISREG(findstat.st_mode) ) {
+						deCh->d_type = DT_REG ;
+					}
+				}
+			}
+			if (deCh->d_type != DT_DIR)
+				continue;
+
+			sprintf(dname, "%s/_%s_/%s/%s",
+				dir_path, servername,
+				de->d_name, deCh->d_name);
+				
+			dirFile = opendir(dname);
+			if (dirFile == NULL) {
+				writeDebug("scan_files:opendir %s(%s)", dname,strerror(errno));
+				closedir(dirCh);
+				closedir(dir);
+				return 1;
+			}
+			while ((deFile = readdir(dirFile)) != NULL) {
+				if (deFile->d_name[0] == '.') {
+					continue;
+				}
+				//if (deFile->d_type != DT_REG) {
+				// continue;
+				//}
+				
+				(*doit)(dir_path, servername, dname, deFile->d_name, arg);
+			}
+
+			closedir(dirFile);
+		}
+
+		closedir(dirCh);
+	}
   
   closedir(dir);
   
@@ -3022,7 +3075,6 @@ void check_and_add_to_list(char *dir_path, char *servername, char *fullname,
     }
     fi->size = st.st_size;
   }
-
   upload_file_count++;
   upload_size += fi->size;
   check_resume_file(dir_path, servername, fi);
@@ -3097,7 +3149,6 @@ get_fileinfo_from_name(struct fileInfo *fi, char *filename, char *servername)
     if (!check_servername(filename, servername, fi->type, &fi->prelock))
       return 0;
   }
-
   return 1;
 }
 
@@ -3281,62 +3332,61 @@ static int
 create_mark_file_list(char *dir_path, char *servername,
 		      char *path, char *filename, void *arg)
 {
-  int ret;
-  struct fileInfo fi;
-  char fullname[256], newfullname[256];
-	
-  ret = get_fileinfo_from_name(&fi, filename, servername);
-  if (!ret) {
-    snprintf(fullname, sizeof(fullname), "%s/%s",
-	     path, filename);
-  
-    if ((fi.type == 'L') || (fi.type == 'l')) {
-      check_and_add_to_list(dir_path, servername, fullname, &fi);
-      if ((fi.ch == 0) && (fi.ext != 'K') && (fi.ext != 'k')) {
-	if ((dvr_type == DVR_TYPE_DM500) ||
-	    ((dvr_type == DVR_TYPE_DM510) && !fi.prelock)) {
-	  event_count++;
-	  event_duration += (dvr_type == DVR_TYPE_DM500) ?
-	    (fi.len / 1000) : fi.len;
-	}
-      }
-    } else {
-      if ((fi.ext != 'K') && (fi.ext != 'k')) {
-	/* we have only N type video file here */
-	time_t from, to;
-        //printf("file:%s\n",fullname);
-        
-	ret = where_to_cut_file(&fi, &from, &to);
-	if (!ret) { /* file in the remote mark range */
-	  fprintf(stderr, "where to cut:%d-%d\n", from, to);
-	  if (dvr_type == DVR_TYPE_DM500) {
-	    rename_and_add_to_list(dir_path, servername, fullname, &fi);
-	    /* K files are skipped here, so add k here */
-	    rename_k_and_add_to_list(dir_path, servername, fullname, &fi);
-	  } else {
-	    if (!from && !to) {
-	      /* file inside a range: rename(video & k) it to _L_ file */
-	      rename_and_add_to_list(dir_path, servername, fullname, &fi);
-	      /* K files are skipped here, so add k here */
-	      rename_k_and_add_to_list(dir_path, servername, fullname, &fi);
-	    } else {
-	      /* cut file, add L file to list(with K), delete on flash */
+	int ret;
+	struct fileInfo fi;
+	char fullname[256], newfullname[256];
+
+	ret = get_fileinfo_from_name(&fi, filename, servername);
+	if (!ret) {
+		snprintf(fullname, sizeof(fullname), "%s/%s",
+			path, filename);
+		if ((fi.type == 'L') || (fi.type == 'l')) {
+			check_and_add_to_list(dir_path, servername, fullname, &fi);
+			if ((fi.ch == 0) && (fi.ext != 'K') && (fi.ext != 'k')) {
+				if ((dvr_type == DVR_TYPE_DM500) ||
+				((dvr_type == DVR_TYPE_DM510) && !fi.prelock)) {
+					event_count++;
+					event_duration += (dvr_type == DVR_TYPE_DM500) ?
+					(fi.len / 1000) : fi.len;
+				}
+			}
+		} else {	
+			if ((fi.ext != 'K') && (fi.ext != 'k')) {						
+				/* we have only N type video file here */
+				time_t from, to;
+				//printf("file:%s\n",fullname);
+
+				ret = where_to_cut_file(&fi, &from, &to);
+				if (!ret) { /* file in the remote mark range */
+					fprintf(stderr, "where to cut:%d-%d\n", from, to);
+					if (dvr_type == DVR_TYPE_DM500) {
+						rename_and_add_to_list(dir_path, servername, fullname, &fi);
+						/* K files are skipped here, so add k here */
+						rename_k_and_add_to_list(dir_path, servername, fullname, &fi);
+					} else {
+						if (!from && !to) {
+							/* file inside a range: rename(video & k) it to _L_ file */
+							rename_and_add_to_list(dir_path, servername, fullname, &fi);
+							/* K files are skipped here, so add k here */
+							rename_k_and_add_to_list(dir_path, servername, fullname, &fi);
+						} else {
+							/* cut file, add L file to list(with K), delete on flash */
 #if 0	      
-	      if (!cut_file(dir_path,servername, fullname, &fi,
-			    from, to, 'L')){
-                delete_file_on_flash(fullname);
-              }
+							if (!cut_file(dir_path,servername, fullname, &fi,
+							from, to, 'L')){
+								delete_file_on_flash(fullname);
+							}
 #else
-               cut_file(dir_path,servername, fullname, &fi,from, to, 'L');
+							cut_file(dir_path,servername, fullname, &fi,from, to, 'L');
 #endif              
-	    }
-	  } /* dvr_type */
-	} /* where_to_cut */
-      } /* (ext!=k) */
-    } /* if (type) */	  
-  } /* if (sscanf) */
-  
-  return 0;
+						}
+					} /* dvr_type */
+				} /* where_to_cut */
+			} /* (ext!=k) */
+		} /* if (type) */	  
+	} /* if (sscanf) */
+
+	return 0;
 }
 
 int send_file_add(char *busname, char *server_ip, int port, char *filepath)
@@ -3657,7 +3707,7 @@ void *upload_files(void *arg)
   struct stat st;
   off_t res;
   int write_error, file_exist;
-
+  
   ui = (struct upload_info *)arg;
   dir_path = ui->dir_path;
   servername = ui->servername;
@@ -3670,33 +3720,38 @@ void *upload_files(void *arg)
   pthread_cond_signal(&cond);
   pthread_mutex_unlock(&mutex);
 
-
   upload_done_size = 0;
-
+  
   /* upload dvrlog.txt file */  
   if (dvr_type == DVR_TYPE_DM500) {
     snprintf(path, sizeof(path),
 	     "%s/_%s_/dvrlog.txt",
 	     dir_path, servername);
   } else {
-      FILE *fp;
-      fp = fopen("/var/dvr/dvrcurdisk", "r");
-      if (!fp) {
-	writeDebug("dvrcurdisk error");
-	pthread_exit((void *)EXIT_CODE_DVRCURDISK_ERROR);
-      }
+	  // read dvrlog file from link .  @Dennis
+	  if( readlink( "/var/dvr/dvrlogfile", path, sizeof(path) )<=0 ) {
+		  //  read link file failed, then we fall back to the old method.   @Dennis
+		  
+		  FILE *fp;
+		  fp = fopen("/var/dvr/dvrcurdisk", "r");
+		  if (!fp) {
+			writeDebug("dvrcurdisk error");
+			pthread_exit((void *)EXIT_CODE_DVRCURDISK_ERROR);
+		  }
 
-      char curdisk[64];
-      if (!fgets(curdisk, sizeof(curdisk), fp)) {
-	fclose(fp);
-	writeDebug("dvrcurdisk error2");
-	pthread_exit((void *)EXIT_CODE_DVRCURDISK_ERROR);
-      }
-      snprintf(path, sizeof(path),
-	      "%s/_%s_/dvrlog.txt",
-	      curdisk, servername);
-      fclose(fp);
+		  char curdisk[64];
+		  if (!fgets(curdisk, sizeof(curdisk), fp)) {
+			fclose(fp);
+			writeDebug("dvrcurdisk error2");
+			pthread_exit((void *)EXIT_CODE_DVRCURDISK_ERROR);
+		  }
+		  snprintf(path, sizeof(path),
+			  "%s/_%s_/dvrlog.txt",
+			  curdisk, servername);
+		  fclose(fp);
+	}
   }
+
   snprintf(remote, sizeof(remote),
 	   "\\\\%s\\data_d\\_%s_\\dvrlog.txt",
 	   server_ip, servername);
@@ -4075,8 +4130,19 @@ int scan_recording_disks(char *rootdir, char *servername)
       return 1;
 
     curdisk[r] = 0;
+    
+    // trim curdisk , by Dennis
+    while( r>2 ) {
+		if( curdisk[r-1] <= ' ' ) {
+			curdisk[r-1] = 0 ;
+			r-- ;
+		}
+		else {
+			break ;
+		}
+	}
   }
-
+  
   if (r) { /* hybrid */
     writeDebug("scaning %s", curdisk);
     if (scan_files(curdisk, servername, NULL, &create_mark_file_list)) {
@@ -4169,6 +4235,30 @@ int scan_smartlog_disks(char *rootdir, char *servername)
   char curdisk[256];
   int r = 0;
 
+  DIR * dir ;
+  struct dirent *de ;
+  dir = opendir(rootdir);
+  if( dir ) {
+      while ((de = readdir(dir)) != NULL) {
+		  if( de->d_name[0]=='.' ) continue ;
+		  if (de->d_type == DT_DIR) {
+			if( strncasecmp(de->d_name, "mmc", 3 )==0 ||
+				strncasecmp(de->d_name, "sd", 2 )==0 ) {
+					sprintf(curdisk, "%s/%s", rootdir, de->d_name );
+
+				  if (scanSmartFiles(curdisk, servername)) {
+					writeDebug("scanSmartFiles error: %s", curdisk);
+				  }
+			}
+		  }
+	  }
+      closedir(dir);
+  }
+  
+#if 0
+
+	// Sorry, these codes not been used on PWZ6. @Dennis
+
   /* we can scan only current recording disk */
   FILE *fp = fopen("/var/dvr/dvrcurdisk", "r");
   if (fp != NULL) {
@@ -4179,11 +4269,22 @@ int scan_smartlog_disks(char *rootdir, char *servername)
     return 1;
 
   curdisk[r] = 0;
+	// trim curdisk , by Dennis
+	while( r>2 ) {
+		if( curdisk[r-1] <= ' ' ) {
+			curdisk[r-1] = 0 ;
+			r-- ;
+		}
+		else {
+			break ;
+		}
+	}
 
   //writeDebug("scaning %s", curdisk);
   if (scanSmartFiles(curdisk, servername)) {
     writeDebug("scanSmartFiles error");
   }
+#endif  
 
   return 0;
 }
@@ -4234,6 +4335,13 @@ void read_config()
       if (p) {
 	post_peak_event = atoi(p);
       }
+
+		// add default unicast smartserver support.  By Dennis
+		p = cfg_get_str("network", "smartserver");
+		if (p) {
+			strcpy( def_smart_server, p );
+		}
+      
     }
   }
 }
@@ -4301,12 +4409,17 @@ int main(int argc, char **argv)
 
   read_config();
 
+
   writeDebug("get_wifi_ip");
 
   /* get ip address assigned to the specified device
    * to be used in "discover_smart_server"
    * Do this until DHCP assigns a IP
    */
+   
+   /*   querying device moved to discover_smart_server
+    * 
+    * 
   while (retry < 10) {
       fprintf(stderr, "Querying IP for %s\n", argv[1]);
       if (get_wifi_ip(argv[1], &ip, &netmask, &broadcast)) {
@@ -4331,6 +4444,8 @@ int main(int argc, char **argv)
       else
 	exit(EXIT_CODE_NO_DHCP);
   }
+  * 
+  */
 
 #ifndef NO_SERVER_TEST
   writeDebug("discover_smart_server");
@@ -4402,7 +4517,7 @@ int main(int argc, char **argv)
     ui.ftp_pass = argv[7];
     ui.port = port;
     writeDebug("upload_thread");
-
+    
     pthread_mutex_lock(&mutex);
     if (pthread_create(&upload_thread, NULL, upload_files, &ui)) {
       upload_thread = 0;

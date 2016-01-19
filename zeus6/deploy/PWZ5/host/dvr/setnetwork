@@ -9,18 +9,31 @@
 
 cd /mnt/nand/dvr 
 
-
-ifconfig eth0 `cat /mnt/nand/dvr/eth_ip`
-ifconfig eth0 netmask `cat /mnt/nand/dvr/eth_mask`
-ifconfig eth0 broadcast `cat /mnt/nand/dvr/eth_broadcast`
-
-sleep 3
+if [ -f /var/dvr/udhcpc.pid ] ; then
+kill `cat /var/dvr/udhcpc.pid`
+sleep 1
+rm /var/dvr/udhcpc.pid
+fi
 
 route del default
+
+dhcpc_en=`cfg get network eth_dhcpc` 
+if [ ${dhcpc_en:-0} != 0 ] ; then 
+    udhcpc -p /var/dvr/udhcpc.pid -i eth0 -b
+else
+	ifconfig eth0 `cat /mnt/nand/dvr/eth_ip`
+	ifconfig eth0 netmask `cat /mnt/nand/dvr/eth_mask`
+	ifconfig eth0 broadcast `cat /mnt/nand/dvr/eth_broadcast`
+fi
+
+sleep 2
 
 for gw in `ls gateway*` ; do 
    route add default gw `cat $gw`   
 done
+
+# add multicast route for ip camera detection
+route add -net 224.0.0.0 netmask 240.0.0.0 dev eth0
 
 ifconfig wlan0 `cat /mnt/nand/dvr/wifi_ip` netmask `cat /mnt/nand/dvr/wifi_mask` up
 ifconfig wlan0 broadcast `cat /mnt/nand/dvr/wifi_broadcast`

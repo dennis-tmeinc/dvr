@@ -26,7 +26,8 @@ SOURCES=main.cpp \
 		crypt.cpp \
 		dio.cpp \
 		vri.cpp \
-		screen.cpp
+		screen.cpp \
+		ipstream.cpp 
 
 HEADERS=../cfg.h\
 		dvr.h \
@@ -41,18 +42,18 @@ HEADERS=../cfg.h\
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
-CFLAGS += -Wno-write-strings
+CFLAGS += -Wno-write-strings -g
 
 # LIBRARY=libdio.so
 
 #LDFLAGS= -lpthread -lstdc++ -L./eagle8851 -leagle8851 libfbdraw.so -Wl,-rpath,.
 
 LDFLAGS = -lpthread -lm -lstdc++ \
-	-L./eagle8851 -leagle8851 libfbdraw.so -lxmlwrapper -lexpat -lmemmgr -lmsgreader \
-	-lvideocap -lsharedbuffmgr -lframeratectrl -lfreetype \
-	-lmassmemaccess -lh264enc -ljpegenc -lresize \
-	-ldeinterlacer -limgbackendprocess -lpbengine -lvideodisp \
-	-lROISelector
+    -L./eagle8851 -leagle8851 -lipcamerasdk libfbdraw.so -lxmlwrapper -lexpat -lmemmgr -lmsgreader \
+    -lvideocap -lsharedbuffmgr -lframeratectrl -lfreetype \
+    -lmassmemaccess -lh264enc -ljpegenc -lresize \
+    -ldeinterlacer -limgbackendprocess -lpbengine -lvideodisp \
+    -lssl -lcrypto  -luuid -lROISelector -g
 
 all : dvrsvr bgarch
 

@@ -68,38 +68,12 @@ void outputcfg()
     }
 }            
 
-// calculate cfg file length
-long calcfglength()
-{
-    long len = 0 ;
-    int i;
-    FILE * fp ;
-    long fsize ;
-    for( i=0; i<100; i++ ) {
-        if( cfgfiles[i]==NULL || strlen(cfgfiles[i])<1 ) {
-            break;
-        }
-        fp = fopen(cfgfiles[i], "r");
-        if( fp ) {
-            fseek( fp, 0, SEEK_END ) ;
-            fsize = ftell( fp ) ;
-            if( fsize>0 ) {
-                len+=sizeof(struct chunkheader)+strlen(cfgfiles[i])+fsize ;
-            }
-            fclose( fp );
-        }
-    }
-    return len ;
-}
-
 int main()
 {
     // printf headers
     printf( "HTTP/1.1 200 OK\r\n" );
     printf( "Content-Type: application/octet-stream\r\n" );
-    printf( "Cache-Control: no-cache\r\n" );        // no cache on cgi contents
     printf( "Content-Disposition: attachment; filename= mdvr.cfg\r\n" );        // this would force IE to save file
-    printf( "Content-Length: %ld\r\n", (long) calcfglength() );
     printf( "\r\n" );
     
     outputcfg();

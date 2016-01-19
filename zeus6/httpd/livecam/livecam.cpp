@@ -6,38 +6,6 @@
 
 int net_addr(char *netname, int port, struct sockad *addr);
 
-#ifdef NETDBG
-
-// debugging procedures
-int msgfd ;
-
-// send out UDP message use msgfd
-int net_sendmsg( char * dest, int port, const void * msg, int msgsize )
-{
-    struct sockad destaddr ;
-    if( msgfd==0 ) {
-        msgfd = socket( AF_INET, SOCK_DGRAM, 0 ) ;
-    }
-    net_addr(dest, port, &destaddr);
-    return (int)sendto( msgfd, msg, (size_t)msgsize, 0, &(destaddr.addr), destaddr.addrlen );
-}
-
-void net_dprint( char * fmt, ... )
-{
-    char msg[1024] ;
-    va_list ap ;
-    va_start( ap, fmt );
-    vsprintf(msg, fmt, ap );
-    net_sendmsg( "192.168.152.61", 15333, msg, strlen(msg) );
-    va_end( ap );
-}
-
-#endif  // NETDBG
-
-//  function from getquery
-int decode(const char * in, char * out, int osize );
-char * getquery( const char * qname );
-
 // open live stream from remote dvr
 int dvr_openlive(int sockfd, int channel)
 {
@@ -61,8 +29,6 @@ int dvr_openlive(int sockfd, int channel)
     return 0 ;
 }
 
-char * getquery( const char * qname );
-
 void dvr_livestream()
 {
     int channel=0 ;
@@ -70,12 +36,12 @@ void dvr_livestream()
     int streamfd ;
     int started=0 ;
 
-    streamfd = net_connect("127.0.0.1", 15159) ;
+    streamfd = net_connect("127.0.0.1", 15114) ;
     if( streamfd <= 0 ) {
         return ;
     }
 
-    qv = getquery("channel") ;
+    qv = getenv("VAR_G_channel") ;
     if( qv ) {
         sscanf(qv, "%d", &channel);
     }
@@ -124,7 +90,7 @@ void dvr_livestream()
 int main()
 {
     // print headers
-    printf( "HTTP/1.1 200 OK\r\nContent-Type: video/mp4\r\nCache-Control: no-store\r\n\r\n" );
+    printf( "HTTP/1.1 200 OK\r\nContent-Type: video/mp4\r\n\r\n" );
 
     dvr_livestream();
 

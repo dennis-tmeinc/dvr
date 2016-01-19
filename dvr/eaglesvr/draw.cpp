@@ -10,7 +10,7 @@
 #include <fcntl.h>
 #include <linux/fb.h>
 
-#include "../lzmasdk/lzma.h"
+#include "../lzmasdk/lzmax.h"
 #include "../cfg.h"
 #ifdef EAGLE32
 #include "eagle32/davinci_sdk.h"

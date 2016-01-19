@@ -20,7 +20,6 @@
 
 #define DENIED_PAGE ("/denied.html")
 
-// we need to excess environment
 extern char **environ ;
 
 static char * mime_type[][2] =

@@ -15,7 +15,6 @@ programs/ssl/ssl_server:
 	cd library  && $(MAKE) all && cd ..
 	cd programs && $(MAKE) ssl/ssl_server && cd ..
 	cp programs/ssl/ssl_server .
-	cp programs/ssl/ssl_server $(debug_folder)/www
 
 clean:
 	cd library  && $(MAKE) clean && cd ..

@@ -11,5 +11,3 @@ export STRIP=$(CROSS_COMPILE_PREFIX)strip
 
 # debugging folder
 debug_folder=/home/dennis/nfsroot/eagletest
-
-CFLAGS += --sysroot=/home/dennis/proj/zeus6/arm-eabi-uclibc

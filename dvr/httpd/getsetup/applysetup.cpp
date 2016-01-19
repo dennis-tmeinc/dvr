@@ -12,8 +12,6 @@
 #include "../../dvrsvr/genclass.h"
 #include "../../dvrsvr/config.h"
 
-char tzfile[] = "tz_option" ;
-
 pid_t  dvrpid=0 ;
 
 void dvrsvr_down()

@@ -14,6 +14,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <stdarg.h>
+#include <signal.h>
 
 #include "../cfg.h"
 #include "../dvrsvr/genclass.h"
@@ -23,19 +24,16 @@
 #include "curl/easy.h"
 #include "curl/multi.h"
 
-
 CURLM * g_curlm ;			// global curl multi interface
 int     g_running ;			// global running connections 
 string  g_webtun_url ;		// tunnel server url ;
 string  g_hostname ;
 string  g_phonenumber ;
 string  g_logfile ;
+int     g_maxwait ;
 
-int     g_urlidx ;
-const char * default_url[2] = {
-	"http://tdlive.darktech.org/vlt/vltdir.php",
-	"http://64.40.243.198/vlt/vltdir.php"
-	};
+//const char default_url[] = "http://64.40.243.195/tdc/livetun.php" ;
+const char default_url[] = "http://tdlive.darktech.org/vlt/vltdir.php" ;
 
 unsigned g_serial ;
 
@@ -100,6 +98,34 @@ int gettime()
 int inittime()
 {
 	starttime = gettime();
+}
+
+// load default tunnel server
+void loadUrl()
+{
+	string v ;
+    config dvrconfig(CFG_FILE);
+    
+    // get remote tunnel server
+    v = dvrconfig.getvalue("network", "livesetup_url") ;
+	if( strncmp( (char *)v, "http://", 7 )==0 ) {
+		g_webtun_url = (char *)v ;
+		char * u = (char *)g_webtun_url ;
+		int l = strlen( u ) ;
+		if( u[l-1]=='/' ) {
+			// 
+			sprintf( v.expand( l+20 ), "%slivetun.php", u ) ;
+			g_webtun_url = (char *)v ;
+		}
+	}
+	else {
+		g_webtun_url = default_url ;
+	}
+
+    v = dvrconfig.getvalue("network", "livesetup_logfile") ;
+    if( v.length() > 0 ) {
+		g_logfile = (char *)v ;
+	}
 }
 
 // read phone number
@@ -292,22 +318,19 @@ public:
 	
 	size_t rdatafunc( CURL * eh, void *ptr, size_t size )
 	{
-		int r = 0 ;
 		if( eh == m_rcurl && m_socket>0 ) {		// read curl (PUT)
-
-			if( size> m_putsize ) {
+			if( (int)size > m_putsize ) {
 				size = m_putsize ;
 			}
-			if( size > 0 ) {
-				r =  read( ptr, size ) ;
+			if( (int)size > 0 ) {
+				size =  recv( m_socket, ptr, size, 0 ) ;
+				if( ((int)size)>0 ) {
+					m_putsize -= (int)size ;
+					return size ;
+				}
 			}
-			m_putsize -= r ;
 		}
-		else {
-			memset( ptr, 0, size) ;			// empty padding data
-			r = size ;
-		}
-		return r ;
+		return 0 ;
 	}
 	
 	static size_t s_rdatafunc( void *ptr, size_t size, size_t nmemb, void *userdata)
@@ -323,90 +346,84 @@ public:
 	// send data out use PUT request through m_rcurl
 	void rcurl_send()
 	{
-		if( m_socket>0 && m_rcurl == NULL ) {
-			m_rcurl = curl_easy_init(); 
+		m_rcurl = curl_easy_init(); 
 
-			string url ;
-			// url:	 PUT http://1.1.1.1/tdc/webtun.php?c=p&t=<tunnel id>&s=<n+1>
-			sprintf( url.expand(512), "%s?c=p&t=%s&s=%x", (char *)g_webtun_url, (char *)m_id, g_serial++ );
-			// use data file handle
-			
-			curl_easy_setopt(m_rcurl, CURLOPT_URL, (char *)url );
-			curl_easy_setopt(m_rcurl, CURLOPT_TIMEOUT, 60 );		// 1 minute timeout
-			
-			// call back handler
-			curl_easy_setopt(m_rcurl, CURLOPT_PRIVATE, (char *)this);
-			curl_easy_setopt(m_rcurl, CURLOPT_READDATA,  m_rcurl);
-			curl_easy_setopt(m_rcurl, CURLOPT_READFUNCTION,  s_rdatafunc);
-			curl_easy_setopt(m_rcurl, CURLOPT_WRITEHEADER,  m_rcurl);
-			curl_easy_setopt(m_rcurl, CURLOPT_HEADERFUNCTION,  s_wheaderfunc);
-			curl_easy_setopt(m_rcurl, CURLOPT_WRITEDATA,  m_rcurl);
-			curl_easy_setopt(m_rcurl, CURLOPT_WRITEFUNCTION,  s_wdatafunc);
+		string url ;
+		// url:	 PUT http://1.1.1.1/tdc/webtun.php?c=p&t=<tunnel id>&s=<n+1>
+		sprintf( url.expand(512), "%s?c=p&t=%s&s=%x", (char *)g_webtun_url, (char *)m_id, g_serial++ );
+		// use data file handle
+		
+		curl_easy_setopt(m_rcurl, CURLOPT_URL, (char *)url );
+		curl_easy_setopt(m_rcurl, CURLOPT_TIMEOUT, 60 );		// 1 minute timeout
+		
+		// call back handler
+		curl_easy_setopt(m_rcurl, CURLOPT_PRIVATE, (char *)this);
+		curl_easy_setopt(m_rcurl, CURLOPT_READDATA,  m_rcurl);
+		curl_easy_setopt(m_rcurl, CURLOPT_READFUNCTION,  s_rdatafunc);
+		curl_easy_setopt(m_rcurl, CURLOPT_WRITEHEADER,  m_rcurl);
+		curl_easy_setopt(m_rcurl, CURLOPT_HEADERFUNCTION,  s_wheaderfunc);
+		curl_easy_setopt(m_rcurl, CURLOPT_WRITEDATA,  m_rcurl);
+		curl_easy_setopt(m_rcurl, CURLOPT_WRITEFUNCTION,  s_wdatafunc);
 
-			curl_easy_setopt(m_rcurl, CURLOPT_UPLOAD, 1L);
-			curl_easy_setopt(m_rcurl, CURLOPT_PUT, 1L);
-			
-			if( m_rheader ) {
-				curl_slist_free_all(m_rheader);
-			}
-			m_rheader = NULL ;
-			m_rheader = curl_slist_append( m_rheader, "Accept:" );
+		curl_easy_setopt(m_rcurl, CURLOPT_UPLOAD, 1L);
+		curl_easy_setopt(m_rcurl, CURLOPT_PUT, 1L);
+		
+		if( m_rheader ) {
+			curl_slist_free_all(m_rheader);
+		}
+		m_rheader = curl_slist_append( NULL, "Expect:" );
+		
+		m_putsize = 0 ;
+		ioctl(m_socket, FIONREAD, &m_putsize);
+		if( m_putsize <= 0 ) {	// closed or error?
+			// close socket 
+			close( m_socket );
+			m_socket = -1 ;
 			
 			m_putsize = 0 ;
-			ioctl(m_socket, FIONREAD, &m_putsize);
-			if( m_putsize <= 0 ) {	// closed or error?
-				// close socket 
-				close( m_socket );
-				m_socket = -1 ;
-				
-				m_putsize = 0 ;
-				// header to close connection
-				m_rheader = curl_slist_append( m_rheader, "X-Webt-Connection: close" );
-				
-				log("PUT(%s):closed",(char*)m_id);
-				
-			}
-			curl_easy_setopt(m_rcurl, CURLOPT_INFILESIZE_LARGE,(curl_off_t)m_putsize);			
-			curl_easy_setopt(m_rcurl, CURLOPT_HTTPHEADER, m_rheader);
+			// header to close connection
+			m_rheader = curl_slist_append( m_rheader, "X-Webt-Connection: close" );
 			
-			// add to curl multi interface
-			curl_multi_add_handle(g_curlm, m_rcurl);
+			log("PUT(%s):closed",(char*)m_id);
 			
-			log( "PUT(%s): %s  (%d)", (char*)m_id,(char*)url, (int)m_putsize );
-
 		}
+		curl_easy_setopt(m_rcurl, CURLOPT_INFILESIZE_LARGE,(curl_off_t)m_putsize);			
+		curl_easy_setopt(m_rcurl, CURLOPT_HTTPHEADER, m_rheader);
+		
+		// add to curl multi interface
+		curl_multi_add_handle(g_curlm, m_rcurl);
+		
+		log( "PUT(%s): %s  (%d)", (char*)m_id,(char*)url, (int)m_putsize );
+
 	}
 
 	// send date receiving request use GET request through m_wcurl
 	void wcurl_send()
 	{
-		if( m_socket>0 &&  m_wcurl == NULL && m_wend == 0 ) {
-			
-			string url ;
-			// url:	 GET http://1.1.1.1/tdc/webtun.php?c=g&t=<tunnel id>&s=<n+1>				
-			sprintf( url.expand(512), "%s?c=g&t=%s&s=%x", (char *)g_webtun_url, (char *)m_id, g_serial++ );
-			
-			m_wcurl = curl_easy_init(); 
+		string url ;
+		// url:	 GET http://1.1.1.1/tdc/webtun.php?c=g&t=<tunnel id>&s=<n+1>				
+		sprintf( url.expand(512), "%s?c=g&t=%s&s=%x", (char *)g_webtun_url, (char *)m_id, g_serial++ );
+		
+		m_wcurl = curl_easy_init(); 
 
-			curl_easy_setopt(m_wcurl, CURLOPT_URL, (char *)url );
-			curl_easy_setopt(m_wcurl, CURLOPT_TIMEOUT, 600 );		// 10 min timeout
+		curl_easy_setopt(m_wcurl, CURLOPT_URL, (char *)url );
+		curl_easy_setopt(m_wcurl, CURLOPT_TIMEOUT, 600 );		// 10 min timeout
 
-			// call back handler
-			curl_easy_setopt(m_wcurl, CURLOPT_PRIVATE, (char *)this);
-			curl_easy_setopt(m_wcurl, CURLOPT_READDATA,  m_wcurl);
-			curl_easy_setopt(m_wcurl, CURLOPT_READFUNCTION,  s_rdatafunc);
-			curl_easy_setopt(m_wcurl, CURLOPT_WRITEHEADER,  m_wcurl);
-			curl_easy_setopt(m_wcurl, CURLOPT_HEADERFUNCTION,  s_wheaderfunc);
-			curl_easy_setopt(m_wcurl, CURLOPT_WRITEDATA,  m_wcurl);
-			curl_easy_setopt(m_wcurl, CURLOPT_WRITEFUNCTION,  s_wdatafunc);
+		// call back handler
+		curl_easy_setopt(m_wcurl, CURLOPT_PRIVATE, (char *)this);
+		curl_easy_setopt(m_wcurl, CURLOPT_READDATA,  m_wcurl);
+		curl_easy_setopt(m_wcurl, CURLOPT_READFUNCTION,  s_rdatafunc);
+		curl_easy_setopt(m_wcurl, CURLOPT_WRITEHEADER,  m_wcurl);
+		curl_easy_setopt(m_wcurl, CURLOPT_HEADERFUNCTION,  s_wheaderfunc);
+		curl_easy_setopt(m_wcurl, CURLOPT_WRITEDATA,  m_wcurl);
+		curl_easy_setopt(m_wcurl, CURLOPT_WRITEFUNCTION,  s_wdatafunc);
 
-			curl_easy_setopt( m_wcurl, CURLOPT_HTTPGET, 1);
+		curl_easy_setopt( m_wcurl, CURLOPT_HTTPGET, 1);
 
-			// add to curl multi interface
-			curl_multi_add_handle(g_curlm, m_wcurl);
-			
-			log( "GET(%s): %s", (char*)m_id,(char*)url );
-		}
+		// add to curl multi interface
+		curl_multi_add_handle(g_curlm, m_wcurl);
+		
+		log( "GET(%s): %s", (char*)m_id,(char*)url );
 	}
 
 	void curl_complete( CURL * e, CURLcode result)
@@ -470,9 +487,11 @@ public:
 	int process()
 	{
 		if( m_socket>0 && m_rcurl == NULL && rrdy() ) {
+			log("tunnel rrdy");
 			rcurl_send() ;
 		}
 		if( m_socket>0 && m_wcurl == NULL && wrdy() ) {
+			log("tunnel wrdy");
 			wcurl_send() ;
 		}
 		return 0 ;
@@ -485,9 +504,12 @@ public:
 			if( m_rcurl == NULL ) {
 				FD_SET( m_socket, fdr ) ;
 			}
-			if( m_wcurl == NULL ) {
+			if( m_wcurl == NULL && m_wend == 0 ) {
 				FD_SET( m_socket, fdw ) ;
 			}
+			if( m_wend )
+				g_maxwait = 2 ;
+			
 			FD_SET( m_socket, fde ) ;
 			if( m_socket>*maxfd ) *maxfd = m_socket ;
 		}
@@ -617,6 +639,7 @@ void tunnel_fdset( fd_set * fdr, fd_set * fdw, fd_set * fde, int * maxfd )
 	}
 }
 
+// Master connection (waiting for requests from TDWeb)
 // Connect curl session format
 //    Request:	
 //		 GET http://1.1.1.1/tdc/webtun.php?c=i&p=<phone number>&h=<host name>&ser=<n+1>
@@ -655,6 +678,7 @@ public:
 		}
 	}
 	
+	// received header
 	size_t headerfunc( void * ptr, size_t si )
 	{
 		string header ;
@@ -728,7 +752,7 @@ public:
 		
 	void request() {
 		
-		if( m_curl ) return ;	// request already sent
+		if( m_curl ) return ;	// request pending
 		if( gettime()<m_idletime ) {
 			return ; 		// idling
 		}
@@ -761,7 +785,7 @@ public:
 			log("req: %s", (char *)url);
 		}
 		else {
-			m_idletime = gettime() + 30 ;
+			m_idletime = gettime() + 60 ;
 		}
 	}
 
@@ -773,41 +797,39 @@ public:
 		
 		log("req complete.(code:%d)",(int)response_code);
 			
+		curl_easy_cleanup(m_curl);
+		m_curl = NULL ;
+		
 		if( result == CURLE_OK && response_code == 200 && m_ready ) {
-			curl_easy_cleanup(m_curl);
-			m_curl = NULL ;
 			request();
 		}
 		else {
 			// failed ? fall back to default url
-			g_urlidx = (g_urlidx+1)%2 ;
-			g_webtun_url = default_url[g_urlidx] ;
-			m_idletime = gettime() + 100 ;
-
-			curl_easy_cleanup(m_curl);
-			m_curl = NULL ;
-
+			loadUrl();
+			m_idletime = gettime() + 30 ;
 		}
 
 	}
 
 };
 
-
-int run()
+int webtun_run()
 {
 	int  curl_run ;
 	long curl_timeo = -1;
 	
-	g_running = 1 ;
+	curl_global_init( CURL_GLOBAL_ALL );
+	g_curlm = curl_multi_init() ;
 	
 	connect_curl * cc = new connect_curl ;
 	
+	g_running = 1 ;
 	while( g_running ) {
+		
 		cc->request();
 		curl_multi_perform(g_curlm, &curl_run);
 		CURLMsg *msg;
-		int Q ;
+		int Q=0 ;
 		while ((msg = curl_multi_info_read(g_curlm, &Q))) {
 			if (msg->msg == CURLMSG_DONE) {
 				CURL * ch = msg->easy_handle ;
@@ -825,8 +847,11 @@ int run()
 			}
 		}
 
+		g_maxwait = 60 ;
+
 		tunnel_process();
 
+		curl_timeo = 30000;
 		curl_multi_timeout(g_curlm, &curl_timeo);
 		
 		if( curl_timeo !=0 ) {
@@ -835,18 +860,6 @@ int run()
 			int rc; 
 			int maxfd = -1;
 		 
-			/* set a suitable timeout to play around with */ 
-			timeout.tv_sec = 5 ;
-			timeout.tv_usec = 0;
-			
-			if(curl_timeo > 0) {
-			  timeout.tv_sec = curl_timeo / 1000;
-			  if(timeout.tv_sec > 5)
-				timeout.tv_sec = 5;
-			  else
-				timeout.tv_usec = (curl_timeo % 1000) * 1000;
-			}
-			
 			fd_set fdr;
 			fd_set fdw;
 			fd_set fde;
@@ -857,15 +870,32 @@ int run()
 
 			curl_multi_fdset(g_curlm, &fdr, &fdw, &fde, &maxfd);
 			tunnel_fdset( &fdr, &fdw, &fde, &maxfd);
-		 
+
+			if(curl_timeo > 0) {
+				timeout.tv_sec  = curl_timeo / 1000;
+				timeout.tv_usec = (curl_timeo % 1000) * 1000;
+			}
+			else {
+				timeout.tv_sec  = 60 ;
+				timeout.tv_usec = 0;
+			}
+			
+			if( timeout.tv_sec > g_maxwait )
+				timeout.tv_sec = g_maxwait ;
+		 		
 			// wait for new event
 			rc = select(maxfd+1, &fdr, &fdw, &fde, &timeout);
 			if( rc<0 ) {
-				sleep(10);
+				sleep(3);
 			}
 		}
 	} 
+	
 	delete cc ;
+
+	curl_multi_cleanup(g_curlm);
+	curl_global_cleanup();
+
 	return 0;
 }
 
@@ -875,7 +905,7 @@ void sig_handler(int signum)
 }
 
 // return true if modem is up
-int app_init()
+void app_init()
 {
 	int res = 0 ;
 	string v ;
@@ -884,30 +914,9 @@ int app_init()
     // setup signal
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
-    
-    // get remote tunnel server
-    v = dvrconfig.getvalue("network", "livesetup_url") ;
-	if( strncmp( (char *)v, "http://", 7 )==0 ) {
-		g_webtun_url = (char *)v ;
-		char * u = (char *)g_webtun_url ;
-		int l = strlen( u ) ;
-		if( u[l-1]=='/' ) {
-			// 
-			sprintf( v.expand( l+20 ), "%slivetun.php", u ) ;
-			g_webtun_url = (char *)v ;
-		}
-	}
-	else {
-		g_webtun_url = default_url[0] ;
-	}
-
-    v = dvrconfig.getvalue("network", "livesetup_logfile") ;
-    if( v.length() > 0 ) {
-		g_logfile = (char *)v ;
-	}
 	
 	inittime();
-	return res ;
+	loadUrl();
 
 }
 
@@ -915,12 +924,13 @@ int main()
 {
 	// wait until modem is up
 	app_init();
-	curl_global_init( CURL_GLOBAL_ALL );
-	g_curlm = curl_multi_init() ;
 
-	run();
+#ifdef RCMAIN
+	void rc_main();
+	rc_main();
+#endif
+
+	webtun_run();
 	
-	curl_multi_cleanup(g_curlm);
-	curl_global_cleanup();
 	return 0 ;
 }

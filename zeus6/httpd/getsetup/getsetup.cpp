@@ -7,8 +7,6 @@
 #include "../../dvrsvr/genclass.h"
 #include "../../dvrsvr/cfg.h"
 
-char tzfile[] = "tz_option" ;
-
 static char * rtrim( char * s )
 {
 	while( *s > 1 && *s <= ' ' ) {
@@ -54,7 +52,6 @@ int main()
     char * p ;
     int l;
     int i;
-    config_enum enumkey ;
     config dvrconfig(CFG_FILE);
     string tzi ;
     string value ;
@@ -526,6 +523,16 @@ int main()
                 fprintf(fvalue, "\"camera_name\":\"%s\",", (char *)value );
             }
 
+            // camera_type
+            ivalue = dvrconfig.getvalueint(section, "type");
+            fprintf(fvalue, "\"camera_type\":\"%d\",", ivalue );
+            
+            // ip camera_url
+            value = dvrconfig.getvalue(section, "stream_URL");
+            if( value.length()>0 ) {
+                fprintf(fvalue, "\"ipcamera_url\":\"%s\",", (char *)value );
+            }
+
             // Physical channel
             value = dvrconfig.getvalue(section, "channel");
             if( value.length()>0 ) {
@@ -537,6 +544,12 @@ int main()
             if( value.length()>0 ) {
                 fprintf(fvalue, "\"recording_mode\":\"%s\",", (char *)value );
             }
+            
+#ifdef APP_PWZ5
+            // force record channel (camera direction)
+            ivalue = dvrconfig.getvalueint(section, "forcerecordchannel");
+			fprintf(fvalue, "\"forcerecordchannel\":\"%d\",", ivalue );
+#endif
 
             // Video Type for Special version 2. (less options)
             ivalue = dvrconfig.getvalueint(section, "videotype");
@@ -976,6 +989,7 @@ int main()
         if( value.length()>0 ) {
             fprintf(fvalue, "\"smartserver\":\"%s\",", (char *)value );
         }
+
 #else   // PWZ5
 
         // eth_ip
@@ -989,6 +1003,12 @@ int main()
         if( value.length()>0 ) {
             fprintf(fvalue, "\"eth_mask\":\"%s\",", (char *)value );
         }
+        
+        // enable dhcp client on eth0
+        ivalue = dvrconfig.getvalueint("network", "eth_dhcpc");
+        if( ivalue ) {
+            fprintf(fvalue, "\"eth_dhcpc\":\"on\"," );
+		}
 
         // wifi_ip
         value = readfile( "/davinci/dvr/wifi_ip" ) ;
@@ -997,11 +1017,10 @@ int main()
         }
                 
         // wifi_mask
-        value = readfile( "/davinci/dvr/wifi_ip" ) ;
+        value = readfile( "/davinci/dvr/wifi_mask" ) ;
         if( value.length()>0 ) {
             fprintf(fvalue, "\"wifi_mask\":\"%s\",", (char *)value );
         }
-
 
 		// wifi essid
 		value = dvrconfig.getvalue("network", "wifi_essid");
@@ -1013,6 +1032,12 @@ int main()
         value = dvrconfig.getvalue("network","wifi_key");
         if( value.length()>0 ) {
             fprintf(fvalue, "\"wifi_key\":\"%s\",", (char *)value );
+        }
+        
+		// smart upload server
+        value = dvrconfig.getvalue("network","smartserver");
+        if( value.length()>0 ) {
+            fprintf(fvalue, "\"smartserver\":\"%s\",", (char *)value );
         }
         
         // gateway
@@ -1027,6 +1052,16 @@ int main()
 		  ivalue=0 ;                   // default
 		}
 		fprintf(fvalue, "\"wifi_enc\":\"%d\",", ivalue );
+		
+        // internet access
+        ivalue = dvrconfig.getvalueint("system", "nointernetaccess");
+        if( ivalue == 0 ) {
+			fprintf(fvalue, "\"internetaccess\":\"on\"," );
+        }
+
+        // internet key
+        value = dvrconfig.getvalue("system", "internetkey") ;
+		fprintf(fvalue, "\"internetkey\":\"%s\",", (char *)value );
 	
 #endif
         // end of network value
@@ -1080,6 +1115,7 @@ int main()
     fvalue = fopen( "tz_option", "w");
     if( fvalue ) {
         // initialize enumkey
+        config_enum enumkey ;
         enumkey.line=0 ;
         while( (p=dvrconfig.enumkey("timezones", &enumkey))!=NULL ) {
             tzi=dvrconfig.getvalue("timezones", p );

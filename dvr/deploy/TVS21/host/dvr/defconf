@@ -55,6 +55,9 @@ maxfilelength=3600
 # file buffer size
 filebuffersize=512k
 
+disk_alarm = 1 ;
+disk_alarm_pattern = 2 ;
+
 # low memory. (minimum free memory required. ) (kb)
 lowmemory=15000
 
@@ -132,7 +135,7 @@ motionalarmpattern=0
 
 # video lost alarm
 videolostalarm=1
-videolostalarmpattern=2
+videolostalarmpattern=1
 videolostalarmen=2
 
 # recording indicator
@@ -226,7 +229,7 @@ motionalarm=2
 motionalarmpattern=0
 motionalarmen=0
 videolostalarm=1
-videolostalarmpattern=2
+videolostalarmpattern=1
 videolostalarmen=2
 recordalarm=0
 recordalarmpattern=1

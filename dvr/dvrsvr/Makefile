@@ -60,7 +60,7 @@ LDFLAGS= -lpthread -lstdc++ -lrt
 
 endif
 
-EXTRASOURCES=../ioprocess/diomap.cpp ../lzmasdk/dec.cpp ../lzmasdk/LzmaDec.c
+EXTRASOURCES=../ioprocess/diomap.cpp ../lzmasdk/decx.cpp ../lzmasdk/LzmaDec.c
 
 HEADERS=dvr.h \
 		dvrprotocol.h \

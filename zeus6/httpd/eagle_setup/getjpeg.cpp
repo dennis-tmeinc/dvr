@@ -236,7 +236,7 @@ int main()
 #endif
 
     // print headers
-    printf( "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nCache-Control: no-store\r\n\r\n" );
+    printf( "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\n\r\n" );
     fflush(stdout);
     dvr_getjpeg();
 

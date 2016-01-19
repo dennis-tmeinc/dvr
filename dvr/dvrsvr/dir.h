@@ -104,5 +104,7 @@ public:
     }
 };
 
+class dir : public dir_find {
+};
 
 #endif		// __DIR_H__

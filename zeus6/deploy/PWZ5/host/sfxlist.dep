@@ -1,41 +1,28 @@
-
 # self extract file 
 sfxrun.dep sfxrun
 
 # file on /davinci
-
-./xinetd
 ./mkdosfs
 ./dosfsck
 ./dosfsckcheck
 
 # ID 
 ./ID
-./ID/APPID
-./ID/BOARDNUM
-./ID/BOARDID
 
 # dvr
-./dvr
 ./dvr/firmwareid
 ./dvr/tdevd
 ./dvr/setnetwork
 ./dvr/start.sh
 ./dvr/fw_printenv
-./dvr/libcurl.so.4
-./dvr/eth_mask
 ./dvr/ioprocess
 ./dvr/tdevmount
 ./dvr/cfg
-./dvr/wifi_mask
-./dvr/eth_broadcast
 ./dvr/buzzer
 ./dvr/arrow.cursor
 ./dvr/tab101check
 ./dvr/dvrtime
 ./dvr/wpa_cli
-./dvr/wifi_ip
-./dvr/wifi_broadcast
 ./dvr/tab102.sh
 ./dvr/lpc21isp
 ./dvr/usbcheck
@@ -52,46 +39,39 @@ sfxrun.dep sfxrun
 ./dvr/eaglehost
 ./dvr/wpa_supplicant
 ./dvr/tab102
-./dvr/libfbdraw.so
 ./dvr/passwd
-./dvr/eth_ip
 ./dvr/dvrsvr
 ./dvr/bgarch
-./dvr/stTYSwgV
-./dvr/sti3u2nA
-./dvr/dvrsvr.conf
 ./dvr/glog
+./dvr/rconn
+./dvr/zdaemon
+./dvr/adb
 ./dvr/tdevhotplug
 ./dvr/mount_backup
+./dvr/fat32vol
+
+# dvr configure files
+./dvr/dvrsvr.conf
+./dvr/adminpasswd
+./dvr/eth_ip
+./dvr/eth_broadcast
+./dvr/eth_mask
+./dvr/wifi_ip
+./dvr/wifi_broadcast
 ./dvr/gateway_1
+./dvr/wifi_mask
 
 # www binary
 ./dvr/eaglehttpd
 
-# www site
-./dvr/httpd.sfx
-
-# www cgi
-./dvr/cgi
-./dvr/cgi/cfgdown.cgi
-./dvr/cgi/applysetup
-./dvr/cgi/getsetup
-./dvr/cgi/gcrash.cgi
-./dvr/cgi/gcal.cgi
-./dvr/cgi/mp4live
-./dvr/cgi/cfgupload
-./dvr/cgi/mfid
-./dvr/cgi/cfgreport
-./dvr/cgi/dvrstatus.cgi
-./dvr/cgi/pagevalue
-./dvr/cgi/firmwareupd
-./dvr/cgi/mcufwupd
-./dvr/cgi/login
-./dvr/jquery.js  dvr/cgi/jquery.js
+# www files (include all subdirs)
+./dvr/www
 
 # original copied firmware
+dvr/lib
 
-./dvr/drivers.tar.gz
-./dvr/lib.tar.gz
-./dvr/etc.tar.gz
+#./dvr/drivers.tar.gz
+dvr/drivers
 
+#./dvr/etc.tar.gz  
+dvr/etc	 etc

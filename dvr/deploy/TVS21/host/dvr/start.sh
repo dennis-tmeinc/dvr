@@ -9,12 +9,17 @@ fi
 
 #clean some ram disk space. (hikvison files)
 rm -r /opt/*
+rm -r /home/*
 rm /bin/chat /bin/pppd /bin/pppoe /bin/t1 /bin/update
 
 # make working directory
 mount -t ramfs ramfs /var
 mkdir /var/dvr
 mkdir /var/dvr/disks
+# web root
+mkdir /var/www
+ln -sf /var/www /home/www
+ln -sf /davinci/dvr/www/cgi /var/www/cgi
 
 # setup DVR configure file
 mkdir /etc/dvr
@@ -73,13 +78,6 @@ export TZ
 
 #telnet support
 cp /davinci/dvr/passwd /etc
-
-# install web server
-cd /home
-mkdir www
-cd www
-/davinci/dvr/httpd.sfx
-ln -sf /davinci/dvr/www/cgi cgi
 
 # restart inetd
 echo "Restart inetd."

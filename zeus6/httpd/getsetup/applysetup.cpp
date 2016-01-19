@@ -114,45 +114,27 @@ int randomchar()
     }
 }
 
-void setuserpassword()
+void setadminpassword( char * password )
 {
-    char * v ;
-    char password[100] ;
-    char passwdline[200] ;
     char salt[20] ;
     char * key ;
     int i ;
     FILE * fpasswd;
-    password[0]=0;
-    v = getsetvalue("password" );
-    if( v ) {
-        strncpy( password, v, 99 );
-        password[99]=0 ;
-    }
-    else {
-        return ;
-    }
-
-    if( strcmp( password, "********" )==0 ) return ;    // invalid passwd
-
-    fpasswd = fopen( "/etc/passwd", "r+");
+    fpasswd = fopen( APP_DIR "/adminpasswd", "w");
     if( fpasswd ) {
-        fgets(passwdline, sizeof(passwdline), fpasswd); // bypass first line.(root)
-
         // generate passsword line
         strcpy(salt, "$1$12345678$" );
         for( i=3; i<=10; i++ ) {
             salt[i]=randomchar();
         }
-        // set user name and password on second line
         key = crypt(password, salt);
         if( key ) {
-            fprintf( fpasswd, "admin:%s:101:101:admin:/home/admin/:/bin/false", key );
+			fwrite( key, 1, strlen(key), fpasswd);
         }
         fclose( fpasswd);
     }
-    system("cp /etc/passwd " APP_DIR "/passwd");
 }
+
 
 // c64 key should be 400bytes
 void fileenckey( char * password, char * c64key )
@@ -264,6 +246,12 @@ int main()
         if( v ) {
             dvrconfig.setvalue( "unit", "serial", v );
         }
+        
+        // adminpassword
+        v=getsetvalue("adminpassword");
+        if( v!=NULL && strcmp(v, "*****" )!=0 ) {
+			setadminpassword(v);
+		}
         
 		// all other values
 
@@ -485,6 +473,17 @@ int main()
                 dvrconfig.setvalue(section,"name",v);
             }
             
+            // camera_type
+            v=getsetvalue( "camera_type" );
+            if( v ) {
+                dvrconfig.setvalue(section,"type",v);
+            }
+            
+            // ip camera_url
+            v=getsetvalue( "ipcamera_url" );
+            if( v && strlen(v)>5 ) {
+                dvrconfig.setvalue(section,"stream_URL",v);
+            }
             
             // Physical channel
             v=getsetvalue( "channel" );
@@ -497,6 +496,14 @@ int main()
             if( v ) {
                 dvrconfig.setvalue(section,"recordmode",v);
             }            
+
+#ifdef APP_PWZ5
+            // force record channel (camera direction)
+            v=getsetvalue( "forcerecordchannel" );
+            if( v ) {
+                dvrconfig.setvalue(section,"forcerecordchannel",v);
+            } 
+#endif
 
 			// resolution
             v=getsetvalue( "resolution" );
@@ -710,6 +717,26 @@ int main()
                     dvrconfig.setvalueint(section,"show_gforce",0);
                 }
             }
+            
+             // record_alarm_mode
+            v=getsetvalue( "record_alarm_mode" ) ;
+            if( v ) {
+				dvrconfig.setvalue( section,"recordalarmpattern", v );
+			}
+            v=getsetvalue( "record_alarm_led" ) ;
+            if( v ) {
+				dvrconfig.setvalue( section,"recordalarm", v );
+			}
+            
+             // video_lost_alarm_mode
+            v=getsetvalue( "video_lost_alarm_mode" ) ;
+            if( v ) {
+				dvrconfig.setvalue( section,"videolostalarmpattern", v );
+			}
+            v=getsetvalue( "video_lost_alarm_led" ) ;
+            if( v ) {
+				dvrconfig.setvalue( section,"videolostalarm", v );
+			}
 
         }
     }
@@ -743,6 +770,16 @@ int main()
 			savefile( "/davinci/dvr/eth_broadcast", getbroadcastaddr(v,ipmask) );
 		}
 		
+		// dhcp client on eth0
+		v=getsetvalue("eth_dhcpc");
+		if( v!=NULL && strcmp(v,"on")==0 ) {
+			dvrconfig.setvalueint( "network", "eth_dhcpc", 1 );
+		}
+		else {
+			dvrconfig.setvalueint( "network", "eth_dhcpc", 0 );
+		}
+		
+	
 		// wifi_mask
 		v=getsetvalue("wifi_mask");
 		if( v ) {
@@ -751,7 +788,7 @@ int main()
 		}
 		else {
 			sprintf(ipmask,"%s",tempmask);
-		} 
+		}
 
 		// wifi_ip
 		v=getsetvalue("wifi_ip");
@@ -788,8 +825,27 @@ int main()
 		if( v ) {
 			dvrconfig.setvalue( "network", "wifi_key", v);
 		}
+
+		v = getsetvalue("smartserver");
+		if( v ) {
+			dvrconfig.setvalue( "network", "smartserver", v);
+		}
+		
+		// internet access
+		v = getsetvalue("internetaccess");
+		if( v ) {
+			dvrconfig.setvalueint( "system", "nointernetaccess", 0);
+		}
+		else {
+			dvrconfig.setvalueint( "system", "nointernetaccess", 1);
+		}
+		
+        // internet key
+		v = getsetvalue("internetkey");
+		if( v ) {
+			dvrconfig.setvalue( "system", "internetkey", v);
+		}
     }
-    
 
     // save setting
     sync();

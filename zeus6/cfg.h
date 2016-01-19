@@ -24,15 +24,14 @@
 
 // default config file
 #define	CFG_DEFFILE	"/davinci/dvr/defconf"
-#define	CFG_FILE	"/etc/dvr/dvr.conf"
+#define	CFG_FILE	"/davinci/dvr/dvrsvr.conf"
 
 // applications dir
 #define APP_DIR		"/davinci/dvr"
 // where dvr var files created
 #define VAR_DIR		"/var/dvr"
 
-#define WWWROOT	"/home/www"
-#define WWWSERIALFILE "/home/www/wwwserialnofile"
-
+#define WWWROOT	"/var/www"
+#define WWWSERIALFILE "/var/www/wwwserialnofile"
 
 #define NETDBG

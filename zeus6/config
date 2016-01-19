@@ -3,6 +3,8 @@ PROJDIR=/home/dennis/proj/dvr/zeus6
 proj=PWZ5
 EAGLE=eagle32
 
+export PROJDIR proj EAGLE
+
 # cross compile toolchain
 
 SYSROOT=/home/dennis/proj/zeus6/arm-eabi-uclibc
@@ -13,8 +15,8 @@ export CROSS_COMPILE=$(CROSS_COMPILE_PREFIX)
 export CC=$(CROSS_COMPILE_PREFIX)gcc
 export GPP=$(CROSS_COMPILE_PREFIX)g++
 export STRIP=$(CROSS_COMPILE_PREFIX)strip
+export CFLAGS += --sysroot=$(SYSROOT)
 
 # debugging folder
 debug_folder=/home/dennis/nfsroot/eagletest
 
-CFLAGS+= --sysroot=/home/dennis/proj/zeus6/arm-eabi-uclibc

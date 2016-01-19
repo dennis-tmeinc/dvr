@@ -81,6 +81,9 @@ struct dio_mmap {
     int     gforce_changed;
     int     synctimestart;
     
+    int     battery_state ; 		// 0: fully charged, 1: charging, 2: disconnected
+    float   battery_voltage ;		// voltage
+    
     // beeper
     int     beeper ;
 
@@ -95,7 +98,6 @@ struct dio_mmap {
     int tab102_ready;
     int fileclosed;
     int tab102_isLive;
-    
 
     // PWII mcu support
     unsigned int pwii_buttons ;         // pwii button,  1: pressed, 0: released
@@ -131,17 +133,40 @@ struct dio_mmap {
                                         // BIT 12: standby mode, 1: standby, 0: running		// black out
                                         // BIT 13: WIFI power
                                         
-    // PWZ6 dual mic status ( inverted from MCU inputs )
+                                        // FOR PWZ6 wireless mic control
+                                        // BIT 16: MIC1 TRIGGER ON/OFF
+                                        // BIT 17: INCAR1 TRIGGER ON/OFF
+                                        // BIT 18: MIC2 TRIGGER ON/OFF
+                                        // BIT 19: INCAR2 TRIGGER ON/OFF
+                                        
+                                        // BIT 20: COVERT MODE (for ip camera)
+                                        
+                                        
+    // PWZ6 dual mic status ( inverted from MCU inputs )   
     unsigned int pwii_micinput;         //       all bits implemented as one shot trigger of C1 record for PWZ6
-                                        //  BIT 0:  Mic 1
-                                        //  BIT 1:  EMG 1
-                                        //  BIT 2:  Mic 2
-                                        //  BIT 3:  EMG 2      
+                                        //  BIT 0:  Mic 1,    
+                                        //  BIT 1:  EMG 1     
+                                        //  BIT 2:  Mic 2     
+                                        //  BIT 3:  EMG 2     
                                         
     int     pwii_error_LED_flash_timer ; // LED flash timer (output),  0: stayon, others in 0.25 second step
     char    pwii_VRI[128] ;             // current VRI(video recording Id)
-
     
+    unsigned int camera_status[16] ;	// to store camera status from DVRSVR
+										//  one for each camera
+										//  bits definition
+										//         0: signal lost
+										//         1: motion
+										//         2: recording
+										//         3: force-recording
+										//         4: lock recording
+										//         5: pre-recording
+										//         6: in-memory pre-recording
+										
+    unsigned long streambytes[16] ;		// streamed bytes from start
+    
+    int     res[128] ;
+
 } ;
 
 // app_mode
@@ -213,6 +238,9 @@ void dio_unlock();
 #define PWII_POWER_BLACKOUT		(1<<12)
 #define PWII_POWER_STANDBY		(PWII_POWER_BLACKOUT)
 #define PWII_POWER_WIFI			(1<<13)
+
+// PW Z6 COVERTY
+#define PWII_COVERT_MODE		(1<<20)
 
 // PWII key codes
 

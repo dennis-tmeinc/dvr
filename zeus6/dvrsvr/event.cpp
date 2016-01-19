@@ -97,15 +97,14 @@ int alarm_t::setvalue(int v)
 
 void alarm_t::update()
 {
+	int v = 0 ;
     if( m_value==1 ) {
-        dio_output(m_outputpin, 1);
+		v = 1 ;
     }
     else if( m_value>1 ) {
-        dio_output(m_outputpin, event_serialno&(1<<(m_value-1)) );
+		v =  event_serialno&(1<<(m_value-1)) ;
     }
-    else {
-        dio_output(m_outputpin, 0);
-    }
+    dio_output(m_outputpin, v);
 }
 
 // time_t poweroffstarttime ;
@@ -198,17 +197,49 @@ void event_check()
         
         videolost=0;
         videodata=1 ;
-	for(i=0; i<cap_channels; i++ ) {
-	    if( cap_channel[i]->enabled() ) {
-                if( cap_channel[i]->getsignal()==0 ) {
-                    videolost=1 ;
-                   // printf("channel %d has video lost\n",i);
-                }
-                if( !cap_channel[i]->isworking() ) {
-                    videodata=0 ;
-                }
-	     }
-	}
+        
+		for(i=0; i<cap_channels; i++ ) {
+			if( cap_channel[i]->enabled() ) {
+					if( cap_channel[i]->getsignal()==0 ) {
+						videolost=1 ;
+					   // printf("channel %d has video lost\n",i);
+					}
+					if( !cap_channel[i]->isworking() ) {
+						videodata=0 ;
+					}
+			 }
+		}
+
+
+		// set camera status
+		//  bits definition
+		//         0: signal lost
+		//         1: motion
+		//         2: recording
+		//         3: force-recording
+		//         4: lock recording
+		//         5: pre-recording
+		//         6: in-memory pre-recording
+		void dio_set_camera_status(int camera, unsigned int status, unsigned long streambytes );
+
+		// update dio camera status
+		for(i=0; i<cap_channels; i++ ) {
+			if( cap_channel[i]->enabled() ) {
+				unsigned int status = 0 ;
+				status = rec_state2(i);
+				if( cap_channel[i]->getsignal()==0 ) {
+					status |= 1 ;
+				}
+				if( cap_channel[i]->getmotion() ) {
+					status |= 2 ;
+				}
+				dio_set_camera_status(i, status,  cap_channel[i]->streambytes() );
+			 }
+			 else {
+				dio_set_camera_status(i, 0, 0);
+			 }
+		}
+
 		// set video lost led
         if( videolost ) {
             dio_setstate(DVR_VIDEOLOST) ;
@@ -221,13 +252,13 @@ void event_check()
         }
         else {
             dio_setstate (DVR_NODATA);
-	    // update decoder screen (OSD)
-	    for(i=0; i<cap_channels; i++ ) {
-	      /* gpsvalid_changed: don't show invalid value */
-		cap_channel[i]->update(1);
-	    }
+			// update decoder screen (OSD)
+			for(i=0; i<cap_channels; i++ ) {
+			  /* gpsvalid_changed: don't show invalid value */
+				cap_channel[i]->update(1);
+			}
         }
-        diskready = rec_basedir.length()>0 ;
+        diskready = ( disk_getbasedir(0)!=NULL ) ;
         if( diskready ) {
             dio_setstate (DVR_DISKREADY);
         }
@@ -257,7 +288,6 @@ void event_check()
             dio_clearstate (DVR_NETWORK);
         }            
 
-        
 #ifdef POWERCYCLETEST    
         if( cycletest ) {
             static int cycle=0 ;

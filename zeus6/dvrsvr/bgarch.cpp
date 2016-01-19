@@ -212,7 +212,7 @@ static int archive_copyfile( char * srcfile, char * destfile )
 		}
 		else if( archive_mode == 1 ) {	// unlock mode
 			tmpfile = srcfile ;
-			char * l = strstr( (char *)tmpfile, "_L_" ) ;
+			char * l = strstr( (char *)tmpfile, "_L" ) ;
 			if( l != NULL ) {		// locked file?
 				l[1] = 'N' ;
 				rename( srcfile, tmpfile );		// rename to _N_ file
@@ -234,13 +234,20 @@ int archive_copydir( char * srcdir, char * destdir )
 	while( *archive_run>0  && sdir.find() ) {
 		if( sdir.isfile() ) {
 			filename = sdir.filename() ;
+			
+			// don't copy DISK* file , temperary to fix bug "dis2 copy"
+			if( fnmatch( "DISK?", filename, FNM_CASEFOLD )==0 ) {
+				continue ;
+			}
+			
 			if( filename[0]=='C' && filename[1]=='H' ) {			// might be video file or .k file
+				
 				int bcddate, bcdtime ;
 				if( strstr( filename, "_0_" ) ) {	// currently recording video file, skip it
 					continue ;
 				}
 				if( strstr( filename, "_L_" ) ) {					// locked file
-					if( archive_type & 2 == 0 ) {
+					if( (archive_type & 2) == 0 ) {
 						continue ;
 					}
 					sscanf( filename+5, "%8d%6d", &bcddate, &bcdtime );
@@ -250,7 +257,7 @@ int archive_copydir( char * srcdir, char * destdir )
 					}
 				}
 				if( strstr( filename, "_N_" ) ) {					// nonlocked file
-					if( archive_type & 1 == 0 ) {
+					if( (archive_type & 1) == 0 ) {
 						continue ;
 					}
 					sscanf( filename+5, "%8d%6d", &bcddate, &bcdtime );
@@ -262,6 +269,7 @@ int archive_copydir( char * srcdir, char * destdir )
 			}
 			
 			sprintf( destfile, "%s/%s", destdir, sdir.filename() );
+			
 			// to check target disk space
 			archive_diskspace();
 			archive_copyfile( sdir.pathname(), destfile );
@@ -305,6 +313,7 @@ int archive_load_xdate()
 {
 	string xdatefile ;
 	sprintf( xdatefile.setbufsize(500), "%s/.xarchdate", (char *)archive_target_disk );
+	
 	FILE * fxdate = fopen( (char *)xdatefile, "r" );
 	if( fxdate ) {
 		fscanf( fxdate, "%d %d", &old_bcddate, &old_bcdtime );
@@ -315,7 +324,7 @@ int archive_load_xdate()
 		old_bcdtime = 0 ;
 	}
 	return 0;
-}	
+}
 
 int archive_save_xdate()
 {
@@ -331,8 +340,8 @@ int archive_save_xdate()
 		old_bcdtime = 0 ;
 	}
 	return 0 ;
-}	
-	
+}
+
 // archive hold directory, 
 //   atype:  ORed bits for file types,  bit 0: _N_ files, bit 1: _L_ files
 //   mode:  0, just copy
@@ -380,6 +389,12 @@ int main(int argc, char * argv[] )
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
       
-	archive( argv[1], targetdir, atype, mode );
+    while( run ) {  
+		archive( argv[1], targetdir, atype, mode );
+		for( int delay=0; run && delay<30; delay++ ) {
+			sleep(1);
+		}
+	}
+		
 	return run ;
 }

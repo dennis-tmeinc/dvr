@@ -17,6 +17,45 @@ fi
 
 OUTPUTDIR=${DEPROOT}/${RELEASE}
 
+CGIFILES='
+	httpd/cfgdown/cfgdown.cgi
+	httpd/cfgdown/cfgreport
+	httpd/cfgdown/dvrstatus.cgi
+	httpd/eagle_setup/cfgupload
+	httpd/eagle_setup/firmwareupd 
+	httpd/eagle_setup/login 
+	httpd/eagle_setup/mcufwupd 
+	httpd/eagle_setup/mfid 
+	httpd/eagle_setup/pagevalue 
+	httpd/eagle_setup/getjpeg.cgi 
+	httpd/getsetup/applysetup 
+	httpd/getsetup/getsetup 
+	httpd/getsetup/tzoption 
+'
+
+DVRFILES='
+	dvrsvr/dvrsvr 
+	eaglesvr/eaglesvr 
+	dvrtime/dvrtime 
+	eaglehost/eaglehost 
+	glog/glog 
+	ioprocess/ioprocess 
+	ioprocess/iowait 
+	ioprocess/devicepower  
+	ioprocess/panelled  
+	ioprocess/buzzer  
+	tdev/tdevd 
+	tdev/tdevmount 
+	usbgenkey/usbcheck 
+	tmeft/tmefile 
+	volumeid/md5check 
+	volumeid/volumeid 
+	cfg/cfg 
+	dhcp/udhcpc 
+	httpd/eaglehttpd/eaglehttpd
+	ssl/programs/ssl/ssl_server
+'
+
 appid=$1
 special=""
 special=$2
@@ -28,13 +67,26 @@ if [ ${appid} = "clean" ]; then
  
 # clean host www files
     cd ${DEPROOT}/host/dvr/www
-    rm -r -f cgi
-    rm -f eaglehttpd
+    rm -f -v eaglehttpd
 
-# clean host firmware filesa
+# clean cgi files
+	echo Clean cgi files.
+    cd ${DEPROOT}/host/dvr/www/cgi
+	for cfile in $CGIFILES ; do
+		BASE=`basename ${cfile}`
+		rm -v ${BASE}
+	done
+    
+# clean dvr files
+	echo Clean dvr files.
     cd ${DEPROOT}/host/dvr
-    rm -f httpd.sfx firmwareid
-    rm -f dvrsvr eaglesvr dvrtime eaglehost udhcpc glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg 
+	for cfile in $DVRFILES ; do
+		BASE=`basename ${cfile}`
+		rm -v ${BASE}
+	done
+	    
+# clean host firmware file
+    rm -f firmwareid
     
     cd ${DEPROOT}/host/ID
     rm -f BOARDNUM APPID BOARDID
@@ -79,43 +131,7 @@ ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/defconf set glog tab102b_enable 0
 
 ${STRIP} sfx
 
-# makeing host board deploy firmware
-
-echo "Build http files"
-cd ${DEPROOT}/host/dvr/www
-if [ ! -d cgi ] ; then
-    mkdir cgi
-fi
-
-cp -v ${APPROOT}/httpd/eaglehttpd .
-cp -v ${APPROOT}/ssl/programs/ssl/ssl_server .
-${STRIP} eaglehttpd ssl_server
-
-echo "Copy cgi files"
-cp -v ${APPROOT}/httpd/cfgdown/cfgdown.cgi cgi
-cp -v ${APPROOT}/httpd/cfgdown/cfgreport cgi
-cp -v ${APPROOT}/httpd/cfgdown/dvrstatus.cgi cgi
-
-cp -v ${APPROOT}/httpd/eagle_setup/cfgupload cgi
-cp -v ${APPROOT}/httpd/eagle_setup/firmwareupd cgi
-cp -v ${APPROOT}/httpd/eagle_setup/login cgi
-cp -v ${APPROOT}/httpd/eagle_setup/mcufwupd cgi
-cp -v ${APPROOT}/httpd/eagle_setup/mfid cgi
-cp -v ${APPROOT}/httpd/eagle_setup/pagevalue cgi
-cp -v ${APPROOT}/httpd/eagle_setup/getjpeg.cgi cgi
-
-cp -v ${APPROOT}/httpd/getsetup/applysetup cgi
-cp -v ${APPROOT}/httpd/getsetup/getsetup cgi
-
-cd cgi
-${STRIP} cfgdown.cgi cfgreport dvrstatus.cgi
-${STRIP} cfgupload firmwareupd login mcufwupd mfid pagevalue
-${STRIP} applysetup getsetup
-cd ..
-
-${DEPROOT}/mksfx ${DEPROOT}/sfx wwwlist ../httpd.sfx
-
-chmod a+x ../httpd.sfx
+# making host board deploy firmware
 
 if [ ! -d ${DEPROOT}/host/ID ] ; then
   mkdir ${DEPROOT}/host/ID
@@ -126,29 +142,28 @@ echo 1 > BOARDNUM
 echo ${appid} > APPID
 echo 1 > BOARDID
 
-echo Building Host deploy firmware.
-cd ${DEPROOT}/host/dvr
-echo copy dvr host files
-cp -v ${APPROOT}/dvrsvr/dvrsvr .
-cp -v ${APPROOT}/eaglesvr/eaglesvr .
-cp -v ${APPROOT}/dvrtime/dvrtime .
-cp -v ${APPROOT}/eaglehost/eaglehost .
-cp -v ${APPROOT}/glog/glog .
-cp -v ${APPROOT}/ioprocess/ioprocess .
-cp -v ${APPROOT}/ioprocess/iowait .
-cp -v ${APPROOT}/ioprocess/devicepower  .
-cp -v ${APPROOT}/ioprocess/panelled  .
-cp -v ${APPROOT}/ioprocess/buzzer  .
-cp -v ${APPROOT}/tdev/tdevd .
-cp -v ${APPROOT}/tdev/tdevmount .
-cp -v ${APPROOT}/usbgenkey/usbcheck .
-cp -v ${APPROOT}/tmeft/tmefile .
-cp -v ${APPROOT}/volumeid/md5check .
-cp -v ${APPROOT}/volumeid/volumeid .
-cp -v ${APPROOT}/cfg/cfg .
-cp -v ${APPROOT}/dhcp/udhcpc .
+echo "Build http files"
+cd ${DEPROOT}/host/dvr/www
 
-${STRIP} dvrsvr eaglesvr dvrtime eaglehost glog ioprocess iowait devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg
+# dvr files
+echo Copy dvr host files
+cd ${DEPROOT}/host/dvr
+for cfile in $DVRFILES ; do
+	cp -v ${APPROOT}/${cfile} ./
+	BASE=`basename ${cfile}`
+	${STRIP} ${BASE}
+done
+
+# cgi files
+echo "Copy cgi files"
+cd ${DEPROOT}/host/dvr/www/cgi
+for cfile in $CGIFILES ; do
+	cp -v ${APPROOT}/${cfile} ./
+	BASE=`basename ${cfile}`
+	${STRIP} ${BASE}
+done
+
+echo Building Host dep firmware
 cd ${DEPROOT}/host
 echo ${firmwareid} > dvr/firmwareid
 ${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.dep ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW

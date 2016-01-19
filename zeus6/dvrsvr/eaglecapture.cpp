@@ -203,7 +203,7 @@ void eagle_capture::streamcallback(CALLBACK_DATA CallBackData)
     case FRAME_TYPE_VIDEO_P:
         xframetype = FRAMETYPE_VIDEO ;
         break;
-    case FRMAE_TYPE_VIDEO_I:
+    case FRAME_TYPE_VIDEO_I:
         xframetype = FRAMETYPE_KEYVIDEO ;
         if( m_motion>0 ) {
             if( --m_motion==0 ) {
@@ -216,7 +216,7 @@ void eagle_capture::streamcallback(CALLBACK_DATA CallBackData)
     }
 #if 1
     if(xframetype != FRAME_TYPE_AUDIO){
-	if(GetChannelMotionStatus(m_channel)){
+	if(GetChannelMotionStatus(m_hikhandle)){
 	       // printf("motion\n");
 		if( m_motion==0 ) {
 		    m_motionupd = 1 ;

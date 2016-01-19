@@ -1,4 +1,3 @@
-
 #ifndef __genclass_h__
 #define __genclass_h__
 
@@ -17,9 +16,10 @@ class array {
     
     // swap items of index a and b
     void swap( int a, int b) {
-        m_array[m_size] = m_array[a] ;
+		T s ;
+		s = m_array[a] ;
         m_array[a] = m_array[b] ;
-        m_array[b] = m_array[m_size] ;
+        m_array[b] = s ;
     }
     
     void quicksort(int lo, int hi) {
@@ -76,12 +76,13 @@ class array {
                     newsize=m_arraysize*2 ;
                 }
                 T * newarray = new T [newsize] ;
-                if( m_arraysize > 0 ) {
+                if( m_size > 0 && m_array!=NULL ) {
                     for( int i=0; i<m_size; i++ ) {
                         newarray[i] = m_array[i] ;
                     }
-                    delete [] m_array ;
                 }
+                if( m_array !=NULL ) 
+                    delete [] m_array ;
                 m_arraysize = newsize ;
                 m_array = newarray ;
             }
@@ -124,7 +125,7 @@ class array {
             }
         }
         void remove(int pos) {
-            if( pos<m_size ) {
+            if( pos>=0 && m_size>0 && pos<m_size ) {
                 m_size--;
                 for( int i=pos; i<m_size; i++ ) {
                     m_array[i]=m_array[i+1] ;
@@ -346,150 +347,47 @@ class list {
         }
 };
 
-
-// string and string list
-// string functions
-
-/*
-class string {
-    protected:
-        char *m_str;
-        int   m_s ;
-		        
-        void setstring(const char *str){
-			char * stmp = m_str ;
-			if( str ) {
-				m_s = strlen( str ) + 1 ;
-				m_str = new char [m_s] ;
-				strcpy( m_str, str );
-			}
-			else {
-				m_s = 0 ;
-				m_str = NULL ;
-			}
-			if( stmp ) 
-				delete stmp ;
-        }		
-    public:
-    
-        string(const char *str = NULL) {
-			m_str = NULL ;
-			m_s = 0 ;
-			setstring( str );
-        }
-        
-        ~string() {
-			if( m_str )
-				delete m_str ;
-        }
-        
-        char * getstring(){
-			if( m_str ) {
-				return m_str;
-			}
-			else {
-				m_s = 2 ;
-				m_str = new char [m_s] ;
-				*m_str = 0 ;
-				return m_str ;
-			}
-        }
-
-		operator char * (){
-			return getstring();
-		}
-		
-        string & operator = (const char *str) {
-			setstring( str );
-            return *this;
-        }
-        
-        int operator < ( string & s2 ) {
-            return ( strcmp( getstring(), s2.getstring())<0 );
-        }
-        
-        int length(){
-            return strlen(m_str);
-        }
-        
-        int size() {		// buffer size
-			return m_s ;
-		}
-		
-		// expand buffer size. (no shrinking)
-		char * expand(int nsize){
-			if( m_s < nsize ) {
-				char * nbuf = new char [nsize] ;
-				if( m_str ) {
-					memcpy( nbuf, m_str, m_s ) ;
-					delete m_str ;
-				}
-				m_str = nbuf ;
-				m_s = nsize ;
-			}
-            return m_str ;
-        }
-        
-        char * setbufsize(int nsize){
-			return expand( nsize+1 );
-        }
-        
-        string & trim()
-        {
-			int l = strlen( m_str );
-			while( l>0 && m_str[l-1]<=' ' && m_str[l-1]>0 ) {
-				m_str[l-1] = 0 ;
-				l-- ;
-			}
-			l = 0 ;
-			while( l<m_s-1 && m_str[l]<=' ' && m_str[l]>0 ) {
-				l++;
-			}
-			setstring( &m_str[l] );
-			return *this ;
-		}
-        
-        int isempty() {
-            return (m_str[0] == 0);
-        }
-        char & operator[] (int idx) {
-            return m_str[idx] ;
-        }
-};
-*/
-
 // string and string list
 // string functions
 class string {
     protected:
         char *m_str ;
         int   m_s ;
-        void setstring(const char *str){
+        void set(const char *str){
+			if( str==m_str ) return ;
 			char * t_str = m_str ;
-            m_str=NULL ;			
-			m_s = 0 ;
             if( str && *str != 0 ) {
-                m_s = strlen(str)+1;
+                m_s = strlen(str)+1 ;
                 m_str=new char [m_s];
                 strcpy(m_str, str);
             }
+            else {
+				m_str = NULL ;
+				m_s = 0 ;
+			}
             if( t_str!=NULL ) {
                 delete t_str ;
             }
         }
+	
     public:
-        string( const char * str = NULL ) {
+        string() {
+			m_s = 0 ;
+            m_str=NULL;
+        } 
+
+        string( const char * str ) {
 			m_s = 0 ;
             m_str=NULL;
             if( str ) 
-				setstring( str );
-        } 
-
+				set( str );
+        }
+        
         string(string & str) {
 			m_s = 0 ;
             m_str=NULL;
-            if( str.length() )
-				setstring((char *)str);
+            if( !str.isempty() )
+				set((char *)str);
         }
 
         ~string() {
@@ -497,34 +395,44 @@ class string {
                 delete m_str ;
             }
         }
-
-		char *getstring(){
+        
+		char *get(){
 			if (m_str == NULL) {
-				m_s = 4;
+				m_s = 2;
 				m_str=new char [m_s] ;
 				m_str[0]='\0' ;
 			}
 			return m_str;
 		}
 
+		char *getstring(){
+			return get();
+		}
+		
 		operator char * (){
-			return getstring() ;
+			return get() ;
 		}
-		
-		operator const char * (){
-			return (const char *)getstring() ;
-		}
-		
+
         string & operator =(const char *str) {
-            setstring(str);
+            set(str);
             return *this;
         }
-        
+
+        string & operator =(char *str) {
+            set(str);
+            return *this;
+        }
+                
         string & operator =(string & str) {
-			setstring( (char *)str );
+			set( (char *)str );
             return *this;
         }
         
+		string & operator + ( const char * s2 ) {
+			strcat( expand( length()+strlen(s2)+1 ), s2 );
+			return *this ;
+        }
+                
         int operator < ( string & s2 ) {
             return ( strcmp(getstring(), s2.getstring())<0 );
         }
@@ -541,48 +449,88 @@ class string {
         int size() {
 			return m_s ;
 		}
-		
+
         char * expand(int nsize){
+            if( nsize<0 ) nsize=0 ;
+            nsize+=4 ;
 			if( nsize>m_s ) {
-				char * nbuf = new char [nsize] ;
-				*nbuf = 0 ;
+				char * nstr = new char [nsize] ;
 				if( m_str ) {
-					memcpy( nbuf, m_str, m_s );
+					memcpy( nstr, m_str, m_s );
 					delete m_str ;
+					nstr[m_s]=0;
 				}
-				m_str = nbuf ;
+				else {
+					nstr[0] = 0 ;
+				}
+				m_str = nstr ;
 				m_s = nsize ;
 			}
-			return getstring();
+			return get();
 		}
 		
 		char * setbufsize( int nsize ) {
-			return expand(nsize+1);
+            if( nsize<0 ) nsize=0 ;
+            nsize+=4 ;
+			if( nsize>m_s ) {		// to resize buffer
+				if( m_str ) {
+					delete m_str ;
+				}
+				m_s = nsize ;
+				m_str = new char [m_s] ;
+				m_str[0]=0;
+			}
+			return get();
+		}
+		
+		string & trimtail()
+        {
+			if( m_str ) {
+				int l = strlen( m_str );
+				if( l<m_s ) {
+					while( l>0 && m_str[l-1]>0 && m_str[l-1]<=' ' ) {
+						m_str[--l] = 0 ;
+					}
+				}
+			}
+			return *this ;
+		}
+
+		string & trimhead()
+        {
+			if( m_str ) {
+				int l = 0 ;
+				while( l<m_s && m_str[l]>0 && m_str[l]<=' ' ) {
+					l++;
+				}
+				if( l>0 ) {
+					set( &m_str[l] );
+				}
+			}
+			return *this ;
 		}
 		
 		string & trim()
         {
 			if( m_str ) {
 				int l = strlen( m_str );
-				while( l>0 && m_str[l-1]<=' ' && m_str[l-1]>0 ) {
-					m_str[l-1] = 0 ;
-					l-- ;
+				while( l<m_s && l>0  && m_str[l-1]<=' ' && m_str[l-1]>0 ) {
+					m_str[--l] = 0 ;
 				}
 				l = 0 ;
 				while( l<m_s-1 && m_str[l]<=' ' && m_str[l]>0 ) {
 					l++;
 				}
-				setstring( &m_str[l] );
+				if( l>0 )
+					set( &m_str[l] );
 			}
 			return *this ;
 		}
-		
+
         int isempty() {
-            return (length() == 0);
+			return m_str==NULL || *m_str==0 ;
         }
-        
         char & operator[] (int idx) {
-			setbufsize(idx);
             return m_str[idx] ;
         }
 };

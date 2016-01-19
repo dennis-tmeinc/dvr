@@ -7,8 +7,6 @@
 #include "../../dvrsvr/genclass.h"
 #include "../../dvrsvr/config.h"
 
-char tzfile[] = "tz_option" ;
-
 int main()
 {
     char * zoneinfobuf ;
@@ -940,31 +938,6 @@ int main()
 
     }
 #endif
-
-
-    // write tz_option
-    fvalue = fopen( "tz_option", "w");
-    if( fvalue ) {
-        // initialize enumkey
-        enumkey.line=0 ;
-        while( (p=dvrconfig.enumkey("timezones", &enumkey))!=NULL ) {
-            tzi=dvrconfig.getvalue("timezones", p );
-            fprintf(fvalue, "<option value=\"%s\">%s ", p, p );
-            if( tzi.length()>0 ) {
-                zoneinfobuf=tzi;
-                while( *zoneinfobuf != ' ' &&
-                      *zoneinfobuf != '\t' &&
-                      *zoneinfobuf != 0 ) {
-                          zoneinfobuf++ ;
-                      }
-                if( strlen(zoneinfobuf) > 1 ) {
-                    fprintf(fvalue, "-%s", zoneinfobuf );
-                }
-            }
-            fprintf(fvalue, "</option>\n");
-        }
-        fclose( fvalue );
-    }
 
     // write led_number
     ivalue=dvrconfig.getvalueint("io", "outputnum");

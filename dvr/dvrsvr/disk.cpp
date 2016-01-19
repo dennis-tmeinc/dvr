@@ -1531,6 +1531,18 @@ void * disk_cleanthread(void *param)
     return NULL;
 }
 
+int disk_alarm_num = 1 ;		// same as video lost
+int disk_alarm_pattern = 2 ;
+int disk_alarm_delay = 600 ;	// delay before system up
+
+// disk failure alarm
+void disk_alarm()
+{
+	if( time_tick()/1000>disk_alarm_delay && rec_basedir.length() < 5 ) {
+		alarms[disk_alarm_num]->setvalue(disk_alarm_pattern);
+	}
+}
+
 void disk_init(config &dvrconfig)
 {
     const char * pcfg;
@@ -1591,6 +1603,12 @@ void disk_init(config &dvrconfig)
     if( disk_maxdirty < 50 || disk_maxdirty > 10000 ) {
         disk_maxdirty = 10000 ;
     }
+
+	disk_alarm_num = dvrconfig.getvalueint("system", "disk_alarm");
+	disk_alarm_pattern = dvrconfig.getvalueint("system", "disk_alarm_pattern");
+	disk_alarm_delay = dvrconfig.getvalueint("system", "disk_alarm_delay");
+	if( disk_alarm_delay<=0 || disk_alarm_delay>1800 )
+		disk_alarm_delay = 600 ;		// default 10 minutes
 
     // empty disk list
     disk_disklist.empty();

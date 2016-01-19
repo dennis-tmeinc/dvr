@@ -124,3 +124,7 @@ int net_recv(int sockfd, void * data, int datasize, int ustimeout)
     return 0;
 }
 
+int net_recv(int sockfd, void * data, int datasize)
+{
+	return net_recv(sockfd, data, datasize, 10000000);
+}

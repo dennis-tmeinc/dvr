@@ -71,6 +71,22 @@ void alarm_t::clear()
     m_value=0;
 }
 
+#ifdef TVS_APP        
+// value priority order:  2-3-4-5-6-7-1-0
+int alarm_t::setvalue(int v)
+{
+	if( m_value<=0 && v>0 ) {
+        m_value = v ;
+    }
+    else if( m_value == 1 && v > 1 ) {
+		m_value = v ;
+	}
+	else if( m_value > 1 && v>1 && v < m_value ) {
+		m_value = v ;
+	}
+    return m_value ;
+}
+#else
 // value priority order:  1-2-3-4-5-6-7-0
 int alarm_t::setvalue(int v)
 {
@@ -84,17 +100,18 @@ int alarm_t::setvalue(int v)
     }
     return m_value ;
 }
+#endif
 
 void alarm_t::update()
 {
-    if( m_value==1 ) {
+	if( m_value<=0 || m_value>15 ) {
+        dio_output(m_outputpin, 0);
+    }
+    else if( m_value==1 ) {
         dio_output(m_outputpin, 1);
     }
-    else if( m_value>1 ) {
-        dio_output(m_outputpin, g_timetick&(1<<(m_value+6)) );
-    }
     else {
-        dio_output(m_outputpin, 0);
+        dio_output(m_outputpin, g_timetick&(1<<(m_value+6)) );
     }
 }
 
@@ -169,6 +186,11 @@ int event_check()
 
         // update recording alarm
         rec_alarm();
+
+#ifdef TVS_APP                
+        // for TVS requirement, no disk flashing 
+        disk_alarm();
+#endif        
 
         videolost=0;
         videodata=1 ;

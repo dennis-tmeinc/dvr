@@ -111,6 +111,10 @@ void dvrsvr::close()
         fclose( m_nfilehandle );
         m_nfilehandle=NULL ;
     }
+    if (m_recvbuf != NULL) {
+        mem_free(m_recvbuf);
+        m_recvbuf = NULL;
+    }    
 }
 
 // return 0: no data, 1: may have more data
@@ -149,7 +153,7 @@ int dvrsvr::read()
 	        return 0 ;
         }
         else if (m_req.reqsize>0 ){	// wait for extra data
-            m_recvbuf = (char *) malloc(m_req.reqsize);
+            m_recvbuf = (char *) mem_alloc(m_req.reqsize);
             if (m_recvbuf == NULL) {
                 close();		// no enough memory
                 return 0 ;
@@ -183,7 +187,7 @@ int dvrsvr::read()
     onrequest();
 
     if (m_recvbuf != NULL) {
-        free(m_recvbuf);
+        mem_free(m_recvbuf);
         m_recvbuf = NULL;
     }
     m_recvlen = m_recvloc = 0 ;
@@ -195,85 +199,51 @@ int dvrsvr::read()
 int dvrsvr::write()
 {
     int n=0;
-    int res = 0 ;
     net_fifo * nfifo ;
     if( m_sockfd <= 0 ){
-        return res ;
+        return 0 ;
     }
     if (m_fifo == NULL) {
-	m_fifosize = 0 ;
-        return res ;
+		m_fifosize = 0 ;
+        return 0 ;
     }
     if (m_fifo->buf == NULL) {
         nfifo=m_fifo->next ;
         mem_free(m_fifo);
         m_fifo = nfifo;
-        return write();
+        return 1 ;
     }
     if (m_fifo->loc >= m_fifo->bufsize) {
         nfifo=m_fifo->next ;
         mem_free(m_fifo->buf);
         mem_free(m_fifo);
         m_fifo = nfifo;
-        return write();
+        return 1;
     }
-    if(m_fifo->loc==0&&m_fifo->bufsize>0){
-       // printf("send header\n");
-	struct dvr_ans ans ;
-	////////////////////////////////////
-	ans.anscode = ANSSTREAMDATA;
-	ans.anssize = m_fifo->bufsize;
-	ans.data = 0 ;
-	//Send( &ans, sizeof(ans));	
-	n=::send(m_sockfd,&ans,sizeof(ans),0);
-	if(n<0){
-         //  printf("send n<0\n");
-	    if( errno != EWOULDBLOCK ) {
-		    close();
-	    }
-            return res ;	    
-	}
-	//printf("header sent:%d\n",n);
-    }   
-    if(m_sockfd>0){
-     // printf("sending size:%d loc:%d\n",m_fifo->bufsize,m_fifo->loc);
-#if 0     
-      if(m_connchannel==0){
-	struct dvrtime dvrt ;
-	time_now(&dvrt);
-	printf("second:%d mini:%d\n",dvrt.second,dvrt.milliseconds);
-      }
-#endif      
-      n =::send(m_sockfd,
-		&(m_fifo->buf[m_fifo->loc]),
-		m_fifo->bufsize - m_fifo->loc, 0);	
-    }
-    if( n<0 ) {
-            printf("send n<0\n");
-	    if( errno != EWOULDBLOCK ) {
-		    close();
-	    }
-            return res ;
-    }
-//    if(m_fifo)
-//      printf("buffer size:%d n:%d\n",m_fifo->bufsize,n);   
-    m_active=2 ;
-    m_fifosize -= n ;
-    m_fifo->loc += n;
-    if (m_fifo->loc >= m_fifo->bufsize) {
-		nfifo=m_fifo->next ;
-		mem_free(m_fifo->buf);
-		mem_free(m_fifo);
-		m_fifo = nfifo;
-		if( m_fifo == NULL ) {
-			m_fifosize=0;
+    
+    if(m_sockfd>0 && m_fifo!=NULL ){
+		n =::send(m_sockfd,	&(m_fifo->buf[m_fifo->loc]),
+					m_fifo->bufsize - m_fifo->loc, 0);	
+		if( n<0 ) {
+			if( errno != EWOULDBLOCK ) {
+				close();
+			}
+			return 0 ;
 		}
-		else {
-			res = 1 ;
+		m_active=2 ;
+		m_fifo->loc += n;
+		if (m_fifo->loc >= m_fifo->bufsize) {
+			nfifo=m_fifo->next ;
+			m_fifosize -= m_fifo->bufsize ;
+			mem_free(m_fifo->buf);
+			mem_free(m_fifo);
+			m_fifo = nfifo;
 		}
     }
-
-    return res ;
+    
+    if( m_fifo==NULL ) m_fifosize = 0 ;
+    
+    return 0 ;
 }
 
 void dvrsvr::send_fifo(char *buf, int bufsize)
@@ -290,61 +260,39 @@ void dvrsvr::send_fifo(char *buf, int bufsize)
         nfifo->buf = (char *) mem_addref(buf);
     } else {
         nfifo->buf = (char *) mem_alloc(bufsize);
-        memcpy(nfifo->buf, buf, bufsize);
-        //mem_cpy32(nfifo->buf, buf, bufsize);
+        mem_cpy(nfifo->buf, buf, bufsize);
     }
     nfifo->next = NULL;
     nfifo->bufsize = bufsize;
     nfifo->loc = 0;
     
+    net_lock();
     if (m_fifo == NULL) {
         m_fifo = nfifo;
-	m_fifosize = bufsize ;
-        net_trigger();				// trigger sending
+		m_fifosize = bufsize ;
+		net_trigger();
     } else {
         pfifo = m_fifo;
-        while (pfifo->next != NULL)
+        while (pfifo->next != NULL) {
             pfifo = pfifo->next;
+        }
         pfifo->next = nfifo;
-	m_fifosize += bufsize ;
+		m_fifosize += bufsize ;
     }
+    net_unlock();
 }
 
 
 void dvrsvr::Send(void *buf, int bufsize)
 {
-    int n ;
-    char * cbuf = (char *)buf; 
-    int cbufsize = bufsize ;
-    while(cbufsize>0) {
-        if(m_sockfd){
-	    n = ::send(m_sockfd, cbuf, cbufsize, 0);
-	    if( n<0 ) {
-		if( errno==EWOULDBLOCK ) {
-		    usleep(1000);
-		}
-		else {
-		    close();		// net work error!
-		    return ;
-		}
-	    }
-	    else {
-		cbufsize-=n ;
-		cbuf+=n ;
-	    }
-	} else {
-	  break; 
-	}
-    }
-//    send_fifo((char *)buf, bufsize);
-/*
+
     char * cbuf = (char *)buf;
-    //int n;
+    int n;
     if( isclose() ) {
         return ;
     }
     
-    if ( m_fifo || mem_check (buf)) {
+    if ( m_fifo  || mem_check(buf) ) {
         send_fifo(cbuf, bufsize);
     }
     else {
@@ -362,8 +310,7 @@ void dvrsvr::Send(void *buf, int bufsize)
             cbuf+=n ;
             bufsize-=n ;
         }
-    } 
-*/
+    }
 }
 
 int dvrsvr::isclose()
@@ -374,6 +321,8 @@ int dvrsvr::isclose()
     return (m_sockfd <= 0);
 }
 
+static int fcount=1 ;
+
 int dvrsvr::onframe(cap_frame * pframe)
 {
     net_fifo *pfifo, *tfifo;
@@ -381,12 +330,119 @@ int dvrsvr::onframe(cap_frame * pframe)
         return 0;
     }
     if ((m_conntype == CONN_REALTIME||m_conntype==CONN_LIVESTREAM) && m_connchannel == pframe->channel) {
-        if(mIframe>0){
-           mIframe--;
-           if(pframe->frametype==FRAMETYPE_VIDEO){
-	      printf("channel:%d p frame dropped\n",m_connchannel);
-             return 0;
-	   }
+
+#ifdef APP_PWZ5
+		/*
+
+		// check if network jammed
+		if( pframe->frametype==FRAMETYPE_KEYVIDEO ) {
+			m_networkjam = 0 ;
+		}
+		if( m_networkjam ) {
+			return 0 ;
+		}
+		
+		if( pframe->frametype==FRAMETYPE_KEYVIDEO && 
+			m_fifo != NULL &&
+            m_fifosize > 2*pframe->framesize + 500000 )
+        {		
+			// Frame jamemed
+		
+			printf("Frame jammed :%d  Channel: %d\n", m_fifosize, m_connchannel );
+			
+			// seach for first jammed video frame in fifo
+			m_fifosize = 0 ;
+			pfifo = m_fifo ;
+			m_fifosize += pfifo->bufsize ;
+			
+			tfifo = pfifo->next ;
+			while( tfifo ) {
+				if( tfifo->bufsize == sizeof(struct dvr_ans) ) {
+					if( ((struct dvr_ans *) tfifo->buf)->anscode == ANSSTREAMDATA ){
+						break ;
+					}
+				}
+				pfifo = tfifo ;
+				m_fifosize += tfifo->bufsize ;
+				tfifo = pfifo->next ;
+			}
+			
+			int x = 0;
+			if( tfifo ) {
+				pfifo->next = NULL ;
+				// remove all tail fifos
+				while( tfifo ) {
+					pfifo = tfifo->next ;
+                    mem_free(tfifo->buf);
+                    mem_free(tfifo);
+                    x++ ;
+                    tfifo = pfifo ;
+				}
+			}
+			
+			printf("Drop %d frames. \n");
+
+			
+			printf("Net work jam!!!\n");
+
+			m_networkjam = 1 ;
+
+//			close();
+			return 0 ;
+			
+		}
+		*/
+		if( pframe->frametype==FRAMETYPE_KEYVIDEO && 
+			m_fifo != NULL )
+        {		
+			net_lock() ;
+			
+			pfifo = m_fifo ;
+			tfifo = pfifo->next ;
+			while( tfifo != NULL ) {
+				if( tfifo->loc == 0 &&
+					tfifo->bufsize == sizeof(struct dvr_ans) &&
+					((struct dvr_ans *) tfifo->buf)->anscode == ANSSTREAMDATA )
+				{
+					break ;
+				}
+				pfifo = tfifo ;
+				tfifo = pfifo->next ;
+			}
+			
+			if( tfifo!=NULL ) {
+				pfifo->next = NULL ;
+				
+				// remove all tail fifos
+				while( tfifo ) {
+					pfifo = tfifo->next ;
+					
+					m_fifosize -= tfifo-> bufsize ;
+                    mem_free(tfifo->buf);
+                    mem_free(tfifo);
+                    
+                    tfifo = pfifo ;
+				}
+			}
+			
+			net_unlock();
+		}
+		
+		// **** send frame buffer header for PLY266
+		struct dvr_ans * ans = (struct dvr_ans *)mem_alloc( sizeof(struct dvr_ans) ) ;
+		ans->anscode = ANSSTREAMDATA;
+		ans->anssize = pframe->framesize;
+		ans->data = 0 ;
+		send_fifo( (char *)ans, sizeof( *ans ) );
+        mem_free( ans );
+        send_fifo(pframe->framedata, pframe->framesize);
+
+#else
+		 if(mIframe>0){
+		   mIframe--;
+		   if(pframe->frametype==FRAMETYPE_VIDEO){
+			 return 0;
+		   }
         }
         if (pframe->frametype == FRAMETYPE_KEYVIDEO ) {	// for keyframes
             if(m_fifo != NULL &&
@@ -410,6 +466,8 @@ int dvrsvr::onframe(cap_frame * pframe)
             }
         }
         send_fifo(pframe->framedata, pframe->framesize);
+#endif
+        
         return 1;
     }
     //	else if( m_live ) {
@@ -420,13 +478,6 @@ int dvrsvr::onframe(cap_frame * pframe)
 
 void dvrsvr::onrequest()
 {
-#ifdef OUTPUT_COMMAND
-    printf( "Receive cmd : %d - payload : %d\n", m_req.reqcode, m_recvlen );
-#endif    
- //  dvr_log("Receive cmd : %d - payload : %d", m_req.reqcode, m_recvlen);
- //   if(m_req.reqcode==210){
-  //    dvr_log("Receive cmd:get stream day info");
-  //  }
     switch (m_req.reqcode) {
         case REQOK:
             ReqOK();
@@ -566,7 +617,7 @@ void dvrsvr::onrequest()
             DefaultReq();
             break;
         case REQSTREAMOPEN:
-	    powerNum=60;
+			powerNum=60;
             ReqStreamOpen();
             break;
         case REQSTREAMOPENLIVE:
@@ -693,11 +744,6 @@ void dvrsvr::ReqOK()
     ans.data=0;
     ans.anssize=0;
     Send(&ans, sizeof(ans));
-    
-#ifdef NETDBG
-    printf( "ReqOK\n");
-#endif    
-    
 }
 
 void dvrsvr::ReqEcho()
@@ -710,11 +756,6 @@ void dvrsvr::ReqEcho()
     if( m_recvlen>0 ) {
         Send(m_recvbuf, m_recvlen);
     }
-    
-#ifdef NETDBG
-    printf( "ReqEcho\n");
-#endif    
-    
 }
 
 void dvrsvr::ReqRealTime()
@@ -1084,23 +1125,20 @@ void dvrsvr::ReqStreamOpen()
     if( !m_keycheck && g_keycheck ) {
     		DefaultReq();
     		return ;
-    	}
+   	}
 
     struct dvr_ans ans ;
     if( m_req.data>=0 && m_req.data<cap_channels ) {
         if( m_playback ) {
             delete m_playback ;
         }
+        
         m_playback=new playback( m_req.data ) ;
         if( m_playback!=NULL ) {
             ans.anscode = ANSSTREAMOPEN;
             ans.anssize = 0;
             ans.data = DVRSTREAMHANDLE(m_playback) ;
             Send( &ans, sizeof(ans) );
-            
-#ifdef NETDBG
-            printf( "Stream Open : %d\n", ans.data);
-#endif    
         //    dvr_log("Stream Open : %d", m_req.data);
             return ;
         }
@@ -1173,7 +1211,6 @@ void dvrsvr::ReqOpenLive()
 void dvrsvr::ReqStreamClose()
 {
     struct dvr_ans ans ;
-    
     if( m_req.data == DVRSTREAMHANDLE(m_playback) ) {
         ans.anscode = ANSOK;
         ans.anssize = 0;
@@ -1232,12 +1269,6 @@ void dvrsvr::ReqStreamSeek()
 	} 	  
 //	printf("ans.code:%d size=%d data=%d\n",ans.anscode,ans.anssize,ans.data);	
 	Send(H264header, 40);
-#if 0	
-	int i;
-	for(i=0;i<40;++i)
-	  printf("%x ",H264header[i]);
-	printf("\n");
-#endif	
 #ifdef NETDBG
         printf("Stream seek, %04d-%02d-%02d %02d:%02d:%02d\n", 
                ((struct dvrtime *) m_recvbuf)->year,
@@ -1283,116 +1314,29 @@ void dvrsvr::ReqPrevKeyFrame()
 
 void dvrsvr::ReqStreamGetDataEx()
 {
-    void * pbuf=NULL ;
-    int  getsize=0 ;
+    void * framebuf ;
+    int  framesize=0 ;
     int  frametype ;
-   // printf("Request\n");
+	struct dvr_ans ans ;    
+	struct dvrtime frametime ;
+
     if( m_req.data == DVRSTREAMHANDLE(m_playback) && 
        m_playback )
     {
-
-      //  printf("get stream\n");
-        m_playback->getstreamdataex( &pbuf, &getsize, &frametype);
-        if( getsize>0  && pbuf ) {	  
-#if 0	      
-	    unsigned int mValue;
-	    int mIndex=0;
-	    int mPesLeng_L;
-	    int mPesLeng_H;
-	    int mPesLeng;	    
-	    unsigned char* pChar=(unsigned char*)pbuf;
-            mIndex=3;
-            mValue=(unsigned int)pChar[0]<<16 | \
-            (unsigned int)pChar[1]<<8 | \
-            (unsigned int)pChar[2];
-	    while(mIndex<getsize){
-	       if(mValue==0x000001){
-		  if(pChar[mIndex]==0xe0||pChar[mIndex]==0xc0){
-                     printf("mIndex:%d ",mIndex);
-		     ++mIndex;  //pes length h
-		     mPesLeng_H=pChar[mIndex];
-		     ++mIndex;  //pes length low;
-		     mPesLeng_L=pChar[mIndex];
-		     mPesLeng = mPesLeng_H<<8|mPesLeng_L;
-		     ++mIndex; //0x8c
-		   //  printf("%x ",pChar[mIndex]);
-		     ++mIndex; //0x80;
-		   //  printf("%x ",pChar[mIndex]);
-		     ++mIndex; //head length
-		   //  printf("header length:%d ",pChar[mIndex]);
-		     ++mIndex; //PTS 32-30
-		    // printf("%x ",pChar[mIndex]);
-		     u_int8_t mPTS0=((pChar[mIndex]>>1)&0x07);
-		    // printf("mPTS0:%x ",mPTS0);
-		     ++mIndex; //PTS 29-22
-		  //   printf("%x ",pChar[mIndex]);
-		     u_int8_t mPTS1= pChar[mIndex];
-		  //   printf("mPTS1:%x ",mPTS1);
-		     ++mIndex; //PTS 21-15;
-		   //  printf("%x ",pChar[mIndex]);
-		     u_int8_t mPTS2=((pChar[mIndex]>>1)&0x7f);
-		  //    printf("mPTS2:%x ",mPTS2);
-		     ++mIndex; //14-7
-		 //    printf("%x ",pChar[mIndex]);
-		     u_int8_t mPTS3= pChar[mIndex];
-		 //    printf("mPTS3:%x ",mPTS3);
-		     ++mIndex; //6-0;
-		  //   printf("%x ",pChar[mIndex]);
-		     u_int8_t mPTS4= ((pChar[mIndex]>>1)&0x7f);
-		  //   printf("mPTS4:%x ",mPTS4);
-		     u_int32_t mPTS=((u_int32_t)mPTS0<<30)|
-		                    ((u_int32_t)mPTS1<<22)|
-		                    ((u_int32_t)mPTS2<<15)|
-		                    ((u_int32_t)mPTS3<<7)|
-		                    (u_int32_t)mPTS4;
-	            
-		     if(frametype==FRAMETYPE_VIDEO){
-		       dvr_log("Packet size:%d PESLeng:%d Video PES, PTS:%u\n",getsize,mPesLeng,mPTS); 
-		     } else {
-		       dvr_log("Packet size:%d PESLeng:%d Audio PES,PTS:%u\n",getsize,mPesLeng,mPTS); 
-		     }			    
-		     break;
-		  }		   
-	       }
-	       mValue=((mValue<<16)>>8)|pChar[mIndex];
-	       ++mIndex;
-	    }
-#endif	  
-            struct dvr_ans ans ;
+		framesize = m_playback->getframetypeandsize( &frametype, &frametime );
+        if( framesize > 0 ) {
+			framebuf = mem_alloc( framesize );
+			m_playback->getframedata(framebuf, framesize);
             ans.anscode = ANS2STREAMDATAEX;
-            ans.anssize = getsize;
-            ans.data = 0; //frametype;
-            Send( &ans, sizeof( struct dvr_ans ) );
-            Send( pbuf, ans.anssize );
-
-#ifdef NETDBG
-            printf( "Stream Data: %d\n", ans.anssize);
-#endif                
-         //    printf( "Stream Data: %d type:%d\n", ans.anssize,frametype);
-         //   dvr_log("Stream Data: size=%d type=%d",ans.anssize,frametype);
-
-            if( m_playback ) {
-                m_playback->prereadex();
-            }
+            ans.anssize = sizeof(frametime) + framesize;
+            ans.data = frametype; 				//frametype;
+            Send( &ans, sizeof(ans) );
+            Send( &frametime, sizeof(frametime) );
+            Send( framebuf, framesize);
+            mem_free(framebuf);
             return ;
         }
     }        
-    else if( m_req.data == DVRSTREAMHANDLE(m_live) && 
-       m_live )
-    {
-        m_live->getstreamdata( &pbuf, &getsize, &frametype);
-        if( getsize>=0 && pbuf ) {
-            struct dvr_ans ans ;
-            ans.anscode = ANSSTREAMDATA ;
-            ans.anssize = getsize ;
-            ans.data = frametype ;
-            Send( &ans, sizeof(ans));
-            if( getsize>0 ) {
-                Send( pbuf, getsize );
-            }
-            return ;
-        }
-    }
     DefaultReq();
 }
 
@@ -1415,10 +1359,6 @@ void dvrsvr::ReqStreamGetData()
             ans.data = frametype;
             Send( &ans, sizeof( struct dvr_ans ) );
             Send( pbuf, ans.anssize );
-
-#ifdef NETDBG
-            printf( "Stream Data: %d\n", ans.anssize);
-#endif                
            //  printf( "Stream Data: %d type:%d\n", ans.anssize,frametype);
             //dvr_log("Stream Data: size=%d type=%d",ans.anssize,frametype);
 
@@ -1665,18 +1605,14 @@ void dvrsvr::Req2GetLocalTime()
 {
     struct dvr_ans ans ;
     struct dvrtime dvrt ;
-    try{
+
     time_now(&dvrt);
-   // printf("re-second:%d mini:%d\n",dvrt.second,dvrt.milliseconds); 
     ans.anscode = ANS2TIME;
     ans.anssize = sizeof( struct dvrtime );
     ans.data = 0 ;
     Send( &ans, sizeof(ans));
     Send( &dvrt, sizeof(dvrt));
-    }
-    catch(...){
-      printf("error in Req2GetLocalTime\n");
-    }
+
     return ;
 }
 
@@ -2123,6 +2059,20 @@ void dvrsvr::ReqSendData()
 			Send( &ans, sizeof(ans));
 			break;
 			
+		case PROTOCOL_PW_SETCOVERTMODE :
+			if( m_recvbuf && m_recvlen>0 ) {
+				dio_covert_mode( *m_recvbuf != 0 );
+			}
+			else {
+				dio_covert_mode( 0 );
+			}
+			
+			ans.anscode = ANSOK ;
+			ans.data = 0 ;
+			ans.anssize = 0 ;
+			Send( &ans, sizeof(ans));
+			break;
+			
 		default:
 			DefaultReq();
 	}
@@ -2314,6 +2264,18 @@ void dvrsvr::ReqGetData()
 			}
 			break ;
 			
+		case PROTOCOL_PW_GETWARNINGMSG:
+			{
+				extern char   g_diskwarning[] ;
+				int l = strlen( g_diskwarning ) ;
+				ans.anscode = ANSGETDATA ;
+				ans.data = PROTOCOL_PW_GETWARNINGMSG ;
+				ans.anssize = l+1 ;
+				Send( &ans, sizeof(ans));
+				Send( g_diskwarning, ans.anssize );
+			}
+			break ;			
+			
 		default:
 			DefaultReq();
 	}
@@ -2371,6 +2333,10 @@ void dvr_onkey( int keycode, int keydown ) 	// keyboard/keypad event
         if( keydown ) {
             rec_pwii_toggle_rec( keycode-(int)VK_C1 ) ;
             dvr_log("C%d pressed!", keycode-(int)VK_C1+1);
+            // turn off mic trigger for PWZ6
+            if( keycode==(int)VK_C1 ) {
+				dio_pwii_mic_off();
+			}
         }
     }
 }

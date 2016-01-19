@@ -22,23 +22,18 @@ all: $(TARGET)
 
 cfgdown.cgi: cfgdown.c $(EXTSOURCES) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -o $@ cfgdown.c $(LDFLAGS)
-	cp cfgdown.cgi  $(debug_folder)/www
 
 gcal.cgi : gcal.cpp ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h
 	$(CC) $(CFLAGS) -o $@ gcal.cpp ../../ioprocess/diomap.cpp $(LDFLAGS)
-	cp $@  $(debug_folder)/www
 
 gcrash.cgi : gcrash.cpp ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h
 	$(CC) $(CFLAGS) -o $@ gcrash.cpp ../../ioprocess/diomap.cpp $(LDFLAGS)
-	cp $@  $(debug_folder)/www
 
 dvrstatus.cgi : dvrstatus.cpp ../eagle_setup/getquery.cpp $(EXTHEADERS) $(EXTSOURCES) ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h
 	$(CC) $(CFLAGS) -o $@ dvrstatus.cpp ../net.cpp ../eagle_setup/getquery.cpp ../../ioprocess/diomap.cpp $(LDFLAGS)
-	cp $@  $(debug_folder)/www
 
 cfgreport : cfgreport.cpp $(EXTHEADERS) $(EXTSOURCES) ../../ioprocess/diomap.cpp ../../ioprocess/diomap.h
 	$(CC) $(CFLAGS) -o $@ cfgreport.cpp ../../ioprocess/diomap.cpp $(EXTSOURCES) $(LDFLAGS)  -lstdc++
-	cp $@  $(debug_folder)/www
 
 %.o : %.c $(HEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@

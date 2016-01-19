@@ -36,9 +36,11 @@ void * vri_setvri( char * vri, char * vbuf )
 	if( dash ) {
 		sscanf( dash+1, "%02d%02d%02d", &y, &m, &d) ;
 	}
+	
+	char * logdir = disk_getlogdir();
 
 	sprintf( vlogfile.setbufsize(500), "%s/../smartlog/%s_%04d%02d%02d_L.010", 
-		rec_basedir.getstring(),
+		logdir,
 		(char *)g_hostname,
 		y+2000,
 		m, 
@@ -46,7 +48,7 @@ void * vri_setvri( char * vri, char * vbuf )
 		
 	// _N file ?
 	sprintf( vnlogfile.setbufsize(500), "%s/../smartlog/%s_%04d%02d%02d_N.010", 
-		rec_basedir.getstring(),
+		logdir,
 		(char *)g_hostname,
 		y+2000,
 		m, 
@@ -62,7 +64,7 @@ void * vri_setvri( char * vri, char * vbuf )
 	if( log==NULL ) {
 		// just in case smartlog directory is not there
 		sprintf( vnlogfile.setbufsize(500), "%s/../smartlog", 
-			rec_basedir.getstring() );
+			logdir );
 		mkdir( vnlogfile, 0777 );	
 		log = fopen( vlogfile, "w" ) ;
 	}
@@ -103,7 +105,7 @@ void * vri_setvri( char * vri, char * vbuf )
 
 void vri_log( char * vri )
 {
-	if( rec_basedir.length() > 0 ) {
+	if( disk_getlogdir()!=NULL ) {
 		vri_setvri( vri, NULL );
 	}
 }
@@ -115,10 +117,11 @@ int vri_getlistsize( int * itemsize )
 	int rsize = 0 ;
 	struct dvrtime logtime ;
 	*itemsize = VRI_RECORD_LENGTH ;
-	if( rec_basedir.length() > 0 ) {
+	char * logdir = disk_getlogdir();
+	if( logdir!=NULL ) {
 		string vlogdir ;
 		sprintf( vlogdir.setbufsize(500), "%s/../smartlog/", 
-			rec_basedir.getstring() );
+			logdir );
 
 		dir d( vlogdir ) ;
 		while( d.find( "*_L.010" ) ) {
@@ -144,10 +147,11 @@ int vri_getlist( char * buf, int bufsize )
 	int vsize = 0 ;
 	int rsize = 0 ;
 	struct dvrtime logtime ;
-	if( rec_basedir.length() > 0 ) {
+	char * logdir = disk_getlogdir();
+	if( logdir!=NULL ) {
 		string vlogdir ;
 		sprintf( vlogdir.setbufsize(500), "%s/../smartlog/", 
-			rec_basedir.getstring() );
+			logdir );
 
 		dir d( vlogdir ) ;		
 		while( d.find( "*_L.010" ) && bufsize>vsize ) {

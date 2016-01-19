@@ -69,12 +69,26 @@ int checkloginpassword()
     password[0]=0;
     p = getquery( "login_username" );
     if( p )strcpy( username, p );
-    if( strcmp(username, "admin") == 0 ) {
-        // replace admin with root
-        strcpy(username, "root") ;
-    }
+
     p = getquery( "login_password" );
     if( p )strcpy( password, p );
+
+    if( strcmp(username, "root") != 0 ) {
+		fpasswd = fopen( APP_DIR "/adminpasswd", "r");
+		if( fpasswd ) {
+		    if( fgets(passwdline, sizeof(passwdline), fpasswd) ) {
+				strncpy(salt, passwdline, 13);
+				salt[12]=0;
+				key = crypt(password, salt);
+				if( key && strncmp( key, passwdline, strlen(key) )==0 ) {
+					setenv("loginname", username, 1);
+					res=1 ;
+				}
+			}
+			fclose( fpasswd );
+		}
+		return res ;
+	}
 
     int useshadow = 0 ;
 

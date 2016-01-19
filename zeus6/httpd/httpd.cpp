@@ -1138,8 +1138,6 @@ int http_input()
 
 void http()
 {
-	char host[64] ;
-	char port[32] ;
     if( recvok(fileno(fd_in), http_keep_alive*1000000)<=0 ) {
         http_keep_alive=0 ;
         return ;
@@ -1150,27 +1148,10 @@ void http()
  	http_status=200 ;		// assume OK
 	request_content_length=-1 ;		// not request content length.
 
-	struct sockaddr_in sname ;
-	socklen_t slen ;
-	slen = sizeof(sname);
-	if( getsockname(fileno(fd_in), (struct sockaddr *)&sname, &slen)==0 ) {
-		if( getnameinfo( (struct sockaddr *)&sname, slen, host, sizeof(host), port, sizeof(port), NI_NUMERICHOST|NI_NUMERICSERV )==0 ) {
-			setenv( "SERVER_ADDR", host, 1 );
-			setenv( "SERVER_NAME", host, 1 );
-			setenv( "SERVER_PORT", port, 1 );
-		}
-	}
-	slen = sizeof(sname);
-	if( getpeername(fileno(fd_in), (struct sockaddr *)&sname, &slen)==0 ) {
-		if( getnameinfo( (struct sockaddr *)&sname, slen, host, sizeof(host), port, sizeof(port), NI_NUMERICHOST|NI_NUMERICSERV )==0 ) {
-			setenv( "REMOTE_ADDR", host, 1 );
-			setenv( "REMOTE_PORT", port, 1 );
-		}
-	}
-
     if( http_input()==0 ) {
         http_error(400, NULL);
-        goto http_done ;
+		http_keep_alive = 0 ;
+		break ;
     }
 
     // save post data
@@ -1190,8 +1171,6 @@ http_done:
 
     // remove all HTTP_* environment and POST files
     clrservervar() ;
-
-	fflush( fd_out );
 
     return ;
 }
@@ -1267,9 +1246,14 @@ void http_listen()
     while( (asockfd=accept( sockfd, (struct sockaddr *)&saddr, &saddrlen  ))>0 ) {
         if( fork()==0 ) {
             // child process
-			fd_in = fdopen( asockfd, "r+b" );
-			fd_out = fd_in ;
             close( sockfd );	// close listening socket
+
+            dup2( asockfd, 0 );
+            dup2( asockfd, 1 );
+            
+            for( asockfd = 3; asockfd<10; asockfd++ ) 
+				close( asockfd );
+
             break;
         }
         close( asockfd ) ;
@@ -1278,6 +1262,36 @@ void http_listen()
 
 
     return ;
+}
+
+void initenv()
+{
+    // set document root dir
+    setenv( "DOCUMENT_ROOT", document_root, 1);
+	setenv( "SERVER_PROTOCOL", PROTOCOL, 1 );
+	setenv( "SERVER_SOFTWARE", SERVER_NAME, 1 );
+    chdir(document_root);
+    
+    struct sockaddr_in sname ;
+	socklen_t slen ;
+	slen = sizeof(sname);
+	if( getsockname(fileno(fd_in), (struct sockaddr *)&sname, &slen)==0 ) {
+		if( getnameinfo( (struct sockaddr *)&sname, slen, host, sizeof(host), port, sizeof(port), NI_NUMERICHOST|NI_NUMERICSERV )==0 ) {
+			setenv( "SERVER_ADDR", host, 1 );
+			setenv( "SERVER_NAME", host, 1 );
+			setenv( "SERVER_PORT", port, 1 );
+		}
+	}
+	slen = sizeof(sname);
+	if( getpeername(fileno(fd_in), (struct sockaddr *)&sname, &slen)==0 ) {
+		if( getnameinfo( (struct sockaddr *)&sname, slen, host, sizeof(host), port, sizeof(port), NI_NUMERICHOST|NI_NUMERICSERV )==0 ) {
+			setenv( "REMOTE_ADDR", host, 1 );
+			setenv( "REMOTE_PORT", port, 1 );
+		}
+	}
+	
+	// temperary directory
+	strcpy( temp_root, document_root );
 }
 
 int main(int argc, char * argv[])
@@ -1297,21 +1311,16 @@ int main(int argc, char * argv[])
         }
     }
 
-    // set document root dir
-    setenv( "DOCUMENT_ROOT", document_root, 1);
-	setenv( "SERVER_PROTOCOL", PROTOCOL, 1 );
-	setenv( "SERVER_SOFTWARE", SERVER_NAME, 1 );
-    chdir(document_root);
+	initenv();
 	
-	// temperary directory
-	strcpy( temp_root, document_root );
-
     // do some cleaning on SIGPIPE
     signal(SIGPIPE,  sigpipe );
 
     http_keep_alive=MAX_KEEP_ALIVE ;
     while( http_keep_alive>0 && maxkeepalive-->0 ) {
 	    http();
+		fflush( fd_out );
+		fsync( fileno(fd_out) );
     }
 
     return 0 ;

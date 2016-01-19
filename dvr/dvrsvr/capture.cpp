@@ -315,9 +315,12 @@ void capture::onframe(cap_frame * pcapframe)
         memcpy( m_header, pcapframe->framedata, pcapframe->framesize );
         return ;
     }
+    
     rec_onframe(pcapframe);
+    
     net_onframe(pcapframe);
-    screen_onframe(pcapframe);
+    
+//    screen_onframe(pcapframe);
 
 #ifdef EAGLE34
 

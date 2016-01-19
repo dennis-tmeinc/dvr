@@ -9,13 +9,12 @@ CFLAGS+= -Wall
 
 HEADERS=
 
-LDFLAGS=
+LDFLAGS+= -lcrypt -lstdc++
 
-all: eaglehttpd eagle_setup- getsetup- cfgdown- livecam-
+all: eaglehttpd- eagle_setup- getsetup- cfgdown- livecam-
 
-eaglehttpd: eaglehttpd.c
-	$(CC) $(CFLAGS) -o $@ eaglehttpd.c $(LDFLAGS)
-	cp eaglehttpd  $(debug_folder)/www
+eaglehttpd- :
+	make -C eaglehttpd
 
 eagle_setup- :
 	make -C eagle_setup
@@ -31,8 +30,7 @@ cfgdown- :
 	make -C cfgdown
 
 clean :
-	rm -f eaglehttpd
-	rm -f *.o
+	make -C eaglehttpd clean
 	make -C eagle_setup clean
 	make -C getsetup clean
 	make -C livecam clean

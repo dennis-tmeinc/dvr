@@ -1,59 +1,64 @@
 #!/bin/sh
 
-#PATH=/bin:/sbin:/usr/bin:/usr/sbin:/mnt/nand:/mnt/nand/dvr
-#export PATH
+export LD_LIBRARY_PATH=/davinci/dvr/lib
+export PATH=/davinci/dvr:/davinci:/bin:/sbin:/usr/bin:/usr/sbin
+
+cd /
+
+hostname `cfg get system hostname`
+if [ ! -f /etc/TZ ] ; then
+	timezone=`cfg get system timezone`
+	tzx=`cfg get timezones $timezone`
+	echo ${tzx%% *} > /etc/TZ
+fi
 
 ifconfig lo 127.0.0.1
 
-#preset ether net address
-ifconfig eth0 192.168.42.42 netmask 255.255.255.0
+#preset ether net address (use default)
+ifconfig eth0 192.168.1.100 netmask 255.255.255.0
 
-#copy web files
-mkdir /home/www
-cd /home/www
-# install web server
-/mnt/nand/dvr/httpd.sfx
-
-# restart inetd
-#echo "Restart inetd."
-inetdpid=`ps | awk '$5 ~ /inetd/ {print $1}'`
-
-kill -TERM ${inetdpid}
-sleep 1
-/davinci/xinetd &  < /dev/null > /dev/null 2> /dev/nul
-
-echo "inetd done"
-
-mkdir /etc/dvr
-
-# setup DVR configure file
-ln -sf /mnt/nand/dvr/dvrsvr.conf /etc/dvr/dvr.conf
+setnetwork
 
 # start io module
-#echo "Start IO PROCESS"
-ioprocess
+echo "Start IO PROCESS"
+zdaemon ioprocess
 
 echo "start hotplug"
 # start hotplug deamond
-/mnt/nand/dvr/tdevd /mnt/nand/dvr/tdevhotplug 
+zdaemon tdevd /mnt/nand/dvr/tdevhotplug
 # mount disk already found
-/mnt/nand/dvr/tdevmount /mnt/nand/dvr/tdevhotplug 
+zdaemon tdevmount /mnt/nand/dvr/tdevhotplug 
 
-sleep 4
 echo "start dvr"
-cp /mnt/nand/dvr/libfbdraw.so /usr/lib
 # start dvr server
-dvrsvr  
+zdaemon dvrsvr
 
-sleep 5
+# start remote access
+echo "start rconn"
+zdaemon rconn
 
-# wifi driver
-#insmod /dav/rt73.ko
+# to restart wpa_supplicant
+killall wpa_supplicant
+killall wpa_cli
 
-#smartftp support
-#ln -sf /dav/dvr/librt-0.9.28.so /lib/librt.so.0
-cp /mnt/nand/dvr/libcurl.so.4 /usr/lib
+sleep 2
 
+echo "ctrl_interface=/var/run/wpa_supplicant" > /var/run/wpa.conf
+wpa_supplicant -Dwext -iwlan0 -c/var/run/wpa.conf -B
+wpa_cli -B -i wlan0 -a /mnt/nand/dvr/wpa_cli-action.sh
 
+#link web server 
+#mkdir /home/www
+#ln -sf /davinci/dvr/eaglehttpd /home/www/eaglehttpd
+#ln -sf /davinci/dvr/www/cgi /home/www/cgi
+mkdir /var/www
+ln -sf /davinci/dvr/www/cgi /var/www/cgi
 
-
+# restart inetd (not necessary now !!!)
+# echo "Restart inetd."
+# inetdpid=`ps | awk '$5 ~ /inetd/ {print $1}'`
+# kill -TERM ${inetdpid}
+# sleep 2
+# zdaemon inetd /davinci/etc/inetd.conf
+# echo "inetd restarted."
+# sleep 1

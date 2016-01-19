@@ -453,17 +453,17 @@ int print_cfgreport()
 
         // # resolution, 0:CIF, 1:2CIF, 2:DCIF, 3:4CIF
         // resolution
-        static char * picres[5]={
-            "352x240",
-            "704x240",
+        static char * picres[8]={
+            "360x240",
+            "720x240",
             "528x320",
-#ifdef APP_TVS_ZEUS6            
             "720x480",
-#else
-			"704x480",
-#endif            
-            "" } ;
+            "176x120",
+            "1280x720 (720p)",
+            "1920x1080 (1080p)",
+            "Unknown" } ;
         ivalue = dvrconfig.getvalueint(section, "resolution");
+        if( ivalue<0 || ivalue>7 ) ivalue = 7;
         printf("Picture resolution : %s\n", picres[ivalue] );
 
         // frame_rate

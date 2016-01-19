@@ -9,7 +9,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-
 class dir {
 protected:
     DIR * m_pdir ;
@@ -35,7 +34,7 @@ public:
     void open( const char * path ) {
         close();
 
-        m_path = new char [1024] ;
+        m_path = new char [512] ;
         strcpy( m_path, path );
         
         m_dirlen=strlen( m_path ) ;
@@ -76,15 +75,41 @@ public:
         if( m_pdir ) {
             struct dirent * ent ;
             while( (ent=readdir(m_pdir))!=NULL  ) {
-                // skip . and .. directory and any hidden files
-                if( ent->d_name[0]=='.' )
-                    continue ;
+                   
                 if( pattern && fnmatch(pattern, ent->d_name, 0 )!=0 ) {
                     continue ;
                 }
                 strcpy( m_path+m_dirlen, ent->d_name );
                 m_type = ent->d_type ;
-                return 1 ;
+				if( m_type == DT_UNKNOWN ) {
+					struct stat st ;
+					if( stat( m_path, &st )==0 ) {
+						if( S_ISREG(st.st_mode) ) {
+							m_type = DT_REG ;
+						}
+						else if( S_ISDIR(st.st_mode) ) {
+							m_type = DT_DIR ;
+						}
+						else if( S_ISCHR(st.st_mode) ) {
+							m_type = DT_CHR ;
+						}
+						else if( S_ISBLK(st.st_mode) ) {
+							m_type = DT_BLK ;
+						}
+						else {
+							continue ;
+						}
+					}
+					else {
+						continue ;
+					}
+				}
+				
+				// skip . and .. directory
+                if( m_type == DT_DIR && ent->d_name[0]=='.' )
+                    continue ;
+                    
+		        return 1 ;
             }
         }
         return 0 ;
@@ -107,45 +132,26 @@ public:
 
     // check if found a dir
     int    isdir() {
-        if( m_type == DT_DIR ) {
-			return 1 ;
-		}
-		else if( m_type == DT_UNKNOWN ) {
-			struct stat st ;
-			if( stat( m_path, &st )==0 ) {
-				return S_ISDIR(st.st_mode) ;
-			}
-		}
-        return 0 ;
+		return (m_type == DT_DIR ) ;
     }
 
     // check if found a regular file
     int    isfile(){
-        if( m_type == DT_REG ) {
-			return 1 ;
-		}
-		else if( m_type == DT_UNKNOWN ) {
-			struct stat st ;
-			if( stat( m_path, &st )==0 ) {
-				return S_ISREG(st.st_mode) ;
-			}
-		}
-		return 0;
+        return (m_type == DT_REG);
     }
+    
+    int    isblk(){
+        return (m_type == DT_BLK);
+	}
+
+    int    ischr(){
+        return (m_type == DT_CHR);
+	}
 
     // check if found a device file
     int    isdev(){
-        if( m_type == DT_CHR || m_type == DT_BLK ) {
-			return 1 ;
-		}
-		else if( m_type == DT_UNKNOWN ) {
-			struct stat st ;
-			if( stat( m_path, &st )==0 ) {
-				return S_ISBLK(st.st_mode) || S_ISCHR(st.st_mode)  ;
-			}
-		}
-        return 0;
-    }
+        return ( m_type == DT_CHR || m_type == DT_BLK ) ;
+	}
 };
 
 

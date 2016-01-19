@@ -18,7 +18,7 @@ LDFLAGS= -lstdc++
 
 CFLAGS+= -I../dvrsvr -Wall
 
-TARGET= login\
+TARGET= login loginx\
 	pagevalue\
 	cfgupload\
 	firmwareupd\
@@ -30,6 +30,9 @@ all: $(TARGET)
 
 login : login.cpp getquery.cpp
 	$(CC) $(CFLAGS) -o $@ login.cpp getquery.cpp $(LDFLAGS) -lcrypt
+	
+loginx : loginx.cpp getquery.cpp
+	$(CC) $(CFLAGS) -o $@ loginx.cpp getquery.cpp $(LDFLAGS) -lcrypt
 
 pagevalue : pagevalue.cpp getquery.cpp
 	$(CC) $(CFLAGS) -o $@ pagevalue.cpp  getquery.cpp $(LDFLAGS)

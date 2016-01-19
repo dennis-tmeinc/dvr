@@ -1,16 +1,6 @@
-/* --- Changes ---
- * 09/02/2009 by Harrison
- *   1. Fixed Record status for Sensor trigger mode
- *
- * 10/08/2009 by Harrison
- *   1. Fixed Sensor trigger recording bug (offset by 1)
- *
- */
 
 #include "dvr.h"
 #include "../ioprocess/diomap.h"
-
-string rec_basedir;
 
 static pthread_t rec_threadid;
 static int rec_run = 0 ;           // 0: quit record thread, 1: recording
@@ -31,7 +21,6 @@ enum REC_STATE {
     REC_RECORD,         // recording
     REC_LOCK,           // recording lock file
 };
-
 
 struct rec_fifo {
     struct rec_fifo *next;
@@ -86,14 +75,15 @@ class rec_channel {
 		float m_gforce_trigger_value ;		// gforce trigger value 
 		int m_speed_trigger ;				// enable speed trigger ? 
 		float m_speed_trigger_value ;		// speed trigger value 
-
+      
+        REC_STATE   m_filerecstate ;
+        dvrfile 	m_file;					// recording file
         
         // variable for file write
         string m_prevfilename ;				// previous recorded file name.
-        string m_filename;
-        REC_STATE   m_filerecstate ;
-        dvrfile m_file;						// recording file
-        
+        int    m_prevfilemode ;				//  REC_PRERECORD,  REC_RECORD,  REC_LOCK
+        int    m_prevfilelen ;				//  previous file length in seconds
+                
         int m_maxfilesize;
         int m_maxfiletime;
         dvrtime m_filebegintime;
@@ -106,12 +96,14 @@ class rec_channel {
         
         int m_active ;
         time_t m_activetime ;
+        
+        struct dvrtime m_lock_starttime ;	        // L rec start time      
+        struct dvrtime m_rec_starttime ;	        // N rec start time      
 
         //	rec_index m_index ;			// on/off index
         //	int m_onoff ;				// on/off state
-
         dvrfile m_prelock_file;			// pre-lock recording file
-        struct dvrtime m_state_starttime ;	        // record state start time      
+        
         int m_framerate;
 		int m_width;
 		int m_height;
@@ -125,7 +117,6 @@ class rec_channel {
         
         void start();				// set start record stat
         void stop();				// stop recording, frame data discarded
-
 
 #ifdef  PWII_APP
 
@@ -163,7 +154,6 @@ class rec_channel {
         void putfifo(rec_fifo * fifo);
         void releasefifo(struct rec_fifo *fifo);
         int  clearfifo();
-        void addfifo(cap_frame * pframe);
         int setfifotype( REC_STATE t );
         
         void onframe(cap_frame * pframe);
@@ -180,17 +170,38 @@ class rec_channel {
         void breakfile(){			// start a new recording file
             m_reqbreak = 1;
         }
-        int  recstate() {
-            return( m_file.isopen() &&
-		    (m_filerecstate == REC_RECORD ||
-		     //m_filerecstate == REC_POSTLOCK ||
-		     //m_filerecstate == REC_POSTRECORD ||
-		     m_filerecstate == REC_LOCK) );
-        }
         int  lockstate() {
             return( m_file.isopen() &&
 		    m_filerecstate == REC_LOCK  );
 		}
+		int  recstate() {
+            return( m_file.isopen() &&
+		    (m_filerecstate == REC_RECORD ||
+		     m_filerecstate == REC_LOCK) );
+        }
+        
+        // get record detail state
+        //  bits definition
+		//         2: recording
+		//         3: force-recording
+		//         4: lock recording
+		//         5: pre-recording
+		//         6: in-memory pre-recording
+        int recstate2() {
+			int st = 0 ;
+			if(  m_file.isopen() ) {
+				if( m_filerecstate == REC_RECORD )
+					st |= 4 ;
+				if( m_filerecstate == REC_LOCK ) 
+					st |= (4|16) ;
+			}
+			if( m_recstate == REC_PRERECORD ) 
+				st |= 1<<5 ;
+			if( m_inmemprerecord ) 
+				st |= 1<<6 ;
+			return st ;
+		}
+        
         void update();          						// update recording status
         void alarm();						            // set recording alarm.
 
@@ -288,6 +299,8 @@ rec_channel::rec_channel(int channel)
     if( m_prerecord_time>rec_maxfiletime )
         m_prerecord_time=rec_maxfiletime ;
     //	m_prerecord_file = NULL ;
+    m_prevfilemode == REC_STOP  ;
+    
     //	time_dvrtime_init( &m_prerecord_filestart, 2000 );
     
     // initialize post-record variables
@@ -355,15 +368,19 @@ void rec_channel::stop()
 {
     m_recstate = REC_STOP;
 }
+
 ///////////////////////////
-void rec_channel::addfifo(cap_frame * pframe)
+void rec_channel::onframe(cap_frame * pframe)
 {
     int s ;
     struct rec_fifo *nfifo;
+        
+    if (pframe->channel != m_channel ) {
+		return ;
+	}
     
     if( m_recstate == REC_STOP ||
        rec_pause ||
-       rec_basedir.length()<=0 ||
        dio_standby_mode )
     {
 		clearfifo();
@@ -430,6 +447,7 @@ void rec_channel::addfifo(cap_frame * pframe)
         framedroped=0;
         nfifo->key=1 ;
         m_recreq = 1 ;			// to continue recording thread
+       
     }
     else {
         nfifo->key=0 ;
@@ -533,13 +551,6 @@ int rec_channel::setfifotype( REC_STATE t )
     return t ;
 }
 
-void rec_channel::onframe(cap_frame * pframe)
-{
-    if (pframe->channel == m_channel ) {
-        addfifo(pframe);
-    }
-}
-
 /*
 struct file_copy_struct {
     int  start ;
@@ -599,45 +610,39 @@ int rec_channel::fileclosed()
 // close all openning files
 void rec_channel::closefile()
 {
-    char newfilename[512];
+	string filename ;
+	string newfilename ;
     char *rn;
     int  filelength ;
     
     if (m_file.isopen()) {
-        m_file.close();
 		filelength = time_dvrtime_diff(&m_fileendtime, &m_filebegintime);
-        if( filelength<5 || filelength>10000 ) {
-            m_file.remove(m_filename.getstring());
-            m_filename="";
-            return ;
-        }
+		filename = m_file.getfilename();
+        m_file.close();
+
         // need to rename to contain file lengh
-        strcpy(newfilename, m_filename.getstring());
-        if ((rn = strstr(newfilename, "_0_")) != NULL) {
+        newfilename.setbufsize(512) ;
+        strcpy( (char *)newfilename, (char *)filename );
+        char * nbase = basefilename( (char *)newfilename );
+        
+        if ((rn = strstr(nbase, "_0_")) != NULL) {
             sprintf( rn, "_%d_%c_%s.266", 
                     filelength, 
                     m_filerecstate == REC_LOCK ? 'L' : 'N',
                     g_hostname );
-            m_file.rename( m_filename.getstring(), newfilename ) ;
+            dvrfile::rename( filename, newfilename ) ;
             
-            if( m_filerecstate == REC_PRERECORD ) {			
-				// remove previous pre-recording clip
-                if( m_prevfilename.length()>0 ) {
-                    m_file.remove( m_prevfilename.getstring() );
-                }
-				// save file name as previous name
-				m_prevfilename = newfilename ;
-            }
-            else {
-				m_prevfilename = "" ;
-				disk_renew( newfilename );
+			// remove previous pre-record video
+			if( m_filerecstate == REC_PRERECORD && m_prevfilemode == REC_PRERECORD && m_prevfilename.length()>0 ) {
+				dvrfile::remove( m_prevfilename.getstring() );
 			}
+               
+			// save file name as previous name
+			m_prevfilename = newfilename ;
+			m_prevfilemode = m_filerecstate ;
+			m_prevfilelen = filelength ;
 			
         }
-        m_filename="";
-		
-		// drop caches, hope to free up some main memory
-		mem_dropcaches();        
     }
 }
 
@@ -645,10 +650,9 @@ void rec_channel::closefile()
 //  return  0: data not used (keep in fifo), 1: data used or should be discard
 void rec_channel::recorddata(rec_fifo * data)
 {
-    char newfilename[512];
     int l;
     DWORD timestamp ;
-    
+
     if( data->bufsize<=0 || data->buf==NULL ) {
         closefile();
         return ;
@@ -673,53 +677,35 @@ void rec_channel::recorddata(rec_fifo * data)
         }
         m_lastkeytimestamp = timestamp ;
     }
-    
+		
     // create new dvr file
     if ( (!m_file.isopen()) && data->key ) {	// need to open a new file
+		
         // create new record file
-        if (rec_basedir.length() <= 0) {	// no base dir, no recording disk available
-            // frame data should be discarded
-            return ;
-        }
+        // if (rec_basedir.length() <= 0) {	// no base dir, no recording disk available
+        //    return ;
+        // }
 
-      //  if(m_width<320){
-	  m_width=GetVideoWidth(m_channel);
-	  m_height=GetVideoHight(m_channel);   
-	//}
-	//dvr_log("width:%d height:%d, framerate:%d",m_width,m_height,m_framerate);
+
+		//  if(m_width<320){
+		m_width=GetVideoWidth(m_channel);
+		m_height=GetVideoHight(m_channel);   
+		//}
+		//dvr_log("width:%d height:%d, framerate:%d",m_width,m_height,m_framerate);
         mFileHeader.video_height=m_height;
         mFileHeader.video_width=m_width;
-	mFileHeader.video_framerate=m_framerate;
-        // make date directory
-        sprintf(newfilename, "%s/%04d%02d%02d", 
-                rec_basedir.getstring(),
-                data->time.year,
-                data->time.month,
-                data->time.day );
-        mkdir(newfilename, S_IFDIR | S_IRWXU | S_IRGRP | S_IROTH);
-        
-        // make channel directory
-        l = strlen(newfilename);
-        sprintf(newfilename + l, "/CH%02d", m_channel);
-        mkdir(newfilename, S_IFDIR | S_IRWXU | S_IRGRP | S_IROTH);
-        
-        // make new file name
-        l = strlen(newfilename);
-        sprintf(newfilename + l,
-                "/CH%02d_%04d%02d%02d%02d%02d%02d_0_%c_%s.266", 
-                m_channel,
-                data->time.year,
-                data->time.month,
-                data->time.day,
-                data->time.hour,
-                data->time.minute,
-                data->time.second,
-                data->rectype==REC_LOCK?'L':'N', 
-                g_hostname);
-        m_fileday = data->time.day ;
+		mFileHeader.video_framerate=m_framerate;
+		
+		// retrieve base dir depends on file type ?
+		string * newfilename = dvrfile::getdvrfilename( &(data->time), m_channel, data->rectype==REC_LOCK , 0 ) ;
+		if( newfilename == NULL ) {
+			// disk not ready, frame discarded
+			return ;
+		}
+		
+		m_fileday = data->time.day ;
 	
-        if (m_file.writeopen(newfilename, "wb", &mFileHeader)) {
-            m_filename = newfilename;
+        if (m_file.writeopen((char *)(*newfilename), "wb", &mFileHeader)) {
             m_filebegintime = data->time;
             m_filebegintime.milliseconds=0 ;
             m_lastkeytimestamp = timestamp ;
@@ -727,8 +713,10 @@ void rec_channel::recorddata(rec_fifo * data)
             //			dvr_log("Start recording file: %s", newfilename);
         } else {
             dvr_log("File open error:%s", newfilename);
-            rec_basedir="";
+            closefile();
         }
+        
+        delete newfilename ;
     }
     
     // record frame
@@ -736,7 +724,6 @@ void rec_channel::recorddata(rec_fifo * data)
         if( m_file.writeframe(data->buf, data->bufsize, data->key, &(data->time) )<=0 ) {
             dvr_log("record:write file error.");
             closefile();
-            rec_basedir="";
         }
     }
     return  ;
@@ -745,21 +732,25 @@ void rec_channel::recorddata(rec_fifo * data)
 // use prelock_lock to ensure only one prelock thread is running. ( to reduce cpu usage and improve performance )
 static int rec_prelock_lock = 0 ;
 
-void * rec_prelock_thread(void * param)
+struct rec_prelock_thread_param {
+	string breakfile ;
+	int    breaktime ;
+} ;
+
+void * rec_prelock_thread( void * param )
 {
     dvr_lock(&rec_prelock_lock, 1000000);
-
- //   pthread_mutex_lock(&prelock_mutex);
+    
+    struct rec_prelock_thread_param * pa = ( struct rec_prelock_thread_param * )param ;
+ 
     dvrfile prelockfile ;
-  //  rec_prelock_lock++;   
-    if (prelockfile.open((char *)param, "r+")) {
-        prelockfile.repairpartiallock();
+    if (prelockfile.open((char *)(pa->breakfile), "r+")) {
+        prelockfile.breakLfile( pa->breaktime ) ;
         prelockfile.close();
     }
     
-    delete (char *)param ;
- //   rec_prelock_lock--;   
- //   pthread_mutex_unlock(&prelock_mutex);
+    delete pa ;
+ 
     dvr_unlock(&rec_prelock_lock);
     return NULL ;
 }
@@ -796,70 +787,59 @@ static int get_new_file_name(char *filename, char *newname, char type)
 }
 #endif
 
+
+// recoding mode just turn from rec to lock
 // duplication pre-lock data
 void rec_channel::prelock()
 {
-    char * lockmark ;
-    char lockfilename[300] ;
-    struct dvrtime pfiletime ;
     int    pfilelength ;
-  
-#if 0  
-    if (!get_new_file_name(m_filename.getstring(), lockfilename, 'L')) {
-      m_file.rename( m_filename.getstring(), lockfilename ) ;
-      m_filename = lockfilename;
-      fprintf(stderr, "renamed to %s\n", m_filename.getstring());
-    }
-#endif
 
+    if( !m_file.isopen() ) {
+		return ;
+	}
+
+	// current recording file time
     pfilelength = time_dvrtime_diff(&m_fileendtime, &m_filebegintime);
-    if( pfilelength > m_prelock_time + 10 ) {
-        closefile();
-    }
     
-    if( m_prevfilename.length()<=5 ) {
-        return ;
-    }
+    if( pfilelength < m_prelock_time + 10 ) {
+		
+		printf("REC getbase\n");
+		
+		char * baseN = disk_getbasedir(0) ;
+		char * baseL = disk_getbasedir(1) ;
+
+		printf("REC getbase %p : %p\n", baseN, baseL);
+
+		if( baseN == baseL ) {		// same disk for L/N
+			m_filerecstate == REC_LOCK ;
+			return ;				// keep recording to L file
+		}
+		else {
+			m_filerecstate == REC_LOCK ;
+			closefile();			// close current recording as L file, let bgarch do the background copying
+			return ;
+		}
+	}
+	
+	// require to broke this file into 2
+	closefile();
+
+	// create a thread to break this partial locked file	
+	struct rec_prelock_thread_param * pa = new struct rec_prelock_thread_param ;
+    pa->breakfile = (char *)m_prevfilename ;
+    pa->breaktime = pfilelength - m_prelock_time ; 
     
-    strcpy( lockfilename, m_prevfilename.getstring() );
-    pfilelength = f264length ( lockfilename );
-    f264time ( lockfilename, & pfiletime );
+    m_prevfilemode = REC_STOP ;		// invalidate previous file 
     
-    int beforelock = time_dvrtime_diff(&m_fileendtime, &pfiletime ) - m_prelock_time ;
-    if( beforelock < 10 ) {
-        // rename file to full lcoked file name
-        lockmark = strstr( lockfilename, "_N_" ) ;
-        if( lockmark ) {
-            lockmark[1] = 'L' ;
-            dvrfile::rename( m_prevfilename.getstring(), lockfilename );
-            disk_renew( lockfilename );
-        }
-    } else if( beforelock > 0 && pfilelength - beforelock > 5 ) {
-        // rename to partial locked file name
-        lockmark = strstr( lockfilename, "_N_" ) ;
-        if( lockmark && strlen(lockmark) > 4) {
-            char tail[256] ;
-            strcpy( tail, &lockmark[3] );
-            sprintf( lockmark, "_L_%d_%s", 
-                    pfilelength - beforelock, 
-                    tail );
-            dvrfile::rename( m_prevfilename.getstring(), lockfilename );
-            disk_renew( lockfilename );
-            
-            // create a thread to break this partial locked file
-            pthread_t prelockthread ;
-            char * thlockfilename ;
-            thlockfilename = new char [strlen(lockfilename)+2] ;
-            strcpy( thlockfilename, lockfilename );
-            if( pthread_create(&prelockthread, NULL, rec_prelock_thread, (void *)thlockfilename ) == 0 ) {
-                pthread_detach( prelockthread );
-            }
-            else {
-                delete thlockfilename ;
-            }
-        }
-    }
-    // else  all file no locked
+	// create a thread to break this partial locked file
+	pthread_t prelockthread ;
+	if( pthread_create(&prelockthread, NULL, rec_prelock_thread, (void *)pa ) == 0 ) {
+		pthread_detach( prelockthread );
+	}
+	else {
+		delete pa ;
+	}
+	
 }
 
 int rec_channel::dorecord()
@@ -928,7 +908,6 @@ int rec_channel::dorecord()
    
     m_fileendtime=fifo->time ;
     if( fifo->key ) {
-		
         if( fifo->rectype != m_filerecstate ) {
             if( fifo->rectype == REC_PRERECORD ) {
                 closefile();
@@ -960,7 +939,7 @@ int rec_channel::dorecord()
    
     m_active=1 ;
     fifo = getfifo();
-    
+        
     if(fifo->rectype == REC_STOP ) {
         closefile();                       
     }
@@ -1033,37 +1012,32 @@ void rec_channel::update()
         return ;
     }
 
+	if( dio_runmode() == 0 ) {
+		m_recstate == REC_STOP ;
+	}
+	else {
+		if( m_recstate == REC_STOP )
+			start();
+	}
+
     if( m_recstate == REC_STOP )
         return;
 
-
 #ifdef PWII_APP        
-	int tick = time_gettick();
-	if( tick < m_lock_endtime ) {
-        m_recstate=REC_LOCK;
-        return ;
-	}
+	// check lock/record timeout
+	if(  m_recstate == REC_LOCK && time_gettick() <= m_lock_endtime ) {
+		eventmark = 1 ;
+	} 
 #endif
 
-    time_now(&tnow);
-
-	// check lock/record timeout
-	if( m_recstate == REC_LOCK ) {
-        if(time_dvrtime_diff(&tnow, &m_state_starttime) > m_postlock_time){
-			m_recstate = REC_PRERECORD ;
-        }
-	}
-	else if( m_recstate == REC_RECORD ) {
-        if( time_dvrtime_diff(&tnow,&m_state_starttime) > m_postrecord_time ){
-			m_recstate = REC_PRERECORD ;
-        }   
-	}
-
 	// global trigger
-	trigger = rec_trigger ;
-
     if( event_tm ) {
 		eventmark = 1 ;
+	}
+
+	// not a event marker now, 2015-10-01
+	if( rec_trigger ) {
+		trigger = 1 ;
 	}
 
 	// G-Force Trigger
@@ -1086,25 +1060,25 @@ void rec_channel::update()
 	}
 	
 	// sensor trigger
-     if( m_recordmode==1 || m_recordmode==3 ) {	// sensor triggger mode				// sensor triggger mode
-
-		for(i=0; eventmark == 0 && i<num_sensors; i++) {
-			int sv = sensors[i]->value() ;
-			int xsv = sensors[i]->xvalue() ;
-			int tr=m_triggersensor[i] ;
-			int trig = ( (tr&1) && sv ) ||
-						 ( (tr&2) && (!sv) ) ||
-						 ( (tr&4) && sv && (!xsv) ) ||
-						 ( (tr&8) && (!sv) && xsv ) ;
-			if( trig ) {
-				trigger = 1 ;
-				if( sensors[i]->iseventmarker() ) {
-					eventmark = 1 ;
-				}
+	for(i=0; eventmark == 0 && i<num_sensors; i++) {
+		int sv = sensors[i]->value() ;
+		int xsv = sensors[i]->xvalue() ;
+		int tr=m_triggersensor[i] ;
+		int trig = ( (tr&1) && sv ) ||
+					 ( (tr&2) && (!sv) ) ||
+					 ( (tr&4) && sv && (!xsv) ) ||
+					 ( (tr&8) && (!sv) && xsv ) ;
+		if( trig ) {
+			trigger = 1 ;
+			if( sensors[i]->iseventmarker() ) {
+				eventmark = 1 ;
 			}
-
 		}
+	}
 
+	// continue recording mode = always trigger
+	if( m_recordmode == 0 ) { 
+		trigger=1 ;
 	}
 	
 	// motion trigger
@@ -1114,17 +1088,30 @@ void rec_channel::update()
 		}
 	}
 
+	// get current time 
+    time_now(&tnow);
+
 	// set record state
 	if( eventmark ) {
-        m_state_starttime = tnow ;		
+        m_lock_starttime = tnow ;		
+        m_rec_starttime = tnow ;
 		m_recstate = REC_LOCK ;
 	}
 	else if( trigger ) {
-        m_state_starttime = tnow ;		
+        m_rec_starttime = tnow ;
         if( m_recstate == REC_PRERECORD ) {
 			m_recstate = REC_RECORD ;
 		}
-	}	
+	}
+	
+    if( m_recstate == REC_LOCK  && time_dvrtime_diff(&tnow, &m_lock_starttime) > m_postlock_time){
+		m_recstate = REC_RECORD ;
+	}
+
+	if( m_recstate == REC_RECORD && time_dvrtime_diff(&tnow,&m_rec_starttime) > m_postrecord_time ){
+		m_recstate = REC_PRERECORD ;
+	}
+	
 }
 
 // updating recording alarms
@@ -1319,6 +1306,13 @@ int  rec_forcestate(int channel)
     return 0 ;
 }
 
+int  rec_state2(int channel)
+{
+	if (channel>=0 && channel < rec_channels)
+        return recchannel[channel]->recstate2();
+    return 0 ;
+} 
+
 // return recording channel state
 //    0: not recording
 //	  1: recording
@@ -1406,7 +1400,9 @@ void rec_pwii_toggle_rec( int c )
 	}
 	rec_pwii_force_rec( c, rec ) ;
 }
+
 #else
+
 void rec_pwii_toggle_rec( int ch )
 {
 	int i ;

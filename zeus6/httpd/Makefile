@@ -2,20 +2,23 @@
 # Makefile for ZEUS 6 DVR
 #
 
+ifndef PROJDIR
 include ../config
+export PROJDIR
+endif
 
 HEADERS=
 
-LDFLAGS+= -lcrypt
+LDFLAGS+= -lcrypt -lstdc++
 
-all: eaglehttpd eagle_setup- getsetup- cfgdown- livecam-
+all: eaglehttpd- eagle_setup- getsetup- cfgdown- livecam-
 
-eaglehttpd: eaglehttpd.c
-	$(CC) $(CFLAGS) -o $@ eaglehttpd.c $(LDFLAGS)
+# eaglehttpd: eaglehttpd.cpp smallssi.cpp var.cpp access.cpp mod.cpp eaglehttpd.h
+#	$(CC) $(CFLAGS) -O2 -DMOD_SUPPORT -o $@ eaglehttpd.cpp smallssi.cpp var.cpp access.cpp mod.cpp $(LDFLAGS)
 
-httpd: httpd.cpp httpd.h
-	g++ -o $@ httpd.cpp 
-
+eaglehttpd- :
+	make -C eaglehttpd
+	
 eagle_setup- :
 	make -C eagle_setup
 
@@ -30,8 +33,7 @@ cfgdown- :
 	make -C cfgdown
 
 clean :
-	rm -f eaglehttpd
-	rm -f *.o
+	make -C eaglehttpd clean
 	make -C eagle_setup clean
 	make -C getsetup clean
 	make -C livecam clean

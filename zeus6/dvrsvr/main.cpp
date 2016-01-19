@@ -194,12 +194,13 @@ int dvr_log(const char *fmt, ...)
 
     flog=NULL ;
     // check logfile, it must be a symlink to hard disk
-    if( readlink(logfilelnk, lbuf, 512)>10 ) {
+    if( readlink(logfilelnk, lbuf, 500)>10 ) {
         flog = fopen(logfilelnk, "a");
     }
     else {
-        if (rec_basedir.length() > 0) {
-            sprintf(lbuf, "%s/%s", (char *)rec_basedir, (char *)logfile);
+		char * logdir = disk_getlogdir() ;
+		if( logdir != NULL ) {
+            sprintf(lbuf, "%s/%s", (char *)logdir, (char *)logfile);
             unlink(logfilelnk);
             if( symlink(lbuf, logfilelnk)==0 ) {		// success
                 flog = fopen(logfilelnk, "a");
@@ -284,8 +285,9 @@ static FILE * dvr_logkey_file()
     static char logfilename[512] ;
     FILE * lfile=NULL ;
     if( logfilename[0]==0 ) {
-        if (rec_basedir.length() > 0) {
-            sprintf(logfilename, "%s/%s", (char *)rec_basedir, (char *)g_keylogfile);
+		char * logdir = disk_getlogdir() ;
+        if ( logdir != NULL ) {
+            sprintf(logfilename, "%s/%s", (char *)logdir, (char *)g_keylogfile);
             unlink( VAR_DIR "/tvslogfile" );
             symlink(logfilename, VAR_DIR "/tvslogfile" );
             dvr_cleanlogfile(logfilename, logfilesize);
@@ -678,15 +680,17 @@ void sig_check()
         dvr_log("Signal <SIGINT> captured.");
         app_state = APPQUIT ;
     }
+    else if( sigmap & (1<<SIGUSR1) ) 
+    {
+		dvr_log("Signal <SIGUSR1> captured.");
+        app_state = APPDOWN ;
+    }
     else if( sigmap & (1<<SIGUSR2) ) 
     {
+		dvr_log("Signal <SIGUSR2> captured.");
        if(!isstandbymode()){
           app_state = APPRESTART ;
        }
-    }
-    else if( sigmap & (1<<SIGUSR1) ) 
-    {
-        app_state = APPDOWN ;
     }
     
     if( sigmap & (1<<SIGPIPE) ) 
@@ -933,6 +937,7 @@ void do_init()
 
 void do_uninit()
 {
+	
     dvr_log("Start un-initializing.");
     cap_stop();		// stop capture
 
@@ -1009,13 +1014,6 @@ int main(int argc, char **argv)
 
     if ((argc >= 2) && !strcmp(argv[1], "-f")) {
       // force foreground
-    } else if ((argc >= 2) && !strcmp(argv[1], "-d")) {
-      app_init(1);
-      dio_init();
-      int ret = do_disk_check();
-      dio_uninit();
-      app_exit(1);
-      exit(ret);
     } else {
 #ifdef DEAMON
       if (daemon(1, 0) < 0) {
@@ -1040,7 +1038,7 @@ int main(int argc, char **argv)
             }
             if( (serial%400)==119 ){ // every 3 second
                 // check memory
-                if( mem_available () < g_lowmemory && rec_basedir.length()>1 ) {
+                if( mem_available () < g_lowmemory &&  disk_getbasedir(0)!=NULL ) {
                     dvr_log("Memory low. reload DVR.");
                     app_state = APPRESTART ;
                 }
@@ -1054,9 +1052,8 @@ int main(int argc, char **argv)
                     rec_break ();
                 }
                 time1.tv_sec = time2.tv_sec ;
-		disk_check();
- 
-            }
+				disk_check();
+             }
             if( serial%10 == 1 ) {
                 event_check();
             }

@@ -173,9 +173,9 @@ void capture::loadconfig()
 
     m_attr.key_interval = dvrconfig.getvalueint( section, "key_interval" );
     if( m_attr.key_interval <= 0  || m_attr.key_interval > 400 ) {
-		m_attr.key_interval = 100 ;							// default 100 frames
-		if( m_attr.key_interval > 5*m_attr.FrameRate ) 		// max 5 seconds per key frames
-			m_attr.key_interval = 5*m_attr.FrameRate ;
+		m_attr.key_interval = 30 ;							// default 30 frames
+		if( m_attr.key_interval > 3*m_attr.FrameRate ) 		// max 3 seconds per key frames
+			m_attr.key_interval = 3*m_attr.FrameRate ;
 		if( m_attr.key_interval < 10 ) 						// minimum 10 frames per key frames
 			m_attr.key_interval = 10 ;
 	}
@@ -282,13 +282,13 @@ void capture::loadconfig()
    m_show_licenseplate=dvrconfig.getvalueint( section, "show_licenseplate" );
    m_show_ivcs=dvrconfig.getvalueint( section, "show_ivcs" );
    m_show_cameraserial=dvrconfig.getvalueint( section, "show_cameraserial" );
-	m_attr.ShowPeak=dvrconfig.getvalueint(section,"show_gforce");
 #endif
 
 #ifdef PWII_APP
     m_show_vri=dvrconfig.getvalueint( section, "show_vri" );
     m_show_policeid=dvrconfig.getvalueint( section, "show_policeid" );
 #endif
+	m_attr.ShowPeak=dvrconfig.getvalueint(section,"show_gforce");
 
 }
 
@@ -644,7 +644,7 @@ void capture::updateOSD1(){
                  newtime.second
     );
    
-   // Show trigger name, if triggered
+	// Show trigger name, if triggered
     for(j=0; j<num_sensors; j++) {
         if( m_sensorosd & (1<<j) ) {
             if( sensors[j]->value() ) {
@@ -747,7 +747,7 @@ void capture::updateOSD1(){
 
 #ifdef PWII_APP
 void capture::updateOSD1(){
-    int l, j ;
+    int l, j, n ;
     char osdbuf[256] ;
 
    // init OSD
@@ -758,15 +758,18 @@ void capture::updateOSD1(){
     struct dvrtime newtime;
     time_now(&newtime);    
     sprintf(osdbuf,
-                "%02d/%02d/%04d %02d:%02d:%02d  %20s", 
+                "%02d/%02d/%04d %02d:%02d:%02d", 
                  newtime.month,
                  newtime.day,
                  newtime.year,
                  newtime.hour,
                  newtime.minute,
-                 newtime.second,
-		         m_show_policeid?g_policeid:"" ) ;
+                 newtime.second ) ;
     OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_TOP, 8, 4 );
+    
+    // first OSD Line right, Police id
+    sprintf(osdbuf,"%s", m_show_policeid?g_policeid:"" ) ;
+    OSD1_line( osdbuf, ALIGN_RIGHT|ALIGN_TOP, 8, 4 );
 
 	// second line, GPS
 	if( m_attr.GPS_enable ) {
@@ -830,9 +833,30 @@ void capture::updateOSD1(){
 	   }
 		OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_TOP, 8, 28 );
 	}
+	
+	// line 2 right, g-force value
+	osdbuf[0]=0 ;
+    if(m_attr.ShowPeak && isPeakChanged()){
+		sprintf( osdbuf, "%c%5.2lf,%c%5.2lf,%c%5.2lf  ",
+		  g_fb>=0.0?'F':'B',
+		  g_fb>=0.0?g_fb:-g_fb,
+		  g_lr>=0.0?'R':'L',
+		  g_lr>=0.0?g_lr:-g_lr, 
+		  g_ud>=1.0?'D':'U',
+		  g_ud>=1.0? (g_ud-1):(1-g_ud));
+    }
+   	OSD1_line( osdbuf, ALIGN_RIGHT|ALIGN_TOP, 8, 28 );
 
     // 3rd line, sensors
     osdbuf[0]=0 ;
+    if( m_motion ) {
+		osdbuf[0]='*' ;
+	}
+	else {
+		osdbuf[0]=' ' ;
+	}
+    osdbuf[1]=' ' ;
+    osdbuf[2]=0 ;
     for(j=0; j<num_sensors; j++) {
         if( m_sensorosd & (1<<j) ) {
             if( sensors[j]->value() ) {
@@ -843,27 +867,16 @@ void capture::updateOSD1(){
     }
     OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 28 );
 
-    // line 4, vri and camera name
-    sprintf( osdbuf, "%19s %19s %c",
-            m_show_vri?g_vri:" ",           // optional VRI(video referrence id)
-            m_attr.CameraName ,
-            m_motion?'*':' ');
+    // line 4, camera name
+    sprintf( osdbuf, "%s", m_attr.CameraName );
     OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 8 );
 
-    // line 5, g-force value
-    if(m_attr.ShowPeak &&isPeakChanged()){
-		sprintf( osdbuf, "%c%5.2lf,%c%5.2lf,%c%5.2lf  ",
-		  g_fb>=0.0?'F':'B',
-		  g_fb>=0.0?g_fb:-g_fb,
-		  g_lr>=0.0?'R':'L',
-		  g_lr>=0.0?g_lr:-g_lr, 
-		  g_ud>=1.0?'D':'U',
-		  g_ud>=1.0? (g_ud-1):(1-g_ud));
+    // line 4 right, VRI
+	sprintf( osdbuf, "%s", m_show_vri?g_vri:" " );           // optional VRI(video referrence id)
+	OSD1_line( osdbuf, ALIGN_RIGHT|ALIGN_BOTTOM, 8, 8 );
 
-    	OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 48 );
-    }
-    
 }
+
 #endif   // PWII_APP
 
 
@@ -1247,7 +1260,7 @@ void cap_init()
 {
     int i;
     int videostandard ;
-    int dvrchannels ;
+    int dvrchannels ;			// local analog channel
     int enabled_channels ;
     int cap_ch ;
     enabled_channels = 0 ;
@@ -1259,6 +1272,9 @@ void cap_init()
     // initialize local capture card (eagle32)
     videostandard = dvrconfig.getvalueint("system", "videostandard");
     dvrchannels=eagle32_init();
+    
+    // initialize IP camera
+    IpCamera_Init();
     
     dvr_log("%d capture card (local) channels detected.", dvrchannels);
     if( cap_ch<=0 ) {
@@ -1278,32 +1294,40 @@ void cap_init()
         int cameratype ;
         sprintf(cameraid, "camera%d", i+1 );
         cameratype = dvrconfig.getvalueint(cameraid, "type");	
-        if( cameratype == 0 ) {			// local capture card
+        if( cameratype == CAP_TYPE_HIKLOCAL ) {			// local capture card
 			int lch = dvrconfig.getvalueint(cameraid, "channel");		// local channel, 0-
 			if( lch==-1 ) lch = i ;
             if( lch>=0 && lch<dvrchannels ) {
+				// i: logical channel, lch: physical channel
                 cap_channel[i]=new eagle_capture(i, lch);
             }
             else {
                 cap_channel[i]=new eagle_capture(i, -1);// dummy channel
             }
         }
-        else if( cameratype == 1 ) {	// ip camera
-            printf("ip camera:%d\n",i);
+        else if( cameratype == CAP_TYPE_HIKIP ) {	// eagle ip camera
             cap_channel[i] = new ipeagle32_capture(i);
         }
+        else if( cameratype == CAP_TYPE_HDIPCAM ) {	// standard HD ip camera 
+            cap_channel[i] = new Ipstream_capture(i);
+        }
+        else {
+            cap_channel[i]=new eagle_capture(i, -1);// dummy channel
+		}
+
         if( cap_channel[i]->enabled() ) {
             enabled_channels++ ;
         }
     }
     
-    cap_channels = i ;
+    cap_channels = cap_ch ;
     
     if( enabled_channels<=0 ) {
-        printf("No camera available, DVR QUIT!\n");
-        exit(1);
+		dvr_log("No camera been setup!!!");
     }
-    dvr_log("Total %d cameras initialized.", enabled_channels);
+    else {
+		dvr_log("Total %d cameras, %d camera(s) enabled.",  cap_channels, enabled_channels);
+	}
 }
 
 // uninitial capture card
@@ -1322,5 +1346,9 @@ void cap_uninit()
     cap_channel = NULL ;
     // un initialize local capture card
     eagle32_uninit ();
+    
+    // un init IP camera
+    IpCamera_Uninit();
+    
     dvr_log("Capture card uninitialized.");
 }

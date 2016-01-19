@@ -2,26 +2,19 @@
 sfxrun.upd sfxrun
 
 # file on /davinci
-
-./xinetd
 ./mkdosfs
 ./dosfsck
 ./dosfsckcheck
 
-# ID 
+# ID files
 ./ID
-./ID/APPID
-./ID/BOARDNUM
-./ID/BOARDID
 
 # dvr
-./dvr
 ./dvr/firmwareid
 ./dvr/tdevd
 ./dvr/setnetwork
 ./dvr/start.sh
 ./dvr/fw_printenv
-./dvr/libcurl.so.4
 ./dvr/ioprocess
 ./dvr/tdevmount
 ./dvr/cfg
@@ -44,34 +37,30 @@ sfxrun.upd sfxrun
 ./dvr/volumeid
 ./dvr/tmefile
 ./dvr/eaglehost
+./dvr/wpa_supplicant
 ./dvr/tab102
-./dvr/libfbdraw.so
+./dvr/passwd
 ./dvr/dvrsvr
 ./dvr/bgarch
 ./dvr/glog
+./dvr/rconn
+./dvr/zdaemon
+./dvr/adb
 ./dvr/tdevhotplug
 ./dvr/mount_backup
+./dvr/fat32vol
 
 # www binary
 ./dvr/eaglehttpd
 
-# www site
-./dvr/httpd.sfx
+# www files (will include all subdir)
+./dvr/www
 
-# www cgi
-./dvr/cgi
-./dvr/cgi/cfgdown.cgi
-./dvr/cgi/applysetup
-./dvr/cgi/getsetup
-./dvr/cgi/gcrash.cgi
-./dvr/cgi/gcal.cgi
-./dvr/cgi/mp4live
-./dvr/cgi/cfgupload
-./dvr/cgi/mfid
-./dvr/cgi/cfgreport
-./dvr/cgi/dvrstatus.cgi
-./dvr/cgi/pagevalue
-./dvr/cgi/firmwareupd
-./dvr/cgi/mcufwupd
-./dvr/cgi/login
-./dvr/jquery.js  dvr/cgi/jquery.js
+# original copied firmware
+dvr/lib
+
+#./dvr/drivers.tar.gz
+dvr/drivers
+
+#./dvr/etc.tar.gz  
+dvr/etc	 etc

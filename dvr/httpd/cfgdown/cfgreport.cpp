@@ -11,8 +11,6 @@
 #include "../../dvrsvr/genclass.h"
 #include "../../dvrsvr/config.h"
 
-char tzfile[] = "tz_option" ;
-
 struct channelstate {
     int sig ;
     int rec ;

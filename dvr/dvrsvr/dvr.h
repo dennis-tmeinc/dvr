@@ -429,6 +429,7 @@ void disk_archive_stop();
 int disk_archive_runstate();
 int disk_stat(int * recordtime, int * lockfiletime, int * remaintime);
 int disk_renew(char * newfilename, int add=1);
+void disk_alarm();
 void disk_init(config &dvrconfig);
 void disk_uninit();
 extern volatile int disk_busy ;
@@ -909,8 +910,9 @@ extern int num_sensors ;
 class alarm_t {
     string m_name ;
     int m_outputpin ;
-    int m_value ;
+
 public:
+    int m_value ;
     alarm_t(int n);
     ~alarm_t();
 

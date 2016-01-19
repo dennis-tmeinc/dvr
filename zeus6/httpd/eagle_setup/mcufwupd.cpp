@@ -45,25 +45,6 @@ int main()
         }
     }
 
-    FILE * fmsg ;
-    // progress file
-    sprintf( mcumsgfile, "%s/mcuprog", getenv("DOCUMENT_ROOT") );
-    setenv( "MCUPROG", mcumsgfile, 1 );
-    fmsg=fopen(mcumsgfile, "w");
-    if( fmsg ) {
-        fprintf(fmsg,"0");
-        fclose( fmsg );
-    }
-
-    // msg file
-    sprintf( mcumsgfile, "%s/mcumsg", getenv("DOCUMENT_ROOT") );
-    setenv( "MCUMSG", mcumsgfile, 1 );
-    fmsg=fopen(mcumsgfile, "w");
-    if( fmsg ) {
-        fprintf(fmsg,"\n");
-        fclose( fmsg );
-    }
-
     if( res==0 ) {
         printf( "Invalid firmware file!" );
         return 0;
@@ -76,13 +57,14 @@ int main()
     // install MCU firmware
     mcu_upd_pid = fork() ;
     if( mcu_upd_pid == 0 ) {
-        // disable stdin , stdout
-        int fd = open("/dev/null", O_RDWR );
-        dup2(fd, 0);                 // set dummy stdin stdout, also close old stdin (socket)
-        dup2(fd, 1);
-        dup2(fd, 2);
-        close(fd);
-        // if dvrsvr running, suspend it
+
+		// msg file
+		sprintf( mcumsgfile, "%s/mcumsg", getenv("DOCUMENT_ROOT") );
+		setenv( "MCUMSG", mcumsgfile, 1 );
+		FILE * fmcumsg = fopen( mcumsgfile, "w" );
+		fclose( fmcumsg );
+		
+        // if dvrsvr running, close it
         FILE * dvrpidfile ;
         pid_t dvrpid ;
         dvrpidfile=fopen(VAR_DIR"/dvrsvr.pid", "r");
@@ -91,38 +73,46 @@ int main()
             fscanf(dvrpidfile, "%d", &dvrpid);
             fclose( dvrpidfile );
             if( dvrpid>0 ) {
-                kill( dvrpid, SIGUSR1 );
+                kill( dvrpid, SIGTERM );
             }
         }
+        
+		// close ioprocess also 
+		dvrpidfile=fopen(VAR_DIR"/ioprocess.pid", "r");
+		if( dvrpidfile ) {
+			dvrpid=0 ;
+			fscanf(dvrpidfile, "%d", &dvrpid);
+			fclose( dvrpidfile );
+			if( dvrpid>0 ) {
+				kill( dvrpid, SIGTERM );
+			}
+		}
+
+		int fd = open( "/dev/null", O_RDWR );
+		dup2( fd, 0 );
+        dup2( fd, 1 );
+		dup2( fd, 2 );
 
         // updating MCU firmware
-#ifdef  MCU_ZEUS
         fd = open(mcumsgfile, O_RDWR );
-        char * msg ;
+        dup2(fd, 1);
+        
+        // close all other handles 
+        for( fd=3; fd<10; fd++ ) 
+			close( fd );
 
-        msg = (char *)"Start updating MCU firmware, please wait....\n" ;
-        write(fd, msg, strlen(msg)) ;
-        msg = (char *)"(Try press RESET button when message \"Synchronizing\" appear)\n\n" ;
-        write(fd, msg, strlen(msg)) ;
+		printf( "Start updating MCU firmware, please wait....\n" );
+		printf( "(Try press RESET button when message \"Synchronizing\" appear)\n\n" );
+		fflush( stdout );
 
         char * zargs[10] ;
 
-#ifndef APP_TVS_ZEUS6
-        zargs[0] = APP_DIR"/ioprocess" ;
-        zargs[1] = "-fwreset" ;
-        zargs[2] = NULL ;
-        runapp(zargs);
-#endif
-
-        dup2(fd, 1);
-        dup2(fd, 2);
-
         zargs[0] = APP_DIR"/lpc21isp" ;
-        zargs[1] = "-try1000" ;				// wait for sync, 1000 times
+        zargs[1] = "-try10000" ;				// wait for sync, 1000 times
         zargs[2] = "-wipe" ;				// erase flash
         zargs[3] = "-hex" ;					// input .hex file
         zargs[4] = mcufirmwarefile ;		// firmware file
-#ifdef APP_TVS_ZEUS6
+#if defined (APP_TVS_ZEUS6) || defined (APP_PWZ5)
         zargs[5] = "/dev/ttyS3" ;			// MCU connection port
 #else
         zargs[5] = "/dev/ttyS1" ;			// MCU connection port
@@ -132,17 +122,8 @@ int main()
         zargs[8] = NULL ;
         runapp(zargs);
         
-        lseek(fd, 0, SEEK_END);
-        msg = "\nMCU firmware update finished!\n" ;
-        write(fd, msg, strlen(msg)) ;
-        msg = "Please reset unit.\n" ;
-        write(fd, msg, strlen(msg)) ;
-        close( fd );
+        printf( "\nMCU firmware update finished!\nPlease reset unit.\n" );
 
-#else
-        execlp( APP_DIR"/ioprocess", "ioprocess", "-fw", mcufirmwarefile, NULL );
-#endif
-        exit(2);    // error exec
     }
 
     /*
@@ -164,6 +145,7 @@ int main()
         execlp( APP_DIR"/ioprocess", "ioprocess", "-reboot", "5", NULL );
         return 2;
     }
-*/
+	*/
+    
     return 0;
 }

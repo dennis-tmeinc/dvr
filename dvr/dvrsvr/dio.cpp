@@ -38,7 +38,7 @@ void dio_output( int no, int v)
 {
     dio_lock();
     if( p_dio_mmap && p_dio_mmap->iopid ) {
-        if( v ) {
+        if( v!=0 ) {
             p_dio_mmap->outputmap |= 1<<no ;
         }
         else {

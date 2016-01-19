@@ -2,31 +2,41 @@
 #include <errno.h>
 #include "dvr.h"
 #include <netinet/ip.h>
+#include <netinet/in.h>
 
-int multicast_en;	// multicast enabled?
-struct sockad multicast_addr;	// multicast address
-
-static int net_fifos;
+static int net_fifos ;
 static int serverfd;
 int msgfd;
 static struct sockad loopback;
 static pthread_t net_threadid;
 static int net_run;
 static int net_port;
-static int net_multicast;
+static string net_multicast_addr ;
 int     net_livefifosize=100000 ;
 static int noreclive=1 ;
 int    net_active = 0 ;
 int    net_liveview=0;
 
 int    powerNum=0;
-// trigger a new network wait cycle
+
+// trigger network thread jump out of select()
 void net_trigger()
 {
-    if (net_fifos == 0) {
-        // this make select() on net_thread return right away
-        sendto(msgfd, "TRIG", 4, 0, &loopback.addr, loopback.addrlen);
-    }
+	// this make select() on net_thread return right away
+	if( pthread_self() != net_threadid ) {
+		sendto(msgfd, "TRIG", 4, 0, &loopback.addr, loopback.addrlen);
+	}
+}
+
+static pthread_mutex_t net_mutex;
+void net_lock()
+{
+    pthread_mutex_lock(&net_mutex);
+}
+
+void net_unlock()
+{
+    pthread_mutex_unlock(&net_mutex);
 }
 
 // wait for socket ready to send (timeout in micro-seconds)
@@ -66,32 +76,22 @@ int net_onframe(cap_frame * pframe)
     int sends = 0;
     dvrsvr *pconn;
     
-    // see if we can use multicast
-    //    if( multicast_en ) {
-    //        sendto( ) ;
-    //    }
-#if 0    
-    if(pframe->channel==0){
-      struct dvrtime dvrt ;
-      time_now(&dvrt);
-      printf("===second:%d mini:%d\n",dvrt.second,dvrt.milliseconds);
-    }
-#endif    
-    dvr_lock();
+    net_lock();
     pconn = dvrsvr::head();
+
     while (pconn != NULL) {
         sends += pconn->onframe(pframe);
         pconn = pconn->next();
     }
-    dvr_unlock();   
-    
+   
     if( noreclive && sends>0 ) {
         rec_pause = 50 ;            // temperary pause recording, for 5 seconds
     }
     if(sends>0){
         net_liveview = 5;      
     }
- 
+    net_unlock();
+    
     return sends;
 }
 
@@ -99,51 +99,46 @@ int net_onframe(cap_frame * pframe)
 void net_message()
 {
     struct sockad from;
-    void *msgbuf;
     int msgsize;
     unsigned long req = 0;
-    //msgbuf = mem_alloc(MAXMSGSIZE);	// maximum messg size should be less then 32K
-    msgbuf=malloc(MAXMSGSIZE);
+	char msgbuf[256] ;
+	
     from.addrlen = sizeof(from) - sizeof(from.addrlen);
-   // printf("check message-----");
     msgsize =
-        recvfrom(msgfd, msgbuf, MAXMSGSIZE, 0, &(from.addr),
+        recvfrom(msgfd, msgbuf, 255, 0, &(from.addr),
                  &(from.addrlen));
-   // printf("msgsize:%d\n",msgsize);
-    if ( msgsize >= (int)sizeof(unsigned long) ) {
-        req = *(unsigned long *) msgbuf;
-	//printf("req:%x\n",req);
-    }
-    if (req == REQDVREX) {
-      //  printf("request DVREX\n");
-        req = DVRSVREX;
-        sendto(msgfd, &req, sizeof(req), 0, &(from.addr), from.addrlen);
-    } 
-    else if (req == REQSHUTDOWN) {
-       // printf("request quit\n");
-        app_state = APPQUIT;
-    }
-    else if (req == REQDVRTIME) {
-       // printf("request dvrtime\n");
-        struct dvrtimesync dts ;
-        char * tz ;
-        dts.tag = DVRSVRTIME ;
-        time_utctime (&dts.dvrt) ;
-        tz = getenv("TZ");
-        if( tz && strlen(tz)<128 ) {
-            strcpy( dts.tz, tz );
-        }
-        else {
-            dts.tz[0]=0 ;
-        }
-        sendto(msgfd, &dts, sizeof(dts), 0, &(from.addr), from.addrlen);
-    }
-    else if (req == REQMSG ) {
-       // printf("request msg\n");
-        msg_onmsg(msgbuf, msgsize, &from);
-    }
-   // mem_free(msgbuf);
-   free(msgbuf);
+	if ( msgsize >= (int)sizeof(unsigned long) ) {
+		req = *(unsigned long *) msgbuf;
+		if (req == REQDVREX) {
+			req = DVRSVREX;
+			sendto(msgfd, &req, sizeof(req), 0, &(from.addr), from.addrlen);
+		} 
+		else if (req == REQSHUTDOWN) {
+			app_state = APPQUIT;
+		}
+		else if (req == REQDVRTIME) {
+			struct dvrtimesync dts ;
+			char * tz ;
+			dts.tag = DVRSVRTIME ;
+			time_utctime (&dts.dvrt) ;
+			tz = getenv("TZ");
+			if( tz && strlen(tz)<128 ) {
+				strcpy( dts.tz, tz );
+			}
+			else {
+				dts.tz[0]=0 ;
+			}
+			sendto(msgfd, &dts, sizeof(dts), 0, &(from.addr), from.addrlen);
+		}
+		//else if (req == REQMSG ) {
+		//    msg_onmsg(msgbuf, msgsize, &from);
+		//}
+		else if( req == 'OHCE' ) {		// echo
+			sendto(msgfd, msgbuf, msgsize, 0, &(from.addr), from.addrlen);
+		}
+	}
+
+
 }
 
 int net_addr(char *netname, int port, struct sockad *addr)
@@ -176,7 +171,7 @@ int net_peer(int sockfd)
 	return ((sockaddr_in *)&peeraddr.addr)->sin_addr.s_addr ;	
 }
 
-int net_connect(char *netname, int port)
+int net_connect(const char *netname, int port)
 {
     struct addrinfo hints;
     struct addrinfo *res;
@@ -358,6 +353,38 @@ int net_listen(int port, int socktype)
     return sockfd;
 }
 
+// join a multicast group
+int net_join( int fd, char * maddr )
+{
+    struct ip_mreqn mreq;
+	memset( &mreq, 0, sizeof(mreq));
+	
+    mreq.imr_multiaddr.s_addr=inet_addr(maddr);
+    mreq.imr_address.s_addr=htonl(INADDR_ANY);
+    mreq.imr_ifindex=0;
+    if (setsockopt(fd,IPPROTO_IP,IP_ADD_MEMBERSHIP,&mreq,sizeof(mreq)) < 0) {
+		perror("IP_ADD_MEMBERSHIP");
+	    return 0 ;
+    }
+    return 1 ; 
+}
+
+// drop a multicast group
+int net_drop( int fd, char * maddr )
+{
+    struct ip_mreqn mreq;
+	memset( &mreq, 0, sizeof(mreq));
+	
+    mreq.imr_multiaddr.s_addr=inet_addr(maddr);
+    mreq.imr_address.s_addr=htonl(INADDR_ANY);
+    mreq.imr_ifindex=0;
+    if (setsockopt(fd,IPPROTO_IP,IP_DROP_MEMBERSHIP,&mreq,sizeof(mreq)) < 0) {
+		perror("IP_DROP_MEMBERSHIP");
+	    return 0 ;
+    }
+    return 1 ; 
+}
+
 void *net_thread(void *param)
 {
     struct timeval timeout = { 0, 0 };
@@ -365,15 +392,13 @@ void *net_thread(void *param)
     fd_set writefds;
     fd_set exceptfds;
     int fd;
-    int fifos;					// total sockets with fifo pending
     int flag ;
     dvrsvr *pconn;
     dvrsvr *pconn1;
-    
-    time_t t1, t2 ;
-    int tdiff ;
+
     int  mpowerstart=0;
     struct timeval tv;
+    
 #if defined (TVS_APP) || defined (PWII_APP)
 	int tvs_activetime = 0 ;
     gettimeofday(&tv,NULL);
@@ -399,28 +424,35 @@ void *net_thread(void *param)
         }       
         msg_clean();			// clearn dvr_msg
 
+        net_lock();
+        
         // setup select()
         FD_ZERO(&readfds);
         FD_ZERO(&writefds);
         FD_ZERO(&exceptfds);
         
-        dvr_lock();
-        fifos = 0;
+        net_fifos = 0 ;
+        
         pconn = dvrsvr::head();
-        while (pconn != NULL) {
-            pconn1 = pconn->next();
-            if (pconn->isclose()) {
-                delete pconn;
-            } else {
-                FD_SET(pconn->socket(), &readfds);
-                if (pconn->isfifo()) {
-                    FD_SET(pconn->socket(), &writefds);
-                    fifos++;
-                }
-                FD_SET(pconn->socket(), &exceptfds);
-            }
-            pconn = pconn1;
-        }
+		while (pconn != NULL) {
+			pconn1 = pconn->next();
+			if (pconn->isclose()) {
+				delete pconn;
+			} 
+			else {
+				if (pconn->isfifo()) {
+					FD_SET(pconn->socket(), &writefds);
+					net_fifos++ ;
+				}
+				else {
+					// do read until output buffer is clean
+					FD_SET(pconn->socket(), &readfds);
+				}
+
+				FD_SET(pconn->socket(), &exceptfds);
+			}
+			pconn = pconn1;
+		}
 
 #if defined (TVS_APP) || defined (PWII_APP)
        if( dvrsvr::head() == NULL ) {
@@ -433,18 +465,41 @@ void *net_thread(void *param)
 		}
 #endif
         
-        net_fifos = fifos;
-        dvr_unlock();
-        
         FD_SET(serverfd, &readfds);
         FD_SET(msgfd, &readfds);
         
-        timeout.tv_sec = 0;		// 2 second time out
-        timeout.tv_usec = 30000 ;
+        timeout.tv_sec = 2;		// 2 second time out
+        timeout.tv_usec = 0 ;
         
+        net_unlock();
+        
+        net_fifos = 0 ;
+         
         if (select(FD_SETSIZE, &readfds, &writefds, &exceptfds, &timeout) > 0) {
-            net_fifos = 1 ;
-            // check listensocket
+			
+			net_lock();
+            if (FD_ISSET(msgfd, &readfds)) {
+                net_message();
+            }
+            net_active=5 ;
+            pconn = dvrsvr::head();
+            while ( pconn != NULL ) {
+				fd = pconn->socket();
+				if( fd>0 ) {
+					if (FD_ISSET(fd, &writefds)) {
+						pconn->write() ;
+					}					
+					if (FD_ISSET(fd, &readfds)) {
+						pconn->read() ;
+					}
+					if (FD_ISSET(fd, &exceptfds)) {
+						pconn->close();
+					}
+				}
+				pconn = pconn->next();
+            }
+
+            // check new connection
             if (FD_ISSET(serverfd, &readfds)) {
                 fd = accept(serverfd, NULL, NULL);
                 if (fd > 0) {
@@ -453,90 +508,34 @@ void *net_thread(void *param)
                     flag = 1 ;
                     // turn on TCP_NODELAY, to increase performance
                     setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
-                    flag = 1 ;
-                    setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (char *) &flag, sizeof(int));
-                    flag = 3; //10 ;
-                    setsockopt(fd, SOL_TCP, TCP_KEEPCNT, (char *) &flag, sizeof(int));
-                    flag = 30; //60 ;
-                    setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, (char *) &flag, sizeof(int));
-                    flag = 10;//60 ;
-                    setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, (char *) &flag, sizeof(int));
-		    
-                    dvr_lock();
                     pconn =	new dvrsvr(fd);
-                    dvr_unlock();
-                    continue ;
                 }
             }
 
-            if (FD_ISSET(msgfd, &readfds)) {
-                net_message();
-            }
-
-            net_active=5 ;
-
-            t1=time(NULL);
-            
-            pconn = dvrsvr::head();
-            while ( pconn != NULL ) {
-                fd = pconn->socket();
-                if( fd>0 ) {
-                    if (FD_ISSET(fd, &exceptfds)) {
-                        pconn->close();
-                    }
-                    else {
-                        if (FD_ISSET(fd, &readfds)) {
-                            dvr_lock();
-
-                    // turn on TCP_NODELAY, to increase performance
-//                            flag=1 ;
-//                    setsockopt(fd, IPPROTO_TCP, TCP_CORK, (char *) &flag, sizeof(int));
-
-                            while( pconn->read() ) ;
-
-//                            flag=0 ;
-//                    setsockopt(fd, IPPROTO_TCP, TCP_CORK, (char *) &flag, sizeof(int));
-
-//                            flag=1 ;
-                            // turn on TCP_NODELAY, to increase performance
-//                    setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (char *) &flag, sizeof(int));
-                            
-                            dvr_unlock ();
-                        }
-   
-			if (pconn->isfifo()) {
-			    dvr_lock();
-			    while( pconn->write() ) ;
-			    dvr_unlock ();
-			}
-                    }
-                }
-                pconn = pconn->next();
-            }
-            
-            t2=time(NULL);
-            tdiff=(int)t2-(int)t1 ;
-            if( tdiff>1 ) {
-                tdiff=0 ;
-            }                        
+            net_unlock();   
         }
+
     }
     
+    net_lock();
     while (dvrsvr::head() != NULL)
         delete dvrsvr::head();
- 
+	net_unlock();
+	
     return NULL;
 }
 
 // initialize network
 void net_init()
 {
+	// init network mutex
+	net_mutex=mutex_init ;
+	
     config dvrconfig(dvrconfigfile);
     net_run = 0;				// assume not running
     net_port = dvrconfig.getvalueint("network", "port");
     if (net_port == 0)
         net_port = DVRPORT;
-    net_multicast = dvrconfig.getvalueint("network", "multicast");
     
     net_livefifosize=dvrconfig.getvalueint("network", "livefifo");
     if( net_livefifosize<10000 ) {
@@ -553,6 +552,7 @@ void net_init()
         dvr_log("Can not initialize network!");
         return;
     }
+    
     msgfd = net_listen(net_port, SOCK_DGRAM);
     if (msgfd == -1) {
         closesocket(serverfd);
@@ -560,11 +560,19 @@ void net_init()
         return;
     }
     
-    net_addr(NULL, net_port, &loopback);	// get loopback addr
+    // make msgfd broadcast capable
+    int broadcast=1 ;
+    setsockopt(msgfd, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast));
+
+	// enable multicast
+    net_multicast_addr = dvrconfig.getvalue("network", "multicast_addr");
+    if( net_multicast_addr.isempty() ) {
+		net_multicast_addr = "228.229.230.231" ;
+	}
+	net_join( msgfd, (char *)net_multicast_addr );
     
-    multicast_en = 0;			// default no multicast
-    net_addr("228.229.210.211", 15113, &multicast_addr);
-    // fixed multicast address for now
+    // get localhost loopback addr
+    net_addr("127.0.0.1", net_port, &loopback);	
     
     pthread_attr_t attr;
     size_t stacksize = 0 ;
@@ -582,8 +590,11 @@ void net_uninit()
         net_run = 0;				// stop net_thread.
         net_trigger();
         pthread_join(net_threadid, NULL);
+        net_threadid = NULL ;
         closesocket(serverfd);
+        net_drop( msgfd, (char *)net_multicast_addr );
         closesocket(msgfd);
         dvr_log("Network uninitialized.");
     }
+    pthread_mutex_destroy(&net_mutex);    
 }

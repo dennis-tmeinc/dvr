@@ -22,11 +22,13 @@ appid=$1
 if [ ${appid} = "clean" ]; then
 
 # clean host binary files
+	echo "Clean dvr host programs" 
     cd ${DEPROOT}/host/dvr
     rm dvrsvr dvrtime eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg tab102 smartftp fw_printenv lpc21isp bgarch
-    rm eaglehttpd
-    rm httpd.sfx
-    rm cgi/*
+    rm eaglehttpd rconn zdaemon
+
+	echo "Clean dvr web files" 
+    rm ${webfiles} 
     exit 0
 fi
 
@@ -42,80 +44,95 @@ firmwareid=${appid}.1.0.${RELEASE}
 echo "Firmware ID: " $firmwareid
 
 cd ${DEPROOT}
+echo copy sfx files
+cp -v ${BASEROOT}/sfx/sfx .
+cp -v ${BASEROOT}/sfx/mksfx .
 ${STRIP} sfx
-
-echo "Build http files"
-cd ${DEPROOT}/host/www
-${DEPROOT}/mksfx ${DEPROOT}/sfx wwwlist ../dvr/httpd.sfx
-
-chmod a+x ../dvr/httpd.sfx
 
 cd ${DEPROOT}/host/ID
 echo ${boardnumber} > BOARDNUM
 echo ${appid} > APPID
 echo 1 > BOARDID
 
-
 echo Building Host deploy firmware.
 cd ${DEPROOT}/host
 cp -v ${BASEROOT}/dosfsck_check/dosfsckcheck .
 
+RELEASEFILES='
+	/dvrsvr/dvrsvr 
+    /dvrsvr/bgarch 
+    /dvrsvr/libfbdraw.so 
+    /dvrtime/dvrtime 
+    /eaglehost/eaglehost 
+    /glog/glog 
+    /ioprocess/ioprocess 
+    /ioprocess/devicepower  
+    /ioprocess/panelled  
+    /ioprocess/buzzer  
+    /tdev/tdevd 
+    /tdev/tdevmount 
+    /usbgenkey/usbcheck 
+    /tmeft/tmefile 
+    /volumeid/md5check 
+    /volumeid/volumeid 
+    /cfg/cfg 
+    /tab102/tab102 
+    /smartupload/smartftp 
+    /fw_env/fw_printenv 
+    /lpc21isp/lpc21isp 
+    /rconn/rconn 
+    /zdaemon/zdaemon 
+    /fat32vol/fat32vol
+'
+
 cd ${DEPROOT}/host/dvr
 echo copy dvr host files
-cp -v ${BASEROOT}/dvrsvr/dvrsvr .
-cp -v ${BASEROOT}/dvrsvr/bgarch .
-cp -v ${BASEROOT}/dvrsvr/libfbdraw.so .
-cp -v ${BASEROOT}/dvrtime/dvrtime .
-cp -v ${BASEROOT}/eaglehost/eaglehost .
-cp -v ${BASEROOT}/glog/glog .
-cp -v ${BASEROOT}/ioprocess/ioprocess .
-cp -v ${BASEROOT}/ioprocess/devicepower  .
-cp -v ${BASEROOT}/ioprocess/panelled  .
-cp -v ${BASEROOT}/ioprocess/buzzer  .
-cp -v ${BASEROOT}/tdev/tdevd .
-cp -v ${BASEROOT}/tdev/tdevmount .
-cp -v ${BASEROOT}/usbgenkey/usbcheck .
-cp -v ${BASEROOT}/tmeft/tmefile .
-cp -v ${BASEROOT}/volumeid/md5check .
-cp -v ${BASEROOT}/volumeid/volumeid .
-cp -v ${BASEROOT}/cfg/cfg .
-cp -v ${BASEROOT}/tab102/tab102 .
-cp -v ${BASEROOT}/smartupload/smartftp .
-cp -v ${BASEROOT}/fw_env/fw_printenv .
-cp -v ${BASEROOT}/lpc21isp/lpc21isp .
+for rfile in $RELEASEFILES ; do
+	cp -v ${BASEROOT}${rfile} .
+	BASE=`basename ${rfile}`
+	${STRIP} ${BASE}
+done
 
-${STRIP} dvrsvr bgarch dvrtime eaglehost glog ioprocess devicepower panelled buzzer tdevd tdevmount usbcheck tmefile md5check volumeid cfg tab102 smartftp fw_printenv lpc21isp
-
-echo copy web files
-cp -v ${BASEROOT}/httpd/eaglehttpd ./
+echo copy web server
+cp -v ${BASEROOT}/httpd/eaglehttpd/eaglehttpd ./
 ${STRIP} eaglehttpd 
 
+echo "Copy web files..." 
+
+CGIFILES='
+ /httpd/getsetup/getsetup      
+ /httpd/getsetup/applysetup   
+ /httpd/cfgdown/cfgdown.cgi   
+ /httpd/cfgdown/cfgreport     
+ /httpd/cfgdown/dvrstatus.cgi 
+ /httpd/cfgdown/gcal.cgi      
+ /httpd/cfgdown/gcrash.cgi    
+ /httpd/eagle_setup/cfgupload 
+ /httpd/eagle_setup/firmwareupd 
+ /httpd/eagle_setup/login      
+ /httpd/eagle_setup/loginx      
+ /httpd/eagle_setup/mcufwupd  
+ /httpd/eagle_setup/mfid      
+ /httpd/eagle_setup/pagevalue 
+ /httpd/livecam/mp4live       
+'
+
 # cgi files
+mkdir www
+cd www
 mkdir cgi
 cd cgi
-cp -v ${BASEROOT}/httpd/getsetup/getsetup     . 
-cp -v ${BASEROOT}/httpd/getsetup/applysetup   .
-cp -v ${BASEROOT}/httpd/cfgdown/cfgdown.cgi   .
-cp -v ${BASEROOT}/httpd/cfgdown/cfgreport     .
-cp -v ${BASEROOT}/httpd/cfgdown/dvrstatus.cgi .
-cp -v ${BASEROOT}/httpd/cfgdown/gcal.cgi      .
-cp -v ${BASEROOT}/httpd/cfgdown/gcrash.cgi    .
-cp -v ${BASEROOT}/httpd/eagle_setup/cfgupload .
-cp -v ${BASEROOT}/httpd/eagle_setup/firmwareupd .
-cp -v ${BASEROOT}/httpd/eagle_setup/login      .
-cp -v ${BASEROOT}/httpd/eagle_setup/mcufwupd  .
-cp -v ${BASEROOT}/httpd/eagle_setup/mfid      .
-cp -v ${BASEROOT}/httpd/eagle_setup/pagevalue .
-cp -v ${BASEROOT}/httpd/livecam/mp4live       .
-
-${STRIP} getsetup applysetup cfgdown.cgi cfgreport dvrstatus.cgi gcal.cgi gcrash.cgi cfgupload firmwareupd login mcufwupd mfid pagevalue mp4live
+for cfile in $CGIFILES ; do
+	cp -v ${BASEROOT}${cfile} . 
+	BASE=`basename ${cfile}`
+	${STRIP} ${BASE}
+done
 
 cd ${DEPROOT}/host
 
 echo Building Host deploy firmware.
 echo ${firmwareid} > dvr/firmwareid
 ${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.dep ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW
-
 
 echo Building Host update firmware.
 ${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.upd ${OUTPUTDIR}/HOST_${firmwareid}.FW
