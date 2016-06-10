@@ -1,38 +1,26 @@
-/* --- Changes ---
- *
- * 10/20/2009 by Harrison
- *   1. Fixed file encryption bug 
- *
- * 12/02/2009 by Harrison
- *   1. Fixed memory leak bug 
- *   2. No decryption on remote playback
- *
- */
+#include <fcntl.h>
+#include <sys/mman.h>
 
+// #include "mpheader.h"
 #include "dvr.h"
-#include <errno.h>
-#include "mpheader.h"
-
-#define FILETRUNCATINGSIZE (2*1024*1024)
+#include "dir.h"
 
 static int file_bufsize;								// file buffer size
-static int file_syncreq;
 static int file_encrypt ;
+
+static volatile int file_busy = 0 ;						// busy counter, 
 
 unsigned char g_filekey[260] ;
 static unsigned char file_encrypt_RC4_table[1024] ;		// RC4 encryption table
-static int file_repaircut=FILETRUNCATINGSIZE ;
 
 dvrfile::dvrfile()
 {
-    m_handle = NULL;
-    m_khandle=NULL;
-    m_filebuf = NULL;
-    m_initialsize=0;
-    m_filestamp = 0;
-    m_timestamp = 0 ;
-    m_syncsize=0 ;
-    m_framepos=0 ;
+    m_khandle = NULL;
+    
+    m_handle = 0;
+    m_writebuf = NULL ; 
+    m_writebufsize = 0 ;
+    m_writepos = 0 ;
 }
 
 dvrfile::~dvrfile()
@@ -40,212 +28,149 @@ dvrfile::~dvrfile()
     close();
 }
 
-int dvrfile::writeopen(const char *filename, char *mode, void* pheader)
+int dvrfile::open(const char *filename, char *mode )
 {
-    struct hd_file h264hd ;
-    struct stat dvrfilestat ;
     close();
-    m_initialsize = 0;
-    m_handle = fopen(filename, mode);
-    if (m_handle == NULL) {
-        dvr_log("open file:%s failed",filename);
-        return 0;
-    }
+
     m_filename=filename ;
     f264time(filename, &m_filetime);
-    m_filelen=f264length(filename);
-    m_filestamp=0;
-    m_timestamp=0;
-    m_filestart=(int)sizeof(struct hd_file);	// first data frame
     m_openmode=0;
-    if (strchr(mode, 'w')) {
+	m_curframe=0 ;
+	m_fileencrypt=file_encrypt ;    		// default enc
+	m_lastframetime = 0 ;
+    if( *mode == 'w' ) {
 		
-		if( file_bufsize > 512 ) {
-			setvbuf(m_handle, (char *)NULL, _IOFBF, file_bufsize );
+		m_handle = ::open( filename, O_WRONLY | O_CREAT | O_DIRECT , 0666 );
+		
+		if (m_handle <= 0 ) {
+			dvr_log("open file:%s failed",filename);
+			m_handle = 0 ;
+			return 0;
 		}
-        file_syncreq = 1;
- 
-        seek(0,SEEK_SET);
-        m_fileencrypt=file_encrypt ;
+		
+		// prepare header
+		int channel = f264channel(filename) ;
+		if( channel>=0 && channel<cap_channels ) {
+			// get file header from capture channel
+			memcpy( &m_fileheader, &( cap_channel[channel]->m_header ), sizeof(m_fileheader));
+		}
+		else {
+			return 0;
+		}
+		
+		if( m_fileencrypt ) {
+			RC4_block_crypt( (unsigned char*)&m_fileheader, sizeof(m_fileheader), 0, file_encrypt_RC4_table, 1024);
+		}
+					
+        m_openmode = 1;
 
-		struct File_format_info *pFileHead=(struct File_format_info*)pheader;
-	
-		//dvr_log("in dvrfile:width:%d height:%d framerate:%d",pFileHead->video_width,pFileHead->video_height,pFileHead->video_framerate);
-        if( m_fileencrypt ) {
-            memcpy( &h264hd, pheader, sizeof(h264hd));
-            RC4_block_crypt( (unsigned char*)&h264hd, sizeof(h264hd), 0, file_encrypt_RC4_table, 1024);
-            write( &h264hd, sizeof(struct hd_file));	// write header
-        }
-        else {
-            write(pheader, sizeof(struct hd_file));// write header
-        }
-        m_filestart = tell();
-        m_openmode=1;
-        m_syncsize=0 ;
-        //open the k file
-        string keyfilename(m_filename) ;
-        char * pk = keyfilename.getstring() ;
-        int l=strlen(pk);
-        if( strcmp( &pk[l-4], ".266")==0 ) {
-            strcpy(&pk[l-4],".k");
-            m_khandle=fopen( pk, "w" );
-        }
-    }
-    return 1;
-}
+		// consider this is a new file
+		m_filesize = 0 ;
+		
+		// setup file write buffer, alignment to 2048
+		m_writebufsize = file_bufsize ;
+		m_writebuf = (char *)mmap( NULL, m_writebufsize, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0 );
+		m_writepos = 0 ;
+		
+		// to write file header
+		write( &m_fileheader, sizeof(m_fileheader));				// write header
 
-int dvrfile::open(const char *filename, char *mode, int initialsize, int encrypt)
-{
-    struct hd_file h264hd ;
-    struct stat dvrfilestat ;
-    close();
-    m_initialsize = 0;
-    m_handle = fopen(filename, mode);
-    if (m_handle == NULL) {
-        dvr_log("open file:%s failed",filename);
-        return 0;
-    }
-    m_filename=filename ;
-    f264time(filename, &m_filetime);
-    m_filelen=f264length(filename);
-    m_filestamp=0;
-    m_timestamp=0;
-    m_filestart=(int)sizeof(struct hd_file);	// first data frame
-    m_openmode=0;
-    if (strchr(mode, 'w')) {
-        setvbuf(m_handle, (char *)NULL, _IOFBF, file_bufsize );
-        file_syncreq = 1;
-        if (initialsize > 0) {
-            seek(initialsize - 1);
-            if (fputc(0, m_handle) == EOF) {
-                close();
-                return 0;
-            };
-            m_initialsize = initialsize;
-        }
-        seek(0,SEEK_SET);
-        m_fileencrypt=file_encrypt ;
-        if( m_fileencrypt ) {
-            memcpy( &h264hd, Dvr264Header, sizeof(h264hd));
-            RC4_block_crypt( (unsigned char*)&h264hd, sizeof(h264hd), 0, file_encrypt_RC4_table, 1024);
-            write( &h264hd, sizeof(struct hd_file));	// write header
-        }
-        else {
-            write(Dvr264Header, sizeof(struct hd_file));// write header
-        }
-        m_filestart = tell();
-        m_openmode=1;
-        m_syncsize=0 ;
         //open the k file
-        string keyfilename(m_filename) ;
-        char * pk = keyfilename.getstring() ;
-        int l=strlen(pk);
-        if( strcmp( &pk[l-4], ".266")==0 ) {
-            strcpy(&pk[l-4],".k");
-            m_khandle=fopen( pk, "w" );
-        }
+		string keyfilename(m_filename) ;
+		char * pk = (char *)keyfilename ;
+		int l=strlen(pk);
+		if( l>24 && strcmp( pk+l-4, ".266")==0 ) {
+			strcpy( pk+l-4,".k");
+			m_khandle=fopen( pk, "a" );
+			setlinebuf( m_khandle );
+		}
     }
-    else if( strchr(mode, 'r')) {
-      //  dvr_log("open file:%s to read",filename);
-        if( fstat( fileno(m_handle), &dvrfilestat)==0 ) {
-	    setvbuf(m_handle, (char *)NULL, _IOFBF, dvrfilestat.st_blksize );
-            m_filesize=dvrfilestat.st_size ;
-            if( m_filesize<64000 ) {   //128000
-                dvr_log("opened file:%s is too small,size:%d",filename,m_filesize);
-                close();	
-                return 0 ;
-            }
-        }
-        else {
-            dvr_log("get file:%s status failed",filename);
-            close();	
-            return 0 ;
-        }
-        m_fileencrypt=-1 ;
-        read(&h264hd, sizeof(h264hd) );
-        m_fileheader = h264hd.flag;
-     //   dvr_log("flag=%x",h264hd.flag);
-        if( h264hd.flag == 0x544d4546 ) {
+    else if( *mode == 'r' ) {
+		
+		if( strchr( mode, '+' ) ) { 
+			m_handle = ::open( filename, O_RDWR );
+		}
+		else {
+			m_handle = ::open( filename, O_RDONLY );
+		}
+				
+		if (m_handle <= 0) {
+			dvr_log("open file:%s failed",filename);
+			m_handle = 0 ;
+			return 0;
+		}
+
+        if( read(&m_fileheader, sizeof(m_fileheader) )!=sizeof(m_fileheader) ) {
+			close();
+			return 0;
+		}
+
+        seek(0, SEEK_END) ;
+        m_filesize = tell(); 
+        if( m_filesize<1000 ) {
+			close();
+			return 0;
+		}
+		
+        if( m_fileheader.flag == 0x544d4546 ) {
             m_fileencrypt=0 ;	// no encrypted
         }
         else {
-            if( file_encrypt ) {
-                RC4_block_crypt( (unsigned char*)&h264hd, sizeof(h264hd), 0, file_encrypt_RC4_table, 1024);
-                if( h264hd.flag == 0x544d4546) {
-                    m_fileencrypt=1 ;
-                }
-            }
+			m_fileencrypt=1 ;
         }
-#if 0        
-        if( m_fileencrypt<0 ) {
-            dvr_log("file:%s header file error",filename);
-            close();		
-            return 0;
-        }
-#else
-        if( m_fileencrypt<0 )
-           m_fileencrypt=1;
-#endif
-        readkey();// read key frame index
-       // printf("key array size:%d\n",m_keyarray.size());
-        if( m_keyarray.size()>0 ) {
-            seek( m_keyarray[0].koffset,SEEK_SET);
-        }
-        m_filestart=tell();
-        int type,frsize;
-        type=frametypeandsize(&frsize);
-
-      //  m_timestamp= m_keyarray[0].ktime;
-        //framesize();	// update frame time stamp
-        m_filestart=tell();
-        m_filestamp=m_timestamp ;
+         
+		// read key frame index
+        readkey(m_keyarray);
+        if( m_keyarray.size()<=1 || m_filesize < m_keyarray[ m_keyarray.size()-1 ].koffset ) {
+			close();
+		}
     }
-
-    return 1;
+	return isopen();
 }
 
 void dvrfile::close()
 {
-    int size;
-    if (isopen()) {
+	if( m_khandle ) {
+		fclose(m_khandle);
+		m_khandle=NULL;
+	}
+
+	if( m_handle ) {
+		
         if( m_openmode ) {  // open for write
-            size = tell();
-            if (m_initialsize > size) {
-                truncate(size);
-            }
-            if(m_khandle){
-				fclose(m_khandle);
-				m_khandle=NULL;
-            }
-            else{
-				if( m_keyarray.size()>0 ) {
-					writekey();
-				}
-            }
-            file_syncreq = 1;
-            if( fclose(m_handle)!=0 ) {
-                dvr_log("Close file failed : %s %d",m_filename.getstring(),errno);
-            }
+			
+            int wsize = tell();
+           	if( m_writepos > 0 )  {
+				::write( m_handle, m_writebuf, m_writebufsize );
+				m_writepos = 0 ;
+			}
+            truncate(wsize);
+            
+            // free( m_writebuf_internal );
+            
+            munmap( m_writebuf, m_writebufsize );
+            m_writebuf = NULL ; 
         }
-        else {
-            fclose(m_handle);
-        }
-        m_handle = NULL;
-        if( m_filebuf!=NULL  ) {
-            free( m_filebuf );
-        }
+
+		if( ::close(m_handle)!=0 ) {
+			dvr_log("Close file failed : %s",m_filename.getstring() );
+		}
+		
+        m_handle = 0;
     }
-    m_keyarray.empty();
-    m_initialsize=0;
-    m_filestamp = 0;
-    m_timestamp = 0 ;
-    m_filebuf=NULL ;
+
+	m_keyarray.empty();
 }
 
 int dvrfile::read(void *buffer, size_t buffersize)
 {
-    if( isopen() ) {
-        return fread(buffer, 1, buffersize, m_handle);
+    if( m_handle && buffer && buffersize>0 ) {
+		if( m_openmode ) {
+			return 0 ;
+		}
+		else {
+			return ::read( m_handle, buffer, buffersize );
+		}
     }
     else {
         return 0 ;
@@ -254,18 +179,33 @@ int dvrfile::read(void *buffer, size_t buffersize)
 
 int dvrfile::write(void *buffer, size_t buffersize)
 {
-    if( isopen() ) {
-      return fwrite(buffer, 1, buffersize, m_handle);
-    }
-    else {
-        return 0;
-    }
+	int w = 0 ;
+    if( m_handle && buffer && buffersize>0 && m_openmode ) {
+		while( w < buffersize ) {
+			int r =  m_writebufsize - m_writepos ;
+			if( r > (buffersize-w) ) {
+				r = (buffersize-w) ;
+			}
+			memcpy( m_writebuf + m_writepos, ((char *)buffer) + w, r );
+			w += r ;
+			m_writepos += r ;
+			if( m_writepos >= m_writebufsize ) {
+				::write( m_handle, m_writebuf, m_writebufsize );
+				m_writepos = 0 ;
+			}
+		}
+	}
+	return w;
+}
+        
+void dvrfile::flush()
+{
 }
 
 int dvrfile::tell() 
 {
-    if( isopen() ) {
-        return ftell(m_handle);
+    if( m_handle ) {
+		return ::lseek( m_handle, 0, SEEK_CUR )+m_writepos ;
     }
     else {
         return 0;
@@ -274,9 +214,9 @@ int dvrfile::tell()
 
 int dvrfile::seek(int pos, int from) 
 {
-    if( isopen() ) {
-        return fseek(m_handle, pos, from);
-    }
+    if( m_handle && m_openmode == 0 ) {
+		return ::lseek(m_handle, pos, from);
+	}
     else {
         return 0 ;
     }
@@ -284,914 +224,296 @@ int dvrfile::seek(int pos, int from)
 
 int dvrfile::truncate( int tsize )
 {
-    int res ;
-    fflush(m_handle);
-    res=ftruncate(fileno(m_handle), tsize);
-    fflush(m_handle);
+    int res = 0 ;
+    if( m_handle ) {
+		res=ftruncate( m_handle, tsize);
+	}
     return res ;
 }
 
 int dvrfile::readheader(void * buffer, size_t headersize) 
 {
-    int framepos ;
-    
-    if( headersize<sizeof(struct hd_file) ) {
+    if( headersize<sizeof(m_fileheader)  ) {
         return 0 ;
     }
-    
-      // save old file pointer
-    framepos = tell();
-    
-    seek(0);
-    read( buffer, sizeof(struct hd_file));
-    seek( framepos );
-    return sizeof( struct hd_file );
-}
 
-int dvrfile::writeheader(void * buffer, size_t headersize) 
-{
-    int framepos ;
-    
-    if( headersize<sizeof(struct hd_file) ) {
-        return 0 ;
-    }
-    
-    // save old file pointer
-    framepos = tell();
-    seek(0);
-    write( buffer, sizeof(struct hd_file));
-    seek( framepos );
-    return sizeof( struct hd_file );
+	memcpy( buffer, &m_fileheader, sizeof(m_fileheader) );
+	return sizeof(m_fileheader) ;
 }
 
 // write a new frame, return 1 success, 0: failed
-int dvrfile::writeframe(void *buffer, size_t size, int keyframe, dvrtime * frametime)
+int dvrfile::writeframe( rec_fifo * frame )
 {
-	unsigned char * wbuf = (unsigned char *)buffer ;
-	if( keyframe ) {
-		dvr_key_t keytime ;
-		keytime.koffset = tell();
-		keytime.ktime = time_dvrtime_diffms(frametime, &m_filetime);
-		if(m_khandle){
-			fprintf(m_khandle,"%d,%d\n",  keytime.ktime, keytime.koffset);
-			// fflush(m_khandle);
-		}
-		else{
-			m_keyarray.add(keytime);
-			if( m_keyarray.size()==1 ) {
-				writekey();	// record first key frame pos
-			}
+	return writeframe( (unsigned char * )frame->buf, (int)frame->bufsize, frame->frametype, &(frame->time) );
+}
+
+// write a new frame, return 1 success, 0: failed
+int dvrfile::writeframe(unsigned char * buf, int size, int frametype, dvrtime * frametime)
+{
+	if( frametype == FRAMETYPE_KEYVIDEO && m_khandle ) {
+		m_curframe++ ;
+		m_lastframetime = time_dvrtime_diffms(frametime, &m_filetime) ;		// if size==0, then this is then ending frame
+		if( size>0 ) {
+			fprintf(m_khandle,"%d,%d\n", 
+				m_lastframetime ,
+				tell() );
 		}
 	}
-/*		
-	if( m_fileencrypt ) {
-		int i,mIndex;
-		unsigned char nextbyte;
-		unsigned int mValue;
-		unsigned int audiofound;
-		unsigned int mLength;
-		int mEnsize=0;
-		unsigned char * pbuf = (unsigned char *)buffer ;
-		mValue=(unsigned int)pbuf[0]<<16 | 
-			(unsigned int)pbuf[1]<<8 | 
-			(unsigned int)pbuf[2];
-		mIndex=3;
-		audiofound=0;
-		while(1){
-			nextbyte=pbuf[mIndex];
-			mIndex++;
-			if(mIndex>=size)
-				break;
-			if(mValue==START_CODE){
-
-				if(nextbyte==0x25){
-					break;
-				} else if(nextbyte==0x21){
-					break;
-				} else if(nextbyte==0xc0){
-					audiofound=1;
-					break;
-				}
-			}
-			mValue=(mValue<<8)|(unsigned int)nextbyte;
-		}
-		if(audiofound){
-			mIndex+=4;
-			mLength=pbuf[mIndex];
-			mIndex++;
-			mIndex+=mLength;
-			mEnsize=size-mIndex;
-			// dvr_log("audio enc size:%d size:%d\n",mEnsize,size);
-		} else{
-			mEnsize=size-mIndex;
-			if(mEnsize>1024)
-				mEnsize=1024;
-				//	dvr_log("video enc size:%d size:%d index:%d\n",mEnsize,size,mIndex);
-		}
-
-		if(mEnsize>0)
-			RC4_block_crypt(pbuf+mIndex, mEnsize, 0, file_encrypt_RC4_table, 1024);
-
-	}
-*/
-
-	if( m_fileencrypt ) {
-		int peslen ;
-		int peshlen ;
-		unsigned char * buf = (unsigned char *)buffer ;
-		unsigned char * xbuf = new unsigned char [1024] ;
-		while( (int)size > 0 ) {
-			if( buf[0]==0 && buf[1]==0 && buf[2]==1 ) {
-				// AV frame
-				if (buf[3] == 0xc0 || buf[3] == 0xe0 ) {
-					// audio / video PES frame
-					peshlen = (((unsigned int)buf[8]) & 0xff) + 9 ;
-					peslen = (((unsigned int)buf[4])<<8) |
-							((unsigned int)buf[5]) ;
-					if( peslen > 0 ) {
-						peslen += 6 ;
-					}
-					else {
-						peslen = (((unsigned int)buf[15])<<24) |
-							(((unsigned int)buf[16])<<16) |
-							(((unsigned int)buf[17])<<8) |
-							((unsigned int)buf[18]) ;
-						peslen += peshlen ;
-					}
-					if( peslen > size ) {
-						peslen = size ;
-					}
-					
-					int elen = peslen - peshlen ;
-					if( buf[3] == 0xe0 ) {			//video frame
+	
+	if( buf && size>0 ) {
+		if( m_fileencrypt ) {
+			int peslen ;
+			int peshlen ;
+			while( size > 0 ) {
+				if( buf[0]==0 && buf[1]==0 && buf[2]==1 ) {
+					// AV frame
+					if( (buf[3] & 0xd0 ) == 0xc0 ) {				// 0xc0 || 0xe0
+						// audio / video PES frame
+						peslen = (((unsigned int)buf[4])<<8) |
+								((unsigned int)buf[5]) ;
+						peshlen = (((unsigned int)buf[8]) & 0xff)  + 9 ;
+						if( peslen > 0 ) {
+							peslen += 6 ;
+						}
+						else {
+							peslen = ((((unsigned int)buf[15])<<24) |
+								(((unsigned int)buf[16])<<16) |
+								(((unsigned int)buf[17])<<8) |
+								((unsigned int)buf[18])) + peshlen ;
+						}
+						if( peslen > size ) {
+							peslen = size ;
+						}
 						
-						// look for tag 00 00 00 01 25/21
-						while( elen>10 ) {
-							if( buf[peshlen] == 0 &&
-								buf[peshlen+1] == 0 &&
-								buf[peshlen+2] == 1 &&
-								(buf[peshlen+3] == 0x21 || buf[peshlen+3] == 0x25 || buf[peshlen+3] == 0x61 || buf[peshlen+3] == 0x65) ) 
-							{
-								peshlen += 4 ;
-								elen-=4 ;
-								break ;
+						if( buf[3] == 0xe0 ) {			//video frame
+							// look for video frame tag 00 00 01 21/25/61/65/41/45
+							int vtag = peshlen ;
+							while( (peslen-vtag)>10 ) {
+								if( buf[vtag] == 0 &&
+									buf[vtag+1] == 0 &&
+									buf[vtag+2] == 1 &&
+									(buf[vtag+3]&0x9b) == 1  )
+								{
+									peshlen = vtag + 4 ;
+									break ;
+								}
+								vtag++ ;
 							}
-							peshlen++ ;
-							elen-- ;
 						}
 					
-					}
-				
-					// save headlen
-					if( peshlen > 0 ) {
-						write( buf, peshlen );
-						buf+=peshlen ;
-						size-=peshlen ;		
-						peslen-=peshlen ;
-					}			
-					
-					// do encrypt
-					if( elen>0 ) {
-						if( elen > 1024 ) 
-							elen = 1024 ;
-						// duplicate encrypting parts
-						memcpy( xbuf, buf, elen );
-						RC4_block_crypt( xbuf, elen, 0, file_encrypt_RC4_table, 1024);
-						write( xbuf, elen );
+						// save header
+						if( peshlen > 0 ) {
+							write( buf, peshlen );
+							buf+=peshlen ;
+							size-=peshlen ;		
+							peslen-=peshlen ;
+						}
 						
-						buf+=elen ;
-						size-=elen ;		
-						peslen-=elen ;
+						// save encrypted parts
+						if( peslen>0 ) {
+							peshlen = peslen ;						
+							if( peshlen > 1024 ) {
+								peshlen = 1024 ;
+							}
+							// do encryption
+							unsigned char * xbuf = new unsigned char [peshlen] ;						
+							memcpy( xbuf, buf, peshlen );
+							RC4_block_crypt( xbuf, peshlen, 0, file_encrypt_RC4_table, 1024);
+							write( xbuf, peshlen );
+							delete xbuf ;
+							
+							buf+=peshlen ;
+							size-=peshlen ;	
+							peslen-=peshlen ;
+						}
+					}
+					else if( buf[3] == 0xba ) {
+						// skip PS header, usually 20 bytes
+						peslen = 14 + (buf[13] & 0x7) ;
+					}
+					else {
+						// other PES, save it all
+						peslen = ((((unsigned int)buf[4])<<8) |
+						 ((unsigned int)buf[5])) + 6 ;
 					}
 				}
-				else if( buf[3] == 0xba ) {
-					// skip PS header, usually 20 bytes
-					peslen = 14 + (buf[13] & 0x7) ;
+				else if( ( buf[0]=='T' && buf[1]=='X' && buf[2]=='T' ) ||		// TXT
+							( buf[0]=='G' && buf[1]=='P' && buf[2]=='S' ) )		// GPS  
+				{
+					// text/gps len is little endian
+					peslen = ((((unsigned int)buf[7])<<8) |
+						 ((unsigned int)buf[6])) + 8 ;
 				}
 				else {
-					// other PES, skip it
-					peslen = (((unsigned int)buf[4])<<8) |
-					 ((unsigned int)buf[5]) ;
-					peslen += 6 ;
-				}	
+					// write everything else as is
+					peslen = size ;
+				}
 
 				if( peslen>0 ) {
+					if( peslen>size )
+						peslen = size ;
+											
 					write( buf, peslen );
 					buf+=peslen ;
 					size-=peslen ;		
-				}					
-
+				}	
+									
 			}
-			else if( buf[0]=='T' && buf[1]=='X' && buf[2]=='T' ) {		// OSD
-				// text len is little endian
-				peslen = (((unsigned int)buf[7])<<8) |
-					 ((unsigned int)buf[6]) ;
-				peslen += 8 ;
-				
-				// TXT are not encrypted?
-				write( buf, peslen );
-				buf+=peslen ;
-				size-=peslen ;
-
-			}
-			else if( buf[0]=='G' && buf[1]=='P' && buf[2]=='S' ) {		// GPS
-				// gps len is little endian
-				peslen = (((unsigned int)buf[7])<<8) |
-					 ((unsigned int)buf[6]) ;
-				peslen += 8 ;
-				
-				// GPS are not encrypted?
-				write( buf, peslen );
-				buf+=peslen ;
-				size-=peslen ;
-			}			
-			else {
-				// write everything else as is
-				write( buf, size );
-				buf += size ;
-				size = 0 ;
-			}
+			return 1 ;
 		}
-		delete [] xbuf ;
-		return 1 ;
-	}
-	else {
-		if (size > 0) {
-			if( write( wbuf, size )==(int)size ) {
+		else {
+			if( write( buf, size )==(int)size ) {
 				return 1;
 			}
 		}
 	}
-	return 0;
+	return 0 ;	
 }
 
-// read one frame
-int dvrfile::readframe(void * framebuf, size_t bufsize)
-{
-    //int encsize ;
-    int rsize=0 ;
-    if( bufsize>0 ){
-       rsize = read(framebuf, bufsize);
-       return rsize ;
-    } else
-       return 0;
-}
 
-#if 0
-// read one frame, return 0 for error, 
-int dvrfile::readframe(struct cap_frame *pframe)
+// read current frame , if success advance to next frame after read
+int dvrfile::readframe( frame_info * fi )
 {
-    int frsize ;
-    int type;
-    type=frametypeandsize(&frsize);
-    if(type==FRAMETYPE_UNKNOWN){
-        return 0;
-    }
-    pframe->frametype=type;
-    pframe->framesize=frsize;
-    if( pframe->framesize<=0 ) {
-        pframe->framesize = 4096 ;
-    }
-    pframe->framedata = (char *) mem_alloc(pframe->framesize);
-    if (pframe->framedata == NULL)
-        return 0;
-    return read(pframe->framedata, pframe->framesize);
-    //return readframe (pframe->framedata, pframe->framesize);
-}
-#endif
-int dvrfile::getnextbyte(unsigned char* mbyte)
-{
-     int readbytes;
-     if(mBuf_Index>=1024){
-    	readbytes = read(mBuff,1024);
-        if(readbytes<=0)
-           return -1;
-    	mBuf_Index=0;
-     }
-     *mbyte=mBuff[mBuf_Index];
-     ++mBuf_Index;
-     return 0;
-}
-int dvrfile::skipnextnbytes(int n)
-{
-   int readbytes;
-   mBuf_Index+=n;
-   if(mBuf_Index>=1024){
-    	readbytes = read(mBuff,1024);
-        if(readbytes<=0)
-           return -1; 
-    	mBuf_Index-=1024;
-   }
-   return 0;
-}
-
-#if 0
-int dvrfile::frametypeandsize(int* size)
-{
-    int readbytes;
-    int framepos ;
-    int curpos;
-    unsigned int mValue;
-    int type=FRAMETYPE_UNKNOWN;
-    unsigned char nextbyte;
-    unsigned int mPesLength;
-    unsigned int mHigh;
-    unsigned int mLow;
-    int framesize;
-    framepos = tell();
-    if( framepos >= m_filesize ) {
-        framepos = m_filesize;
-    }        
-    
-    if( framepos < m_filestart ) {
-        framepos=m_filestart ;
-    }
-    readbytes = read(mBuff,1024);
-    if(readbytes<1024){
-      *size=0;
-      return type;
-    }
-    mBuf_Index=3;
-    mValue=(unsigned int)mBuff[0]<<16 | \
-           (unsigned int)mBuff[1]<<8 | \
-           (unsigned int)mBuff[2];
-    while(1){
-         if(getnextbyte(&nextbyte)<0)
-            break;
-         if(mValue==START_CODE){
-	    if(nextbyte==0xe0){
-               if(getnextbyte(&nextbyte)<0)
-                   break;
-               mHigh=(unsigned int)nextbyte;
-               if(getnextbyte(&nextbyte)<0)
-                   break;
-               mLow=(unsigned int)nextbyte;
-               mPesLength=mHigh<<8|mLow;
-               if(mPesLength>1024){
-		   type=FRAMETYPE_VIDEO;
-		   break;
-               }
-            } else if(nextbyte==0xc0){
-               if(getnextbyte(&nextbyte)<0)
-                   break;
-               mHigh=(unsigned int)nextbyte;
-               if(getnextbyte(&nextbyte)<0)
-                   break;
-               mLow=(unsigned int)nextbyte;
-               mPesLength=mHigh<<8|mLow;
-	       type=FRAMETYPE_AUDIO;
-		   break;
-            }
-         }
-         mValue=((mValue<<16)>>8)|(unsigned int) nextbyte;
-    }
-    if(type==FRAMETYPE_UNKNOWN){
-        seek(framepos);
-        *size=0;
-        return type;
-    }
-    curpos=tell()-1024+mBuf_Index+mPesLength;
-    if(curpos> m_filesize)
-       curpos=m_filesize;
-    *size=curpos-framepos;
-    seek(framepos);
-    return type;
-}
-#endif
-
-#if 1
-int dvrfile::frametypeandsize(int* size)
-{
-    int readbytes;
-    int framepos ;
-    int curpos;
-    unsigned int mValue;
-    int type=FRAMETYPE_UNKNOWN;
-    unsigned char nextbyte;
-    unsigned int mPesLength;
-    unsigned int mHigh;
-    unsigned int mLow;
-    int framesize;
-    framepos = tell();
-    
-    if( framepos >= m_filesize ) {
-        framepos = m_filesize;
-    }            
-    if( framepos < m_filestart ) {
-        framepos=m_filestart ;
-		seek(framepos);
-    }
-    
-    int numkey = m_keyarray.size() ;
-    if( numkey>0 ){
-        int i;
-        int frameend = m_filesize ;
-		for (i=1;i<numkey;++i){
-			if(m_keyarray[i].koffset>framepos){
-				frameend = m_keyarray[i].koffset ;
-				break;
-			}
-		}
-		framesize= frameend - framepos ;
-		if( framesize > 0 ) {
-			type = FRAMETYPE_VIDEO ;
+	int framesize = 0 ;
+	if( isopen() && m_curframe<m_keyarray.size() && m_curframe>=0 ) {
+		if( m_curframe < m_keyarray.size()-1 ) {
+			framesize = m_keyarray[m_curframe+1].koffset - m_keyarray[m_curframe].koffset ;
 		}
 		else {
-			type = FRAMETYPE_UNKNOWN ;
-			framesize = 0 ;
+			framesize = m_filesize - m_keyarray[m_curframe].koffset ;
 		}
-		if( size!=NULL ) {
-			*size = framesize ;
+		if( framesize<0 ) framesize = 0 ;
+		if( fi == NULL ) {
+			return framesize ;
 		}
-		return type ;
-    } 
-    else {
-	  readbytes = read(mBuff,1024);
-	  if(readbytes<1024){
-	    *size=0;
-	    return type;
-	  }
-	  mBuf_Index=3;
-	  mValue=(unsigned int)mBuff[0]<<16 | \
-		(unsigned int)mBuff[1]<<8 | \
-		(unsigned int)mBuff[2];
-	  while(1){
-	      if(getnextbyte(&nextbyte)<0)
-		  break;
-	      if(mValue==START_CODE){
-		  if(nextbyte==0xe0){
-		    if(getnextbyte(&nextbyte)<0)
-			break;
-		    mHigh=(unsigned int)nextbyte;
-		    if(getnextbyte(&nextbyte)<0)
-			break;
-		    mLow=(unsigned int)nextbyte;
-		    mPesLength=mHigh<<8|mLow;
-		    if(mPesLength>1024){
-			type=FRAMETYPE_VIDEO;
-			break;
-		    }
-		  } else if(nextbyte==0xc0){
-		    if(getnextbyte(&nextbyte)<0)
-			break;
-		    mHigh=(unsigned int)nextbyte;
-		    if(getnextbyte(&nextbyte)<0)
-			break;
-		    mLow=(unsigned int)nextbyte;
-		    mPesLength=mHigh<<8|mLow;
-		    type=FRAMETYPE_AUDIO;
-			break;
-		  }
-	      }
-	      mValue=((mValue<<16)>>8)|(unsigned int) nextbyte;
-	  }
-	  if(type==FRAMETYPE_UNKNOWN){
-	      seek(framepos);
-	      *size=0;
-	      return type;
-	  }
-	  curpos=tell()-1024+mBuf_Index+mPesLength;
-	  if(curpos> m_filesize)
-	    curpos=m_filesize;
-	  *size=curpos-framepos;
-	  seek(framepos);
-	  return type;
-    }
-}
-#endif
-
-#if 0
-// return frame type
-//      0 - no frame
-//      1 - keyframe
-//     >1 - other frame
-int dvrfile::frametype()
-{
-    struct hd_frame frame;
-    int readbytes;
-    int framepos ;
-    
-    framepos = tell();
-    
-    if( framepos >= m_filesize ) {
-        framepos = tell();
-    }        
-    
-    if( framepos < m_filestart ) {
-        framepos=m_filestart ;
-    }
-    if ((framepos & 3) != 0) {
-        return FRAMETYPE_UNKNOWN ;
-    }
-    
-    readbytes = read((char *) &frame, sizeof(frame));
-    
-    seek(framepos);				// set back old position
-    if (readbytes == sizeof(frame) && 
-        frame.flag == 1 && 
-        HD264_FRAMESUBFRAME(frame) < 10 &&
-        frame.framesize < 1000000) 
-    {
-        switch ( HD264_FRAMETYPE(frame) ) {
-            case 3 :
-                return FRAMETYPE_KEYVIDEO;
-            case 4:
-                return FRAMETYPE_VIDEO ;
-            case 1:
-                return FRAMETYPE_AUDIO ;
-            default:
-                return FRAMETYPE_UNKNOWN;
-        }
-    }
-    return FRAMETYPE_UNKNOWN;
-}
-
-// current frame size
-int dvrfile::framesize()
-{
-    struct hd_frame frame;
-    struct hd_subframe subframe;
-    int framepos ;
-    int subframes;
-    int frsize;
-    
-    frsize=0;
-    if (frametype() > 0) {
-        framepos = tell();
-        if( read(&frame, sizeof(frame)) != sizeof(frame)){
-            seek(framepos);	
-            return 0;
-        }
-        m_timestamp=frame.timestamp ;								// assign time stamp
-        subframes =  HD264_FRAMESUBFRAME(frame) ;
-        seek(frame.framesize, SEEK_CUR);
-        while (--subframes > 0) {
-            subframe.d_flag = 0;
-            if( read(&subframe, sizeof(subframe))!= sizeof(subframe) ) {
-                seek( framepos );
-                return 0;
-            }
-            if (HD264_SUBFLAG(subframe)!= 0x1001 && HD264_SUBFLAG(subframe)!= 0x1005) {
-                break;
-            }
-            seek(subframe.framesize, SEEK_CUR);
-        }
-        if (subframes == 0)  {
-            frsize=tell()-framepos ;
-        }
-        seek(framepos);
-    }
-    return frsize;	
-}
-#endif
-// return current frame time
-dvrtime dvrfile::frametime()
-{
-    int i=0 ;
-    int pos ;
-    unsigned int timeoffset=0;
-    dvrtime t=m_filetime ;
-	pos = tell();
-	int numkey = m_keyarray.size() ;
-    if( numkey>0 ) {                         // key frame index available
-		timeoffset=m_keyarray[0].ktime;
-		for(i=numkey-1;i>0;--i)
-		{
-			if( pos>=m_keyarray[i].koffset ){
-				timeoffset=m_keyarray[i].ktime;
-				break ;
-			}
+		fi->frametype = FRAMETYPE_KEYVIDEO ;
+		fi->frametime = m_filetime ;
+		time_dvrtime_addms(&(fi->frametime), m_keyarray[m_curframe].ktime );
+		if( fi->framebuf == NULL || fi->framesize<=0 ) {
+			fi->framesize = framesize ;
 		}
-    }
-    else {
-		timeoffset = (int)(((long)1000l) * m_filelen * pos / m_filesize);
+		else {
+			seek( m_keyarray[m_curframe].koffset );
+			framesize = read( fi->framebuf, fi->framesize );
+			m_curframe++ ;
+		}
 	}
-    
-    time_dvrtime_addms(&t, timeoffset );
-    return t;
-}	
-
-
-#define SEARCHBUFSIZE	(0x10000)
-
-int dvrfile::nextframe()
-{
-    int frsize;
-    int type;
-    type=frametypeandsize(&frsize);
-    if (type!=FRAMETYPE_UNKNOWN) {
-        seek(frsize, SEEK_CUR );
-        return tell();
-    } 
-    return 0;
-}
-
-#if 0
-int dvrfile::prevframe()
-{
-    int pos ;
-    int j, i, readbytes;
-    int *searchbuf;
-    pos = tell();
-    pos &= (~3);
-    seek(pos, SEEK_SET);
-    searchbuf = (int *) mem_alloc(SEARCHBUFSIZE);	// 64Kbytes
-    for (j = 0; j < 32; j++) {	// search 32 blocks, 2Mbytes
-        pos -= SEARCHBUFSIZE;
-        if (pos < m_filestart) {
-            break;
-        }
-        seek(pos,SEEK_SET);
-        readbytes = read(searchbuf, SEARCHBUFSIZE);
-        if (readbytes < 16) {	// probably file error
-            break;
-        }
-        for (i = readbytes / (sizeof(int)) - 1; i >= 0; i--) {
-            if (searchbuf[i] == 1) {
-                // find it
-                seek(pos+ i * (sizeof(int)), SEEK_SET );
-                if( framesize() ) {		// find a correct frame
-                    mem_free(searchbuf);
-                    return tell();
-                }
-            }
-        }
-    }
-    mem_free(searchbuf);
-    seek(0, SEEK_SET);
-    return 0;					// could not find, file error!
-}
-#endif
-int dvrfile::nextkeyframe()
-{
-    int i ;
-    int pos ;
-    if( m_keyarray.size()>0 ) {                         // key frame index available
-        pos = tell();
-        for( i=0; i<m_keyarray.size(); i++ ) {
-            if( m_keyarray[i].koffset>pos ) {
-                seek(m_keyarray[i].koffset, SEEK_SET);
-                return (m_keyarray[i].koffset);
-            }
-        }
-    }
-    return 0;					// could not found
-}
-
-int dvrfile::prevkeyframe()
-{
-    int i ;
-    int pos ;
-    if( m_keyarray.size()>0 ) {                         // key frame index available
-        pos = tell();
-        for( i=m_keyarray.size()-1; i>=0; i--) {
-            if( m_keyarray[i].koffset<pos ) {
-                seek(m_keyarray[i].koffset, SEEK_SET);
-                return (m_keyarray[i].koffset);
-            }
-        }
-        return 0 ;
-
-    }
-    return 0;
-}
-
-void dvrfile::readkey()
-{
-    string keyfilename(m_filename) ;
-    char * pk = keyfilename.getstring() ;
-    int l=strlen(pk);
-    FILE * keyfile = NULL;
-    m_keyarray.empty();
-    if( strcmp( &pk[l-4], ".266")==0 ) {
-        strcpy(&pk[l-4],".k");
-        keyfile=fopen( pk, "r" );
-	if(!keyfile){
-	      string kname=keyfilename;
-	      char *strp=strstr(kname.getstring(),"_L_");
-	      if(strp){
-		*(strp+1)='N'; 
-	      } else {
-		strp=strstr(kname.getstring(),"_N_");
-		if(strp){
-		  *(strp+1)='L'; 
-		}
-	      }
-	      if(strp){
-		keyfile=fopen(kname.getstring(),"r");
-	      }	      	      	  	  
-	}
-        if( keyfile ) {
-            struct dvr_key_t key;
-            while(fscanf(keyfile,"%d,%d\n", &(key.ktime), &(key.koffset))==2){
-                m_keyarray.add(key);
-            }
-            fclose(keyfile);
-        }
-    }
-}
-
-void dvrfile::writekey()
-{
-    string keyfilename(m_filename) ;
-    char * pk = keyfilename.getstring() ;
-    int l=strlen(pk);
-    int i;
-    FILE * keyfile=NULL ;
-    if( m_keyarray.size()==0 ) {
-        return;
-    }
-    if( strcmp(&pk[l-4], ".266")==0 ) {
-        strcpy(&pk[l-4],".k");
-        keyfile=fopen( pk, "w" );
-        if( keyfile ) {
-            for( i=0;i<m_keyarray.size();i++) {
-                struct dvr_key_t * pkey ;
-                pkey = m_keyarray.at(i);
-                fprintf(keyfile,"%d,%d\n", pkey->ktime, pkey->koffset);
-            }
-            fclose(keyfile);
-        }
-    }
+	return framesize ;
 }
 
 // return 1: seek success, 0: out of range
 int dvrfile::seek( dvrtime * seekto )
 {
-    int i;
-    int seekms ; // seek in milliseconds frome time of file
-    int seeks;
+    int seeks ; 		// seek in seconds
     if( !isopen() ) {
         return 0;
     }
     if( *seekto < m_filetime ) {
-        seek(m_filestart, SEEK_SET );
+        m_curframe = 0;
         return 0;
     }
-#if 0
-    dvr_log("filetime:day:%d hour:%d minute:%d second:%d",\
-	    m_filetime.day,m_filetime.hour,m_filetime.minute,m_filetime.second);
-    dvr_log("seekto:day:%d hour:%d minute:%d second:%d millisec:%d",\
-            seekto->day, seekto->hour,seekto->minute,seekto->second,seekto->milliseconds);
-    dvr_log("file length:%d",m_filelen);    
-#endif   
-    seeks = time_dvrtime_diff( seekto, &m_filetime );
-    if( seeks >= m_filelen ) {
-        seek(0, SEEK_END );
-        return 0 ;
-    }
-
-   // seekms=1000*seeks;
-    seekms=time_dvrtime_diffms( seekto, &m_filetime );
- //   dvr_log("seekms:%d",seekms);
-    if( m_keyarray.size()>0 ) {         
-      // key frame index available
-#if 0      
-        for(i=m_keyarray.size()-1;i>=0;i--){
-	   if(m_keyarray[i].ktime<=seekms){
-	      break; 
-	   }	  
+    seeks=time_dvrtime_diff( seekto, &m_filetime );
+	for( m_curframe=0; m_curframe<m_keyarray.size(); m_curframe++ ) {
+		if( seeks <= m_keyarray[m_curframe].ktime/1000 ) {
+			return 1;
+		}
 	}
-	if(i<0) i=0;
-	if(m_keyarray[i].ktime==seekms){
-          seek(m_keyarray[i].koffset, SEEK_SET );
-	}
-	else {
-	  if(i==(m_keyarray.size()-1)){
-	    
-	  } else
-	  seek(m_keyarray[i+1].koffset,SEEK_SET);
-	}
-	dvr_log("i:%d ktime:%d",i,m_keyarray[i].ktime);
-        return 1 ;
-#else
-       for(i=0;i<m_keyarray.size();++i){
-	  if(m_keyarray[i].ktime>=seekms)
-	    break;	 
-       }
-       if(i<m_keyarray.size()){
-	   seek(m_keyarray[i].koffset, SEEK_SET );
-         //  dvr_log("i:%d ktime:%d arraysize:%d return 1",i,m_keyarray[i].ktime,m_keyarray.size());	   
-	   return 1;
-       } else {
-	  seek(0, SEEK_END );
-	//  dvr_log("i:%d ktime:%d arraysize:%d return 0",i,m_keyarray[i].ktime,m_keyarray.size());	
-	 return 1; 
-       }
-#endif
-    }
-
-   // dvr_log("return to file start");
-    seek(m_filestart, SEEK_SET );
     return 0;
+}
 
-   #if 0
-    // seek to end of file
-    seek(0, SEEK_END);
-    int filesize = tell();
-    
-    int pos = (filesize/m_filelen) * (seekms/1000) ;
-    pos &= ~3; 
-    seek(pos, SEEK_SET );
-    
-    if (nextkeyframe() == 0){
-        seek(0, SEEK_END );                  // seek to end of file
-        return 1 ;
-    }
-    int type,frsize;
-    type=frametypeandsize(&frsize);
-    //framesize();    // this will get current frame timestamp
-    if( tstamp2ms(m_timestamp - m_filestamp) > seekms ) {
-        // go backward
-        while( prevkeyframe() ) {
-            framesize();	// update timestamp
-            if( tstamp2ms(m_timestamp - m_filestamp) <= seekms ) {
-                // got it
-                return 1 ;
-            }
-        }
-        seek(0, SEEK_SET );                  // seek to begin of file
-    }
-    else {
-        // go forward
-        pos = tell();
-        while( nextkeyframe() ) {
-            framesize();
-            if( tstamp2ms(m_timestamp - m_filestamp) > seekms ) {
-                // got it
-                break;
-            }
-            pos=tell();
-        }
-        seek(pos, SEEK_SET );
-    } 
-    return 1 ;
-#endif
+int dvrfile::readkey( array <struct dvr_key_t> &keyarray )
+{
+	FILE * keyfile = NULL;
+	
+	string keyfilename(m_filename) ;
+	char * pk = (char *)keyfilename ;
+	int l=strlen(pk);
+	if( l>24 && strcmp( pk+l-4, ".266")==0 ) {
+		strcpy( pk+l-4,".k");
+		keyfile=fopen( pk, "r" );
+	}
+
+	keyarray.setsize(0);
+	
+	if( keyfile ) {
+		struct dvr_key_t key;
+		char lbuf[128] ;
+		while( fgets( lbuf, 128, keyfile) != NULL ) {
+			if( sscanf( lbuf, "%d,%d", &(key.ktime), &(key.koffset))==2){
+				keyarray.add(key);
+			}
+		}
+		fclose(keyfile);
+	}
+	
+	return keyarray.size();
+}
+
+// update key index file
+void dvrfile::writekey( array <struct dvr_key_t> &keyarray )
+{
+	// renew key file
+	string keyfilename(m_filename) ;
+	char * pk = (char *)keyfilename ;
+	int l=strlen(pk);
+	if( l>24 && strcmp( pk+l-4, ".266")==0 ) {
+		strcpy( pk+l-4,".k");
+		FILE * keyfile=fopen( pk, "w" );
+		if( keyfile ) {
+			for( int i=0; i<keyarray.size(); i++ ) {
+				fprintf(keyfile, "%d,%d\n", 
+					keyarray[i].ktime,
+					keyarray[i].koffset );
+			}
+			fclose( keyfile );
+		}
+	}
 }
 
 // repair a .264 file, return 1 for success, 0 for failed
-#if 1
 int dvrfile::repair()
 {
-    int filepos, filelength;
-    char newfilename[512] ;
-    char tBuffer[1024];
-    char * rn ;
-    char * tail ;
-    int keyindex=0;
-    int readbytes;
-    if(m_keyarray.size()<30||m_filesize<file_repaircut+512000){
-      dvr_log("key size is small:%d\n",m_keyarray.size());
-      return 0;
-    }
-    filepos=0;
-    filelength=0;
-    m_filesize-=file_repaircut;
-    for(keyindex=0;keyindex<m_keyarray.size();++keyindex){
-       if(m_keyarray[keyindex].koffset>=m_filesize)
-	 break;
-       seek(m_keyarray[keyindex].koffset, SEEK_SET);
-       filepos=tell();
-       if(filepos!=m_keyarray[keyindex].koffset){
-          break;
-       }
-       readbytes = read(tBuffer,1024);
-       if(readbytes!=1024)
-	 break;
-    }
-    if(keyindex<30){
-      return 0;
-    }
-    truncate(m_keyarray[keyindex-1].koffset);
-    filelength=m_keyarray[keyindex-2].ktime/1000;
-    m_keyarray.setsize(keyindex-2);
-    m_openmode=1;
-    close();
-    strcpy( newfilename, m_filename.getstring() );
-    rn = strstr(newfilename, "_0_");
-    if( rn ) {
-        tail = strstr(m_filename.getstring(), "_0_")+3 ;
-        sprintf( rn, "_%d_%s", filelength, tail );
-        if( rename( m_filename.getstring(), newfilename )>=0 ) {         // success
-            return 1;
-        }
-    }
-    dvr_log("repair failed\n");
-    return 0;
-}
-#endif
-int videoToK(char *filename) {
-  char *ptr = strrchr(filename, '.');
-  if (ptr) {
-    ptr++;
-    if ((*ptr == 'm') || (*ptr == 'M') || (*ptr == '2')) {
-      *ptr = 'k';
-      ptr++;
-      *ptr = '\0';
-      return 0;
-    }
-  }
-  return 1;
+    string nf ;
+    char * newfilename ;
+    int filelen ;
+    int filesize ;
+    int i, k ;
+    
+    if( m_keyarray.size()<3 ) {
+		return 0;
+	}
+
+	for( k=2; k<m_keyarray.size(); k++ ) {
+		if(m_keyarray[k].koffset >= m_filesize ) {
+			break;
+		}
+	}
+
+	k-- ;
+	filesize = m_keyarray[k].koffset ;
+	filelen = m_keyarray[k].ktime / 1000 ;
+
+	// renew key file
+	m_keyarray.setsize(k);
+	writekey( m_keyarray );
+	
+	// truncate file
+	close();
+	::truncate( (char *)m_filename, filesize );
+	
+	// nename to new file length
+    newfilename = nf.setbufsize(512) ;
+	strcpy( newfilename, (char *)m_filename );
+	char * base = strrchr( newfilename, '/' );
+	int lock = (strstr( base+21, "_L_" )!=NULL);
+	sprintf(base + 21,
+			"%d_%c_%s.266", 
+			filelen, 
+			lock?'L':'N', 
+			g_hostname);
+			
+    dvrfile::rename( (char *)m_filename, newfilename );	
+    return 1 ;
 }
 
 int dvrfile::repairpartiallock()
@@ -1203,21 +525,21 @@ int dvrfile::repairpartiallock()
     char lockfilename1[300] ;
     char * lockfilenamebase ;
     int i;
-    int locklength ;
-    int busywait ;
+    int locklength, filelen ;
     
-    locklength = f264locklength( m_filename.getstring() );
+    filelen = f264length( (char *)m_filename );
+    locklength = f264locklength( (char *)m_filename );
     
-    if( locklength >= m_filelen || locklength<2 ) {        // not a partial locked file
+    if( locklength >= filelen || locklength<2 ) {        // not a partial locked file
         return 0 ;
     }
     
-    if( m_keyarray.size()<=2 ) {            // no key index ?
+    if( m_keyarray.size() < 3 ) {            // no key index ?
         return 0 ;
     }
     
     for( breakindex=m_keyarray.size()-2; breakindex>=0; breakindex-- ) {
-        if( m_keyarray[breakindex].ktime < (m_filelen-locklength)*1000 ) {
+        if( m_keyarray[breakindex].ktime < (filelen-locklength)*1000 ) {
             breakindex++;	  
             break;
         }
@@ -1236,15 +558,16 @@ int dvrfile::repairpartiallock()
                 breaktime.minute,
                 breaktime.second,
                 g_hostname);
-    lockfile.open(lockfilename, "wb");
+    lockfile.open(lockfilename, "w");
     if( !lockfile.isopen() ) {
         return 0 ;
     }
    // dvr_log("file:%s is opened",lockfilename);
     char lockfilehead[40] ;
     
-    readheader( (void *)lockfilehead, 40 );
-    lockfile.writeheader( lockfilehead, 40 );
+    seek(0);
+    read( lockfilehead, 40 );
+    lockfile.write( lockfilehead, 40 );
     lockfile.m_fileencrypt=0 ;
     
     for( i=breakindex ; i<m_keyarray.size(); i++ ) {
@@ -1255,7 +578,7 @@ int dvrfile::repairpartiallock()
             usleep(1000);
         }*/
         
-        char * framebuf ;
+        unsigned char * framebuf ;
         int framesize ;
         int framepos ;
         struct dvrtime frametime ;
@@ -1276,10 +599,10 @@ int dvrfile::repairpartiallock()
         frametime = m_filetime ;
         time_dvrtime_addms( &frametime, m_keyarray[i].ktime );
         
-        framebuf = (char *) malloc ( framesize ) ;
+        framebuf = (unsigned char *) malloc ( framesize ) ;
         seek( framepos );
         read( framebuf, framesize );
-        lockfile.writeframe( framebuf, framesize, 1, &frametime );
+        lockfile.writeframe( framebuf, framesize, FRAMETYPE_KEYVIDEO, &frametime );
         free( framebuf );
         
     }
@@ -1298,14 +621,14 @@ int dvrfile::repairpartiallock()
             breaktime.hour,
             breaktime.minute,
             breaktime.second,
-            m_filelen-locklength,
+            filelen-locklength,
             g_hostname);
     
     dvrfile::rename( lockfilename, lockfilename1 );
     
     // close original file
     seek( m_keyarray[breakindex].koffset ) ;
-    m_initialsize = tell() + 1 ;       // set a fake init size, so close() will do file truncate
+
     m_keyarray.setsize(breakindex);
     m_openmode = 1 ;                    // set open mode to write, so close() would save key file
     close();
@@ -1327,42 +650,41 @@ int dvrfile::repairpartiallock()
    
     usleep(1000);	    
     dvrfile::rename( m_filename.getstring(), lockfilename1 );
-    disk_renew( lockfilename1 );
+    disk_rescan();
     return 1 ;
 }
 
-string * dvrfile::getdvrfilename( struct dvrtime * filetime, int channel, int lock, int filelen )
+char * dvrfile::makedvrfilename( struct dvrtime * filetime, int channel, int lock, int filelen )
 {
-	int l;
+	int l ;
+	string filename ;
 	
 	// retrieve base dir depends on file type ?
-	char * basedir ;
-	basedir = disk_getbasedir( lock ) ;
-	if( basedir == NULL ) {
+	char * basedisk = disk_getbasedisk( lock ) ;
+	if( basedisk == NULL ) {
 		// disk not ready, frame discarded
 		return NULL;
 	}
-
-	string * nf = new string ;
-	nf->setbufsize(512);
-	char * nfilename = (char *)*nf ;
+	
+	char * p = filename.setbufsize(512);
+	
+	// make base rec dir
+	l = sprintf(p, "%s/_%s_", basedisk, g_hostname );
+	mkdir(p, 0777);
 	
 	// make date directory
-	sprintf(nfilename, "%s/%04d%02d%02d", 
-			basedir,
+	l += sprintf( p+l, "/%04d%02d%02d", 
 			filetime->year,
 			filetime->month,
 			filetime->day );
-	mkdir(nfilename, S_IFDIR | S_IRWXU | S_IRGRP | S_IROTH);
+	mkdir(p, 0777);
 	
 	// make channel directory
-	l = strlen(nfilename);
-	sprintf( nfilename + l, "/CH%02d", channel);
-	mkdir(nfilename, S_IFDIR | S_IRWXU | S_IRGRP | S_IROTH);
+	l += sprintf( p+l, "/CH%02d", channel);
+	mkdir(p, 0777);
 	
 	// make new file name
-	l = strlen(nfilename);
-	sprintf(nfilename + l,
+	l += sprintf( p+l,
 			"/CH%02d_%04d%02d%02d%02d%02d%02d_%d_%c_%s.266", 
 			channel,
 			filetime->year,
@@ -1375,124 +697,173 @@ string * dvrfile::getdvrfilename( struct dvrtime * filetime, int channel, int lo
 			lock?'L':'N', 
 			g_hostname);
 			
-	return nf ;
+	char * dvrfilename = new char [l+8] ;
+	strcpy( dvrfilename, p );
+			
+	return dvrfilename ;
 }
 
-int dvrfile::breakLfile( int breaktime ) 
+int dvrfile::breakLfile( char * filename, struct dvrtime * locktime )
 {
-    dvrfile lockfile ;
-    int breakindex ;
-    char lockfilename1[300] ;
-    char * lockfilenamebase ;
-    int i;
-    int locklength ;
-    int busywait ;
-    
-    if( m_keyarray.size()<=2 ) {            // no key index ?
+	dvrfile nfile ;
+	dvrfile lfile ;
+	char * base ;
+	struct dvrtime filetime ;
+	struct dvrtime fileendtime ;
+	int filelen , locklen, filechannel ;
+	int breaktime ;
+	int breakindex ;
+	char * lockname ;
+	int i;
+	
+	char * lockdisk = disk_getbasedisk(1);
+	if( lockdisk == NULL ) 
+		return 0;
+	
+	base = basefilename( filename );
+	if( base == NULL || strstr( base, "_N_") == NULL ) {
+		return 0 ;		// not a valid N file
+	}
+	
+	f264time( base, &filetime );
+	filelen = f264length( base );
+	filechannel = f264channel( base ) ;
+	fileendtime = filetime ;
+	
+	time_dvrtime_add( &fileendtime, filelen-10 );
+	if( *locktime > fileendtime ) {
+		return 0 ;		// locktime out of this file
+	}
+       
+    breaktime = time_dvrtime_diff( locktime, &filetime ) ;
+    if( breaktime<=0 ) {								// to lock whole file
+		i = strlen(lockdisk);
+		if( strncmp( lockdisk, filename, i )==0 ) {		// same disk, rename it
+			lockname = makedvrfilename( &filetime, filechannel, 1, filelen )  ;
+			if( lockname != NULL ) {
+				dvrfile::rename( filename, lockname );
+				delete lockname ;
+			}
+			return 1 ;
+		}
+	}
+
+	nfile.open( filename , "r+" );
+	if( !nfile.isopen() ) {
+		dvr_log( "Can't open file for repair. (%s)", filename );
+		return 0 ;		// can open
+	}
+
+    if( nfile.m_keyarray.size()<3 ) {            // small file? skip it
         return 0 ;
     }
-    
+       
+    breaktime*=1000 ;							// make it milliseconds
     breakindex = -1 ;
-	for( i=0;i<m_keyarray.size()-2;i++) {
-		if( m_keyarray[i].ktime >= breaktime*1000 ) {
+	for( i=0;i<nfile.m_keyarray.size()-3;i++) {
+		if( nfile.m_keyarray[i].ktime >= breaktime ) {
 			breakindex = i ;
 			break;
 		}
 	}
 	if( breakindex < 0 ) return 0 ;
 	
-	char * framebuf ;
-	int framesize ;
-	int framepos ;
+	unsigned char * framebuf ;
 	struct dvrtime frametime ;
 	
-	frametime = m_filetime ;
-	time_dvrtime_addms( &frametime, m_keyarray[breakindex].ktime ) ;
+	// new lock file len
+	locklen = filelen - nfile.m_keyarray[breakindex].ktime / 1000 ;
+	if( locklen<5 ) return 0 ;
 	
-	// new breaktime
-	breaktime = m_keyarray[breakindex].ktime / 1000 ;
+	// new filelen
+	filelen -= locklen ;
+		
+	frametime = filetime ;
+	time_dvrtime_addms( &frametime, nfile.m_keyarray[breakindex].ktime ) ;
 	
-	int locklen = m_filelen - breaktime ;
-	if( locklen < 1 ) 
+	lockname = makedvrfilename( &frametime, filechannel, 1, locklen ) ;
+	if( lockname == NULL ) 
 		return 0 ;
+
+	lfile.open( lockname, "w" );
+	delete lockname ;
 	
-	int channel = f264channel(m_filename);	
+	if( !lfile.isopen() ) {
+		dvr_log( "Can't open file for repair. (%s)", (char *)(*lockname) );
+		return 0 ;		// can open
+	}	
 	
-	string * lockfilename = getdvrfilename( &frametime, channel, 1, locklen ) ;
-	if( lockfilename == NULL ) 
-		return 0 ;
-	
-	dvrfile * lfile = new dvrfile ;
-	lfile->open( (char *)(*lockfilename), "wb" );
-	delete lockfilename ;
-	
+	// allow write raw data to lfile
+    lfile.m_fileencrypt=0 ;
+    
 	// duplicate file header
-	framebuf = new char [40] ;
-	readheader( (void *)framebuf, 40 );
-    lfile->writeheader( framebuf, 40 );
+	framebuf = new unsigned char [40] ;
+	nfile.seek(0);
+	nfile.read( framebuf, 40 );
+	lfile.write( framebuf, 40 );
     delete framebuf ;
 
-	// allow write raw data to lfile
-    lfile->m_fileencrypt=0 ;
-    
-    for( i=breakindex ; i<m_keyarray.size(); i++ ) {
-        
-        framepos = m_keyarray[i].koffset ;
-        if( i<m_keyarray.size()-1 ) {
-            framesize = m_keyarray[i+1].koffset - m_keyarray[i].koffset ;
+    for( i=breakindex ; i<nfile.m_keyarray.size(); i++ ) {
+        int framesize ;
+		int framepos ;
+		
+        framepos = nfile.m_keyarray[i].koffset ;
+        if( i<nfile.m_keyarray.size()-1 ) {
+            framesize = nfile.m_keyarray[i+1].koffset - framepos ;
         }
         else {
 			// lastframe
-            framesize = m_filesize - m_keyarray[i].koffset ;
+            framesize = nfile.m_filesize - framepos;
         }
-        if(framesize<0)
+                
+        if(framesize<=0)
 			break;
 			
-		framebuf = new char [framesize] ;
+		// wait a second if busy
+		for( int busy=0; busy<5; busy++ ) {
+			if( file_busy > 1 || g_cpu_usage > 90 || g_memdirty > 1000 ) {
+				usleep(100000);
+			}
+			else {
+				break;
+			}
+		}
+			
+		framebuf = new unsigned char [framesize] ;
 		
-		seek(framepos) ;
-		read( framebuf, framesize );
+		nfile.seek(framepos) ;
+		nfile.read(framebuf, framesize);
 		
-		frametime = m_filetime ;
-		time_dvrtime_addms( &frametime, m_keyarray[i].ktime ) ;
+		frametime = filetime ;
+		time_dvrtime_addms( &frametime, nfile.m_keyarray[i].ktime ) ;
 		
-		lfile->writeframe( framebuf, framesize, 1, &frametime );
+		lfile.writeframe( framebuf, framesize, FRAMETYPE_KEYVIDEO, &frametime );
 		
 		delete framebuf ;
 		
 	}
-	lfile->close();
-	delete lfile ;
+	lfile.close();
 
 	// now truncate oldfile
-	int breakoffset = m_keyarray[breakindex].koffset ;
-	
-	truncate( m_keyarray[breakindex].koffset );
-	m_keyarray.setsize(breakindex);
-    m_openmode = 1 ;                    // set open mode to write, so close() would save key file
-    close();
+	nfile.truncate( nfile.m_keyarray[breakindex].koffset );
+	nfile.m_keyarray.setsize(breakindex);
+	nfile.writekey( nfile.m_keyarray );
+    nfile.close();
     
-    // rename old locked filename
-    strcpy( lockfilename1, m_filename.getstring() );
-    lockfilenamebase = basefilename( lockfilename1 );
-    sprintf(lockfilenamebase+5, "%04d%02d%02d%02d%02d%02d_%d_N_%s.266", 
-            m_filetime.year,
-            m_filetime.month,
-            m_filetime.day,
-            m_filetime.hour,
-            m_filetime.minute,
-            m_filetime.second,
-            breaktime,
+    // rename broken file
+    string newfilename ;
+    strcpy( newfilename.setbufsize(512), filename );
+    base = basefilename( newfilename );
+    sprintf(base+20, "%d_N_%s.266", 
+            filelen,
             g_hostname);
-   
-    dvrfile::rename( m_filename.getstring(), lockfilename1 );
-    disk_renew( lockfilename1 );
+    dvrfile::rename( filename, (char *)newfilename );
+    disk_rescan();
 
-    dvr_log( "Event locked file breakdown success. (%s)", lockfilename1 );
-
-    return 1 ;
-
-} 
+    dvr_log( "Locked file breakdown. (%s)", (char *)newfilename );
+ 
+    return NULL ;
+}    
    
 // rename .264 file as well .idx file
 int dvrfile::rename(const char * oldfilename, const char * newfilename)
@@ -1532,61 +903,7 @@ int dvrfile::remove(const char * filename)
 
 DWORD dvrfile::getfileheader()
 {
-  	return m_fileheader ;
-}
-
-FILE * file_open(const char *path, const char *mode)
-{
-    FILE * f ;
-    dvr_lock();
-    f = fopen(path, mode);
-    dvr_unlock();
-    return f ;
-}
-
-int file_read(void *ptr, int size, FILE *stream)
-{
-    int r ;
-    dvr_lock();
-    r = (int)fread( ptr, 1, (size_t)size, stream );
-    dvr_unlock();
-    return r ;
-}
-
-int file_write(const void *ptr, int size, FILE *stream)
-{
-    int r ;
-    dvr_lock();
-    r = (int)fwrite( ptr, 1, (size_t)size, stream );
-    dvr_unlock();
-    return r ;
-}
-
-int file_close(FILE *fp)
-{
-    int r ;
-    dvr_lock();
-    r = fclose( fp );
-    dvr_unlock();
-    return r ;
-}
-
-int file_flush(FILE *stream)
-{
-    int r ;
-    dvr_lock();
-    r = fflush( stream );
-    dvr_unlock();
-    return r ;
-}
-
-void file_sync()
-{
-    if (file_syncreq) {
-        file_syncreq = 0;
-        sync();
-    }
-    //	sync();
+  	return m_fileheader.flag ;
 }
 
 void file_init()
@@ -1609,26 +926,32 @@ void file_init()
     }
     
     v=dvrconfig.getvalue("system", "filebuffersize");
-    char unit='b' ;
-    file_bufsize=(64*1024) ;
+    char unit='k' ;
+    file_bufsize=(256*1024) ;
     int n=sscanf(v.getstring(), "%d%c", &file_bufsize, &unit);
-    if( n==2 && (unit=='k' || unit=='K') ) {
-        file_bufsize*=1024 ;
-    }
-    else if( n==2 && (unit=='M' || unit=='m' ) ) {
+    if( n==2 && (unit=='M' || unit=='m' ) ) {
         file_bufsize*=1024*1024 ;
     }
+    else if( n>=1 && (unit=='k' || unit=='K') ) {
+        file_bufsize*=1024 ;
+    }
+    file_bufsize &= ~(4095) ;
+    if( file_bufsize<64*1024)file_bufsize=(64*1024) ;
     if( file_bufsize>(4*1024*1024) ) file_bufsize=(4*1024*1024) ;
     
     //file_nodecrypt=dvrconfig.getvalueint("system", "file_nodecrypt");
-
-    iv=dvrconfig.getvalueint("system", "file_repaircut");
-    if( iv>=8192 && iv<=(8*1024*1024) ) {
-        file_repaircut=iv;
-    }
 }
 
 void file_uninit()
 {
+	// wait for file write completed
+	for( int busy=0; busy<10000; busy++) {
+		if( file_busy>0 ) {
+			usleep(10000);
+		}
+		else {
+			break;
+		}
+	}
     sync();
 }

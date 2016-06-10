@@ -33,22 +33,7 @@
 
 #include "../cfg.h"
 
-#include "eagle8851/tme_sdk.h"
 #include "mpegps.h"
-
-// memory allocation
-void *mem_alloc(int size);
-void mem_free(void *pmem);
-void *mem_addref(void *pmem, int memsize=0);
-int mem_refcount(void *pmem);
-int mem_check(void *pmem);
-int mem_size(void * pmem);
-void *mem_cpy(void *dst, void const *src, size_t len);
-//void mem_cpy32(void *dest, const void *src, size_t count);
-int mem_available();
-void mem_dropcaches();
-void mem_init();
-void mem_uninit();
 
 #include "crypt.h"
 #include "genclass.h"
@@ -95,6 +80,8 @@ extern int g_lowmemory;
 extern char g_hostname[] ;
 extern char g_usbid[] ;
 
+extern int    g_cpu_usage ;	// cpu usage , 0-100 ;
+
 // TVS related
 
 struct key_data {
@@ -118,6 +105,9 @@ extern char g_serial[64] ;
 extern char g_id1[64] ;
 extern char g_id2[64] ;
 
+// generic mutex initializer
+extern pthread_mutex_t mutex_init ;
+
 // pwii
 extern char g_servername[256] ;
 extern char g_vri[128] ;
@@ -128,6 +118,22 @@ void dvr_logkey( int op, struct key_data * key ) ;
 
 extern int turndiskon_power;
 extern int powerNum;
+
+// memory allocation
+extern int g_memfree;  			// free memory in kb
+extern int g_memdirty; 			// dirty memory 
+
+void *mem_alloc(int size);
+void mem_free(void *pmem);
+void mem_dropcache() ;
+void *mem_addref(void *pmem, int memsize=0);
+int mem_refcount(void *pmem);
+int mem_check(void *pmem);
+int mem_size(void * pmem);
+int mem_available();
+void mem_init();
+void mem_uninit();
+
 int  dvr_log(const char *str, ...);
 int  dvr_logd(char *str, ...);
 void dvr_lock();
@@ -139,38 +145,6 @@ void dvr_unlock( void * lockvar );
 
 unsigned dvr_random();
 void dvr_cleanlog(char* logfilename);
-
-size_t safe_fwrite(void *ptr, size_t size, size_t nmemb, FILE *stream);
-// recording support
-class rec_index {
-protected:
-	struct rec_index_item {
-		int onoff ;
-		int onofftime ;
-	} * idx_array ;
-	array <struct rec_index_item> m_array ;
-
-public:
-	rec_index(){};
-	~rec_index(){};
-	void empty(){
-		m_array.empty();
-	}
-	void addopen(int opentime);
-	void addclose(int closetime);
-	void savefile( char * filename );
-	void readfile( char * filename );
-	int getsize() { 
-		return m_array.size(); 
-	}
-	int getidx( int n, int * ponoff, int * ptime ) {
-		if( n<0 || n>=m_array.size() )
-			return 0;
-		*ponoff=m_array[n].onoff ;
-		*ptime=m_array[n].onofftime ;
-		return 1 ;
-	}
-};
 
 // time service
 struct dvrtime {
@@ -193,6 +167,7 @@ struct dvrtimeex {
 	unsigned char second;
 	unsigned short milliseconds;
 };
+
 // dvr .264 file structure
 // .264 file struct
 struct hd_file {
@@ -215,16 +190,17 @@ struct hd_frame {
 	DWORD framesize;
 };
 
+// .266 file header (40bytes)
 struct File_format_info {
    unsigned int file_fourcc;
    unsigned short file_version;
-   unsigned short device_type;
+   unsigned short device_type;			// ZEUS6: 1, ZEUS8: 4
    unsigned short file_format;
    unsigned short video_codec;
-   unsigned short audio_codec;
+   unsigned short audio_codec;			// 1: ulaw, 2: alaw
    unsigned char audio_channels;
-   unsigned char audio_bits_per_sample;
-   unsigned int audio_sample_rate;
+   unsigned char audio_bits_per_sample;		
+   unsigned int audio_sample_rate;		// 8000
    unsigned int audio_bit_rate;
    unsigned short video_width;
    unsigned short video_height;
@@ -252,14 +228,39 @@ struct hd_subframe {
 #define FRAMETYPE_VIDEO		(2)
 #define FRAMETYPE_AUDIO		(3)
 #define FRAMETYPE_JPEG		(4)
+
+// new frame type ?
+#define FRAMETYPE_KEYVIDEO_SUB  (5)
+#define FRAMETYPE_VIDEO_SUB     (6)
+
 #define FRAMETYPE_264FILEHEADER	(10)
+#define FRAMETYPE_OSD		(11)			// TXT
+#define FRAMETYPE_GPS		(12)			// GPS
+#define FRAMETYPE_OTHER		(20)
+
+enum REC_STATE {
+    REC_STOP,           // no recording
+    REC_PRERECORD,      // pre-recording
+    REC_RECORD,         // recording
+    REC_LOCK,           // recording lock file
+};
+
+struct rec_fifo {
+    struct rec_fifo *next;
+    struct dvrtime time;        // captured time
+    int frametype;              // a key frame
+    char *buf;
+    int bufsize;
+    DWORD timestamp;
+    REC_STATE rectype;          // recording type
+    int swappos ;				// swap position on swap file, -1: swap request, 0: no swap,(in mem), >0 : swap out
+};
 
 struct cap_frame {
 	int channel;
 	int framesize;
 	int frametype;
     DWORD timestamp;
-//  struct dvrtime frametime ;      // only available on key frames
 	char *framedata;
 };
 
@@ -270,7 +271,13 @@ struct cap_frame_header{
     DWORD timestamp;
 };
 
-extern char Dvr264Header[];
+// for playback
+struct frame_info {
+    int frametype;
+    int framesize;
+    char * framebuf ;
+    struct dvrtime frametime;        
+};
 
 /*
 	key file format
@@ -291,20 +298,6 @@ typedef struct {
     unsigned short wOSDSize;
 } OSDHeader;
 
-/*
-struct osd_line_hdr {
-	unsigned char magic[2];
-	unsigned short res[2];
-	unsigned short line_len;
-};
-
-struct osd_txt_hdr {
-	unsigned char align;
-	unsigned char x_offset, y_offset;
-	unsigned char res;
-};
-*/
-
 typedef struct {
      unsigned char MagicNum[2]; 
      unsigned char reserved[4];  
@@ -318,7 +311,6 @@ typedef struct {
 	unsigned char res;     
 }OSDLINE_TXT_HEADER;
 
-
 typedef struct {
     unsigned char MagicNum[2];
     unsigned char reserved[4];
@@ -330,61 +322,49 @@ typedef struct {
 // dvrfile
 class dvrfile {
   protected:
-	FILE * m_handle;
     FILE * m_khandle;
+    
+    int    m_handle ;
+    char * m_writebuf ; 
+    int    m_writebufsize ;
+    int    m_writepos ;
+    
+    struct hd_file m_fileheader ;
 	int    m_fileencrypt ;		// if file is encrypted?
-	int    m_initialsize;
-	char * m_filebuf ;
-	unsigned char mBuff[1024];
-	int    mBuf_Index;
 
 	string m_filename ;
 	int    m_openmode ;			// 0: read, 1: write
 
 	struct dvrtime m_filetime ;	// file start time
-	int   m_filesize ;
-	int   m_filelen ;			// file length in seconds
-	DWORD m_filestamp ;			// first frame time stamp
-	int	  m_filestart ;			// first frame offset
-        
-	int   m_syncsize ;
+	int    m_lastframetime ;	// lastframetime, when writing
 	
-	int   m_framepos ;
-	int   m_framesize ;
-	int   m_frametime ;
-	int   m_frametype ;
-	int   m_frame_kindex ;
+	int   m_filesize ;
         
-    // current frame info
-	DWORD m_timestamp ;			// current time stamp ;
-    DWORD m_fileheader ;			// header flag
-
+	int   m_curframe ;			// current reading key frame index
+        
 	array <struct dvr_key_t> m_keyarray ;
-
-    int nextframe();
-//	int prevframe();
 
   public:
 	 dvrfile() ;
-	~dvrfile();
+	~dvrfile() ;
 	
-	// generate dvrfile path
-	static string * getdvrfilename( struct dvrtime * filetime, int channel, int lock, int filelen = 0 ) ;
+	// generate dvrfile path, caller should delete the string
+	static char * makedvrfilename( struct dvrtime * filetime, int channel, int lock, int filelen = 0 ) ;
 	
 	char * getfilename() {
 		return (char *)m_filename ;
 	}
 	
-	int open(const char *filename, char *mode = "r", int initialsize = 0, int encrypt=0);
+	int open(const char *filename, char *mode );
 	int writeopen(const char *filename, char *mode,void* pheader);
 	void close();
 	int writeheader(void * buffer, size_t headersize) ;
 	int readheader(void * buffer, size_t headersize) ;
 	int read(void *buffer, size_t buffersize);
 	int write(void *buffer, size_t buffersize);
+	void flush();
 	int repair(); // repair a .264 file
     int repairpartiallock() ;               // repair a partial locked file
-	int breakLfile( int breaktime ) ;		// break N file into 2 N/L files
 	int tell();
 	int seek(int pos, int from = SEEK_SET);
     int truncate( int tsize );
@@ -399,19 +379,29 @@ class dvrfile {
 	//int frametype();                // return current frame type
 	//int framesize();                // return current frame size
     int frametypeandsize(int* size);
+    frame_info * getframeinfo();
+    
+    struct dvrtime * getfiletime(){
+		return &m_filetime ;
+	}
+    
+   	int readkey( array <struct dvr_key_t> &keyarray );
+	void writekey( array <struct dvr_key_t> &keyarray ) ;
+
 	int prevkeyframe();
 	int nextkeyframe();
 	//int readframe(struct cap_frame *pframe);
 	int readframe(void * framebuf, size_t bufsize);
-	int writeframe(void * buffer, size_t size, int keyframe, dvrtime * frametime);
+	int readframe( frame_info * fi );
+	int writeframe(unsigned char * buf, int size, int frametype, dvrtime * frametime);
+	int writeframe( rec_fifo * frame ) ;
 	int isopen() {
-		return m_handle != NULL;
+		// return m_handle != NULL;
+		return m_handle > 0 ;
 	}
 	int isencrypt() {
 		return m_fileencrypt ;
 	}
-	void writekey();
-	void readkey() ;
 	int isframeencrypt() {
 	    return m_fileencrypt;
 	}
@@ -419,6 +409,8 @@ class dvrfile {
 
 	static int rename(const char * oldfilename, const char * newfilename); // rename .264 filename as well .k file
 	static int remove(const char * filename);// remove .264 file as well .k file
+	static int breakLfile( char * filename, struct dvrtime * ltime );	// break N file into n+l
+	
 };
 
 void file_sync();
@@ -495,32 +487,29 @@ struct hik_osd_type {
 extern unsigned int g_ts_base;
 
 class capture {
-  protected:
-    struct  DvrChannel_attr	m_attr ;	// channel attribute
-    int m_type ;	// channel type, 0: local capture card, 1: eagle ip camera
-    int m_channel;				// channel number
+public:
+    int m_channel;				// logic channel number
     int m_enable ;				// 1: enable, 0:disable
+    int m_type ;				// channel type, 0: local capture card, 1: eagle ip camera
+
+	int m_phychannel ;			// local physical channel
+	int m_audiochannel ;		// physical audiochannel
+	int m_start ;				// started?
+	
+	File_format_info m_header ;	// file header
+
+protected:    
+    struct  DvrChannel_attr	m_attr ;	// channel attribute
+    
     int m_motion ;				// motion status ;
     int m_signal ;				// signal ok.
-    int m_oldsignal ;			// signal ok.
+    
     unsigned long m_streambytes; // total stream bytes.
+    time_t m_osdtime ;
         
     int m_working ;             // channel is working
-    int m_remoteosd ;           // get OSD from network
         
     unsigned int m_sensorosd ;      // bit maps for sensor osd
-    
-   //add for osd start
-    OSDHeader    mOsdHeadBuf;
-    OSDLine       mOSDLine[8];
-    int           mOSDLineNum;
-    char          cameraname[80] ;
-
-    int           mOSDChanged;
-    int           mLastOSDTime;      
-    int           mOSDNeedUpdate;
-    
-	 void OSD1_line(char * text, int align, int posx, int posy);
 	     
 #ifdef TVS_APP
     int m_show_medallion;
@@ -534,17 +523,15 @@ class capture {
     int m_show_policeid;
 #endif
     
-    //add for OSD ends    
-    
     int m_motionalarm ;
     int m_motionalarm_pattern ;
     int m_signallostalarm ;
     int m_signallostalarm_pattern ;
     int m_master;
-    pthread_mutex_t  mCapture_Mutex;
+
   public:
 	capture(int channel) ;
-    virtual ~capture(){};
+    virtual ~capture(){}
 
 	void loadconfig() ;
     void getattr(struct DvrChannel_attr * pattr) {
@@ -577,16 +564,19 @@ class capture {
 	int getptzaddr() {
 		return m_attr.ptz_addr;
 	}
-	 //add for osd start
-	void updateOSD1();
-     //   int  isOSDChanged();
-	//add for osd ends
+	
+	int updateOSD( char * osd ) ;
 
-	virtual void update(int updosd);	// periodic update procedure, updosd: require to update OSD
+	virtual void update();				// periodic update procedure, updosd: require to update OSD
 
-        void setremoteosd() { m_remoteosd=1; } 
+	void setremoteosd() {}				// obsoleted function 
 	//void updateOSD ();          		// to update OSD text
-   	virtual void setosd( struct hik_osd_type * posd )=0;
+   	virtual void setosd( struct hik_osd_type * posd ){};
+	
+	// to generate gps data frame
+	virtual void gpsframe() ;
+	// to generate a OSD frame for eagle channel
+	virtual void osdframe() ;	
 
 	void alarm();                   // update alarm relate to capture channel
 	virtual void start(){};				// start capture
@@ -597,67 +587,53 @@ class capture {
 			start();
 		}
 	}
-    virtual int getsignal(){return m_signal;}	// get signal available status, 1:ok,0:signal lost
-    virtual int getmotion(){return m_motion;}	// get motion detection status
+	
+	int getsignal(){return m_signal;}	// get signal available status, 1:ok,0:signal lost
+    int getmotion(){return m_motion;}	// get motion detection status
+    
+    virtual int getFrameRate() {
+		return m_attr.FrameRate ;
+	}
+	
+protected:
+	// retrive signal status
+	virtual int vsignal(){
+		return 0 ;
+	};   	
+	// retrive motion status
+	virtual int vmotion(){
+		return 0 ;
+	}
+
 };
 
 extern capture ** cap_channel;
 
+// eagle (zeus) board interface
+int eagle_startaudio( int phychannel );
+int eagle_stopaudio( int phychannel );
+void eagle_start();
+void eagle_stop();
+int  eagle_init();
+void eagle_uninit();
 
-int  eagle32_init();
-void eagle32_uninit();
-
-
+// Local channel
 class eagle_capture : public capture {
-  protected:
- 
-	int m_state;				// capture state: 0=stop, 1=running. 2=req_stop
-	struct timeval starttime;
-	int signalchecked;
-//	pthread_t capthread;
-
-	// Hik Eagle32 parameter
-	int m_hikhandle;				// hikhandle = hikchannel+1
+public:
 	int m_chantype ;
-	int m_dspdatecounter ;  
 
-	int m_headerlen ;
-  	char m_header[256] ;
-	char m_motiondata[256] ;
-	int m_motionupd;				// motion status changed ;
-	int keyframedroped;
-	FILE* fpVideo;	
-	///////////////////////////////
-	unsigned int bytes_since_audioref;
-	struct timeval lastvideo_at;
-	struct timeval audioref;
-	struct timeval lastvideo;
-	////////////////////////////////
-  public:
-	eagle_capture(int channel, int hikchannel);
-    ~eagle_capture();
-
-	int gethandle(){
-		return m_hikhandle;
-	}
-	
-	int state() {
-		return m_state;
-	};
-
-        void streamcallback(CALLBACK_DATA CallBackData);
-	//void streamcallback( void * buf, int size, int frame_type);
-
-	int getresolution(){
-		return m_attr.Resolution;
-	}
-   	virtual void setosd( struct hik_osd_type * posd );
-
+public:
+	eagle_capture(int channel);
+   	
 	// virtual function implements
-	virtual void update(int updosd);	// periodic update procedure, updosd: require to update OSD
 	virtual void start();
 	virtual void stop();
-    virtual int getsignal();        // get signal available status, 1:ok,0:signal lost
+
+protected:
+	// retrive signal status
+	virtual int vsignal() ;
+	// retrive motion status
+	virtual int vmotion() ;
 };
 
 class ipeagle32_capture : public capture {
@@ -673,41 +649,28 @@ protected:
 	int m_updcounter ;
 public:
 	ipeagle32_capture(int channel);
-    virtual ~ipeagle32_capture();
 
 	void streamthread();
 	int  connect();
 
 // virtual functions
-	virtual void update(int updosd);	// periodic update procedure, updosd: require to update OSD
 	virtual void start();				// start capture
 	virtual void stop();				// stop capture
-   	virtual void setosd( struct hik_osd_type * posd );
+	virtual void setosd( struct hik_osd_type * posd );
 } ;
 
 // IP HD camera
 class Ipstream_capture : public capture {
-  protected:
-
-	int m_channel;			
-	string m_IpUrl ;		//  remote camera ip address
-	int m_ipchannel ; 
-	struct timeval starttime;
-	////////////////////////////////
-  public:
+public:
 	Ipstream_capture(int channel);
-	~Ipstream_capture();
 	
-	void setCameraURL(string url);
-	void streamcallback(CALLBACK_DATA CallBackData);
-	//void streamcallback( void * buf, int size, int frame_type);
-
 	// virtual function implements
-	virtual void update(int updosd);	// periodic update procedure, updosd: require to update OSD
 	virtual void start();
 	virtual void stop();
-        virtual int getsignal();        // get signal available status, 1:ok,0:signal lost
-	virtual void setosd( struct hik_osd_type * posd );
+ 	
+protected:
+	// retrive signal status
+	virtual int vsignal() ;
 };
 
 // Init/Uninit HD ip camera
@@ -846,6 +809,9 @@ int  rec_state(int channel);
 int  rec_state2(int channel);
 int  rec_forcestate(int channel);
 int  rec_lockstate(int channel);
+int  rec_staterec(int channel);
+int  rec_forcechannel(int channel);
+
 void rec_lock(time_t locktime);
 void rec_unlock();
 void rec_break();
@@ -893,16 +859,30 @@ public:
 	}
 };
 
+struct pw_diskinfo {
+	int mounted ;		// boolean	
+	int totalspace ;	// total space in MB
+	int freespace ;		// free space in MB
+	int reserved ;		// reserved space (5%)
+	int full ;			// disk full
+	int l_len, n_len ;	// L file length, and N file length
+	string disk ;		// disk mount point
+} ;
+
+extern struct pw_diskinfo pw_disk[3] ;
+
 void disk_listday(array <f264name> & list, struct dvrtime * day, int channel);
-void disk_getdaylist(array <int> & daylist);
+void disk_getdaylist(array <int> & daylist, int channel=-1);
 int disk_unlockfile( dvrtime * begin, dvrtime * end );
 void disk_check();
 int disk_renew(char * newfilename);
+void disk_rescan();			// to rescan disk N/L file ration
 void disk_init(int);
 void disk_uninit(int);
 int do_disk_check();
-char * disk_getbasedir( int locked );
-char * disk_getlogdir();
+char * disk_getbasedisk( int locked );
+char * disk_getlogdisk();
+
 
 // live video service
 struct net_fifo {
@@ -937,19 +917,13 @@ class playback {
         int m_channel;
         
         array <int> m_daylist ;			// available data day list
-        int m_day ;						// current day, in bcd format
+        
+        int m_day ;						// BCD date of current file list
         array <f264name> m_filelist ;	// day file list
         int m_curfile ;					// current opened file, index of m_filelist
         
         dvrfile m_file ;				// current opened file, always opened
-        struct dvrtime m_lasttime;
         struct dvrtime m_streamtime ;	// current frame time        
-        
-        // frame buffer buffer
-        void * m_framebuf ;				// frame read buffer
-        int  m_framebufsize ;			// frame buffer size
-        int  m_framesize ;
-        int  m_frametype ;
         
         int opennextfile();
         int close();
@@ -963,12 +937,9 @@ class playback {
 //        void getstreamdataex(void ** getbuf, int * getsize, int * frametype);
 		int  getframetypeandsize(int * pframetype, struct dvrtime * ptime);
 		void getframedata(void * framebuf, int framesize);
+		int readframe( frame_info * fi );
 
-        void preread();
-        int getstreamtime(dvrtime * dvrt) {
-            *dvrt=m_streamtime ;
-            return 1;
-        }
+        int getstreamtime(dvrtime * dvrt);
         void getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * pday);
         void getlockinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * pday);
         DWORD getmonthinfo(dvrtime * month);// return day info in bits, bit 0 as day 1
@@ -1043,7 +1014,8 @@ void net_uninit();
 #define PROTOCOL_PW_GETSYSTEMSTATUS	(1007)
 #define PROTOCOL_PW_GETWARNINGMSG	(1008)
 #define PROTOCOL_PW_SETCOVERTMODE	(1009)
-
+#define PROTOCOL_PW_GETDISKINFO		(1010)
+#define PROTOCOL_PW_GETEVENTLIST	(1011)
 
 // dvr net service
 struct dvr_req {
@@ -1175,29 +1147,27 @@ enum anscode_type {
     ANSMAX
 };
 
-enum conn_type { CONN_NORMAL = 0, CONN_REALTIME,CONN_LIVESTREAM };
+enum conn_type { CONN_NORMAL = 0, CONN_REALTIME, CONN_LIVESTREAM };
 
-#define closesocket(s) close(s)
+#define closesocket(s) ::close(s)
 
 class dvrsvr {
 	public:
-        static dvrsvr *m_head;
-        dvrsvr *m_next;		// dvr list
+		static dvrsvr * head;
+		dvrsvr *m_next;		// dvr list
 	
     protected:
         int m_sockfd;		// socket
         
         struct net_fifo * m_fifo ;
-        int m_fifosize ;	// size of fifo
-        int m_active;      	// actively streaming socket
         
         playback * m_playback ;
         live	 * m_live ;
         int      mIframe;
+        
         // dvr related struct
         int m_conntype;				// 0: normal, 1: realtime video stream, 2: answering
         int m_connchannel;
-        int m_networkjam ;			// network jammmed
         
         struct dvr_req m_req;
         char *m_recvbuf;
@@ -1207,19 +1177,15 @@ class dvrsvr {
         int m_keycheck ;
         
         FILE * m_nfilehandle ;
-        
+
     public:
         dvrsvr(int fd);
-        virtual ~dvrsvr();
-        
-        static dvrsvr *head() {
-            return m_head;
-        } 
+        ~dvrsvr();
         
         dvrsvr *next() {
             return m_next;
         }
-        int isfifo() {
+        int hasfifo() {
             return m_fifo != NULL;
         }
         int socket() {
@@ -1227,98 +1193,99 @@ class dvrsvr {
         }
         int  read();
         int  write();
-        void send_fifo(char *buf, int bufsize);
-	virtual void Send(void *buf, int bufsize);
+        void send_fifo(void *buf, int bufsize);
+		void Send(void *buf, int bufsize);
         void close();
-        int isclose();
+		int isclose() {
+			return (m_sockfd <= 0);
+		}
         int onframe(cap_frame * pframe);
         
         // request handlers
         void onrequest();
         void DefaultReq();
         
-
-        virtual void ReqOK();
-        virtual void ReqRealTime();
-        virtual void ChannelInfo();
-        virtual void DvrServerName();
-        virtual void GetSystemSetup();
-        virtual void SetSystemSetup();
-        virtual void GetChannelSetup();
-        virtual void SetChannelSetup();
-        virtual void ReqKill();
-        virtual void SetUpload();
-        virtual void HostName();
-        virtual void FileRename();
-        virtual void FileCreate();
-        virtual void FileRead();
-        virtual void FileWrite();
-        virtual void FileClose();
-        virtual void FileSetPointer();
-        virtual void FileGetPointer();
-        virtual void FileGetSize();
-        virtual void FileSetEof();
-        virtual void FileDelete();
-        virtual void DirFindFirst();
-        virtual void DirFindNext();
-        virtual void DirFindClose();
-        virtual void GetChannelState();
-        virtual void SetDVRSystemTime();
-        virtual void GetDVRSystemTime();
-        virtual void SetDVRLocalTime();
-        virtual void GetDVRLocalTime();
-        virtual void SetDVRTimeZone();
-        virtual void GetDVRTimeZone();
-        virtual void GetDVRTZIEntry();
-        virtual void GetVersion();
-        virtual void ReqEcho();
-        virtual void ReqPTZ();
-        virtual void ReqAuth();
-        virtual void ReqKey();
-        virtual void ReqDisconnect();
-        virtual void ReqCheckId();
-        virtual void ReqListId();
-        virtual void ReqDeleteId();
-        virtual void ReqAddId();
-        virtual void ReqSharePasswd();
-        virtual void ReqStreamOpen();
-        virtual void ReqStreamOpenLive();
- 	virtual void ReqOpenLive();	
-        virtual void ReqStreamClose();
-        virtual void ReqStreamSeek();
-        virtual void ReqNextFrame();
-        virtual void ReqNextKeyFrame();
-        virtual void ReqPrevKeyFrame();
-        virtual void ReqStreamGetData();
-        virtual void ReqStreamGetDataEx();
-        virtual void ReqStreamTime();
-        virtual void ReqStreamDayInfo();
-        virtual void ReqStreamMonthInfo();
-        virtual void ReqStreamDayList();
-        virtual void ReqLockInfo();
-        virtual void ReqUnlockFile();
-        virtual void Req2SetLocalTime();
-        virtual void Req2GetLocalTime();
-        virtual void Req2AdjTime();
-        virtual void Req2SetSystemTime();
-        virtual void Req2GetSystemTime();
-        virtual void Req2GetZoneInfo();
-        virtual void Req2SetTimeZone();
-        virtual void Req2GetTimeZone();
-        virtual void ReqSetled();
-        virtual void ReqSetHikOSD();
-        virtual void Req2GetChState();
-        virtual void Req2GetSetupPage();
-        virtual void Req2GetStreamBytes();
-		virtual void ReqSendData();
-		virtual void ReqGetData();
+        void ReqOK();
+        void ReqRealTime();
+        void ChannelInfo();
+        void DvrServerName();
+        void GetSystemSetup();
+        void SetSystemSetup();
+        void GetChannelSetup();
+        void SetChannelSetup();
+        void ReqKill();
+        void SetUpload();
+        void HostName();
+        void FileRename();
+        void FileCreate();
+        void FileRead();
+        void FileWrite();
+        void FileClose();
+        void FileSetPointer();
+        void FileGetPointer();
+        void FileGetSize();
+        void FileSetEof();
+        void FileDelete();
+        void DirFindFirst();
+        void DirFindNext();
+        void DirFindClose();
+        void GetChannelState();
+        void SetDVRSystemTime();
+        void GetDVRSystemTime();
+        void SetDVRLocalTime();
+        void GetDVRLocalTime();
+        void SetDVRTimeZone();
+        void GetDVRTimeZone();
+        void GetDVRTZIEntry();
+        void GetVersion();
+        void ReqEcho();
+        void ReqPTZ();
+        void ReqAuth();
+        void ReqKey();
+        void ReqDisconnect();
+        void ReqCheckId();
+        void ReqListId();
+        void ReqDeleteId();
+        void ReqAddId();
+        void ReqSharePasswd();
+        void ReqStreamOpen();
+        void ReqStreamOpenLive();
+		void ReqOpenLive();	
+        void ReqStreamClose();
+        void ReqStreamSeek();
+        void ReqNextFrame();
+        void ReqNextKeyFrame();
+        void ReqPrevKeyFrame();
+        void ReqStreamGetData();
+        void ReqStreamGetDataEx();
+        void ReqStreamTime();
+        void ReqStreamDayInfo();
+        void ReqStreamMonthInfo();
+        void ReqStreamDayList();
+        void ReqLockInfo();
+        void ReqUnlockFile();
+        void Req2SetLocalTime();
+        void Req2GetLocalTime();
+        void Req2AdjTime();
+        void Req2SetSystemTime();
+        void Req2GetSystemTime();
+        void Req2GetZoneInfo();
+        void Req2SetTimeZone();
+        void Req2GetTimeZone();
+        void ReqSetled();
+        void ReqSetHikOSD();
+        void Req2GetChState();
+        void Req2GetSetupPage();
+        void Req2GetStreamBytes();
+		void ReqSendData();
+		void ReqGetData();
         
         // TVS
-        virtual void ReqCheckKey();
+        void ReqCheckKey();
         
 #if defined (PWII_APP)
-		virtual void Req2Keypad();
-		virtual void Req2PanelLights();
+		void Req2Keypad();
+		void Req2PanelLights();
 #endif
 
 
@@ -1391,10 +1358,11 @@ void msg_clean();
 void msg_init();
 void msg_uninit();
 
-extern int msgfd;
-
 // event 
+extern int event_serialno ;
+
 void setdio(int onoff);
+void event_key( int keycode, int keydown );		// vk event
 void event_check();
 void event_init();
 void event_uninit();
@@ -1402,6 +1370,7 @@ void event_run();
 
 // trace mark event
 extern int event_tm ;
+extern int event_tm_time ;
 
 // system setup
 struct system_stru {
@@ -1478,6 +1447,7 @@ void dio_uninit();
 int dio_hdpower(int on);
 void dio_mcureboot();
 int isignitionoff();
+int dio_curmode();
 int dio_runmode();
 void get_gps_data(struct gps *g);
 double gps_speed(int *gpsvalid_changed);
@@ -1507,6 +1477,8 @@ int isstandbymode();
 int dio_getpwiikeycode( int * keycode, int * keydown) ;
 void dio_pwii_lpzoomin( int on );
 void dio_pwii_mic_off();
+void dio_pwii_mic_on();
+void dio_pwii_emg_off();
 #endif    // PWII_APP
 
 extern float g_fb;

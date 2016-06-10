@@ -18,6 +18,9 @@
 #include <stdarg.h>
 #include <sys/vfs.h>
 #include <curl/curl.h>
+
+#include "../cfg.h"
+
 #include "upload.h"
 #include "parseconfig.h"
 #include "gforce_peak.h"
@@ -4294,7 +4297,7 @@ void read_config()
   peak_time_in_utc = 0;
   if (dvr_type == DVR_TYPE_DM510) {
     char *p;
-    if (!cfg_parse_file("/etc/dvr/dvr.conf")) {
+    if (!cfg_parse_file(CFG_FILE)) {
       p = cfg_get_str("glog", "gforce_log_enable");
       if (p) {
 	/* 602 internal gforce has UTC time */

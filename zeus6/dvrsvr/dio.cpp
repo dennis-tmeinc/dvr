@@ -393,14 +393,6 @@ int dio_clearstate( int status )
 */
 
 // set camera status
-//  bits definition
-//         0: signal lost
-//         1: motion
-//         2: recording
-//         3: force-recording
-//         4: lock recording
-//         5: pre-recording
-//         6: in-memory pre-recording
 void dio_set_camera_status(int camera, unsigned int status, unsigned long streambytes )
 {
     if( p_dio_mmap && camera<16 ){
@@ -602,6 +594,15 @@ int isignitionoff()
   return 0;
 }
 
+// return current running mode
+int dio_curmode()
+{
+	if( p_dio_mmap ){
+		return p_dio_mmap->current_mode ;
+   }
+   return APPMODE_RUN ;		// just assume it is runing
+}
+
 int dio_runmode()
 {
 	if( p_dio_mmap ){
@@ -759,8 +760,7 @@ void dio_pwii_lpzoomin( int on )
             p_dio_mmap->pwii_output |= PWII_LP_ZOOMIN ;
         }
         else {
-			// auto zoom out
-//            p_dio_mmap->pwii_output &= ~PWII_LP_ZOOMIN ;
+			p_dio_mmap->pwii_output &= ~PWII_LP_ZOOMIN ;
         }
         dio_unlock();
     }
@@ -772,7 +772,25 @@ void dio_pwii_mic_off()
 {
 	if( p_dio_mmap ) 
     {
-		p_dio_mmap->pwii_output &= ~(0xf << 16) ;			// for PWZ6, use 'pwii_output bit16-bit19' to turn off all wireless microphone
+		// p_dio_mmap->pwii_output &= ~(0xf << 16) ;			// for PWZ6, use 'pwii_output bit16-bit19' to turn off all wireless microphone
+		p_dio_mmap->pwii_output &= ~( PWII_MIC1_ON | PWII_MIC2_ON) ;
+    }
+}
+
+void dio_pwii_mic_on()
+{
+	if( p_dio_mmap ) 
+    {
+		p_dio_mmap->pwii_output |= PWII_MIC1_ON	| PWII_MIC2_ON;
+    }
+}
+
+void dio_pwii_emg_off()
+{
+	if( p_dio_mmap ) 
+    {
+		// reset PW EMG inputs
+		p_dio_mmap->inputmap &= ~(PWII_MIC1_EMG|PWII_MIC2_EMG) ;
     }
 }
 

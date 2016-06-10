@@ -26,6 +26,7 @@ enum picture_format {
 	ENC_2CIF =4,
 	ENC_DCIF =0,
 	ENC_4CIF =3,
+	ENC_720P = 5,
 	ENC_D1 = 0xf
 };
 
@@ -332,6 +333,13 @@ int DecodeNextFrame(int handle);
    int size:   data buffer size;
 */
 int InputAvData(int handle, void* buf, int size);
+
+/* set the channel for video/audio out.
+ * should be called before StartCodec().
+ * returns 0 on success.
+ * channel: channel number (starting from 0)
+ */
+int SetDisplayChannel(int channel);
 
 #ifdef __cplusplus
 }

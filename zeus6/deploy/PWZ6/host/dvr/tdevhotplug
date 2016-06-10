@@ -1,0 +1,478 @@
+#!/bin/sh
+
+# Changes:
+# 09/18/2009 Harrison
+#   1. Added support for WPA/WPA2 encryption
+
+# a bit of sync
+for lock in 1 2 3 4 5 6 7 8 9 10 
+do
+  if [ -f /var/dvr/hotpluglock ] ; then
+    sleep 1
+  fi
+done
+echo 1 > /var/dvr/hotpluglock
+
+
+#  dvrsvr information?
+dvrpidfile=/var/dvr/dvrsvr.pid
+
+#  dvrsvr current working disk.
+dvrcurdisk=/var/dvr/dvrcurdisk
+
+# where dvr disks mounted.
+dvrmountdir=/var/dvr/disks
+
+# where archive disks mounted.
+dvrarchdir=/var/dvr/arch
+if [ ! -d ${dvrarchdir} ] ; then
+    mkdir ${dvrarchdir}
+fi
+
+# hotplug disk mounted here.
+xmountdir=/var/dvr/xdisk
+
+devpath=/sys$2
+devname=${devpath##*/}
+
+subsys=$2
+subsys=${subsys#/}
+subsys=${subsys%%/*}
+
+if [ -f /var/dvr/TZ ] ; then
+  TZ=`cat /var/dvr/TZ`
+  export TZ
+fi
+
+case $1 in
+    "add")
+
+        # hotplug block device (USB disk)
+        if [ ${subsys} = "block" -a -r ${devpath}/dev  ] ; then
+        
+        	devnum=`cat ${devpath}/dev`
+			if [ -b /dev/${devname} ] ; then 
+				rm /dev/${devname}
+			fi
+			mknod /dev/${devname} b ${devnum%%:*} ${devnum##*:}
+        
+			mfs='false' 
+			pa=`ls -d ${devpath}/${devname}*`
+			if [ -f ${devpath}/partition ] ; then
+				mfs='true'
+			elif [ -z "${pa}" ] ; then
+				mfs='true'
+			else
+				mfs='false' 
+			fi
+			
+            if [ $mfs = 'true' -a ! -f ${xmountdir}/mount_${devname} ]; then
+                mkdir -p ${xmountdir}/${devname}
+                
+				FAT32LABEL=`/davinci/dvr/fat32vol /dev/${devname}` 
+                if [ $? -eq 0 ] ; then 		# FAT32 detected!
+		
+					# pre-mount check
+					
+					rm /var/dvr/sddev
+					rm /var/dvr/sdcheckdone 
+					/mnt/nand/dosfsckcheck 
+					echo /dev/${devname} > /var/dvr/sddev
+					/mnt/nand/dosfsck -a /dev/${devname}
+					n=$?                    
+					
+					case $n in
+					"0")
+						echo 0 > /var/dvr/fsckreturn
+						;;
+					"1")
+						echo 1 > /var/dvr/fsckreturn
+						;;
+					"2")
+						echo 2 > /var/dvr/fsckreturn
+						echo 0 > /var/dvr/formatsd
+						/mnt/nand/mkdosfs -F 32 /dev/${devname}
+						;;
+					esac                    
+
+					#	sleep 3
+					#	if [ -f /var/dvr/dosfsckkill ]; then
+					#		echo 1 > /var/dvr/formatsd
+					#	   /mnt/nand/mkdosfs -F 32 /dev/${devname}
+					#	else
+					#	   echo 1 > /var/dvr/noformatsd
+					#	fi
+
+					echo 1 > /var/dvr/sdcheckdone        
+
+								     
+					if mount /dev/${devname} ${xmountdir}/${devname} -o shortname=winnt ; then
+					
+						if [ -f ${xmountdir}/${devname}/DISK1 -o -f ${xmountdir}/${devname}/disk1  -o "$FAT32LABEL" = "DISK1" ] ; then		
+							# disk 1 signature
+							echo "${devname}" > /var/dvr/disk1_device
+
+							# unmount the disk
+							if umount ${xmountdir}/${devname} ; then
+								rm -r ${xmountdir}/${devname}
+							fi
+
+						elif [ -f ${xmountdir}/${devname}/DISK2 -o -f ${xmountdir}/${devname}/disk2 -o "$FAT32LABEL" = "DISK2"  ] ; then		
+							# disk 2 signature
+							echo "${devname}" > /var/dvr/disk2_device
+
+							# unmount the disk
+							if umount ${xmountdir}/${devname} ; then
+								rm -r ${xmountdir}/${devname}
+							fi
+
+						elif [ -f ${xmountdir}/${devname}/DISK3 -o -f ${xmountdir}/${devname}/disk3  -o "$FAT32LABEL" = "DISK3"  ] ; then		
+							# disk 3 signature
+							echo "${devname}" > /var/dvr/disk3_device
+
+							# unmount the disk
+							if umount ${xmountdir}/${devname} ; then
+								rm -r ${xmountdir}/${devname}
+							fi
+						
+						elif [ -f ${xmountdir}/${devname}/archive -o -f ${xmountdir}/${devname}/ARCHIVE -o "$FAT32LABEL" = "ARCHIVE" ] ; then
+
+							if umount ${xmountdir}/${devname} ; then
+								rm -r ${xmountdir}/${devname}
+								# new mount point
+								d_mount=${dvrarchdir}/d_${devname}
+						
+								if [ ! -d ${d_mount} =  ] ; then
+									mkdir ${d_mount} ;
+								fi
+								
+								if mount /dev/${devname} ${d_mount} -o shortname=winnt ; then
+									rm -f ${d_mount}/FSCK*
+									# mark mounted disk
+									echo  ${dvrmountdir}/d_${devname} > ${xmountdir}/mount_${devname}
+								fi
+							fi
+
+						# dvr recording disk ?
+						elif [ -f ${xmountdir}/${devname}/dvrdisk -o -f ${xmountdir}/${devname}/DVRDISK -o "$FAT32LABEL" = "DVRDISK"  ] ; then
+
+							if umount ${xmountdir}/${devname} ; then
+								rm -r ${xmountdir}/${devname}
+							fi
+
+							if [ ! -f ${xmountdir}/mount_${devname} ] ; then
+								# do dosfs check here
+								/mnt/nand/dosfsck -a /dev/${devname}
+
+								mkdir -p ${dvrmountdir}/d_${devname}
+								mount /dev/${devname} ${dvrmountdir}/d_${devname} -o shortname=winnt
+								rm -f ${dvrmountdir}/d_${devname}/FSCK*
+								
+								# mark mounted disk
+								echo  ${dvrmountdir}/d_${devname} > ${xmountdir}/mount_${devname}
+							fi
+
+			    
+						# autorun disk .. key ...
+						elif [ -f ${xmountdir}/${devname}/key ] ; then
+
+							if /mnt/nand/dvr/volumeid /dev/${devname} ${xmountdir}/${devname} ; then
+								# key check passed
+								echo ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
+								
+								USBROOT=${xmountdir}/${devname} 
+								export USBROOT
+
+								# check directory 340
+								if [ -d ${USBROOT}/8851 ] ; then
+									EXEDIR=${USBROOT}/8851
+								else 
+									EXEDIR=${USBROOT}
+								fi
+
+								export EXEDIR
+								cd ${EXEDIR}
+
+								for autoruncheck in `ls *.check`
+								do
+									if /mnt/nand/dvr/md5check ${autoruncheck} ; then
+										autorun_file=${autoruncheck%.check}.autorun
+										if [ -x ${autorun_file} ] ; then
+											# run autorun file
+											mkdir /home/usbrun_${autorun_file}
+											cd /home/usbrun_${autorun_file}
+											cp ${EXEDIR}/${autorun_file} ${autorun_file}
+											./${autorun_file}  &
+										fi
+									fi
+								done
+
+								cd /
+								
+							else    # no autorun file
+
+								cd /
+								if umount ${xmountdir}/${devname} ; then
+									rm -r ${xmountdir}/${devname}
+								fi
+					  
+							fi
+
+						# autorun disk by usbkey
+						elif [ -f ${xmountdir}/${devname}/usbkey ] ; then
+
+							# check auto runable disk
+							cd ${xmountdir}/${devname}		# required to be current dir, so usbcheck can read FW file.
+
+							autorun_appid=`cat /mnt/nand/ID/APPID` 
+							autorun_file_app=`/mnt/nand/dvr/usbcheck /dev/${devname%[1-9]} usbkey ${autorun_appid}`
+							autorun_file=`/mnt/nand/dvr/usbcheck /dev/${devname%[1-9]} usbkey`
+							if [ -f ${xmountdir}/${devname}/${autorun_file} ] ; then
+
+								echo ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
+
+								mkdir /home/usbautorun
+								cd /home/usbautorun
+								# run autorun file
+								EXEDIR=${xmountdir}/${devname}
+								export EXEDIR
+								USBROOT=${EXEDIR}
+								export USBROOT
+								${EXEDIR}/${autorun_file}  &
+					  
+							elif [ -f ${xmountdir}/${devname}/${autorun_file_app} ] ; then
+
+								echo ${xmountdir}/${devname} > ${xmountdir}/mount_${devname}
+
+								mkdir /home/usbautorun
+								cd /home/usbautorun
+								# run autorun file
+								EXEDIR=${xmountdir}/${devname}
+								export EXEDIR
+								USBROOT=${EXEDIR}
+								export USBROOT
+								${EXEDIR}/${autorun_file}  &
+					  
+							else    # no autorun file
+
+								cd /
+								if umount ${xmountdir}/${devname} ; then
+									rm -r ${xmountdir}/${devname}
+								fi
+					  
+							fi                       
+														    
+						# other disk
+						else
+			
+							# PWZ5 backup disk support
+							mmcid=`ls -l ${devpath}/../device`
+							mmcid=${mmcid##*/}
+							mmcid=${mmcid%:*}		# slot 1 : $mmcid = "mmc0", slot 2: $mmcid = "mmc1" , not used for now
+
+							if umount ${xmountdir}/${devname} ; then
+								rm -r ${xmountdir}/${devname}
+							fi
+
+							if [ ! -f ${xmountdir}/mount_${devname} ] ; then
+
+								mkdir -p ${dvrmountdir}/d_${devname}
+								if mount /dev/${devname} ${dvrmountdir}/d_${devname} -o shortname=winnt ; then
+							
+									# mark mounted disk
+									echo  ${dvrmountdir}/d_${devname} > ${xmountdir}/mount_${devname}
+								fi
+							fi
+
+						fi
+					fi   #windows mounted  
+				else      # Not fat32
+					
+
+					if mount /dev/${devname} ${xmountdir}/${devname} -t ext3 ; then
+						if umount ${xmountdir}/${devname} ; then
+							rm -r ${xmountdir}/${devname}
+						fi
+
+						if [ ! -f ${xmountdir}/mount_${devname} ] ; then
+							mkdir -p ${dvrmountdir}/d_${devname}
+							if mount /dev/${devname} ${dvrmountdir}/d_${devname} -t ext3 -o noatime ; then
+								# mark mounted disk
+								echo  ${dvrmountdir}/d_${devname} > ${xmountdir}/mount_${devname}
+							fi
+						fi
+
+					fi
+				fi
+
+			#endif of mount
+            fi      
+
+		#end if block device
+		else 
+
+			if [ -r ${devpath}/dev ] ; then 			
+				devnum=`cat ${devpath}/dev`
+				if [ -c /dev/${devname} ] ; then 
+					rm /dev/${devname}
+				fi
+				mknod /dev/${devname} c ${devnum%%:*} ${devnum##*:}
+			fi
+			
+			# check usb wifi, just to check if it is a network interface
+			if [ -f ${devpath}/mtu -a -f ${devpath}/carrier ]; then			
+			
+				cd /mnt/nand/dvr
+
+				wifi_essid=`/mnt/nand/dvr/cfg get network wifi_essid`
+				wifi_enc=`/mnt/nand/dvr/cfg get network wifi_enc`
+				wifi_key=`/mnt/nand/dvr/cfg get network wifi_key`
+
+				if [ -n "$wifi_essid"  ] ; then
+					if [ -f /mnt/nand/dvr/wifi_ip ]; then
+						ifconfig ${devname} up
+			
+						case $wifi_enc in
+						"0")
+							  #/mnt/nand/iwpriv ${devname} set NetworkType=Infra
+							  #/mnt/nand/iwpriv ${devname} set AuthMode=OPEN
+							  #/mnt/nand/iwpriv ${devname} set EncrypType=NONE
+						  #/mnt/nand/iwpriv ${devname} set SSID=$wifi_essid
+								  # iwconfig ${devname} essid $wifi_essid
+						  ;;
+						"1")
+							 # iwpriv ${devname} set NetworkType=Infra
+							 # iwpriv ${devname} set AuthMode=OPEN
+							 # iwpriv ${devname} set EncrypType=WEP
+							 # iwpriv ${devname} set Key1=$wifi_key
+							 # iwpriv ${devname} set DefaultKeyID=1
+						 # iwpriv ${devname} set SSID=$wifi_essid
+								  # iwconfig ${devname} key $wifi_key
+								  # iwconfig ${devname} essid $wifi_essid 
+						  ;;
+						"2")
+							  #iwpriv ${devname} set NetworkType=Infra
+							  #iwpriv ${devname} set AuthMode=SHARED
+							  #iwpriv ${devname} set EncrypType=WEP
+							  #iwpriv ${devname} set Key1=$wifi_key
+							  #iwpriv ${devname} set DefaultKeyID=1
+						  #iwpriv ${devname} set SSID=$wifi_essid
+								  iwconfig ${devname} key $wifi_key
+								  iwconfig ${devname} essid $wifi_essid 
+						  ;;
+						"3")
+							  #iwpriv ${devname} set NetworkType=Infra
+							  #iwpriv ${devname} set AuthMode=WEPAUTO
+							  #iwpriv ${devname} set EncrypType=WEP
+							  #iwpriv ${devname} set Key1=$wifi_key
+							  #iwpriv ${devname} set DefaultKeyID=1
+						  #iwpriv ${devname} set SSID=$wifi_essid
+								  iwconfig ${devname} key $wifi_key
+								  iwconfig ${devname} essid $wifi_essid 
+						  ;;
+						"4")
+							  iwpriv ${devname} set NetworkType=Infra
+						  iwpriv ${devname} set AuthMode=WPAPSK
+						  iwpriv ${devname} set EncrypType=TKIP
+						  iwpriv ${devname} set SSID=$wifi_essid
+						  iwpriv ${devname} set WPAPSK=$wifi_key
+						  iwpriv ${devname} set SSID=$wifi_essid
+						  ;;
+						"5")
+							  iwpriv ${devname} set NetworkType=Infra
+							  iwpriv ${devname} set AuthMode=WPAPSK
+							  iwpriv ${devname} set EncrypType=AES
+						  iwpriv ${devname} set SSID=$wifi_essid
+							  iwpriv ${devname} set WPAPSK=$wifi_key
+						  iwpriv ${devname} set SSID=$wifi_essid
+						  ;;
+						"6")
+							  iwpriv ${devname} set NetworkType=Infra
+							  iwpriv ${devname} set AuthMode=WPA2PSK
+							  iwpriv ${devname} set EncrypType=TKIP
+						  iwpriv ${devname} set SSID=$wifi_essid
+							  iwpriv ${devname} set WPAPSK=$wifi_key
+						  iwpriv ${devname} set SSID=$wifi_essid
+						  ;;
+						"7")
+							  iwpriv ${devname} set NetworkType=Infra
+							  iwpriv ${devname} set AuthMode=WPA2PSK
+							  iwpriv ${devname} set EncrypType=AES
+						  iwpriv ${devname} set SSID=$wifi_essid
+							  iwpriv ${devname} set WPAPSK=$wifi_key
+						  iwpriv ${devname} set SSID=$wifi_essid
+						  ;;
+						*)
+						  ;;
+						esac
+
+						if [ -f /mnt/nand/dvr/wifi_mask ]; then
+							ifconfig ${devname} `cat /mnt/nand/dvr/wifi_ip` netmask `cat /mnt/nand/dvr/wifi_mask` up
+							ifconfig ${devname} broadcast `cat /mnt/nand/dvr/wifi_broadcast`
+						else
+							ifconfig ${devname} `cat /mnt/nand/dvr/wifi_ip` up
+						fi
+
+					fi
+				fi
+				
+			#endi of wifi	
+			fi
+		
+        fi
+
+        ;;
+
+    "remove")
+        if [ ${subsys} = "block" -a -r ${xmountdir}/mount_${devname} ]; then
+
+            mountdir=`cat ${xmountdir}/mount_${devname}`
+            dvrsvrdown=0
+            dvrpid=0
+
+            # suspend dvrsvr
+            if [ -f ${dvrpidfile} -a -f ${dvrcurdisk} ]; then
+                dvrdisk=`cat ${dvrcurdisk}`
+                if [ ${dvrdisk} = ${mountdir} ] ; then
+                    dvrpid=`cat ${dvrpidfile}`
+                    kill -USR1 ${dvrpid}
+                    for x in 1 2 3 4 5 6 7 8 9 10 ; do
+                        if [ -f ${dvrcurdisk} ]; then
+                            sleep 3
+                        else
+                            break
+                        fi
+                    done
+                    dvrsvrdown=1
+                fi
+            fi
+
+            rm ${xmountdir}/mount_${devname}
+
+            for x in 1 2 3 4 5 6 7 8 ; do
+                if [ -d ${mountdir} ] ; then
+                   sync;
+                   if umount ${mountdir} ; then
+                      rm -r ${mountdir}
+                   else
+                      sleep 1
+                   fi
+                else
+                   break
+                fi
+            done ;
+
+            # restart dvrsvr
+            if [ $dvrsvrdown = 1 ]; then
+                kill -USR2 $dvrpid
+            fi
+
+        fi
+        
+        ;;
+
+
+esac 
+
+# unlock hotplug
+rm /var/dvr/hotpluglock

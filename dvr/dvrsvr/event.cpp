@@ -208,6 +208,9 @@ int event_check()
                     ch_state |= 8 ;             // bit 3: video data
                 }
                 else {
+					
+	printf("channel %d no data! \n", i);
+					
                     videodata=0 ;
                 }
                 if( rec_state(i) ) {
@@ -311,7 +314,6 @@ int event_check()
 
             // check if we need to detect smartserver (wifi)
             dio_checkwifi();
-
             dio_kickwatchdog ();
 
             // calculate cpu usage
@@ -319,7 +321,7 @@ int event_check()
 
             // check memory availablity
             mem_available();
-            if( g_memfree < g_lowmemory ) {
+			if( g_memfree < g_lowmemory ) {
                 dvr_log("Memory low. restart DVR.");
                 app_state = APPRESTART ;
             }

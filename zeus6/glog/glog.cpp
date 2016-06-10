@@ -60,11 +60,11 @@
 #include <ctype.h>
 #include <sys/sem.h>
 
+#include "../cfg.h"
+
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
 #include "../ioprocess/diomap.h"
-
-#include "../cfg.h"
 
 struct baud_table_t {
 	speed_t baudv ;
@@ -153,7 +153,7 @@ double sensorbouncetime[MAXSENSORNUM] ;
 double sensorbouncevalue[MAXSENSORNUM] ;
 
 // unsigned int outputmap ;	// output pin map cache
-char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
+char dvrconfigfile[] = CFG_FILE ;
 char * pidfile = "/var/dvr/glog.pid" ;
 
 int app_state ;     // 0: quit, 1: running: 2: restart

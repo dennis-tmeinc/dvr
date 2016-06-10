@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <malloc.h>
 #include <sys/mman.h>
 
 #include "memory.h"
@@ -29,13 +30,14 @@ struct mem_block {
 #define MEM_HEADERSIZE      ( 3 )
 #define MEM_TAG( m )        ( ((int*)(m))[-3] )
 #define MEM_ID( m )         ( ((int*)(m))[-2] )
-#define MEM_SIZE( m )       ( MEM_ID( m ) )
 #define MEM_REFCOUNT( m )   ( ((int*)(m))[-1] )
+#define MEM_SIZE( m )       ( MEM_ID( m ) )
 #define MEM_HEADER( m )     ( ((int*)(m))-MEM_HEADERSIZE )
 
-#define MEM_TAG_LOCAL  (0x47eb530f)
-#define MEM_TAG_SHARE  (0x2d421056)
-#define MEM_TAG_FREE   (0x5348fd20)
+#define MEM_TAG_LOCAL	(0x47eb530f)
+#define MEM_TAG_MMAP  	(0x7d39213a)
+#define MEM_TAG_SHARE	(0x2d421056)
+#define MEM_TAG_FREE	(0x5348fd20)
 #define MEM_SHARE_FIRSTBLOCK (8)
 
 #define MEM_ISALIGN( m )    (((int)(m)&3)==0)
@@ -294,43 +296,43 @@ void * mem_shm_byindex(int index)
     return NULL ;
 }
 
-
 // local memory management
 
 void *mem_alloc(int size)
 {
+	int * m ;
     size = size/sizeof(int) + 1 ;
-    int * m = (int *)malloc( (size+MEM_HEADERSIZE) * sizeof(int)) ;
-    if( m ) {
-        m+=MEM_HEADERSIZE ;
-        MEM_TAG(m) = MEM_TAG_LOCAL ;
-        MEM_ID(m) = (int)m ;
-        MEM_REFCOUNT(m) = 1 ;
-        g_memused++ ;
-        return (void *)m ;
-    }
+	m = (int *)malloc( (size+MEM_HEADERSIZE) * sizeof(int)) ;
+	if( m ) {
+		m+=MEM_HEADERSIZE ;
+		MEM_TAG(m) = MEM_TAG_LOCAL ;
+		MEM_ID(m) = (int)m ;
+		MEM_REFCOUNT(m) = 1 ;
+		g_memused++ ;
+		return (void *)m ;
+	}
     return NULL ;
 }
 
 // check if this memory is allocated by mem_alloc
 static inline int mem_check(void *pmem)
 {
-    return ( MEM_TAG(pmem)==MEM_TAG_LOCAL && MEM_ID(pmem) == (int)pmem ) ;
+    return ( MEM_ID(pmem) == (int)pmem && MEM_TAG(pmem)==MEM_TAG_LOCAL ) ;
 }
 
 // free memory ( local and shared )
 void mem_free(void *pmem)
 {
-    if( MEM_TAG(pmem) == MEM_TAG_LOCAL &&  MEM_ID(pmem) == (int)pmem   ) {
-        // free local memory
-        mem_lock();
-        if( --MEM_REFCOUNT(pmem) <= 0 ) {
-            MEM_TAG( pmem ) = MEM_TAG_FREE ;
-            free(MEM_HEADER(pmem)) ;
-            g_memused-- ;			// for debugging
-        }
-        mem_unlock();
-    }
+	if( mem_check(pmem) ) {
+		// free mmapped memory
+		mem_lock();
+		if( --MEM_REFCOUNT(pmem) <= 0 ) {
+			MEM_TAG( pmem ) = MEM_TAG_FREE ;
+			free(MEM_HEADER(pmem)) ;
+			g_memused-- ;			// for debugging
+		}
+		mem_unlock();
+	}
     else if( MEM_TAG(pmem)==MEM_TAG_SHARE ) {
         // free shared memory
         mem_shm_lock() ;
@@ -344,7 +346,7 @@ void mem_free(void *pmem)
 // add memory reference count. (local and shared)
 void *mem_addref(void *pmem, int size)
 {
-    if(  MEM_TAG(pmem)==MEM_TAG_LOCAL && MEM_ID(pmem) == (int)pmem  ) {       // is local ?
+    if( mem_check(pmem) ) {       // is local ?
         mem_lock();
         MEM_REFCOUNT(pmem)++ ;
         mem_unlock();
@@ -374,7 +376,10 @@ int mem_refcount(void *pmem)
 void mem_init()
 {
     // initial mutex
-    pthread_mutex_init(&mem_mutex, NULL);
+    pthread_mutex_t mutex_initializer=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP ;
+    mem_mutex = mutex_initializer ;
+    mallopt(M_MMAP_THRESHOLD, 8*1024);
+    mallopt(M_TRIM_THRESHOLD, 64*1024);
     mem_available();
     shmem = NULL ;
     return;

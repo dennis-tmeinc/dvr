@@ -3,7 +3,6 @@
 #
 
 include ../../config
-include $(PROJDIR)/arm_tool
 
 SOURCES=
 

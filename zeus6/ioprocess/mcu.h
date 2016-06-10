@@ -84,10 +84,6 @@
 #define MIN_SERIAL_DELAY	(100000)
 #define DEFSERIALBAUD	    (115200)
 
-// MCU hard ware io pin number
-#define MCU_INPUTNUM (9)
-#define MCU_OUTPUTNUM (4)
-
 // open serial port
 int serial_open(char * device, int buadrate) ;
 int serial_dataready(int handle, int usdelay=MIN_SERIAL_DELAY, int * usremain=NULL);
@@ -202,21 +198,23 @@ int mcu_iotemperature();
 // get hd temperature
 int mcu_hdtemperature(int *hd1,int *hd2);
 void mcu_poe_power( int onoff=1 );
-void mcu_poepoweron();
-void mcu_poepoweroff();
+void mcu_poepoweron() ;
+void mcu_poepoweroff() ;
 void mcu_wifipower(int power);
-void mcu_wifipoweron();
-void mcu_wifipoweroff();
-void mcu_motioncontrol_enable();
-void mcu_motioncontrol_disable();
-void mcu_hdpoweron();
-void mcu_hdpoweroff();
-int mcu_reset();
-void mcu_mic_on( int mic );
-void mcu_mic_off( int mic );
-void mcu_mic_toggle( int mic );
-void mcu_mic_ledoff();
-void mcu_covert( int coverton );
+void mcu_wifipoweron() ;
+void mcu_wifipoweroff() ;
+void mcu_motioncontrol_enable() ;
+void mcu_motioncontrol_disable() ;
+void mcu_hdpoweron() ;
+void mcu_hdpoweroff() ;
+int mcu_reset() ;
+void mcu_mic_on( int mic ) ;
+void mcu_mic_off( int mic ) ;
+void mcu_mic_toggle( int mic ) ;
+void mcu_mic_ledoff() ;
+void mcu_covert( int coverton ) ;
+void mcu_amberled(int ledon) ;
+void mcu_camera_nightmode( int night );
 
 /*
 int mcu_reset();

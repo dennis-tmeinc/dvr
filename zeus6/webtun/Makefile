@@ -13,7 +13,7 @@ EXTSOURCES=../dvrsvr/config.cpp ../rconn/rconn.cpp ../rconn/channel.cpp ../rconn
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 CFLAGS+= -I../rconn
-LDFLAGS= -Lcurl -lcurl -lstdc++ -lpthread
+LDFLAGS+= -lcurl -lstdc++ -lpthread
 
 webtun : $(SOURCES) $(EXTSOURCES) $(EXTHEADERS)
 	$(CC) $(CFLAGS) -DRCMAIN -o $@ $(SOURCES) $(EXTSOURCES) $(LDFLAGS)

@@ -1,0 +1,65 @@
+# self extract file 
+sfxrun.upd sfxrun
+
+# file on /davinci
+./boot.sh
+./dosfsck
+./dosfsckcheck
+./mkdosfs
+./vg_boot.sh
+
+# ID files
+./ID
+
+# dvr
+./dvr/firmwareid
+./dvr/tdevd
+./dvr/setnetwork
+./dvr/dvrinit.sh
+./dvr/fw_printenv
+./dvr/ioprocess
+./dvr/tdevmount
+./dvr/cfg
+./dvr/buzzer
+./dvr/arrow.cursor
+./dvr/tab101check
+./dvr/dvrtime
+./dvr/wpa_cli
+./dvr/tab102.sh
+./dvr/lpc21isp
+./dvr/usbcheck
+./dvr/wpa_cli-action.sh
+./dvr/panelled
+./dvr/smartftp
+./dvr/wpaconf
+./dvr/wpa_passphrase
+./dvr/umountdisks
+./dvr/devicepower
+./dvr/md5check
+./dvr/volumeid
+./dvr/tmefile
+./dvr/eaglehost
+./dvr/wpa_supplicant
+./dvr/tab102
+./dvr/passwd
+./dvr/dvrsvr
+./dvr/glog
+./dvr/rconn
+./dvr/zdaemon
+./dvr/adb
+./dvr/tdevhotplug
+./dvr/mount_backup
+./dvr/fat32vol
+./dvr/inetd.conf
+
+# www binary
+./dvr/eaglehttpd
+
+# www files (will include all subdir)
+./dvr/www
+
+# original copied firmware
+dvr/lib
+
+#./dvr/drivers.tar.gz
+dvr/drivers

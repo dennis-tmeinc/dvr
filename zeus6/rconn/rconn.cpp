@@ -31,8 +31,6 @@
 
 #define APPNKEY "AQ7Ynq23JYCtyHWATwS9"
 
-#define TUNNEL_BUFSIZE (4096)
-
 string	g_server ;
 int     g_port ;
 int     g_runtime ;
@@ -57,7 +55,6 @@ int runtime()
 
 rconn::rconn()
 {
-	stage = STAGE_REG ;
 	datalen = 0 ;
 	cmdptr=0;
 	r_xoff = 0 ;		
@@ -66,17 +63,20 @@ rconn::rconn()
 
 rconn::~rconn()
 {
-	// remove all channels relate to this connection
-	while( channel_list.first()!=NULL ) {
-		delete (channel *)(channel_list.first()->item) ;
-		channel_list.remove(channel_list.first());
-	}
+	closechannel();
 }
 
 void rconn::closechannel(void) 
 {
 	target=NULL ;
 	channel::closechannel();
+		
+	// remove all sub channels
+	while( channel_list.first()!=NULL ) {
+		delete (channel *)(channel_list.first()->item) ;
+		channel_list.remove(channel_list.first());
+	}
+
 }
 
 int rconn::process() 
@@ -86,10 +86,9 @@ int rconn::process()
 		if( g_runtime - activetime > 100 ) {
 			sendLine("p\n");
 		}
-
 		if( sock>=0 && ( sfd->revents & POLLIN ) ) {
 			if( datalen>0 ) {
-				int r = do_read( datalen>CHANNEL_BUFSIZE ? CHANNEL_BUFSIZE : datalen );
+				int r = do_read( datalen );
 				if( r>0 ) {
 					datalen-=r ;
 					if( datalen<=0 ) {
@@ -106,6 +105,11 @@ int rconn::process()
 			do_send();
 		}
 	}
+
+	if( sock<0 ) {
+		closechannel();
+	}
+	
 	m_block = (sfifo.first()!=NULL) ;
 	
 	// process sub connections
@@ -138,9 +142,11 @@ int  rconn::setfd( struct pollfd * pfd, int max )
 			gethostname(hostname, 255);
 			hostname[255]=0 ;
 			sendLineFormat("unit %s %s %s\n", hostname , (char *)g_did, (char *)g_internetkey );
+			stage = STAGE_REG ; 
 		}
 		else {
-			if( g_maxwaitms>2000 ) g_maxwaitms = 2000 ;		// to retry connection in 2 seconds
+			if( g_maxwaitms > 30000 ) 
+				g_maxwaitms = 30000 ;		// to retry connection in 30 seconds
 		}
 	}
 				
@@ -179,7 +185,7 @@ void rconn::closepeer( channel * peer )
 int rconn::sendpacket( packet * p, channel * from )
 {
 	sendLineFormat( "mdata %s %d\n", from->id, p->len() );
-	sfifo.add( new packet(p) );
+	sfifo.add( p );
 	return 1 ;
 }
 
@@ -279,11 +285,12 @@ void  rconn::cmd_connect( int argc, char * argv[] )
 	}
 	
 	// target
-	if( argv[2][0] == '*' ) {
-		argv[2] = "127.0.0.1" ;
+	char * target = argv[2]  ;
+	if( *target == '*' ) {
+		target = "127.0.0.1" ;
 	}
 
-	int tsock = net_connect( argv[2], atoi( argv[3]) );
+	int tsock = net_connect( target, atoi( argv[3]) );
 	if( tsock<0 ) {
 		sendLineFormat("close %s\n", argv[1]);
 		return ;
@@ -421,7 +428,7 @@ void rconn::process_cmd(char * c)
 	char * argv[10] ;
 	int    argc=0 ;
 	int    brk=1 ;
-	
+
 	// breaking arguments
 	while( *c && argc<9 ) {
 		if( *c<=' ' && *c>0 ) {		// found space
@@ -488,11 +495,12 @@ void rconn_run()
 		else if( pfdsize>40 && nfd<(pfdsize/4) ) {
 			pfdresize = pfdsize / 2 ;
 		}
+		
 		if( nfd>0 ) {
 			r = poll( pfd, nfd, g_maxwaitms );
 		}
 		else {
-			sleep(2);
+			usleep( g_maxwaitms*1000 );
 			r = 0;
 		}
 		g_runtime = runtime() ;

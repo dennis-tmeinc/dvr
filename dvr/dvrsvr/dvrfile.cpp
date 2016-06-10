@@ -123,7 +123,7 @@ int dvrfile::open(const char *filename, char *mode, int initialsize)
         m_hdflag = h264hd.flag ;
 
         if( h264hd.flag == H264FILEFLAG ) {
-            m_fileencrypt=0 ;								// no encrypted
+            m_fileencrypt=0 ;						// no encrypted
         }
         else {
             m_fileencrypt = 1 ;
@@ -226,38 +226,42 @@ int dvrfile::write(void *buffer, size_t buffersize)
     }
 }
 
-int dvrfile::tell()
+    OFF64 tell();
+    int seek(OFF64 pos, int from = SEEK_SET);
+    int truncate( OFF64 tsize );
+    
+OFF64 dvrfile::tell()
 {
     if( isopen() ) {
         if( m_filebuffer ) {
-            return ftell(m_handle)+m_filebufferpos ;
+            return file_tell(m_handle)+m_filebufferpos ;
         }
         else {
-            return ftell(m_handle);
+            return file_tell(m_handle);
         }
     }
     else {
-        return 0;
+        return (OFF64)0;
     }
 }
 
-int dvrfile::seek(int pos, int from)
+int dvrfile::seek(OFF64 pos, int from)
 {
     flushbuffer();
     if( isopen() ) {
-        return fseek(m_handle, pos, from);
+        return file_seek(m_handle, pos, from);
     }
     else {
         return 0 ;
     }
 }
 
-int dvrfile::truncate( int tsize )
+int dvrfile::truncate( OFF64 tsize )
 {
     int res ;
     flushbuffer();
     fflush(m_handle);
-    res=ftruncate(fileno(m_handle), tsize);
+    res = file_truncate(fileno(m_handle), tsize);
     fflush(m_handle);
     return res ;
 }
@@ -330,6 +334,9 @@ int dvrfile::writeframe(void *buffer, size_t size, int frametype, dvrtime * fram
 {
     unsigned char * wbuf = (unsigned char *)buffer ;
     unsigned int esize ;        // encryption size
+    
+    
+printf("Write Frame. type: %d size %d\n", frametype, size);    
 
     if( frametype == FRAMETYPE_KEYVIDEO ) {
         dvr_key_t keytime ;

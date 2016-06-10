@@ -176,7 +176,7 @@ char mcu_firmware_version[80] ;
 char hostname[128] = "BUS001";
 
 // unsigned int outputmap ;	// output pin map cache
-char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
+char dvrconfigfile[] = CFG_FILE ;
 char logfile[128] = "dvrlog.txt" ;
 string temp_logfile;
 int watchdogenabled=0 ;

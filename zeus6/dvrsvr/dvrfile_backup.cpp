@@ -539,7 +539,7 @@ void dvrfile::writekey()
 int dvrfile::seek( dvrtime * seekto )
 {
     int i;
-    int seekms ;					// seek in milliseconds frome time of file
+    int seeks ;					// seek in seconds frome time of file
     if( !isopen() ) {
         return 0;
     }
@@ -547,14 +547,14 @@ int dvrfile::seek( dvrtime * seekto )
         seek(m_filestart, SEEK_SET );
         return 0;
     }
-    seekms = time_dvrtime_diffms( seekto, &m_filetime );
-    if( seekms/1000 >= m_filelen ) {
+    seeks = time_dvrtime_diff( seekto, &m_filetime );
+    if( seeks >= m_filelen ) {
         seek(0, SEEK_END );
         return 0 ;
     }
     if( m_keyarray.size()>0 ) {                         // key frame index available
         for( i=m_keyarray.size()-1; i>=0; i-- ) {
-            if( m_keyarray[i].ktime<= seekms ) {
+            if( m_keyarray[i].ktime/1000 <= seeks ) {
                 break;
             }
         }
@@ -562,46 +562,11 @@ int dvrfile::seek( dvrtime * seekto )
         seek(m_keyarray[i].koffset, SEEK_SET );
         return 1 ;
     }
-    
+
     // seek to end of file
     seek(0, SEEK_END);
-    int filesize = tell();
-    
-    int pos = (filesize/m_filelen) * (seekms/1000) ;
-    pos &= ~3; 
-    seek(pos, SEEK_SET );
-    
-    if (nextkeyframe() == 0){
-        seek(0, SEEK_END );                  // seek to end of file
-        return 1 ;
-    }
-    
-    framesize();                                        // this will get current frame timestamp
-    if( tstamp2ms(m_timestamp - m_filestamp) > seekms ) {
-        // go backward
-        while( prevkeyframe() ) {
-            framesize();	// update timestamp
-            if( tstamp2ms(m_timestamp - m_filestamp) <= seekms ) {
-                // got it
-                return 1 ;
-            }
-        }
-        seek(0, SEEK_SET );                  // seek to begin of file
-    }
-    else {
-        // go forward
-        pos = tell();
-        while( nextkeyframe() ) {
-            framesize();
-            if( tstamp2ms(m_timestamp - m_filestamp) > seekms ) {
-                // got it
-                break;
-            }
-            pos=tell();
-        }
-        seek(pos, SEEK_SET );
-    } 
-    return 1 ;
+    return 0 ;
+
 }
 
 // repair a .264 file, return 1 for success, 0 for failed

@@ -300,11 +300,11 @@ time_t time_nextday( struct dvrtime *dvrt )
 // difference in seconds (t1-t2)
 int  time_dvrtime_diff( struct dvrtime *t1, struct dvrtime *t2)
 {
-    return ((int)time_timelocal (t1)-(int)time_timelocal (t2)) ;
+    return (int) (time_timelocal (t1)-time_timelocal (t2)) ;
 }
 
 // difference in seconds (t1-t2)
-int  time_dvrtime_diffms( struct dvrtime *t1, struct dvrtime *t2 )
+int time_dvrtime_diffms( struct dvrtime *t1, struct dvrtime *t2 )
 {
     int diff ;
     diff = time_dvrtime_diff(t1,t2);
@@ -448,7 +448,6 @@ DWORD time_hiktimestamp()
     gettimeofday(&tv, NULL);
     return (tv.tv_sec%(86400*10))*64 + tv.tv_usec * 64 / 1000000 ;
 }
-
 
 int time_gettick()
 {

@@ -52,7 +52,7 @@ DVRFILES='
 	volumeid/volumeid 
 	cfg/cfg 
 	dhcp/udhcpc 
-	httpd/eaglehttpd/eaglehttpd
+	httpd/eaglehttpd
 	ssl/programs/ssl/ssl_server
 '
 
@@ -126,8 +126,7 @@ cp -v ${APPROOT}/sfx/mksfx .
 cp -v ${APPROOT}/sfx/sfx .
 
 # modify default settings
-
-${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/defconf set glog tab102b_enable 0
+# ${DEPROOT}/cfgpc -f${DEPROOT}/host/dvr/defconf set glog tab102b_enable 0
 
 ${STRIP} sfx
 
@@ -166,11 +165,32 @@ done
 echo Building Host dep firmware
 cd ${DEPROOT}/host
 echo ${firmwareid} > dvr/firmwareid
-${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.dep ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW
+${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist21.dep ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW
 chmod a+x ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW
 
 echo Building Host update firmware
-${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist.upd ${OUTPUTDIR}/HOST_${firmwareid}.FW
+${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist21.upd ${OUTPUTDIR}/HOST_${firmwareid}.FW
+chmod a+x ${OUTPUTDIR}/HOST_${firmwareid}.FW
+
+# build TVS22 firmware here
+echo "Build TVS22 firmware"
+appid=TVS22
+firmwareid=${appid}.1.0.${RELEASE}
+echo "Firmware ID: " $firmwareid
+cd ${DEPROOT}/host/ID
+echo 1 > BOARDNUM
+echo ${appid} > APPID
+echo 1 > BOARDID
+
+cd ${DEPROOT}/host
+echo ${firmwareid} > dvr/firmwareid
+
+echo Building Host dep firmware
+${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist22.dep ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW
+chmod a+x ${OUTPUTDIR}/HOST_DEP_${firmwareid}.FW
+
+echo Building Host update firmware
+${DEPROOT}/mksfx ${DEPROOT}/sfx sfxlist22.upd ${OUTPUTDIR}/HOST_${firmwareid}.FW
 chmod a+x ${OUTPUTDIR}/HOST_${firmwareid}.FW
 
 echo Finish!

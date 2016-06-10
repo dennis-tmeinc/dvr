@@ -42,6 +42,10 @@ int serial_open(char * device, int buadrate)
     int hserial ;
     int i;
 
+    
+printf( "Open serial port :%s :%d\n",     (char *)device, buadrate );
+    
+
     // check if serial device match stdin ?
     struct stat stdinstat ;
     struct stat devstat ;

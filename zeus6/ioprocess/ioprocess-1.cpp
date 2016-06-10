@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/reboot.h>
 
+#include "../cfg.h"
 #include "../dvrsvr/eagle32/davinci_sdk.h"
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
@@ -40,7 +41,7 @@ int serial_handle ;
 unsigned int mcu_poweroffdelaytimer ;
 
 // unsigned int outputmap ;	// output pin map cache
-char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
+char dvrconfigfile[] = CFG_FILE ;
 int ledflashing=0;
 int watchdogenabled=0;
 int gpsvalid = 0 ;

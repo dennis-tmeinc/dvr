@@ -31,9 +31,7 @@ int playback::close()
         m_framebuf=NULL ;
         m_framesize=0 ;
     }
-    if( m_file.isopen() ) {
-        m_file.close();
-    }
+    m_file.close();
     return 0;
 }
 
@@ -63,28 +61,25 @@ int playback::seek( struct dvrtime * seekto )
         disk_listday( m_filelist, seekto, m_channel );
     }
 
-    // seek inside m_day (m_filelist)
-    for(m_curfile=0; m_curfile<m_filelist.size(); m_curfile++) {
-        int    fl ;			// file length
-        dvrtime ft ;		// file time
-        char * filename = m_filelist[m_curfile] ;
-        f264time( filename, &ft );
-        fl = f264length( filename );
-        ft = ft + fl ;		// ft become file end time
-        if(!(*seekto > ft) ) {	// found the file
-            if( m_file.open(filename, "rb") ) {	// open success
-                if( m_autodecrypt ) {
-                    m_file.autodecrypt(1);
-                }
-                m_file.seek(seekto);	// don't need to care if its success
-                preread();
-                goto seek_end ;				// done!
-            }
-            else {
-                m_filelist.remove(m_curfile--) ;        // silently remove it form list
-            }
-        }
-    }
+	int m_curfile = m_filelist.size() ;
+	if( m_curfile>0 ) {
+		// seek inside m_day (m_filelist)
+		while( --m_curfile>0 ) {
+			dvrtime ft ;		// file time
+			f264time( m_filelist[m_curfile], &ft );
+			if( *seekto > ft ) {	// found the file
+				break ;
+			}
+		}
+		if( m_file.open(m_filelist[m_curfile], "r") ) {	// open success
+			if( m_autodecrypt ) {
+				m_file.autodecrypt(1);
+			}
+			m_file.seek(seekto);	// don't need to care if its success
+			preread();
+			goto seek_end ;				// done!
+		}
+	}
 
     // seek beyond the day
     opennextfile();
@@ -115,9 +110,7 @@ int playback::opennextfile()
 {
     int i;
     dvrtime dvrt ;
-    if( m_file.isopen() ) {
-        m_file.close();
-    }
+    m_file.close();
     time_dvrtime_init( &dvrt, 2000);
 
     while( !m_file.isopen() ) {
@@ -359,16 +352,9 @@ DWORD playback::getmonthinfo(struct dvrtime * month)
 
 void playback::getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * pday, int lock)
 {
-    struct dvrtime t ;
-    int len ;
     int i;
-    struct dayinfoitem di ;
-    struct dayinfoitem di_x ;
     array <f264name> filelist ;
     array <f264name> * pfilelist ;
-
-    di.ontime=0;
-    di.offtime=0;
 
     int bcdseekday = pday->year*10000 + pday->month*100 + pday->day ;
     if( bcdseekday != m_day ) {			// get different day list
@@ -382,7 +368,14 @@ void playback::getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * 
 
     dayinfo.setsize(0);
     for( i=0; i<pfilelist->size(); i++) {
-        char * fname = (*pfilelist)[i];
+        dvrfile df ;		
+        df.open( (*pfilelist)[i], "r" );
+        if( df.isopen() ) {
+			df.getclipinfo( dayinfo, lock );
+			df.close();
+		}
+        
+        /*
         len=f264length(fname) ;
         f264time(fname, &t);
         di_x.ontime=t.hour * 3600 + t.minute * 60 + t.second ;
@@ -401,11 +394,14 @@ void playback::getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * 
             di.ontime=di_x.ontime ;
         }
         di.offtime=di_x.offtime ;
+        */
     }
 
+	/*
     if( di.offtime>di.ontime ) {
         dayinfo.add(di);
     }
+    */
 }
 
 int playback::fileheadersize()

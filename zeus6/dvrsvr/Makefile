@@ -8,7 +8,6 @@ SOURCES=main.cpp \
 		dvrtime.cpp \
 		dvrsvr.cpp \
 		netsvr.cpp \
-		msg.cpp \
 		ptz.cpp \
 		record.cpp \
 		capture.cpp \
@@ -19,14 +18,14 @@ SOURCES=main.cpp \
 		playback.cpp \
 		string.cpp \
 		disk.cpp \
-		idx.cpp \
 		config.cpp \
 		event.cpp \
 		live.cpp \
 		crypt.cpp \
 		dio.cpp \
 		vri.cpp \
-		screen.cpp \
+		fifoswap.cpp \
+		archive.cpp \
 		ipstream.cpp 
 
 HEADERS=../cfg.h\
@@ -36,48 +35,42 @@ HEADERS=../cfg.h\
 		fbwindow.h \
 		crypt.h \
 		mpegps.h \
+		fifoswap.h \
 		block.h  \
+		record.h \
 		dir.h \
+		archive.h \
 		../ioprocess/diomap.h
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
-CFLAGS += -Wno-write-strings -g
+CFLAGS += -Os
 
-# LIBRARY=libdio.so
+ifeq ($(EAGLE),zeus8)
+  LDFLAGS += -lpthread -lm -lstdc++ -lipcamerasdk -luuid -L./lib -leagle -lgm  
+  
+else
+  LDFLAGS += -lpthread -lm -lstdc++ \
+	-L./eagle8851 -leagle8851 -lxmlwrapper -lexpat -lmemmgr -lmsgreader \
+	-lvideocap -lsharedbuffmgr -lframeratectrl -lfreetype \
+	-lmassmemaccess -lh264enc -ljpegenc -lresize \
+	-ldeinterlacer -limgbackendprocess -lpbengine -lvideodisp -lROISelector \
+	-lipcamerasdk  -luuid -lcrypto
 
-#LDFLAGS= -lpthread -lstdc++ -L./eagle8851 -leagle8851 libfbdraw.so -Wl,-rpath,.
+endif
 
-LDFLAGS = -lpthread -lm -lstdc++ \
-    -L./eagle8851 -leagle8851 -lipcamerasdk libfbdraw.so -lxmlwrapper -lexpat -lmemmgr -lmsgreader \
-    -lvideocap -lsharedbuffmgr -lframeratectrl -lfreetype \
-    -lmassmemaccess -lh264enc -ljpegenc -lresize \
-    -ldeinterlacer -limgbackendprocess -lpbengine -lvideodisp \
-    -lssl -lcrypto  -luuid -lROISelector -g
-
-all : dvrsvr bgarch
+all : dvrsvr 
 
 # dvrsvr : $(OBJS) $(LIBRARY)
 dvrsvr : $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LDFLAGS)
-	#cp dvrsvr /home/jianpeng/eagle34/dvrtest/
-
-bgarch: bgarch.cpp genclass.h dir.h
-	$(CC) $(CFLAGS) -o $@  bgarch.cpp -lstdc++
 
 md5 : md5.cpp
-	$(CC) $(CFLAGS) -o md5 md5.cpp $(LDFLAGS)
-#	cp md5 /home/jianpeng/eagle34/dvrtest/
-
+	$(CC) $(CFLAGS) -o md5 md5.cpp 
 
 %.o : %.cpp $(HEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# libdio.so : dio.c
-# 	$(CC) -g -fPIC -c -Wall -o dio.o dio.c
-# 	$(CC) -g -shared -lpthread -Wl,-soname,libdio.so -o $@ dio.o -lc
-
 clean :
 	rm -f *.o
 	rm -f dvrsvr
-	rm -f bgarch

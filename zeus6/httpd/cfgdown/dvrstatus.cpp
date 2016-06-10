@@ -302,10 +302,9 @@ int get_temperature( int * sys_temp, int * disk_temp)
 
 struct dvrstat {
     struct timeval checktime ;
-    long   uptime, idletime ;
+    float uptime, idletime ;
     unsigned long streambytes[16] ;
 } savedstat ;
-
 
 // generate status page
 void print_status()
@@ -382,30 +381,22 @@ void print_status()
     }
 
     // calculate CPU usage
-    // use /proc/stat now
-    // cpu  5558 96 14442 17017 1157 46 608 0 0
-    statfile = fopen("/proc/stat", "r" );
-    if( statfile != NULL ) {
-		long vstat[7] ;
-		int r ;
-		r = fscanf( statfile, "cpu%ld %ld %ld %ld %ld %ld %ld", 
-			&vstat[0], &vstat[1], &vstat[2], &vstat[3], 
-			&vstat[4], &vstat[5], &vstat[6] ) ;
-		if( r>=7 ) {
-			// total cpu time
-			stat.uptime = vstat[0] + vstat[1] + vstat[2] + vstat[3] + vstat[4] + vstat[5] + vstat[6] ;
-			stat.idletime = vstat[3] ;
-		}
-		fclose( statfile );
-	}
+    FILE * uptimefile = fopen("/proc/uptime", "r" );
+    if( uptimefile ) {
+        fscanf( uptimefile, "%f %f", &stat.uptime, &stat.idletime ) ;
+        fclose( uptimefile );
+    }
 
-    long up  = stat.uptime - savedstat.uptime ;
-    long idle = stat.idletime - savedstat.idletime ;
-    if( up < 1 ) up = 1 ;
-    if( idle>up ) idle=up ;
-    
-    float cpuusage = 100.0 * ( 1.0 - ((float)idle) / ((float)up) ) ;
+    float cpuusage = stat.uptime - savedstat.uptime ;
+    if( cpuusage < 0.1 ) {
+        cpuusage = 99.0 ;
+    }
+    else {
+        cpuusage = 100.0 * (cpuusage - (stat.idletime-savedstat.idletime)) / cpuusage ;
+    }
+
     printf("\"cpu_usage\":\"%.1f\",", cpuusage );
+    
 
     // print memory usage
     int stfree, sttotal ;

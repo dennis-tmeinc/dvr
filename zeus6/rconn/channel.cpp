@@ -61,17 +61,18 @@ void channel::closechannel(void)
 		target->closepeer(this);
 		target = NULL ;
 	}
-	
+
+	stage = STAGE_CLOSED ;
+		
 	if( sock>=0 ) close(sock);
 	sock=-1;
 	
 	while( sfifo.first() ) {
 		packet * p = (packet *)(sfifo.first()->item) ;
-		if( p ) delete p ;
+		if( p ) packet::release(p) ;
 		sfifo.remove(sfifo.first());
 	}
 
-	stage = STAGE_CLOSED ;
 }
 	
 int  channel::setfd( struct pollfd * pfd, int max )
@@ -159,23 +160,25 @@ void channel::closepeer( channel * peer )
 	}
 }
 
+void channel::sendLine( const char * line )
+{
+	int l = strlen(line);
+	packet * p = new packet(l);
+	memcpy( p->w(), line, l ) ;
+	p->writ(l);
+	sfifo.add( p );
+}
+
 //process commands
 void channel::sendLineFormat( const char * format, ... )
 {
 	int n ;
-	if(sock>=0) {
-		packet * p = new packet(1024);
-		va_list va ;
-		va_start( va, format );	
-		p->setlen( vsnprintf( p->start(), 1024, format, va ) );
-		va_end( va );
-		sfifo.add( p );
-	}
-}
-
-void channel::sendLine( const char * line )
-{
-	sendLineFormat("%s", line );
+	packet * p = new packet(1024);
+	va_list va ;
+	va_start( va, format );	
+	p->writ( vsnprintf( p->w(), p->siz(), format, va ) );
+	va_end( va );
+	sfifo.add( p );
 }
 
 void channel::setid( char * nid )
@@ -187,7 +190,7 @@ void channel::setid( char * nid )
 int channel::sendpacket( packet * p, channel * from )
 {
 	if( stage == STAGE_CONNECTED && target == from ) {
-		sfifo.add( new packet(p) );
+		sfifo.add( p );
 		return 1 ;
 	}
 	return 0 ;
@@ -210,26 +213,23 @@ void channel::xon( channel * peer )
 // push out pending send fifo
 void channel::do_send()
 {
-	while( sock>=0 && sfifo.first()!=NULL && net_srdy( sock ) ) {
+	if( sfifo.first()!=NULL ) {
 		packet * p = (packet *)(sfifo.first()->item) ;
 		if( p->len() > 0 ) {
-			int r = net_send( sock, p->start(), p->len() ) ;
+			int r = net_send( sock, p->r(), p->len() ) ;
 			if( r>0 ) {
 				p->use(r);
 			}
 			else {
 				close(sock);
 				sock=-1;
-				break;
+				p->use(p->len());
 			}
 		}
 		if( p->len()<=0 ) {
-			delete p ;
+			packet::release( p );
 			sfifo.remove(sfifo.first());
 			activetime = g_runtime ;				
-		}
-		else {
-			break;
 		}
 	}
 }
@@ -237,20 +237,21 @@ void channel::do_send()
 int  channel::do_read(int maxsize)	// do read packet from socket and send to target
 {
 	int r ;
+
 	packet * p = new packet(maxsize) ;
-	r = net_recv( sock, p->start(), p->len() );
+	r = net_recv( sock, p->w(), p->siz() );
 	if( r>0 ) {
 		activetime = g_runtime ;
-		p->setlen(r) ;
+		p->writ(r) ;
 		if( target ) {
-			target->sendpacket( p, this );
+			target->sendpacket( p->addref(), this );
 		}
 	}
 	else {
 		close(sock);
 		sock=-1;
 	}
-	delete p ;
+	packet::release( p );
 	return r ;
 }
 

@@ -3,12 +3,9 @@
 
 #define DAYLENGTH (24*60*60)
 
-//#define DEBUG_PLAYBACK
-#ifdef DEBUG_PLAYBACK
-FILE *fp=NULL;
-#endif
 static int norecplayback = 1 ;
 int net_playarc=0;
+
 playback::playback( int channel )
 {
     m_channel=channel ;
@@ -16,36 +13,23 @@ playback::playback( int channel )
     if( norecplayback ) {
         rec_pause = 850 ;            // temperary pause recording, for 5 seconds
     }    
-    disk_getdaylist(m_daylist);         // get data available days
+    
+    disk_getdaylist(m_daylist, channel);     
+    m_day=0 ;                      
+	
+	// get data available days
     if( norecplayback ) {
         rec_pause = 100 ;            // temperary pause recording, for 5 seconds
     }     
     net_playarc=10;    
-    m_day=-1 ;                          // invalid day
-    m_curfile=0 ;
-    time_dvrtime_init(&m_streamtime, 2000);
-    time_dvrtime_init(&m_lasttime,2000);
-    //m_framebuf=NULL ;
-    //m_framebufsize = 0 ;			// frame buffer size
-    m_framebufsize = 0 ;			
-    m_framebuf = NULL ;
-    m_framesize=0 ;
-    m_frametype=FRAMETYPE_UNKNOWN ;
-    opennextfile() ;                    // actually open the first file
+
+    m_curfile=-1 ;					// make opennextfile() open first file			
+    opennextfile() ;                // actually open the first file
 }
 
 playback::~playback()
 {
     close();
-#ifdef DEBUG_PLAYBACK    
-    if(fp){
-       fclose(fp);
-       fp=NULL;
-    }
-#endif    
-    if( m_framebuf!=NULL ) {
-		free(m_framebuf);
-    }
 }
 
 DWORD playback::getcurrentfileheader()
@@ -57,309 +41,102 @@ DWORD playback::getcurrentfileheader()
 
 int playback::close()
 {
-    if( m_file.isopen() ) {
-        m_file.close();
-    }
+    m_file.close();
     return 0;
 }
 
 int playback::seek( struct dvrtime * seekto )
 {
-    int bcdseekday ;
-#if 0       
-    m_streamtime=*seekto ;
-    dvr_log("channel:%d seek:year:%d month:%d day:%d hour:%d minute:%d second:%d msec:%d\n",m_channel,
-	   seekto->year,seekto->month,seekto->day,seekto->hour,seekto->minute,seekto->second,seekto->milliseconds);
-#endif	   
-
-  /*	  
-    if(m_file.isopen()){
-       printf("before seek:channel:%d pos:%d\n",m_channel,m_file.tell()); 
-    }*/
-    if( m_file.isopen() && m_file.seek( seekto ) ) {	// within current opened file?
-        goto seek_end ;
-    }
-    close();
-    
-    bcdseekday = seekto->year*10000 + seekto->month*100 + seekto->day ;
-    if( bcdseekday != m_day ) {	// seek to different day? update new day file list
-        m_filelist.setsize(0);	// empty day file list
-        m_day=bcdseekday ;
+	if( m_file.seek( seekto ) ) {
+		return 1;
+	}
+	m_file.close();
+	
+    int newday = seekto->year*10000 + seekto->month*100 + seekto->day ;
+    if( newday != m_day ) {	// seek to different day? update new day file list
         // load new day file list
+        m_day=newday ;
         disk_listday( m_filelist, seekto, m_channel );
     }
-    
-    // seek inside m_day (m_filelist)
-    for(m_curfile=0; m_curfile<m_filelist.size(); m_curfile++) {
-        int    fl ;		// file length
-        dvrtime ft ;		// file time
-        dvrtime ftend;
-        char * filename = m_filelist[m_curfile].getstring() ;
-        f264time( filename, &ft );
-        fl = f264length( filename );
-        ftend = ft + fl ;		// ft become file end time
-#if 0        
-        if(!(*seekto > ft) ) {	// found the file
-            if( m_file.open(filename, "r") ) {	// open success
-                m_file.seek(seekto);	// don't need to care if its success
-                goto seek_end ;				// done!
-            }
-        }
-#else
-       if((*seekto>ft||(*seekto==ft))&&(*seekto<ftend)){
-           if( m_file.open(filename, "r") ) {	// open success
-                m_file.seek(seekto);	// don't need to care if its success
-                  goto seek_end ;// done!
-            }	 
-       } else if(*seekto<ft){
-            if( m_file.open(filename, "r") ) {	// open success
-                m_file.seek(seekto);	// don't need to care if its success
-                  goto seek_end ;				// done!
-            }	 	 
-       }
-#endif        
-    }
-    
-    // seek beyond the day
-    opennextfile();
+    m_curfile = 0;
+    int s = m_filelist.size() ;
+    if( s>0 ) {
+		for( m_curfile = 0; m_curfile < s-1 ; m_curfile++ ) {
+			dvrtime ft ;		// file time
+			f264time( m_filelist[m_curfile+1].getstring(), &ft );
+			if( *seekto<ft ){
+				break ;
+			}
+		}
 
- seek_end:
-
-   // printf("after seek: channel:%d pos:%d\n",m_channel,m_file.tell());
-    if (m_file.isopen() && m_file.isframeencrypt()){
-    //  dvr_log("seek file is encrypted");
-      return 1;
-    }
-    else if(m_file.isopen()){
-  //    dvr_log("seek file is not encrypted");
-      return 0;
-    } else {
-      return -1; 
-    }
+		m_file.open( m_filelist[m_curfile].getstring(), "r" ) ;			
+		if( m_file.isopen() ) {
+			return m_file.seek(seekto);		// don't need to care if its success
+		}
+	}
+    return opennextfile();
 } 
 
 // open next file on list, return 0 on no more file
 int playback::opennextfile()
 {
-    int i;
+    int day = 0 ;
     dvrtime dvrt ;
-    memset( &dvrt, 0, sizeof(dvrt));
-    if( m_file.isopen() ) {
-        m_file.close();
-    }
     time_dvrtime_init( &dvrt, 2000);
-    while( !m_file.isopen() ) {
-        m_curfile++;
-        while( m_curfile>=m_filelist.size()) {	// end of day file
-            m_curfile=0;
-            // go next day
-            for( i=0 ; i<m_daylist.size(); i++ ) {
-                if( m_daylist[i]>m_day ) {
-                    m_day=m_daylist[i] ;
-                    dvrt.year  = m_day/10000 ;
-                    dvrt.month = m_day%10000/100 ;
-                    dvrt.day   = m_day%100 ;
-                    m_filelist.setsize(0);	// empty day file list
-                    disk_listday( m_filelist, &dvrt, m_channel );
-                    break;
-                }
-            }
-            if( i>=m_daylist.size() ) {
-                return 0 ;
-            }
-        }
-        m_file.open( m_filelist[m_curfile].getstring(), "r") ;
+    m_file.close();
+    while( !m_file.isopen() && day < m_daylist.size() ) {
+		if( m_daylist[day] == m_day ) {
+			if(++m_curfile<0) 
+				m_curfile = 0 ;		
+			if( m_curfile < m_filelist.size() ) {
+				m_file.open( m_filelist[m_curfile].getstring(), "r") ;
+			}
+			else {
+				day++;
+			}
+		}
+		else if( m_daylist[day]>m_day ) {
+			// advanced to next day
+			m_day=m_daylist[day] ;
+			dvrt.year  = m_day/10000 ;
+			dvrt.month = m_day%10000/100 ;
+			dvrt.day   = m_day%100 ;
+			disk_listday( m_filelist, &dvrt, m_channel );
+			m_curfile = -1 ;			
+		}
+		else { 		// m_daylist[day]<m_day 
+			day++ ;
+		}
     }
-    return 1;
+
+    return m_file.isopen();
 }
 
-void playback::readframe()
+// read current frame , if success advance to next frame after read
+int playback::readframe( frame_info * fi )
 {
-    int mSize;
-    if( m_framebuf ) {
-        free( m_framebuf );
-        m_framebuf=NULL ;
-    }
-    
-    // read frame();
-   // m_framesize=0;
-    if( m_file.isopen() ) {
-#if 1
-        while(1){
-            m_frametype=m_file.frametypeandsize(&m_framesize);
-            if(m_frametype!=FRAMETYPE_UNKNOWN)
-               break;
-            if( opennextfile()==0 ) {		// end of stream data
-                return ;
-            }
-        }
-#endif
-      //  dvr_log("framesize=%d type=%d",m_framesize,m_frametype);
-        m_framebuf=malloc( m_framesize );
-        mSize=m_file.readframe(m_framebuf, m_framesize);
-        if( mSize!=m_framesize ) {
-            // error !
-            dvr_log( "Read frame data error!");
-        }
-        m_streamtime = m_file.frametime();
-#if 0
-        printf("year:%d month:%d day:%d minute:%d second:%d mill:%d\n", \
-               m_streamtime.year, m_streamtime.month, \
-               m_streamtime.day, m_streamtime.minute, \
-               m_streamtime.second, m_streamtime.milliseconds);
-#endif
-#if 0
-	if(m_streamtime<m_lasttime){
-	   printf("wrong:");
-	   printf("frame: year:%d month:%d day:%d minute:%d second:%d mill:%d\n", \
-               m_streamtime.year, m_streamtime.month, \
-               m_streamtime.day, m_streamtime.minute, \
-               m_streamtime.second, m_streamtime.milliseconds);	   
-	   printf("last: year:%d month:%d day:%d minute:%d second:%d mill:%d\n", \
-                m_lasttime.year, m_lasttime.month, \
-                m_lasttime.day,  m_lasttime.minute, \
-                m_lasttime.second, m_lasttime.milliseconds);	  
-	}
-	m_lasttime=m_streamtime;
-#endif	
-    }
-}
-
-int playback::getframetypeandsize(int * pframetype, struct dvrtime * ptime)
-{
-    unsigned char *ptemp;
-    void * pframe;
-	int frametype = FRAMETYPE_UNKNOWN ;
-	int framesize = 0 ;
-
-    if( m_file.isopen() ) {
-		int retry=100 ;
-        while(--retry>0){
-            frametype=m_file.frametypeandsize(&framesize);
-            if(frametype!=FRAMETYPE_UNKNOWN)
-				break;
-            if( opennextfile()==0 ) {		// end of stream data
-				framesize = 0 ;
-                break ;
-            }
-        }
-        
-		if( pframetype!=NULL ) {
-			*pframetype = frametype ;
+	int framesize = m_file.readframe(fi) ;
+	if(framesize>0 ) {
+		// for norecplayback
+		if( norecplayback ) {
+			rec_pause = 50 ;            // temperary pause recording, for 5 seconds
 		}
-		if( ptime!=NULL ) {
-			*ptime = m_file.frametime() ;
-		}
+		net_playarc=5; 
+
 		return framesize ;
 	}
-	return 0 ;
-}
-
-void playback::getframedata(void * framebuf, int framesize)
-{
-    if( norecplayback ) {
-        rec_pause = 50 ;            // temperary pause recording, for 5 seconds
-    }
-    net_playarc=5; 
-    
-    if( m_file.isopen() && framesize>0 ) {
-		if( m_file.readframe( framebuf, framesize)!=framesize ) {
-			// error !
-			dvr_log( "Read frame data error!");
-		}
-    }
-}
-
-/*
-void playback::getstreamdataex(void ** pbuf, int * getsize, int * pframetype)
-{
-    if( norecplayback ) {
-        rec_pause = 50 ;            // temperary pause recording, for 5 seconds
-    }
-    net_playarc=5; 
-    
-    struct dvrtime*  ptime;
-    
-    unsigned char *ptemp;
-    void * pframe;
-    int exlength=sizeof(struct dvrtime);
-
-	m_framesize = 0 ;
-
-    if( m_file.isopen() ) {
-		int retry=100 ;
-		m_framesize = 0 ;
-        while(--retry>0){
-            m_frametype=m_file.frametypeandsize(&m_framesize);
-            if(m_frametype!=FRAMETYPE_UNKNOWN)
-				break;
-            if( opennextfile()==0 ) {		// end of stream data
-				m_framesize = 0 ;
-                break ;
-            }
-            
-        }
-        if( m_framesize > 0 ) {
-			if( m_framebuf == NULL ) {
-				m_framebufsize = m_framesize+exlength ;
-				m_framebuf = malloc( m_framebufsize );
-			}
-			else if( m_framebufsize < m_framesize+exlength ) {
-				m_framebufsize = m_framesize+exlength ;
-				free( m_framebuf ) ;
-				m_framebuf = malloc( m_framebufsize );
-			}
-			pframe=(void*)(((char*)m_framebuf)+exlength);
-			if( m_file.readframe(pframe, m_framesize)!=m_framesize ) {
-				// error !
-				dvr_log( "Read frame data error!");
-			}
-			m_streamtime = m_file.frametime();
-			memcpy(m_framebuf,(void*)&m_streamtime,sizeof(struct dvrtime));
-		}
-    }
-    
-    if( m_framesize==0 ) {		// can't read frame
-        * getsize=0 ;
-        return ;
-    }
-   
-	if( getsize!=NULL ) {
-		*getsize = m_framesize+exlength ;
+	else {
+		opennextfile() ;
+		return m_file.readframe(fi) ;
 	}
-    if(pframetype!=NULL) {
-		*pframetype=m_frametype ;
-	}
-    if( pbuf!=NULL ) {		// only return buffer size
-        *pbuf = m_framebuf ;
-    }
-}
-*/
-
-void playback::getstreamdata(void ** getbuf, int * getsize, int * frametype)
-{
-    if( norecplayback ) {
-        rec_pause = 50 ;            // temperary pause recording, for 5 seconds
-    }
-    net_playarc=5; 
-    if( m_framesize==0 )
-        readframe();
-    if( m_framesize==0 ) {		// can't read frame
-        * getsize=0 ;
-        return ;
-    }
-    *getsize=m_framesize ;
-    *frametype=m_frametype ;
-    if( getbuf!=NULL ) {		// only return buffer size
-        *getbuf = m_framebuf ;
-        m_framesize=0 ;
-    }
 }
 
-void playback::preread()
+int playback::getstreamtime(dvrtime * dvrt)
 {
-    if( m_framesize==0 )
-        readframe();
+	frame_info fi ;
+	m_file.readframe(&fi) ;	
+	*dvrt = fi.frametime ;
+	return 1 ;
 }
 
 void playback::getdayinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime * pday)
@@ -451,7 +228,7 @@ void playback::getlockinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime *
     
     time_dvrtime_zerohour(pday);
 
-    di.ontime=0; 
+    di.ontime=0;
     di.offtime=0;
 
     bcdday = pday->year*10000 + pday->month*100 + pday->day ;
@@ -493,6 +270,7 @@ void playback::getlockinfo(array <struct dayinfoitem> &dayinfo, struct dvrtime *
         dayinfo.add(di);
     }
 }
+
 int  playback::getfileheader(void * buffer,size_t headersize)
 {
      return m_file.readheader(buffer,headersize);

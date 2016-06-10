@@ -41,9 +41,17 @@ pwz5:
 	cp cfg.h.pwz5 cfg.h
 	cp config.pwz5 config
 
+pwz6:
+	cp cfg.h.pwz6 cfg.h
+	cp config.pwz6 config
+
 tvz6:
 	cp cfg.h.tvsz6 cfg.h
 	cp config.tvsz6 config
+
+pwz8:
+	cp cfg.h.pwz8 cfg.h
+	cp config.pwz8 config
 	
 firmware:
 	$(MAKE) applications

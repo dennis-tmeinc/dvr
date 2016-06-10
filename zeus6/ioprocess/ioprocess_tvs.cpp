@@ -131,7 +131,7 @@ int mcupowerdelaytime = 0 ;
 char mcu_firmware_version[80] ;
 
 // unsigned int outputmap ;	// output pin map cache
-char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
+char dvrconfigfile[] = CFG_FILE ;
 char logfile[128] = "dvrlog.txt" ;
 char temp_logfile[128] ;
 int watchdogenabled=0 ;

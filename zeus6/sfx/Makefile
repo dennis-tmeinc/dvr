@@ -6,6 +6,8 @@ include ../config
 
 HEADERS=
 
+LDFLAGS += -lstdc++
+
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 
 sfxfiles: sfx mksfx

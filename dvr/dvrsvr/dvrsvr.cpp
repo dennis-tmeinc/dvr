@@ -517,7 +517,7 @@ void dvrsvr::ReqRealTime()
 {
     struct dvr_ans ans ;
     if( !g_keycheck || m_keycheck!=0 ) {
-        if (m_req.data >= 0 && m_req.data < cap_channels) {
+        if (m_req.data >= 0 && m_req.data < cap_channels && cap_channel[m_req.data]->enabled() ) {
             ans.anscode = ANSREALTIMEHEADER;
             ans.data = m_req.data;
             ans.anssize = sizeof(struct hd_file);
@@ -717,7 +717,7 @@ void dvrsvr::ReqStreamOpen()
         AnsError();
         return ;
     }
-    if( m_req.data>=0 && m_req.data<cap_channels ) {
+    if( m_req.data>=0 && m_req.data<cap_channels && cap_channel[m_req.data]->enabled() ) {
         if( m_playback ) {
             delete m_playback ;
         }
@@ -745,7 +745,7 @@ void dvrsvr::ReqOpenLive()
         return ;
     }
 
-    if( m_req.data>=0 && m_req.data<cap_channels ) {
+    if( m_req.data>=0 && m_req.data<cap_channels && cap_channel[m_req.data]->enabled() ) {
         ans.anscode = ANSSTREAMOPEN;
         ans.anssize = 0;
         ans.data = 0 ;

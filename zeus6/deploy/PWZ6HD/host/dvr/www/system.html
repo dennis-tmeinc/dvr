@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<link href="eagle3.css" rel="stylesheet" type="text/css" />
+<title>System Setup Page</title>
+<!--#exec cmd="cgi/pagevalue"-->
+<script type="text/javascript" src="js/jquery.js"></script>
+<script type="text/javascript" src="js/eagle3.js"></script>
+</head>
+
+<body>
+<!--#include file="header.i"-->
+<div class="tabs">
+<ul>
+<li class="current"><a onclick="on_system_click()"><span>System</span></a></li>
+<li><a onclick="on_camera_click()"><span>Camera</span></a></li>
+<li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
+<li><a onclick="on_network_click()"><span>Network</span></a></li>
+<li><a onclick="on_status_click()"><span>Status</span></a></li>
+<li><a onclick="on_tools_click()"><span>Tools</span></a></li>
+</ul>
+</div>
+<p>&nbsp;</p>
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="apply.html">
+<input name="page" value="system" type="hidden" />
+<table>
+<tbody>
+
+<tr>
+<td class="col1">Manufacture ID #:</td>
+<td> <!--#include mfid="manufacture_id" --> </td>
+</tr>
+
+<tr>
+<td class="col1">Vehicle ID:</td>
+<td><input name="vehicleid" /></td>
+</tr>
+
+<tr>
+<td class="col1">District:</td>
+<td><input name="district" /></td>
+</tr>
+
+<tr>
+<td class="col1">Unit #:</td>
+<td>
+<input name="unit" />
+</td>
+</tr>
+
+<tr>
+<td class="col1">Administrator Password:</td>
+<td><input name="adminpassword" value="*****" type="password" /></td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1">Time Zone:</td>
+<td>
+<select size="1" name="dvr_time_zone" id="id_dvr_time_zone" onchange="ontimezonechange()" ><!--#include file="tz_option" --></select>
+</td>
+</tr>
+
+<tr id="id_customtz">
+<td class="col1">Custom TZ:</td>
+<td><input name="custom_tz" /></td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1"><label for="id_pw_recordmethod">Just in case recording:</label></td>
+<td>
+<input name="pw_recordmethod" id="id_pw_recordmethod" value="on" type="checkbox" />
+</td>
+</tr>
+
+<tr>
+<td class="col1">Shutdown Delay (seconds):</td>
+<td><input name="shutdown_delay" /></td>
+</tr>
+
+<tr>
+<td class="col1">Standby Time (seconds):</td>
+<td><input name="standbytime" /></td>
+</tr>
+
+<tr>
+<td class="col1">Trace Mark Duration (seconds):</td>
+<td><input name="tracemarktime" /></td>
+</tr>
+
+<!--
+<tr>
+<td class="col1">Maximum WiFi Uploading Time (seconds):</td>
+<td><input name="uploadingtime" /></td>
+</tr>
+
+<tr>
+<td class="col1">Maximum Archiving Time (seconds):</td>
+<td><input name="archivingtime" /></td>
+</tr>
+-->
+
+<tr>
+<td class="col1">File buffer size (kbytes):</td>
+<td><input name="filebuffersize" /></td>
+</tr>
+
+<!--
+<tr>
+<td class="col1">Maximum File Size(MB):</td>
+<td><input name="file_size" /></td>
+</tr>
+<tr>
+<td class="col1">Maximum File Time(s):</td>
+<td><input name="file_time" /></td>
+</tr>
+
+<tr>
+<td class="col1">Minimum Free Disk Space Percentage (%):</td>
+<td><input name="minimun_disk_space" /></td>
+</tr>
+-->
+
+<tr>
+<td>&nbsp;</td>
+</tr>
+
+<!--
+<tr>
+<td class="col1">Check Disk Timeout (seconds):</td>
+<td><input name="fscktimeout" /></td>
+</tr>
+<tr>
+<td class="col1">Check Internal CF on Bootup:</td>
+<td>
+<input name="checkinternalCF" value="on" type="checkbox" />
+<input name="bool_checkinternalCF" value="on" type="hidden" />
+</td>
+</tr>
+<tr>
+<td class="col1">Format Internal CF If Disk Check Failure:</td>
+<td>
+<input name="formatinternalCF" value="on" type="checkbox" />
+<input name="bool_formatinternalCF" value="on" type="hidden" />
+</td>
+</tr>
+<tr>
+<td class="col1">Check External CF on Bootup:</td>
+<td>
+<input name="checkexternalCF" value="on" type="checkbox" />
+<input name="bool_checkexternalCF" value="on" type="hidden" />
+</td>
+</tr>
+<tr>
+<td class="col1">Format External CF If Disk Check Failure::</td>
+<td>
+<input name="formatexternalCF" value="on" type="checkbox" />
+<input name="bool_formatexternalCF" value="on" type="hidden" />
+</td>
+</tr>
+-->
+
+<tr>
+<td>&nbsp;</td>
+</tr>
+
+<tr>
+<td class="col1">Number of camera:</td>
+<td><input name="totalcamera" /></td>
+</tr>
+<tr>
+<td class="col1">Pre-Lock Time (s):</td>
+<td><input name="pre_lock_time" /></td>
+</tr>
+<tr>
+<td class="col1">Post-Lock Time (s):</td>
+<td><input name="post_lock_time" /></td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+
+<!--
+
+<tr>
+<td class="col1"><label for="id_norecplayback">Stop Recording When Play Back:</label></td>
+<td>
+<input name="norecplayback" id="id_norecplayback" value="on" type="checkbox" />
+<input name="bool_norecplayback" value="on" type="hidden" />
+</td>
+</tr>
+<tr>
+
+<tr>
+<td class="col1"><label for="id_noreclive">Stop Recording When Live View:</label></td>
+<td>
+<input name="noreclive" id="id_noreclive" value="on" type="checkbox" />
+<input name="bool_noreclive" value="on" type="hidden" />
+</td>
+</tr>
+<tr>
+
+<tr>
+<td class="col1"><label for="id_nowifiupload">Disable Wifi Upload Feature:</label></td>
+<td>
+<input name="nowifiupload" id="id_nowifiupload" value="on" type="checkbox" />
+<input name="bool_nowifiupload" value="on" type="hidden" />
+</td>
+</tr>
+<tr>
+
+
+<tr>
+<td class="col1"><label for="id_noarchive">Disable Archive Feature::</label></td>
+<td>
+<input name="noarchive" id="id_noarchive" value="on" type="checkbox" />
+<input name="bool_noarchive" value="on" type="hidden" />
+</td>
+</tr>
+<tr>
+-->
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1"><label for="id_en_gpslog">Enable GPS:</label></td>
+<td>
+<input name="en_gpslog" id="id_en_gpslog" value="on" type="checkbox" />
+<input name="bool_en_gpslog" value="on" type="hidden" />
+</td>
+</tr>
+
+<!--
+<tr>
+<td class="col1">GPS port:</td>
+<td>
+<select name="gpsport">
+
+
+</select>
+</td>
+</tr>
+
+
+<tr>
+<td class="col1">GPS Baudrate:</td>
+<td>
+<select name="gpsbaudrate">
+    <option value="4800">4800</option>
+    <option value="9600">9600</option>
+    <option value="19200">19200</option>
+    <option value="38400">38400</option>
+    <option value="57600">57600</option>
+</select>
+</td>
+</tr>
+-->
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr id="idtr_gforce_available">
+<td>&nbsp;</td>
+<td><input name="gforce_available" value="0" type="hidden" /></td>
+</tr>
+
+<tr id="idtr_gforce_enable" >
+<td class="col1">Enable G Force Sensor:</td>
+<td>
+<input name="gforce_enable" value="on" type="checkbox" />
+<input name="bool_gforce_enable" value="on" type="hidden" />
+
+<div id="gforce_win" style="width:60%;height:180px;display:none;position:fixed;border:2px solid gray;left:20%;top:32%;z-index:10;background-color:#b0c4de;">
+<h style="position:static;text-align:center;">
+G Force Sensor Calibration
+</h>
+<div id="gforce_msg" style="width:80%;margin:auto;">
+<pre>
+force msg
+</pre>
+</div>
+
+<div style="position:absolute;bottom:20px;left:46%;">
+<button type="button" onclick="ongforcecalibrationoff()"> Close </button>
+</div>
+
+</div>
+
+<input name="gforce_calibration" type="button" onclick="ongforcecalibration()" value="Calibrate G-Force Sensor" />
+</td>
+</tr>
+
+<tr id="idtr_gforce_dirforward" >
+<td class="col1">G-Force Direction - Forward:</td>
+<td>
+<select name="gforce_forward">
+    <option value="0">Front</option>
+    <option value="1">Back</option>
+    <option value="2">Right</option>
+    <option value="3">Left</option>
+    <option value="4">Bottom</option>
+    <option value="5">Top</option>
+</select>
+</td>
+</tr>
+
+<tr id="idtr_gforce_dirupward" >
+<td class="col1">G-Force Direction - Up:</td>
+<td>
+<select name="gforce_upward">
+    <option value="0">Front</option>
+    <option value="1">Back</option>
+    <option value="2">Right</option>
+    <option value="3">Left</option>
+    <option value="4">Bottom</option>
+    <option value="5">Top</option>
+</select>
+</td>
+</tr>
+
+<input id="id_show_mountangle" name="show_mountangle" type="hidden" />
+<tr id="idtr_gforce_mountangle">
+<td class="col1">Unit Mounting Angle (Tilt Forward):</td>
+<td>
+<input id="id_gforce_mountangle" name="gforce_mountangle"/>
+
+<div id="gforce_dlg_mountangle" style="width:60%;height:240px;display:none;position:fixed;border:2px solid gray;left:20%;top:32%;z-index:50;background-color:#b0c4de;">
+<h4 style="position:static;text-align:center;">Unit Mounting Angle Calibration</h4>
+<h5 style="position:static;text-align:center;">Do not move unit!</h5>
+<table style="border:0px;width:80%;">
+<tr><td>Forward/Backward G-Value : </td><td id="gvalue_Forword"></td></tr>
+<tr><td>Up/Down G-Value :          </td><td id="gvalue_Down"></td></tr>
+<tr><td>Left/Right G-Value :       </td><td id="gvalue_Right"></td></tr>
+<tr><td>Detected Mounting Angle :  </td><td id="gvalue_Angle"></td></tr>
+</table>
+
+<div style="position:absolute;bottom:20px;left:35%;">
+<button type="button" onclick="ongforceMountdlgClose(1)"> Use Detected Angle </button>
+<button type="button" onclick="ongforceMountdlgClose(0)"> Cancel </button>
+</div>
+
+</div>
+
+<input type="button" onclick="ongforceMountdlg()" value="Calibrate" />
+</td>
+</tr>
+
+
+<tr id="idtr_gforce_crashdata">
+<td class="col1">Collect G-Force Crash Data:</td>
+<td>
+<input name="gforce_crashdata" value="on" type="checkbox" />
+<input name="bool_gforce_crashdata" value="on" type="hidden" />
+</td>
+</tr>
+
+<tr id="idtr_gforce_forward" >
+<td class="col1">G-Force Forward Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_forward_base" size="5" />&nbsp;
+Peak&nbsp;<input name="gforce_forward_trigger" size="5" />&nbsp;
+Crash&nbsp;<input name="gforce_forward_crash" size="5" />
+</td>
+</tr>
+
+<tr id="idtr_gforce_backward" >
+<td class="col1">G-Force Backward Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_backward_base" size=5 />&nbsp;
+Peak&nbsp;<input name="gforce_backward_trigger" size=5 />&nbsp;
+Crash&nbsp;<input name="gforce_backward_crash" size=5 />
+</td>
+</tr>
+
+<tr id="idtr_gforce_right" >
+<td class="col1">G-Force Right Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_right_base" size=5 />&nbsp;
+Peak&nbsp;<input name="gforce_right_trigger" size=5 />&nbsp;
+Crash&nbsp;<input name="gforce_right_crash" size=5 />
+</td>
+</tr>
+
+<tr id="idtr_gforce_left" >
+<td class="col1">G-Force Left Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_left_base" size=5 />&nbsp;
+Peak&nbsp;<input name="gforce_left_trigger" size=5 />&nbsp;
+Crash&nbsp;<input name="gforce_left_crash" size=5 />
+</td>
+</tr>
+
+<tr id="idtr_gforce_downward" >
+<td class="col1">G-Force Downward Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_downward_base" size=5 />&nbsp;
+Peak&nbsp;<input name="gforce_downward_trigger" size=5 />&nbsp;
+Crash&nbsp;<input name="gforce_downward_crash" size=5 />
+</td>
+</tr>
+
+<tr id="idtr_gforce_upward" >
+<td class="col1">G-Force Upward Trigger Point:</td>
+<td>
+Base&nbsp;<input name="gforce_upward_base" size=5 />&nbsp;
+Peak&nbsp;<input name="gforce_upward_trigger" size=5 />&nbsp;
+Crash&nbsp;<input name="gforce_upward_crash" size=5 />
+</td>
+</tr>
+
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+<tr>
+<td></td>
+<td> <input id="id_apply" value="Apply" type="submit" />
+</td>
+</tr>
+</tbody>
+</table>
+</form>
+<script type="text/javascript">
+
+var calibration_on=0 ;
+
+function calibration_go( response )
+{
+    if( calibration_on ) {
+	document.getElementById('gforce_msg').innerHTML="<pre>"+response+"</pre>" ;
+	setTimeout("calibration_get()", 1000);
+    }
+}
+
+function calibration_get()
+{
+    ajaxload("post", "gcal.txt", calibration_go);
+}
+
+function calibration_start( response )
+{
+    var dlg = document.getElementById('gforce_win') ;
+    dlg.style.display="" ;
+    document.getElementById('gforce_msg').innerHTML="<pre>Starting Calibration.\nPlease wait......</pre>" ;
+    calibration_on=1 ;
+    calibration_get();
+}
+
+function ongforcecalibration()
+{
+    ajaxload("post", "cgi/gcal.cgi", calibration_start);
+}
+
+function ongforcecalibrationoff()
+{
+    calibration_on=0;
+    document.getElementById('gforce_win').style.display="none" ;
+}
+
+
+var gsensor_mount_cal ;
+var gsensor_mount_calvalue ;
+
+function ongforceMountdlgClose( useangle )
+{
+    if( useangle ) {
+       document.getElementById('id_gforce_mountangle').value = gsensor_mount_calvalue.gvalue_angle ;
+    }
+    document.getElementById('gforce_dlg_mountangle').style.display="none" ;
+    gsensor_mount_cal=0 ;
+}
+
+function gforceMount_readval()
+{
+    ajaxload("get", "cgi/gangle.cgi?op=read", gforceMount_val);
+}
+
+function gforceMount_val( JSONval )
+{
+    if( gsensor_mount_cal==1 ) {
+	gsensor_mount_calvalue = eval('(' + JSONval + ')');
+	if( gsensor_mount_calvalue.gvalue_f )
+	    document.getElementById('gvalue_Forword').innerHTML=gsensor_mount_calvalue.gvalue_f ;
+	if( gsensor_mount_calvalue.gvalue_f )
+	    document.getElementById('gvalue_Down').innerHTML=gsensor_mount_calvalue.gvalue_d ;
+	if( gsensor_mount_calvalue.gvalue_f )
+	    document.getElementById('gvalue_Right').innerHTML=gsensor_mount_calvalue.gvalue_r ;
+	if( gsensor_mount_calvalue.gvalue_f )
+	    document.getElementById('gvalue_Angle').innerHTML=gsensor_mount_calvalue.gvalue_angle+"&deg;" ;
+	setTimeout("gforceMount_readval()", 800);
+    }
+    else {
+       ajaxload("get", "cgi/gangle.cgi?op=stop");
+    }
+}
+
+function ongforceMountdlg()
+{
+    var dlg = document.getElementById('gforce_dlg_mountangle') ;
+    dlg.style.display="" ;
+    gsensor_mount_cal = 1 ;
+    ajaxload("get", "cgi/gangle.cgi?op=start", gforceMount_val);
+}
+
+// custom time zone function
+function ontimezonechange()
+{
+    var tzselect = document.getElementById('id_dvr_time_zone') ;
+    if( tzselect.options[tzselect.selectedIndex].text == "Custom" ) {
+	document.getElementById('id_customtz').style.display="" ;
+    }
+    else {
+	document.getElementById('id_customtz').style.display="none" ;
+    }
+}
+
+function initform( formvalue )
+{
+    var formdata = eval("(" + formvalue + ")") ;
+    JSONinitfield( formdata );
+
+    if( formdata.gforce_available != "1" ) {
+	document.getElementById('idtr_gforce_available').style.display="none" ;
+	document.getElementById('idtr_gforce_enable').style.display="none" ;
+	document.getElementById('idtr_gforce_dirforward').style.display="none" ;
+	document.getElementById('idtr_gforce_dirupward').style.display="none" ;
+	document.getElementById('idtr_gforce_mountangle').style.display="none" ;
+	document.getElementById('idtr_gforce_crashdata').style.display="none" ;
+	document.getElementById('idtr_gforce_upward').style.display="none" ;
+	document.getElementById('idtr_gforce_downward').style.display="none" ;
+	document.getElementById('idtr_gforce_left').style.display="none" ;
+	document.getElementById('idtr_gforce_right').style.display="none" ;
+	document.getElementById('idtr_gforce_backward').style.display="none" ;
+	document.getElementById('idtr_gforce_forward').style.display="none" ;
+    }
+
+    if( !document.getElementsByName('show_mountangle')[0].value ) {
+	document.getElementById('idtr_gforce_mountangle').style.display="none" ;
+	document.getElementsByName('gforce_calibration')[0].style.display="" ;
+    }
+    else {
+	document.getElementById('idtr_gforce_mountangle').style.display="" ;
+	document.getElementsByName('gforce_calibration')[0].style.display="none" ;
+    }
+    ontimezonechange();
+}
+
+ajaxload( "POST", "system_value", initform );
+
+</script>
+</body>
+</html>
+

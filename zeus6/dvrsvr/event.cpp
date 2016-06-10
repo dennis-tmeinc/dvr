@@ -10,6 +10,8 @@
 #include "dvr.h"
 #include "../ioprocess/diomap.h"
 
+#define VK_QUEUE_SIZE (20)
+
 #ifdef POWERCYCLETEST
 
 int cycletest ;
@@ -26,11 +28,15 @@ alarm_t ** alarms ;
 int alarm_suspend = 0 ;
 int event_serialno ;
 
+int event_tm_timeout = 300 ;
+int event_tm_time = 0 ;
 int event_tm = 0;
 
 double g_gpsspeed ;
 float g_fb,g_lr,g_ud;
 int lastpeakchanged=0;
+
+int    g_cpu_usage ;	// 0-100
 
 sensor_t::sensor_t(int n) 
 {
@@ -107,6 +113,73 @@ void alarm_t::update()
     dio_output(m_outputpin, v);
 }
 
+static int vk_queue[VK_QUEUE_SIZE] ;
+static int vk_head = 0 ;
+static int vk_tail = 0 ;
+
+// mod from screen_key()
+void event_key( int keycode, int keydown ) 	// keyboard/keypad event
+{
+	dvr_lock();
+	vk_queue[vk_tail] = keydown? (0xf0000000|keycode) : keycode ;
+	if( ++vk_tail >= VK_QUEUE_SIZE )
+		vk_tail = 0 ;
+	dvr_unlock();
+}
+
+static void event_onkey( int key ) 
+{
+	int keycode = key&0xffff ;
+	int keydown = key&0xffff0000 ;
+	
+	if( keycode == (int) VK_TM ) {
+		if( keydown ) {
+			dvr_log("TraceMark pressed!");
+			event_tm = 1 ;
+			event_tm_time = time_gettick()/1000;
+		}
+		else {
+			dvr_log("TraceMark released!");
+			// event_tm = 0 ;  // to be cleared by event.cpp after rec_update()	
+		 }
+	}
+	else if( keycode==(int)VK_LP ) {                             // LP key
+		if( keydown ) {
+			dio_pwii_lpzoomin( 1 );
+			dvr_log("LP pressed!");
+		}
+		else {
+			dio_pwii_lpzoomin( 0 );
+			dvr_log("LP released!");
+		}
+	}
+	else if( keycode>=(int)VK_C1 && keycode<=(int)VK_C8 ) {     // record C1-C8
+		if( keydown ) {
+			rec_pwii_toggle_rec( keycode-(int)VK_C1 ) ;
+			dvr_log("C%d pressed!", keycode-(int)VK_C1+1);
+		}
+	}
+}
+
+static void event_processkey()
+{
+	if( vk_head == vk_tail ) return ;
+
+	dvr_lock();
+	while( vk_head != vk_tail ) {
+		int key = vk_queue[vk_head] ;
+		if( ++vk_head >= VK_QUEUE_SIZE ) 
+			vk_head = 0;
+		dvr_unlock();
+
+		event_onkey(key);
+		
+		dvr_lock();
+	}
+	dvr_unlock();
+}
+
+
 // time_t poweroffstarttime ;
 // int shutdowndelaytime;
 
@@ -134,6 +207,13 @@ void event_check()
 	for(i=0; i<num_sensors; i++ ) {
 		sensors[i]->resetxvalue();
 	}	
+	
+	event_processkey();
+	
+	// update trace mark
+    if( event_tm && ( time_gettick()/1000 - event_tm_time ) > event_tm_timeout ) {
+		event_tm = 0 ;	
+	}
 
     input = dio_check();    // update dio status,
     
@@ -153,32 +233,38 @@ void event_check()
         g_gpsspeed = 0.0 ;
     }
     
-    int gforce_changed = 0;
-    float fb, lr, ud;
-    get_peak_data( &fb, &lr, &ud );
-  //  dvr_log("fb=%0.2f lr=%0.2f ud=%0.2f",fb,lr,ud);
-    if ((fb != g_fb) || (lr != g_lr) || (ud != g_ud)) {
-      gforce_changed = 1;
-      g_fb = fb;
-      g_lr = lr;
-      g_ud = ud;
-    }    
+	int gforce_changed = 0;
+	float fb, lr, ud;
+	get_peak_data( &fb, &lr, &ud );
+	//  dvr_log("fb=%0.2f lr=%0.2f ud=%0.2f",fb,lr,ud);
+	if ((fb != g_fb) || (lr != g_lr) || (ud != g_ud)) {
+		gforce_changed = 1;
+		g_fb = fb;
+		g_lr = lr;
+		g_ud = ud;
+	}    
     
     if(lastpeakchanged!=isPeakChanged()){
-       lastpeakchanged=isPeakChanged();
-       gforce_changed = 1;
+		lastpeakchanged=isPeakChanged();
+		gforce_changed = 1;
     }
+    
     // update decoder screen (OSD)
     for(i=0; i<cap_channels; i++ ) {
-      /* gpsvalid_changed: don't show invalid value */
-        cap_channel[i]->update(sensor_toggle || gpsspeed>2.0 ||
-			       gpsvalid_changed||gforce_changed);
+        cap_channel[i]->update();
+        
+		/* gpsvalid_changed: don't show invalid value */
+		/*
+        cap_channel[i]->update(
+			sensor_toggle || 
+			gpsspeed>2.0 ||
+			gpsvalid_changed ||
+			gforce_changed );
+		*/
     }
     
     // update recording status
     rec_update();			
-    
-    event_tm = 0 ;	
     
     if( event_serialno % 8 == 0 ) {     // every one second
         
@@ -200,27 +286,14 @@ void event_check()
         
 		for(i=0; i<cap_channels; i++ ) {
 			if( cap_channel[i]->enabled() ) {
-					if( cap_channel[i]->getsignal()==0 ) {
-						videolost=1 ;
-					   // printf("channel %d has video lost\n",i);
-					}
-					if( !cap_channel[i]->isworking() ) {
-						videodata=0 ;
-					}
+				if( cap_channel[i]->getsignal()==0 ) {
+					videolost=1 ;
+				}
+				if( !cap_channel[i]->isworking() ) {
+					videodata=0 ;
+				}
 			 }
 		}
-
-
-		// set camera status
-		//  bits definition
-		//         0: signal lost
-		//         1: motion
-		//         2: recording
-		//         3: force-recording
-		//         4: lock recording
-		//         5: pre-recording
-		//         6: in-memory pre-recording
-		void dio_set_camera_status(int camera, unsigned int status, unsigned long streambytes );
 
 		// update dio camera status
 		for(i=0; i<cap_channels; i++ ) {
@@ -239,6 +312,26 @@ void event_check()
 				dio_set_camera_status(i, 0, 0);
 			 }
 		}
+		
+		{
+			static int mic_triggerstat = 0 ;
+			int tstat = 0;
+			for(i=0; i<cap_channels; i++ ) {
+				if( rec_forcechannel( i )==0 && rec_staterec(i) ) {
+					tstat = 1 ;
+					break;
+				}
+			}
+			if( tstat != mic_triggerstat ) {
+				mic_triggerstat = tstat ;
+				if( tstat ) {
+					dio_pwii_mic_on();
+				}
+				else {
+					dio_pwii_mic_off();
+				}
+			}
+		}
 
 		// set video lost led
         if( videolost ) {
@@ -252,13 +345,9 @@ void event_check()
         }
         else {
             dio_setstate (DVR_NODATA);
-			// update decoder screen (OSD)
-			for(i=0; i<cap_channels; i++ ) {
-			  /* gpsvalid_changed: don't show invalid value */
-				cap_channel[i]->update(1);
-			}
         }
-        diskready = ( disk_getbasedir(0)!=NULL ) ;
+        
+        diskready = pw_disk[0].mounted ||  pw_disk[1].mounted ;
         if( diskready ) {
             dio_setstate (DVR_DISKREADY);
         }
@@ -348,6 +437,29 @@ void event_check()
         }
 */
         dio_kickwatchdog ();
+
+		// read free mem
+		mem_available();
+        
+        // check cpu usages
+		static double x_idle = 0.0 ;
+		static double x_total = 0.0 ;
+		char cpu[10] ;
+		int  v[8] ;
+		double total = 0.0 ;
+		FILE * procstat = fopen("/proc/stat", "r" );
+		fscanf( procstat , "%s %d %d %d %d %d %d %d", 
+			cpu, &v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6] );
+		fclose( procstat );
+		for( i=0; i<7; i++ ) {
+			total += (double) v[i] ;
+		}
+		if( total > x_total ) {
+			g_cpu_usage = (int)( 100.0 - 100.0 * ( (double)v[3] - x_idle ) / (total-x_total)  ) ;
+			x_total = total ;
+			x_idle = (double)v[3] ;
+		}
+        
     }
 
     // display alarm (LEDs)
@@ -366,12 +478,17 @@ void event_init()
 {
     int i;
 
-#ifdef  POWERCYCLETEST
     config dvrconfig(dvrconfigfile);
+
+#ifdef  POWERCYCLETEST
     cycletest = dvrconfig.getvalueint("debug", "cycletest" );
     cyclefile = dvrconfig.getvalue("debug", "cyclefile" );
     cycleserver = dvrconfig.getvalue("debug", "cycleserver" );
 #endif
+
+	event_tm_timeout = dvrconfig.getvalueint( "system", "tracemarktime");
+    if( event_tm_timeout <=0 ) event_tm_timeout = 300 ;
+    if( event_tm_timeout >7200 ) event_tm_timeout = 7200 ;
     
     dio_init();
     num_sensors=dio_inputnum();

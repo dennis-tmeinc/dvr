@@ -9,6 +9,8 @@
 
 extern int g_port ;
 extern int g_keepalive ;
+extern int g_runtime ;
+extern int g_maxwaitms  ;
 
 int runtime();
 void rconn_loop( int ssock, int tsock );

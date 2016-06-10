@@ -10,7 +10,7 @@ static int    tmplogfilesize ;	// temperary logfile size
 string logfile ;
 string g_servername ;
 
-// pthread_mutex_t mutex_init=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP ;
+pthread_mutex_t mutex_init=PTHREAD_RECURSIVE_MUTEX_INITIALIZER_NP ;
 
 char g_mfid[32] ;
 int  g_keycheck ;           // tvs : tvskeycheck
@@ -758,8 +758,8 @@ void app_init( config & dvrconfig )
     dvr_log("Setup hostname: %s", (char *)g_servername);
 
     g_lowmemory=dvrconfig.getvalueint("system", "lowmemory" );
-    if( g_lowmemory<10000 ) {
-        g_lowmemory=10000 ;
+    if( g_lowmemory<5000 ) {
+        g_lowmemory=5000 ;
     }
 
     // setup signal handler

@@ -14,6 +14,8 @@
 #include <sys/socket.h>
 #include <netdb.h>
 
+#include "../cfg.h"
+
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
 #include "../ioprocess/diomap.h"
@@ -26,7 +28,7 @@ char nistserver[]="64.90.182.55" ;
 // check http://support.ntp.org/bin/view/Servers/WebHome
 char ntpserver[]="64.90.182.55" ;
 
-char dvrconfigfile[]="/etc/dvr/dvr.conf" ;
+char dvrconfigfile[]= CFG_FILE ;
 
 #ifdef MCU_SUPPORT
 
@@ -67,6 +69,9 @@ int readrtc(struct tm * ptm)
 {
     int res=0;
     int hrtc = open("/dev/rtc0", O_RDONLY );
+    if( hrtc<0 ) {
+		hrtc = open("/dev/rtc", O_RDONLY );
+	}
     if( hrtc>0 ) {
         memset( ptm, 0, sizeof(struct tm));
         if( ioctl( hrtc, RTC_RD_TIME, ptm )==0 ) {
@@ -81,6 +86,9 @@ int setrtc(struct tm * ptm)
 {
     int res=0;
     int hrtc = open("/dev/rtc0", O_WRONLY );
+    if( hrtc < 0 ) {
+		hrtc = open("/dev/rtc", O_WRONLY );
+	}
     if( hrtc>0 ) {
         if( ioctl( hrtc, RTC_SET_TIME, ptm )==0 ) {
             res=1;
@@ -157,7 +165,8 @@ int printrtc()
         return 1;
     }
     else {
-        return 0;       // error !
+		printf("RTC error!\n");
+        return 1;       // error !
     }
 }
 

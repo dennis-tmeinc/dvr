@@ -105,39 +105,6 @@ unsigned dvr_random()
 }
 
 // clean log file
-#if 0
-void dvr_cleanlog(FILE * flog)
-{
-    int i ;
-    array <string> alog ;
-    string line ;
-    char lbuf[1024]; 
-    int pos = ftell(flog);
-    printf("current pos:%d\n",pos);
-    if( pos>logfilesize ) {
-        pos = (pos/4) ;	// cut 1/4 file
-        fseek( flog, pos, SEEK_SET );
-	//printf("after seek:%d %d\n",pos,ftell(flog));
-        fgets(lbuf, 1024, flog );
-        while (fgets(lbuf, 1024, flog)) {
-	    line=lbuf;
-            if( line.length()>2 ) {
-                alog.add( line );
-            }
-        }	    
-      //  printf("size:%d\n",alog.size());
-	ftruncate( fileno(flog), 0);	
-        fseek( flog, 0, SEEK_SET ) ;		
-        for( i=0; i<alog.size(); i++ ) {
-            fputs(alog[i].getstring(), flog);
-        }
-     //   printf("final length:%d\n",ftell(flog));
-    }
-}
-#endif
-
-
-// clean log file
 void dvr_cleanlogfile(const char * lfilename, int cutsize)
 {
     int posr, posw, rsize ;
@@ -198,9 +165,12 @@ int dvr_log(const char *fmt, ...)
         flog = fopen(logfilelnk, "a");
     }
     else {
-		char * logdir = disk_getlogdir() ;
-		if( logdir != NULL ) {
-            sprintf(lbuf, "%s/%s", (char *)logdir, (char *)logfile);
+		char * logdisk = disk_getlogdisk() ;
+		if( logdisk != NULL ) {
+			l = sprintf(lbuf, "%s/_%s_", (char *)logdisk, g_hostname);
+			mkdir( lbuf, 0777 );
+			
+            sprintf(lbuf+l, "/%s", (char *)logfile);
             unlink(logfilelnk);
             if( symlink(lbuf, logfilelnk)==0 ) {		// success
                 flog = fopen(logfilelnk, "a");
@@ -285,9 +255,9 @@ static FILE * dvr_logkey_file()
     static char logfilename[512] ;
     FILE * lfile=NULL ;
     if( logfilename[0]==0 ) {
-		char * logdir = disk_getlogdir() ;
-        if ( logdir != NULL ) {
-            sprintf(logfilename, "%s/%s", (char *)logdir, (char *)g_keylogfile);
+		char * logdisk = disk_getlogdisk() ;
+        if ( logdisk != NULL ) {
+            sprintf(logfilename, "%s/_%s_/%s", (char *)logdisk, g_hostname, (char *)g_keylogfile);
             unlink( VAR_DIR "/tvslogfile" );
             symlink(logfilename, VAR_DIR "/tvslogfile" );
             dvr_cleanlogfile(logfilename, logfilesize);
@@ -312,7 +282,7 @@ static void dvr_logkey_settings()
     if( g_usbid[0] == 'I' && g_usbid[1] == 'N' ) {		// log installer only
         //			write down some settings changes
         string v ;
-        config dvrconfig(CFG_FILE);
+        config dvrconfig(dvrconfigfile);
 
 #ifdef TVS_APP
         fprintf(flog, "\nTVS settings\n" );
@@ -381,13 +351,6 @@ void dvr_logkey( int op, struct key_data * key )
     time_t ti;
     int l;
 
-    // get time string
-    ti = time(NULL);
-    ctime_r(&ti, lbuf);
-    l = strlen(lbuf);
-    if (lbuf[l - 1] == '\n')
-        lbuf[l - 1] = '\0';
-
     if( op==0  ) {     // disconnect
         if( g_usbid[0] ) {
             g_usbid[0]=0 ;
@@ -398,6 +361,12 @@ void dvr_logkey( int op, struct key_data * key )
             }
             flog = dvr_logkey_file();
             if( flog ) {
+				// get time string
+				ti = time(NULL);
+				ctime_r(&ti, lbuf);
+				l = strlen(lbuf);
+				if (lbuf[l - 1] == '\n')
+					lbuf[l - 1] = '\0';				
                 fprintf(flog, "%s:Viewer connection closed, key ID: %s\n", lbuf, g_usbid );
                 fclose( flog );
             }
@@ -415,6 +384,12 @@ void dvr_logkey( int op, struct key_data * key )
             }
             flog = dvr_logkey_file();
             if( flog ) {
+				// get time string
+				ti = time(NULL);
+				ctime_r(&ti, lbuf);
+				l = strlen(lbuf);
+				if (lbuf[l - 1] == '\n')
+					lbuf[l - 1] = '\0';				
                 fprintf(flog, "\n%s:Viewer connected, key ID: %s\n%s",
                     lbuf, key->usbid, ((char *)&(key->size))+key->keyinfo_start );
                 fclose( flog );
@@ -567,12 +542,6 @@ int dvr_setsystemsetup(struct system_stru * psys)
     config dvrconfig(dvrconfigfile);
     
     if( strcmp( g_hostname, psys->ServerName )!=0 ) {	// set hostname
-        FILE * phostname = NULL;
-        phostname=fopen("/etc/dvr/hostname", "w");
-        if( phostname!=NULL ) {
-            fprintf(phostname, "%s", psys->ServerName);
-            fclose(phostname);
-        }
         sethostname(psys->ServerName, strlen(psys->ServerName)+1);
         dvrconfig.setvalue(system, "hostname", psys->ServerName);
     }
@@ -705,9 +674,10 @@ void sig_check()
 
 }
 
-static string pidfile ;
-// one time application initialization
-void app_init(int partial)
+static char s_pidfile[] = "/var/dvr/dvrsvr.pid" ;
+
+// app init / re-init
+void app_init()
 {
     static int app_start=0;
     string hostname ;
@@ -715,40 +685,27 @@ void app_init(int partial)
     string tzi ;
     char * p ;		// general pointer
     FILE * fid = NULL ;
-    char mbuf[256];    
+
     config dvrconfig(dvrconfigfile);
-   
-    if (!partial) {
-      pid_t mypid ;
-      mypid=getpid();
-      
-      pidfile=dvrconfig.getvalue("system", "pidfile");
-      if( pidfile.length()<=0 ) {
-        pidfile="/var/dvr/dvrsvr.pid" ;
-      }
-      
-      fid=fopen(pidfile.getstring(), "w");
-      if( fid ) {
-        fprintf(fid, "%d", (int)mypid);
-        fclose(fid);
-      }
-    }
     
-    // setup log file names
-    tmplogfile = dvrconfig.getvalue("system", "temp_logfile");
-    if (tmplogfile.length() == 0)
-        tmplogfile = VAR_DIR "/logfile" ;
-    logfile = dvrconfig.getvalue("system", "logfile");
-    if (logfile.length() == 0)
-        logfile = deflogfile;
-    logfilesize = dvrconfig.getvalueint("system", "logfilesize");
-    if( logfilesize< (300*1024 )){
-        logfilesize = 300*1024 ;
-    } else {
-	if(logfilesize>(5*1024*1024) ) {
-	   logfilesize=5*1024*1024;
+	// setup log file names
+	tmplogfile = dvrconfig.getvalue("system", "temp_logfile");
+	if (tmplogfile.length() == 0) {
+		tmplogfile = VAR_DIR "/logfile" ;
 	}
-    }
+	logfile = dvrconfig.getvalue("system", "logfile");
+	if (logfile.length() == 0) {
+		logfile = deflogfile;
+	}
+	logfilesize = dvrconfig.getvalueint("system", "logfilesize");
+	if( logfilesize< (300*1024 )){
+		logfilesize = 300*1024 ;
+	} 
+	else {
+		if(logfilesize>(5*1024*1024) ) {
+			logfilesize=5*1024*1024;
+		}
+	}
     
     // set timezone the first time
     tz=dvrconfig.getvalue( "system", "timezone" );
@@ -770,18 +727,7 @@ void app_init(int partial)
         }
     }
     tzset();   
- #if 1
-    fid=fopen("/mnt/nand/dvr/firmwareid","r");
-    if(fid){
-       int num;
-       num=fread(mbuf,1,256,fid); 
-       fclose(fid);
-       mbuf[num-1]='\0';
-       dvr_log("DVR Firmware:%s",mbuf);
-    }
-
-#endif    
-
+ 
     hostname=dvrconfig.getvalue("system", "hostname" );
     if( hostname.length()>0 ){
         // setup hostname
@@ -875,51 +821,71 @@ void app_init(int partial)
 #endif
 
     gethostname( g_hostname, 128 );
-	 if (!partial) { 
-	   dvr_log("Setup hostname: %s", g_hostname);
-    }
+	dvr_log("Setup hostname: %s", g_hostname);
 
-    
     g_lowmemory=dvrconfig.getvalueint("system", "lowmemory" );
     if( g_lowmemory<10000 ) {
         g_lowmemory=10000 ;
     }
-    
-    if (!partial) {
-      // setup signal handler	
-      signal(SIGQUIT, sig_handler);
-      signal(SIGINT, sig_handler);
-      signal(SIGTERM, sig_handler);
-      signal(SIGUSR1, sig_handler);
-      signal(SIGUSR2, sig_handler);
-      signal(SIGPOLL, sig_handler);
-      // ignor these signal
-      signal(SIGPIPE, SIG_IGN);	  // ignor this
-      
-      if( app_start==0 ) {
-        dvr_log("Start DVR.");
-        app_start=1 ;
-      }
-    }
+
 }
 
-void app_exit(int silent)
+// app startup
+void app_start() 
 {
-  //sync();
-    unlink( pidfile.getstring() );
-    if (!silent)
-      dvr_log("Quit DVR.\n");
+	config dvrconfig(dvrconfigfile);
+	string pidfile ;
+	FILE * fpid ;
+
+	pidfile=dvrconfig.getvalue("system", "pidfile");
+	if( pidfile.length()<=0 ) {
+		pidfile=s_pidfile ;
+	}
+	fpid=fopen( (char *)pidfile, "w");
+	if( fpid ) {
+        fprintf(fpid, "%d", (int)getpid());
+        fclose(fpid);
+	}
+
+	// setup signal handler	
+	signal(SIGQUIT, sig_handler);
+	signal(SIGINT, sig_handler);
+	signal(SIGTERM, sig_handler);
+	signal(SIGUSR1, sig_handler);
+	signal(SIGUSR2, sig_handler);
+	signal(SIGPOLL, sig_handler);
+	// ignor these signal
+	signal(SIGPIPE, SIG_IGN);	  // ignor this
+      
+	dvr_log("Start DVR.");
+	
+	// ZEUS board init, moved here so it been call only once
+    eagle_init ();
+}
+
+void app_exit()
+{
+	// ZEUS board finishing
+	eagle_uninit();
+	
+	config dvrconfig(dvrconfigfile);
+	string pidfile ;
+
+	pidfile=dvrconfig.getvalue("system", "pidfile");
+	if( pidfile.length()<=0 ) {
+		pidfile=s_pidfile ;
+	}
+    unlink( pidfile );
+    dvr_log("Quit DVR.\n");
 }
 
 void do_init()
 {
     // initial mutex
-    memcpy( &dvr_mutex, &mutex_init, sizeof(mutex_init));
+    dvr_mutex = mutex_init ;
     
-    dvr_log("Start initializing.");
-
-    app_init(0);
-
+    app_init();			// reload settings
+    mem_init();
     time_init();
     event_init();
     file_init();
@@ -928,8 +894,9 @@ void do_init()
     cap_init();
     rec_init();
    // ptz_init();
+#ifdef SUPPORT_SCREEN   
     screen_init();	
-    msg_init();
+#endif    
     net_init();
 
     cap_start();	// start capture 
@@ -942,8 +909,9 @@ void do_uninit()
     cap_stop();		// stop capture
 
     net_uninit();
-    msg_uninit();
+#ifdef SUPPORT_SCREEN   
     screen_uninit();  
+#endif    
    // ptz_uninit();
     rec_uninit();    
     cap_uninit();
@@ -952,8 +920,9 @@ void do_uninit()
     file_uninit();
     event_uninit();
     time_uninit();
+    mem_uninit();
     printf("uninitialized done\n");
-    //sleep(30);
+
     pthread_mutex_destroy(&dvr_mutex);
 }
 
@@ -964,66 +933,15 @@ void do_uninit()
 #define EXIT_REBOOT		(102)
 #define EXIT_POWEROFF		(103)
 
-void closeall(int fd)
-{
-  int fdlimit = sysconf(_SC_OPEN_MAX);
-
-  while (fd < fdlimit)
-    close(fd++);
-}
-
-int daemon(int nochdir, int noclose)
-{
-  switch (fork()) {
-  case 0: break;
-  case -1: return -1;
-  default: _exit(0);
-  }
-
-  if (setsid() < 0)
-    return -1;
-
-  switch (fork()) {
-  case 0: break;
-  case -1: return -1;
-  default: _exit(0);
-  }
-
-  if (!nochdir)
-    chdir("/");
-
-  if (!noclose) {
-    closeall(0);
-    open("/dev/null", O_RDWR);
-    dup(0); dup(0);
-  }
-
-  return 0;
-}
-
-//int foo=1;
 int main(int argc, char **argv)
 {
     unsigned int serial=0;
     int app_ostate;	// application status. ( APPUP, APPDOWN )
     struct timeval time1, time2 ;
     int    t_diff ;
-
-    //while(foo)
-    //sleep(1);
-
-    if ((argc >= 2) && !strcmp(argv[1], "-f")) {
-      // force foreground
-    } else {
-#ifdef DEAMON
-      if (daemon(1, 0) < 0) {
-	perror("daemon");
-	exit(1);
-      }
- #endif
-    }
-
-    mem_init();
+    
+    // app startup
+	app_start() ;
     
     app_ostate = APPDOWN ;
     app_state = APPUP ;
@@ -1036,14 +954,15 @@ int main(int argc, char **argv)
                 app_ostate = APPUP ;
                 gettimeofday(&time1, NULL);
             }
-            if( (serial%400)==119 ){ // every 3 second
+            if( (serial%40)==11 ){ // every 5 second
                 // check memory
-                if( mem_available () < g_lowmemory &&  disk_getbasedir(0)!=NULL ) {
+                if( mem_available () < g_lowmemory && disk_getbasedisk(0)!=NULL ) {
                     dvr_log("Memory low. reload DVR.");
                     app_state = APPRESTART ;
                 }
+				disk_check();
             }
-            if( (serial%80)==3 ){	// every 1 second
+            if( (serial%8)==3 ){	// every 1 second
                 gettimeofday(&time2, NULL);
                 t_diff = (int)(int)(time2.tv_sec - time1.tv_sec) ;
                 if( t_diff<-100 || t_diff>100 )
@@ -1052,13 +971,9 @@ int main(int argc, char **argv)
                     rec_break ();
                 }
                 time1.tv_sec = time2.tv_sec ;
-				disk_check();
-             }
-            if( serial%10 == 1 ) {
-                event_check();
             }
-            screen_io(12500);	// do screen io
-//            usleep( 12500 );
+            event_check();
+            usleep( 125000 );
         }
         else if (app_state == APPDOWN ) {			// application down
             if( app_ostate == APPUP ) {
@@ -1073,6 +988,9 @@ int main(int argc, char **argv)
                 do_uninit();
             }
             app_state = APPUP ;
+			
+			dvr_log("Reload DVR!");
+            
             usleep( 100 );
         }
         sig_check();
@@ -1091,9 +1009,8 @@ int main(int argc, char **argv)
         app_ostate=APPDOWN ;
         do_uninit();
     }
-    FiniSystem();      
-    app_exit(0);
-    mem_uninit ();
+    
+    app_exit();
     
     if (system_shutdown) {        // requested system shutdown
         // dvr_log("Reboot system.");

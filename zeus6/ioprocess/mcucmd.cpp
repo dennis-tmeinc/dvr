@@ -64,7 +64,10 @@ int mcu_bootupready(int* D1)
     if( mcuready ) {
         return 1 ;
     }
-    char * rsp = mcu_cmd( 0x11, 1, 0 ) ;
+
+printf("BOOT RDY?\n");    
+    
+    char * rsp = mcu_cmd( 0x11, 1, 1 ) ;
     if( rsp ) {
         int rlen = rsp[0] - 6 ;
         char status[200] ;
@@ -81,6 +84,9 @@ int mcu_bootupready(int* D1)
         *D1 = (rsp[6] == 0x80 ) ;
         return 1 ;
     }
+    else {
+        dvr_log( "MCU not ready!" );
+	}
     return 0 ;
 }
 
@@ -188,11 +194,27 @@ int mcu_version(char * version)
 
 int mcu_camera_zoomin(int zoomin)
 {
-	if( zoomin )
+	if( zoomin ) {
+		dvr_log("Camera zoom in.");
 		mcu_cmd(0x1f);
-	else         
+	}
+	else {        
+		dvr_log("Camera zoom out.");
 		mcu_cmd(0x20);
+	}
 	return 1;
+}
+
+void mcu_camera_nightmode( int night )
+{
+	if( night ) {
+		dvr_log("Camera night mode on.");
+		mcu_cmd_target(4, 0x24, 1, 3 );
+	}
+	else {        
+		dvr_log("Camera night mode off.");
+		mcu_cmd_target(4, 0x24, 1, 0 );
+	}
 }
 
 int mcu_battery_check( int * voltage )
@@ -512,8 +534,11 @@ void mcu_mic_off( int mic )
 // command 5b, 
 void mcu_mic_ledoff()
 {
+	dvr_log("All mic turn off.");
     mcu_cmd( 0x5b );
 }
+
+static int convertmode = 0 ;
 
 // covert mode ( turn off LEDS on ip cameras )
 void mcu_covert( int coverton )
@@ -522,12 +547,22 @@ void mcu_covert( int coverton )
 		dvr_log( "Enter covert mode." );
 		mcu_cmd(0x3d, 1, 1 );
 		mcu_cmd(0x3c, 1, 0 );
+		convertmode = 1 ;
 	}
 	else {
 		dvr_log( "Leave covert mode." );
 		mcu_cmd(0x3d, 1, 0 );
+		convertmode = 0 ;
 	}
 }
+
+// turn amber led on / off
+void mcu_amberled(int ledon)
+{
+	int amber = ledon && (!convertmode) ;
+	mcu_cmd(0x5d, 1, amber);
+}
+
 
 // to receive "Enter a command" , success: return 1, failed: return 0
 static int mcu_recv_enteracommand()
@@ -562,6 +597,6 @@ int mcu_reset()
     }
     dvr_log("mcu_reset:00");
     return 0 ;
-}	
+}
 
 

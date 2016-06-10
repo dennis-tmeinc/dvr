@@ -5,7 +5,7 @@
 #include "list.h"
 
 #ifndef CHANNEL_BUFSIZE
-#define CHANNEL_BUFSIZE 	(4096)
+#define CHANNEL_BUFSIZE 	(256*1024) 
 #endif
 
 #define STAGE_CLOSED		(0)			// closed
@@ -18,82 +18,68 @@
 #define STAGE_VSERVER		(7)			// virtual server
 
 class packet {
-private:
-	class packet_buffer {
-		private:
-			int		refs ;
-			
-		public:
-			char * 	d ;		// data buffer, must be created by new char[]
-		
-		packet_buffer( int siz ) {
-			d = new char [siz] ;
-			refs = 1 ;
-		}
-		~packet_buffer() {
-			if( d!=NULL )
-				delete d ;
-		}
-		packet_buffer * addref() {
-			refs++ ;
-			return this ;
-		}
-		static void release( packet_buffer * p ) {
-			if( (--(p->refs)) <= 0 ) delete p ;
-		}
-	};
 
 protected:	
-	packet_buffer * buf ;
-	int    s ;			// valid data start - for read
-	int    e ;			// valid data end 	- for write
+	char   * buf ;
+	int    refs ;	// number of reference
+	int    s ;		// valid data start - for read
+	int    e ;		// valid data end 	- for write
+	int    z ;		// buffer size ;
 	
 public:
 
 	packet( int siz ) {
-		buf = new packet_buffer( siz ) ;
-		s = 0 ;
-		e = siz ;
-	}
-	packet( packet * pack, int offset = -1, int len = -1 ) {
-		buf = pack->buf->addref() ;
-		if( offset < 0 ) {
-			s = pack->s ;
-		}
-		else {
-			s = offset ;
-		}
-		if( len<0 ) {
-			e = pack->e ;
-		}
-		else {
-			e = s+len ;
-		}
-	}
-	~packet() { 
-		packet_buffer::release( buf );
-	}
-
-	char * data() {
-		return buf->d ;
+		buf = new char [siz] ;
+		refs = 1 ;
+		z = siz ;
+		reset();
 	}
 	
-	// starting address
-	char * start() {
-		return buf->d + s ;
+	~packet() { 
+		delete [] buf ;
+	}
+	
+	static void release( packet * p ) {
+		if( (--(p->refs)) <= 0 ) delete p ;
+	}	
+
+	packet * addref() {
+		refs++ ;
+		return this ;
+	}
+	
+	void reset() {
+		s = 0 ;
+		e = 0 ;
+	}
+	
+	// address for read
+	char * r() {
+		return buf + s ;
 	}
 
+	// available length for read
 	int len() { return e-s ; }
 	
-	// bytes been used (invalid)
+	// bytes been read 
 	void use( int l ) {
 		s+=l ;
+		if( s > e ) s=e ;
 	}
 	
-	int setlen( int l ) {
-		e = s+l ;
+	// address for write
+	char * w() {
+		return buf + e ;
 	}
 	
+	// available size for write
+	int siz() { return z-e ; }
+	
+	// bytes been written
+	int writ( int l ) {
+		e += l ;
+		if( e > z ) e = z ;
+	}	
 } ;
 
 /*	

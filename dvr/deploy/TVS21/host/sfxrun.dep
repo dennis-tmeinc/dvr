@@ -48,6 +48,9 @@ rm -r dvr
 ${SFX} '*'
 rm sfxrun 
 
+# set up name server
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
+
 # stop panel led flashing
 /davinci/dvr/panelled 0
 

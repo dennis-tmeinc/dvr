@@ -3,6 +3,8 @@ PROJDIR=/home/dennis/proj/dvr/zeus6
 proj=PWZ5
 EAGLE=eagle32
 
+export PROJDIR proj EAGLE
+
 # cross compile toolchain
 
 SYSROOT=/home/dennis/proj/zeus6/arm-eabi-uclibc
@@ -15,6 +17,10 @@ export GPP=$(CROSS_COMPILE_PREFIX)g++
 export STRIP=$(CROSS_COMPILE_PREFIX)strip
 export CFLAGS += --sysroot=$(SYSROOT)
 export LDFLAGS +=  --sysroot=$(SYSROOT)
+
+# dvr specific options
+LDFLAGS += -L$(PROJDIR)/deploy/$(proj)/host/dvr/lib
+CFLAGS += -Wno-write-strings 
 
 # debugging folder
 debug_folder=/home/dennis/nfsroot/eagletest

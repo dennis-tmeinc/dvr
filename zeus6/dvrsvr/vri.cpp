@@ -37,18 +37,21 @@ void * vri_setvri( char * vri, char * vbuf )
 		sscanf( dash+1, "%02d%02d%02d", &y, &m, &d) ;
 	}
 	
-	char * logdir = disk_getlogdir();
+	char * logdisk = disk_getlogdisk();
+	sprintf( vlogfile.setbufsize(500), "%s/smartlog", 
+		logdisk );
+	mkdir( (char *)vlogfile, 0777 );
 
-	sprintf( vlogfile.setbufsize(500), "%s/../smartlog/%s_%04d%02d%02d_L.010", 
-		logdir,
+	sprintf( vlogfile.setbufsize(500), "%s/smartlog/%s_%04d%02d%02d_L.010", 
+		logdisk,
 		(char *)g_hostname,
 		y+2000,
 		m, 
 		d );
 		
 	// _N file ?
-	sprintf( vnlogfile.setbufsize(500), "%s/../smartlog/%s_%04d%02d%02d_N.010", 
-		logdir,
+	sprintf( vnlogfile.setbufsize(500), "%s/smartlog/%s_%04d%02d%02d_N.010", 
+		logdisk,
 		(char *)g_hostname,
 		y+2000,
 		m, 
@@ -62,10 +65,6 @@ void * vri_setvri( char * vri, char * vbuf )
 
 	FILE * log = fopen( vlogfile, "r+" ) ;
 	if( log==NULL ) {
-		// just in case smartlog directory is not there
-		sprintf( vnlogfile.setbufsize(500), "%s/../smartlog", 
-			logdir );
-		mkdir( vnlogfile, 0777 );	
 		log = fopen( vlogfile, "w" ) ;
 	}
 	if( log ) {
@@ -105,7 +104,7 @@ void * vri_setvri( char * vri, char * vbuf )
 
 void vri_log( char * vri )
 {
-	if( disk_getlogdir()!=NULL ) {
+	if( disk_getlogdisk()!=NULL ) {
 		vri_setvri( vri, NULL );
 	}
 }
@@ -117,11 +116,11 @@ int vri_getlistsize( int * itemsize )
 	int rsize = 0 ;
 	struct dvrtime logtime ;
 	*itemsize = VRI_RECORD_LENGTH ;
-	char * logdir = disk_getlogdir();
-	if( logdir!=NULL ) {
+	char * logdisk = disk_getlogdisk();
+	if( logdisk != NULL ) {
 		string vlogdir ;
-		sprintf( vlogdir.setbufsize(500), "%s/../smartlog/", 
-			logdir );
+		sprintf( vlogdir.setbufsize(500), "%s/smartlog/", 
+			logdisk );
 
 		dir d( vlogdir ) ;
 		while( d.find( "*_L.010" ) ) {
@@ -147,11 +146,11 @@ int vri_getlist( char * buf, int bufsize )
 	int vsize = 0 ;
 	int rsize = 0 ;
 	struct dvrtime logtime ;
-	char * logdir = disk_getlogdir();
-	if( logdir!=NULL ) {
+	char * logdisk = disk_getlogdisk();
+	if( logdisk!=NULL ) {
 		string vlogdir ;
-		sprintf( vlogdir.setbufsize(500), "%s/../smartlog/", 
-			logdir );
+		sprintf( vlogdir.setbufsize(500), "%s/smartlog/", 
+			logdisk );
 
 		dir d( vlogdir ) ;		
 		while( d.find( "*_L.010" ) && bufsize>vsize ) {

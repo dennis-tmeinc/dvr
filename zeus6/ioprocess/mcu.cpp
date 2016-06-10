@@ -51,7 +51,6 @@ void mcu_debug_out1( char * msg, char * head )
 	for( b=0; b<*msg; b++) {
 		printf(" %02x", (int)*((unsigned char *)msg+b) );
 	}
-	printf("\n" );
 }
 
 void debug_out( char * msg )
@@ -380,7 +379,7 @@ static char * mcu_cmd_va(int target, int cmd, int datalen, va_list arg)
         }
 
 #ifdef MCU_DEBUG
-        printf("Retry!!!\n" );
+        printf("MCU no response, retry!!!\n" );
 #endif
     }
 
@@ -393,11 +392,9 @@ static int mcu_errors ;
 // return
 //       response buffer
 //       NULL if failed
-char * mcu_cmd_target(int target, int cmd, int datalen, ...)
+static char * mcu_cmd_target_va(int target, int cmd, int datalen, va_list va )
 {
-    va_list v ;
-    va_start( v, datalen );
-    char * rsp = mcu_cmd_va( target, cmd, datalen, v );
+    char * rsp = mcu_cmd_va( target, cmd, datalen, va );
     if( rsp ) {
 		mcu_errors=0 ;
 		return rsp ;
@@ -412,6 +409,19 @@ char * mcu_cmd_target(int target, int cmd, int datalen, ...)
     }
 }
 
+// Send command to target mcu and check responds
+// return
+//       response buffer
+//       NULL if failed
+char * mcu_cmd_target(int target, int cmd, int datalen, ...)
+{
+    va_list v ;
+    va_start( v, datalen );
+    char * rsp = mcu_cmd_target_va( target, cmd, datalen, v );
+    va_end( v );
+    return rsp ;
+}
+
 // Send command to mcu and check responds
 // return
 //       response buffer
@@ -420,19 +430,9 @@ char * mcu_cmd(int cmd, int datalen, ...)
 {
     va_list v ;
     va_start( v, datalen );
-    char * rsp = mcu_cmd_va( ID_MCU, cmd, datalen, v );
-    if( rsp ) {
-		mcu_errors=0 ;
-		return rsp ;
-	}
-	else {
-        if( ++mcu_errors>10 ) {
-            sleep(1);
-            mcu_restart();      // restart mcu port
-            mcu_errors=0 ;
-        }
-        return NULL;
-    }
+    char * rsp = mcu_cmd_target_va( ID_MCU, cmd, datalen, v );
+    va_end( v );
+    return rsp ;
 }
 
 // check mcu input
@@ -489,6 +489,9 @@ void  mcu_restart()
         mcu_handle = 0 ;
     }
     mcu_handle = serial_open( mcu_dev, mcu_baud );
+    
+printf( "Open serial port :%s :%d\n",     (char *)mcu_dev, mcu_baud );
+    
     if( mcu_handle<=0 ) {
         // even no serail port, we still let process run
         dvr_log("Serial port failed!\n");

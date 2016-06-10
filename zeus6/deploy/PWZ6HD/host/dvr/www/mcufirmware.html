@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<link href="eagle3.css" rel="stylesheet" type="text/css" /><title>MCU Firmware Update</title>
+<script type="text/javascript" src="js/jquery.js"></script>
+<script type="text/javascript" src="js/eagle3.js"></script>
+
+<script type="text/javascript">
+
+$(document).ready(function(){
+
+function postMsg()
+{
+	$.post( "mcumsg", function( data ) {
+		var res = data.replace(/\n/gi, "<br/>");
+		$("#id_mcumsg").html( res );
+		setTimeout(function(){
+			postMsg();
+		},1000);
+	} );
+}
+
+postMsg();
+
+});
+
+</script>
+
+</head>
+<body>
+<!--#include file="header.i"-->
+<p>&nbsp;</p>
+
+<pre style="font-size:1.2em;">
+<!--#exec cmd="cgi/mcufwupd"-->
+</pre>
+
+<br />
+<p id="id_mcumsg" style="font-size:1.2em;">
+</p>
+
+</body>
+</html>
+

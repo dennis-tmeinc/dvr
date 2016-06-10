@@ -2,84 +2,77 @@
 #include <sys/mman.h> 
 #include "dvr.h"
 
+int g_memfree = 0;  			// free memory in kb
+int g_memdirty = 0 ;			// dirty memory 
+
 static pthread_mutex_t mem_mutex;
 
-// Parse /proc/meminfo
-static int MemTotal, MemFree, Cached, Buffers, Inactive, SwapTotal, SwapFree;
-static int ParseMeminfo()
+void mem_dropcache() 
 {
-    FILE *fproc=NULL;
-    char buf[256];
-    int rnum = 0;
-    fproc = fopen("/proc/meminfo", "r");
-    if (fproc == NULL)
-        return 0;
-    while (fgets(buf, 256, fproc)) {
-        if (memcmp(buf, "MemTotal:", 9) == 0) {
-            rnum += sscanf(buf + 9, "%d", &MemTotal);
-        } else if (memcmp(buf, "MemFree:", 8) == 0) {
-            rnum += sscanf(buf + 8, "%d", &MemFree);
-        } else if (memcmp(buf, "Cached:", 7) == 0) {
-            rnum += sscanf(buf + 7, "%d", &Cached);
-        } else if (memcmp(buf, "Buffers:", 8) == 0) {
-            rnum += sscanf(buf + 8, "%d", &Buffers);
-        } else if (memcmp(buf, "SwapTotal:", 10) == 0) {
-            rnum += sscanf(buf + 10, "%d", &SwapTotal);
-        } else if (memcmp(buf, "SwapFree:", 9) == 0) {
-            rnum += sscanf(buf + 9, "%d", &SwapFree);
-        } else if (memcmp(buf, "Inactive:", 9) == 0) {
-            rnum += sscanf(buf + 9, "%d", &Inactive);
-        }
+    FILE * fdropcache ;
+    fdropcache = fopen("/proc/sys/vm/drop_caches", "w");
+    if( fdropcache ) {
+		fwrite( "3\n", 1, 2, fdropcache );
+		fclose( fdropcache );
     }
-    fclose(fproc);
-    return rnum;
 }
 
 // return kbytes of available memory (Usable Ram)
 int mem_available()
 {
-    if (ParseMeminfo() == 0)
-        return 0;
-    return MemFree + Inactive ;
+	int memfree = 0 ;
+	int m ;
+    FILE * fmem ;
+    char buf[256];
+    fmem = fopen("/proc/meminfo", "r");
+    if( fmem ) {
+		while (fgets(buf, 256, fmem)) {
+			if (memcmp(buf, "MemFree:", 8) == 0) {
+				sscanf(buf + 8, "%d", &m);
+				memfree += m ;
+			}
+			else if (memcmp(buf, "Inactive:", 9) == 0) {
+				sscanf(buf + 9, "%d", &m);
+				if( m > 5000 && memfree<30000 ) 
+					mem_dropcache();
+				memfree += m ;
+			}
+			else if (memcmp(buf, "Dirty:", 6) == 0) {
+				sscanf(buf + 6, "%d", &m);
+				g_memdirty = m ;
+			}			
+		}
+		fclose( fmem );
+    }
+    g_memfree = memfree ;
+    return memfree ;
 }
-
-// dump cache memory, hope to free up main memory
-//		"echo 1 > /proc/sys/vm/drop_caches"
-void mem_dropcaches()
-{
-	FILE * f=fopen( "/proc/sys/vm/drop_caches", "w" );
-	if( f ) {
-		fwrite( "3", 1, 1, f );
-		fclose( f );
-	}
-}
-
-void *mem_cpy(void *dst, void const *src, size_t len)
-{
-	return memcpy( dst, src, len );
-}
-
-static int mem_alloc_st = 0 ;
 
 #define MEM_TAG( p )	(*(((int *)p)-1))
+// high byte: refcount, lower 24bits: blocksize, 0: malloc, >0 mmap
 #define MEM_REF( p )	(*(((int *)p)-2))
+#define MEM_SIZ( p )	( MEM_REF(p)  & 0x00ffffff )
+#define MEM_ADDREF( p ) ( MEM_REF(p) += 0x01000000 )
+#define MEM_DECREF( p ) ( MEM_REF(p) -= 0x01000000 )
+#define MEM_CHECK( p )  ( MEM_TAG( p ) == (int)(p) )
 
 void *mem_alloc(int size)
 {
-    int *pmemblk;
-    
-	if (size < 0) {
-        size=0 ;
+	if (size < 0 || size>0x00800000 ) {
+		return NULL ;
     }
     
-    // experiments, drop caches once a while !
-    if( mem_alloc_st > 50000000 ) {
-		mem_dropcaches();
-		mem_alloc_st = 0 ;
-	}
-	mem_alloc_st += size ;
+    int *pmemblk;
+    size = (size/sizeof(int) + 3) * sizeof(int) ;
     
-    pmemblk = (int *) malloc(size+2*sizeof(int));
+    if( size>8000 ) {
+		pmemblk = (int*) mmap( NULL, size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0 );
+		if( pmemblk ) *pmemblk = size ;
+	}
+	else {
+		pmemblk = (int *) malloc( size );
+		if( pmemblk ) *pmemblk = 0 ;
+	}
     if (pmemblk == NULL) {
         // no enough memory error
         dvr_log("!!!!!mem_alloc failed!");
@@ -87,58 +80,72 @@ void *mem_alloc(int size)
     }
     pmemblk+=2 ;						// 2 integer over head
     MEM_TAG( pmemblk ) = (int)pmemblk ;	// memory tag
-    MEM_REF( pmemblk ) = 1 ;			// reference counter
+    // MEM_REF( pmemblk ) = 0 ;			// reference counter initialize to 0
     return (void *)pmemblk;
 }
 
 // check if this memory is allock by mem_alloc
 int mem_check(void *pmem)
 {
-    return pmem != NULL && MEM_TAG( pmem ) == (int)pmem && MEM_REF( pmem )>0 && MEM_REF( pmem )<100 ;
+    return MEM_CHECK( pmem ) ;
 }
 
 void mem_free(void *pmem)
 {
-    int *pmemblk;
     if (pmem == NULL)
         return;
-    
     pthread_mutex_lock(&mem_mutex);
-    if( mem_check( pmem ) ) {
-		if( --MEM_REF( pmem ) <= 0 ) {
+    if( MEM_CHECK( pmem ) ) {
+		if( MEM_DECREF( pmem ) < 0 ) {
 			MEM_TAG(pmem)=0 ;		// clear memory tag
-			free( & MEM_REF( pmem ) ) ;
+			int siz = MEM_SIZ( pmem )	;
+			if( siz > 0 ) { 		// mmap
+				munmap( & MEM_REF( pmem ), siz );
+			}
+			else {
+				free( & MEM_REF( pmem ) ) ;
+			}
 		}
 	}
     pthread_mutex_unlock(&mem_mutex);
+}
+
+// optimized memory copy (to be used by mem_addref only)
+inline void mem_cp32( int *dst, int *src, int len )
+{
+	len = (len+(sizeof(int)-1))/sizeof(int) ;
+	do {
+		dst[len-1] = src[len-1] ;
+	}
+	while( --len ) ;
 }
 
 void *mem_addref(void *pmem, int memsize)
 {
     pthread_mutex_lock(&mem_mutex);
-    if( mem_check( pmem ) ) {
-		MEM_REF(pmem)++ ;
-	}
-	else if( memsize>0 ){
-		void * nmem = mem_alloc(memsize) ;
-		if( nmem ) {
-			mem_cpy( nmem, pmem, memsize );
-			pmem = nmem ;
-		}
-		else {
-			pmem = NULL ;
-		}
+    if( MEM_CHECK( pmem ) ) {
+		MEM_ADDREF(pmem) ;
+		pthread_mutex_unlock(&mem_mutex);
+		return pmem ;
 	}
 	else {
-		pmem = NULL ;
+		pthread_mutex_unlock(&mem_mutex) ;
+		void * nmem = mem_alloc(memsize) ;
+		if( nmem ) {
+			if( (((int)pmem)&3)==0 ) {
+				mem_cp32( (int*)nmem, (int *)pmem, memsize ) ;
+			}
+			else {
+				memcpy( (void *)nmem, (void *)pmem, memsize );
+			}
+		}
+		return nmem ;
 	}
-    pthread_mutex_unlock(&mem_mutex);
-    return pmem;
 }
 
 void mem_init()
 {
-    pthread_mutex_init(&mem_mutex, NULL);
+	mem_mutex = mutex_init ;
 }
 
 void mem_uninit()

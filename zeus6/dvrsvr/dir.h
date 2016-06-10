@@ -9,6 +9,10 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#define DIR_FINDANY		(0)
+#define DIR_FINDFILE	(1)
+#define DIR_FINDDIR		(2)
+
 class dir {
 protected:
     DIR * m_pdir ;
@@ -69,9 +73,11 @@ public:
     }
     
     // find directory.
+    //			pattern: filename pattern
+    // 			type, 0: all, 1: file, 2: dir
     // return 1: success
     //        0: end of file. (or error)
-    int find(const char * pattern=NULL) {
+    int find(const char * pattern=NULL, int type=DIR_FINDANY) {
         if( m_pdir ) {
             struct dirent * ent ;
             while( (ent=readdir(m_pdir))!=NULL  ) {
@@ -109,12 +115,20 @@ public:
                 if( m_type == DT_DIR && ent->d_name[0]=='.' )
                     continue ;
                     
+                // file only
+                if( type==DIR_FINDFILE && m_type != DT_REG )
+					continue ;
+					
+				// dir only
+                if( type==DIR_FINDDIR && m_type != DT_DIR )
+					continue ;
+                
 		        return 1 ;
             }
         }
         return 0 ;
     }
-    
+        
     void rewind()
     {
 		if( m_pdir ) {

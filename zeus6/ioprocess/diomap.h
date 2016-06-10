@@ -93,8 +93,8 @@ struct dio_mmap {
   // don't do disk_check (also used to stop copy process)
     int nodiskcheck;
 
-    int mcu_cmd; // 1: HD off, 2: HD on
-    int ishybrid_copy; //1 hybrid is copying ,0 hybrid is not
+    int mcu_cmd; 		// 1: HD off, 2: HD on
+    int ishybrid_copy; 	//1 hybrid is copying ,0 hybrid is not
     int tab102_ready;
     int fileclosed;
     int tab102_isLive;
@@ -114,7 +114,7 @@ struct dio_mmap {
                                         //  BIT 12:  blackout, 1: pressed, 0: released
                                         //  BIT 13:  Speaker Mute Botton (virtual) 1: pressed, auto release
                                         //  BIT 14:  Sperker On Botton (virtual) 1: pressed, auto release
-                                 
+
 
     unsigned int pwii_output ;          // LEDs and device power (outputs)
                                         // BIT 0: C1 LED
@@ -140,14 +140,8 @@ struct dio_mmap {
                                         // BIT 19: INCAR2 TRIGGER ON/OFF
                                         
                                         // BIT 20: COVERT MODE (for ip camera)
-                                        
-                                        
-    // PWZ6 dual mic status ( inverted from MCU inputs )   
-    unsigned int pwii_micinput;         //       all bits implemented as one shot trigger of C1 record for PWZ6
-                                        //  BIT 0:  Mic 1,    
-                                        //  BIT 1:  EMG 1     
-                                        //  BIT 2:  Mic 2     
-                                        //  BIT 3:  EMG 2     
+                                        // BIT 21: trigger mic1 on by camera recording
+                                        // BIT 22: trigger mic2 on by camera recording
                                         
     int     pwii_error_LED_flash_timer ; // LED flash timer (output),  0: stayon, others in 0.25 second step
     char    pwii_VRI[128] ;             // current VRI(video recording Id)
@@ -168,6 +162,13 @@ struct dio_mmap {
     int     res[128] ;
 
 } ;
+
+// dio methods
+extern struct dio_mmap * p_dio_mmap ;
+struct dio_mmap * dio_mmap(char * mmapfile = NULL );
+void dio_munmap();
+void dio_lock();
+void dio_unlock();
 
 // app_mode
 #define APPMODE_QUIT            (0)
@@ -190,15 +191,17 @@ struct dio_mmap {
 #define DVR_NODATA      (0x40)
 #define DVR_ERROR       (0x8000)
 
-// dio methods
-extern struct dio_mmap * p_dio_mmap ;
-struct dio_mmap * dio_mmap(char * mmapfile = NULL );
-void dio_munmap();
-void dio_lock();
-void dio_unlock();
+// MCU hardware io pin number
+#define MCU_INPUTNUM (9)
+#define MCU_OUTPUTNUM (4)
 
+// virtual MIC io pins 
+#define PWII_MIC1_MIC			(1<<(MCU_INPUTNUM))
+#define PWII_MIC1_EMG			(2<<(MCU_INPUTNUM))
+#define PWII_MIC2_MIC			(4<<(MCU_INPUTNUM))
+#define PWII_MIC2_EMG			(8<<(MCU_INPUTNUM))
 
-// PWII status *** Dennis ***
+// PWII status 
 #define DVR_LOCK        (0x80)			// recording locked file (any channel) (PWII only)
 #define DVR_ARCH        (0x100)			// archive thread running
 #define DVR_ARCHDISK    (0x200)			// archive disk ready
@@ -220,6 +223,12 @@ void dio_unlock();
 #define  PWII_BT_SPKMUTE        (1<<13)
 #define  PWII_BT_SPKON          (1<<14)
 
+#define  PWII_BT_MIC1          	(1<<16)
+#define  PWII_BT_MIC1          	(1<<16)
+#define  PWII_BT_MIC1          	(1<<16)
+#define  PWII_BT_MIC1          	(1<<16)
+
+
 // PWII CDC led
 #define PWII_LED_C1             (1)
 #define PWII_LED_C2             (1<<1)
@@ -238,6 +247,10 @@ void dio_unlock();
 #define PWII_POWER_BLACKOUT		(1<<12)
 #define PWII_POWER_STANDBY		(PWII_POWER_BLACKOUT)
 #define PWII_POWER_WIFI			(1<<13)
+
+// software mic on stat 
+#define PWII_MIC1_ON			(1<<16)
+#define PWII_MIC2_ON			(1<<17)
 
 // PW Z6 COVERTY
 #define PWII_COVERT_MODE		(1<<20)

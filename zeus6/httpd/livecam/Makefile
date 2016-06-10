@@ -3,7 +3,6 @@
 #
 
 include ../../config
-include $(PROJDIR)/arm_tool
 
 #SOURCES=eagle_setup.cpp md5.cpp
 SOURCES=livecam.cpp ../../dvrsvr/md5.cpp ../net.cpp

@@ -58,6 +58,14 @@
 #define BYTE unsigned char
 #endif
 
+#ifndef OFF_T
+#define OFF_T __off64_t
+#endif
+
+#define file_seek(_stream, _off, _whence) fseeko64(_stream, (__off64_t)_off, _whence)
+#define file_tell(_stream) ftello64(_stream)
+#define file_truncate(_fd, _length) ftruncate64(_fd, _length)
+ 
 // dvr memory allocations
 #include "./memory.h"
 
@@ -82,7 +90,7 @@
 #define APPDOWN 	(2)
 #define APPRESTART	(3)
 
-extern pthread_mutex_t mutex_init ;
+extern pthread_mutex_t mutex_init ;			// commonly used mutex initializer
 extern volatile int app_state;
 extern volatile int system_shutdown;
 extern volatile float g_cpu_usage ;
@@ -144,6 +152,29 @@ public:
     }
 };
 
+struct dayinfoitem {
+    int ontime  ;		// seconds of the day
+    int offtime ;		// seconds of the day
+} ;
+
+// dvr recording stats
+enum REC_STATE {
+    REC_STOP = 0 ,      // no recording
+    REC_PRERECORD,      // pre-recording
+    REC_RECORD,         // recording
+    REC_LOCK,           // recording lock file
+};
+
+struct rec_fifo {
+    REC_STATE rectype;          // recording type
+    struct dvrtime time;        // captured time
+    char *buf;
+    int bufsize ;
+    int frametype ;
+    int swappos ; 				// -1: marked to swapout, 0: inmem, >=4 indicates the buffer is in swap
+    struct rec_fifo *next;
+};
+
 /*
     key file format
         1st_frame_milliseconds, 1st_frame_offset\n
@@ -154,8 +185,19 @@ public:
 // key frame index support
 struct dvr_key_t {
     int ktime;				// key frame time, in milliseconds, from start of file(file time in filename)
-    int koffset ;			// key frame offset
+    OFF_T koffset ;			// key frame offset
+    int ksize ;
+    int klength ;			// key block length in milliseconds
+    REC_STATE ktype ;		// key frame recording type 
 } ;
+
+#define DVR_KEY_TYPE_HEADER		'H'
+#define DVR_KEY_TYPE_NORM		'N'
+#define DVR_KEY_TYPE_LOCK		'L'
+#define DVR_KEY_TYPE_PRE		'P'
+#define DVR_KEY_TYPE_BREAK		'B'
+#define DVR_KEY_TYPE_HOLE		'O'
+#define DVR_KEY_TYPE_END		'E'
 
 // dvrfile
 class dvrfile {
@@ -164,60 +206,68 @@ protected:
 
     int	   m_fileencrypt ;		// if file is encrypted?
     int    m_autodecrypt ;      // auto - decrypt when reading.
-    int    m_initialsize;
+    OFF_T    m_initialsize;
 
-    string m_filename ;
     int    m_openmode ;			// 0: read, 1: write
     DWORD  m_hdflag ;           // file header flag when reading
 
-    struct dvrtime m_filetime ;	// file start time (as from file name)
-    int   m_filesize ;          // file size in bytes
+    OFF_T  m_filesize ;          // file size in bytes
 
-    int   m_filebuffersuggestsize;  // suggested buffer size
     int   m_filebuffersize ;        // real buffer size
     int   m_filebufferpos ;         // valid data size
     char *m_filebuffer ;
 
     int   m_filelen ;			// file length in seconds
-    int	  m_filestart ;			// first frame offset
+    OFF_T m_filestart ;			// first frame offset
 
     // current frame info
     DWORD m_reftstamp ;			// referent frame time stamp
     int   m_reftime ;			// referent frame time (milliseconds from file time)
 
-    int   m_framepos ;          // current frame position
+    OFF_T   m_framepos ;          // current frame position
     int   m_framesize ;         // current frame size
     int   m_frametype ;         // current frame type
-    int   m_frametime ;         // current frame time (milliseconds from file time)
+    int   m_frametime ;         // current frame time (milliseconds from file time) (also used on recording for current recorded frame time)
     int   m_frame_kindex ;
 
-    array <struct dvr_key_t> m_keyarray ;
+	FILE * m_keyfile ;			// for recording
+	
+    array <struct dvr_key_t> m_keyarray ;		// for read
 
+public:
+    string m_filename ;
+    struct dvrtime m_filetime ;	// file start time (as from file name)    
+
+protected:
     int nextframe();
     int prevframe();
+    void updatekey(dvrtime * frametime);
+    void readkey() ;
 
 public:
     dvrfile() ;
     ~dvrfile();
     int open(const char *filename, char *mode = "r", int initialsize = 0);
+	static string * makedvrfilename( struct dvrtime * filetime, int channel ) ;   
     void close();
+    
     int headersize() { return m_filestart; }
     int writeheader(void * buffer, size_t headersize) ;
     int readheader(void * buffer, size_t headersize) ;
     int read(void *buffer, size_t buffersize);
     int write(void *buffer, size_t buffersize);
-    void setbufsize( int bufsize) ;
     void flushbuffer();
 
     int repair();							// repair a .264 file
     int repairpartiallock() ;               // repair a partial locked file
-    int tell();
-    int seek(int pos, int from = SEEK_SET);
-    int truncate( int tsize );
+    OFF_T tell();
+    int seek(OFF_T pos, int from = SEEK_SET);
+    int truncate( OFF_T tsize );
     // seek to specified time,
     //   return 1 if seek inside the file.
     //	return 0 if seek outside the file, pointer set to begin or end of file
     int seek( dvrtime * seekto );
+    int getclipinfo( array <struct dayinfoitem> &dayinfo, int lock );
 
     int getframe();                 // advance to next frame and retrive frame info
     dvrtime frametime();			// return current frame time
@@ -227,7 +277,11 @@ public:
     int prevkeyframe();
     int nextkeyframe();
     int readframe(void * framebuf, size_t bufsize);
-    int writeframe(void * buffer, size_t size, int frametype, dvrtime * frametime);
+    //int writeframe(void * buffer, size_t size, int frametype, dvrtime * frametime, REC_STATE recstat);
+	int writeframe( rec_fifo * data );
+    
+    void flushkey();				// flush out previous key index
+
     int isopen() {
         return m_handle != NULL;
     }
@@ -240,8 +294,6 @@ public:
     void autodecrypt(int decrypt) {
         m_autodecrypt=decrypt ;
     }
-    void writekey();
-    void readkey() ;
 
     static int rename(const char * oldfilename, const char * newfilename); // rename .264 filename as well .k file
     static int remove(const char * filename);		// remove .264 file as well .k file
@@ -259,11 +311,6 @@ void ptz_init(config &dvrconfig);
 void ptz_uninit();
 int ptz_msg( int channel, DWORD command, int param );
 
-struct dayinfoitem {
-    int ontime  ;		// seconds of the day
-    int offtime ;		// seconds of the day
-} ;
-
 void time_init();
 void time_uninit();
 void time_settimezone(char * timezone);
@@ -277,7 +324,7 @@ struct dvrtimesync {
     char tz[128] ;
 } ;
 
-void time_now(struct dvrtime *dvrt);
+time_t time_now(struct dvrtime *dvrt);
 int time_tick();
 time_t time_utctime(struct dvrtime *dvrt);
 int time_setlocaltime(struct dvrtime *dvrt);
@@ -359,12 +406,12 @@ struct dvrtime operator + ( struct dvrtime & t, double seconds ) ;
 double operator - ( struct dvrtime &t1, struct dvrtime &t2 ) ;
 
 // recording service
-#define DEFMAXFILESIZE (100000000)
+#define DEFMAXFILESIZE (1000000000)
 #define DEFMAXFILETIME (24*60*60)
 
 extern string rec_basedir;
 extern int rec_pause;           // pause recording temperary
-extern volatile int rec_busy ;
+extern int rec_busy ;
 extern int rec_watchdog ;      // recording watchdog
 extern int rec_norecord ;
 void rec_init(config &dvrconfig);
@@ -385,6 +432,7 @@ void rec_update();
 void rec_alarm();
 void rec_start();
 void rec_stop();
+void rec_memorylow(int critical);
 /*
  struct nfileinfo {
     int channel;

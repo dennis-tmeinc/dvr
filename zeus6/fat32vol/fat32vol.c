@@ -157,7 +157,7 @@ int main( int argc, char * argv[] )
 					}
 				}
 				if( labelidx>=0 ) {
-					// set label to root
+					// set label to root dir
 					fseek( dev, root_offset + labelidx*32, SEEK_SET );
 					fwrite( dentry, 1, 11, dev );
 				}

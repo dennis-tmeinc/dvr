@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <sys/reboot.h>
 
+#include "../cfg.h"
+
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
 #include "diomap.h"
@@ -14,7 +16,7 @@ struct dio_mmap * p_dio_mmap ;
 char dvriomap[256] = "/var/dvr/dvriomap" ;
 
 // unsigned int outputmap ;	// output pin map cache
-char dvrconfigfile[] = "/etc/dvr/dvr.conf" ;
+char dvrconfigfile[] = CFG_FILE ;
 
 // return 
 //        0 : failed

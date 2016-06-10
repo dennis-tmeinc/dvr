@@ -149,7 +149,6 @@ void print_dio()
    	DUMP_X(pwii_buttons);
 
    	DUMP_X(pwii_output);
-   	DUMP_X(pwii_micinput);
    	DUMP_I(pwii_error_LED_flash_timer);
    	DUMP_S(pwii_VRI);
    	

@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<!--#exec cmd="cgi/pagevalue"-->
+<link href="eagle3.css" rel="stylesheet" type="text/css" /><title>Status</title>
+<script type="text/javascript" src="js/jquery.js"></script>
+<script type="text/javascript" src="js/eagle3.js"></script>
+
+<script type="text/javascript">
+
+synctime=0 ;
+
+$(document).ready(function(){
+
+	var systime=new Date();
+	var dvrtime=new Date();
+
+	function statusvalue( sval )
+	{
+		systime=new Date();
+		dvrtime=Date.parse( sval.dvrtime );
+		document.getElementById("dvrstatus").reset();
+		JSONinitfield( sval );
+
+		$("#id_cpu_usage").html( sval.cpu_usage + "%" ) ;
+		$("#id_total_memory").html( sval.memory_total + " Mbytes"  ) ;
+		$("#id_free_memory").html( sval.memory_free + " Mbytes" ) ;
+		$("#id_total_disk").html( sval.disk_total + " Mbytes" ) ;
+		$("#id_free_disk").html( sval.disk_free + " Mbytes" ) ;
+
+		var temp = parseInt( sval.temperature_system_c ) ;
+		if( isNaN(temp) ) {
+			document.getElementById('id_tr_sys_temperature').style.display="none" ;
+			document.getElementById("id_sys_temperature").innerHTML="";
+		}
+		else {
+			document.getElementById('id_tr_sys_temperature').style.display="" ;
+			document.getElementById("id_sys_temperature").innerHTML=
+				(temp*9/5+32) + " \u00B0" + "F / "+ temp + " \u00B0"+"C" ; 
+		}
+
+		temp = parseInt( sval.temperature_disc_c ) ;
+		if( isNaN(temp) ) {
+			 document.getElementById('id_tr_hd_temperature').style.display="none" ;
+			 document.getElementById("id_hd_temperature").innerHTML="" ;
+		}
+		else {
+			 document.getElementById('id_tr_hd_temperature').style.display="" ;
+			 document.getElementById("id_hd_temperature").innerHTML=
+				(temp*9/5+32) + " \u00B0" + "F / "+ temp + " \u00B0"+"C" ; 
+		}
+
+		var i ;
+		for( i=1; i<=camera_num; i++ ) {
+			$("#id_bitrate_"+i ).html( sval["camera_"+i+"_bitrate"] ) ;
+		}
+		
+		// battery status
+		var battery_st = [
+			"Full charged", "Charging", "Disconnected", "Unknown" ];
+		
+		$("#battery_state" ).html( battery_st[sval["battery_state"]] );
+		$("#battery_voltage" ).html( sval["battery_voltage"] + " V" );
+	
+		if( sval["gps_valid"] != 0 ) {
+			var nlat = Number(sval["gps_latitude"]) ;
+			var nlon = Number(sval["gps_longitude"]) ;
+			var lat, lon ;
+			if( nlat>=0.0 ) {
+				lat = nlat.toFixed(5) + "N" ;
+			}
+			else {
+				lat = (-nlat).toFixed(5) + "S" ;
+			}
+			if( nlon>=0.0 ) {
+				lon = nlon.toFixed(5) + "E" ;
+			}
+			else {
+				lon = (-nlon).toFixed(5) + "W" ;
+			}
+			$("#gps_coordinates").html(lat+','+lon);
+		}
+		else {
+			$("#gps_coordinates").html("No fix");
+		}
+		
+		var ch;
+		var id ;
+		for(ch=1 ; ch<16; ch++ ) {
+			id = "camera_"+ch+"_recordstate" ;
+			$("#"+id ).html( sval[id] );
+		}
+	 
+		update();
+	 
+	}
+
+	var count=10 ;
+	function update()
+	{
+		var stime = new Date();
+		var diff = stime.getTime() - systime.getTime();
+		var dtime = new Date();
+		dtime.setTime( dvrtime+diff );
+		
+		$("#id_dvr_time").html( dtime.toDateString()+" " + dtime.toLocaleTimeString() + " " 
+														 +"(<!--#include file="timezone"-->)" )  ;
+		$("#id_local_time").html( stime.toDateString()+" "
+														 +stime.toLocaleTimeString() );
+		if( synctime == 1 ) {
+			synctime = 0 ;
+			$.get( "cgi/dvrstatus.cgi?synctime="+stime.getTime(), statusvalue, "JSON" );
+		}	
+		else if( ++count > 10 ) {
+			count=0;
+			$.get( "cgi/dvrstatus.cgi", statusvalue, "JSON" );
+		}
+		else {
+			timer = setTimeout( update , 200 );
+		}
+
+	}
+	
+	update();
+
+});
+
+
+</script>
+
+</head>
+<body>
+<!--#include file="header.i"-->
+<div class="tabs">
+<ul>
+<li><a onclick="on_system_click()"><span>System</span></a></li>
+<li><a onclick="on_camera_click()"><span>Camera</span></a></li>
+<li><a onclick="on_sensor_click()"><span>Sensor</span></a></li>
+<li><a onclick="on_network_click()"><span>Network</span></a></li>
+<li class="current"><a onclick="on_status_click()"><span>Status</span></a></li>
+<li><a onclick="on_tools_click()"><span>Tools </span></a></li>
+</ul>
+</div>
+<p>&nbsp;</p>
+<table>
+<tbody>
+<tr>
+<td class="col1">Firmware Version:</td>
+<td> <!--#include file="/davinci/dvr/firmwareid"--> </td>
+</tr>
+<tr>
+<td class="col1">MCU Firmware Version:</td>
+<td> <!--#include file="/var/dvr/mcuversion"--> </td>
+</tr>
+
+<tr>
+<td class="col1">Tab102 Version:</td>
+<td> <!--#include file="/var/dvr/tab102version"--> </td>
+</tr>
+
+<tr>
+<td class="col1">Camera Number:</td>
+<td> <!--#include file="camera_number" --> </td>
+</tr>
+<tr>
+<td class="col1">Sensor Number:</td>
+<td> <!--#include file="sensor_number" --> </td>
+</tr>
+<tr>
+<td class="col1">Alarm Number:</td>
+<td> <!--#include file="led_number" --></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td class="col1">Controller Time:</td>
+<td><span id="id_dvr_time"> </span>
+</td>
+</tr>
+<tr>
+<td class="col1">Computer Time:</td>
+<td><span id="id_local_time"> </span></td>
+</tr>
+<tr>
+<td></td>
+<td>
+<button type="button" onclick="synctime=1">Synchronize Controller Time</button>
+</td>
+</tr>
+<tr>
+<td>&nbsp;</td>
+<td><br />
+</td>
+</tr>
+<form id="dvrstatus">
+	
+<script type="text/javascript">
+var camera_num = <!--#include cameranumber="camera_number" --> ;
+for( i=1; i<=camera_num; i++ ) {
+ var name ;
+ document.write( "<tr><td class=\"col1\">Camera "+i+" Status:</td>" );
+ name = "camera_"+i+"_signal_lost" ;
+ document.write( "<td><input name=\""+name+"\" type=\"radio\" />Signal Lost " );
+ name = "camera_"+i+"_recording" ;
+ document.write( "<input name=\""+name+"\" type=\"radio\" />Recording " ); 
+ name = "camera_"+i+"_motion" ;
+ document.write( "<input name=\""+name+"\" type=\"radio\" />Motion " );
+ document.write( "&nbsp;&nbsp;&nbsp;&nbsp;Bitrate: <span id=\"id_bitrate_"+i+"\"> </span> Kbps &nbsp;&nbsp;&nbsp;&nbsp; " );
+ name = "camera_"+i+"_recordstate" ;
+ document.write( "<span id=\""+name+"\"></span></td></tr>" );
+}
+</script>
+
+<tr>
+<td></td>
+<td></td>
+</tr>
+
+<tr>
+<td class="col1">CPU Usage:</td>
+<td>
+<span id="id_cpu_usage"> </span>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Total Memory:</td>
+<td>
+<span id="id_total_memory"> </span>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Free Memory:</td>
+<td>
+<span id="id_free_memory"> </span>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Total Hard Drive Space:</td>
+<td>
+<span id="id_total_disk"> </span>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Free Hard Drive Space:</td>
+<td>
+<span id="id_free_disk"> </span>
+</td>
+</tr>
+
+<tr id="id_tr_sys_temperature">
+<td class="col1">System Temperature:</td>
+<td>
+<span id="id_sys_temperature"> </span>
+</td>
+</tr>
+
+<tr id="id_tr_hd_temperature">
+<td class="col1">Hard Drive Temperature:</td>
+<td>
+<span id="id_hd_temperature"> </span>
+</td>
+</tr>
+
+<tr>
+<td class="col1">Internal Battery Voltage:</td>
+<td>
+<span id="battery_voltage"> </span>
+</td>
+</tr>
+
+<tr>
+<td class="col1">GPS Coordinates:</td>
+<td>
+<span id="gps_coordinates"></span>
+</td>
+</tr>
+
+</form>
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="status.html">
+<input name="page" value="status" type="hidden" />
+</form>
+
+</script>
+</body></html>

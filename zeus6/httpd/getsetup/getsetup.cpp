@@ -135,9 +135,9 @@ int main()
         }
         
         // pw recording method
-        value = dvrconfig.getvalue("system","pw_recordmethod");
-        if( value.length()>0 ) {
-            fprintf(fvalue, "\"pw_recordmethod\":\"%s\",", (char *)value );
+        ivalue = dvrconfig.getvalueint("system","pw_recordmethod");
+        if( ivalue>0 ) {
+            fprintf(fvalue, "\"pw_recordmethod\":\"on\"," );
         }
         
 #endif
@@ -223,6 +223,22 @@ int main()
         value = dvrconfig.getvalue( "system", "archivetime");
         if( value.length()>0 ) {
             fprintf(fvalue, "\"archivingtime\":\"%s\",", (char *)value );
+        }
+        
+        // trace mark event time (in seconds)
+        ivalue = dvrconfig.getvalueint( "system", "tracemarktime");
+        if( ivalue <=0 ) ivalue = 300 ;
+		fprintf(fvalue, "\"tracemarktime\":\"%d\",",  ivalue );
+        
+		// file buffer size
+        value = dvrconfig.getvalue("system", "filebuffersize");
+        if( value.length()>0 ) {
+            l=value.length();
+            p=value;
+            if( p[l-1]=='k' ) {         // use k bytes only
+                p[l-1]=0;
+            }
+            fprintf(fvalue, "\"filebuffersize\":\"%s\",", p );
         }
 
         // file_size

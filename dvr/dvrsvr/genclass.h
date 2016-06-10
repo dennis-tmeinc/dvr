@@ -223,20 +223,6 @@ class array {
             quicksort( i+1, hi );
         }
     }
-    void expand( int newsize ) {
-        if( newsize>m_arraysize ) {
-            int i;
-            m_arraysize=newsize+ARRAYSTEPSIZE ;
-            T ** newarray = new T * [m_arraysize] ;
-            if( m_array ) {
-                for( i=0; i<m_size; i++ ) {
-                    newarray[i] = m_array[i] ;
-                }
-                delete [] m_array ;
-            }
-            m_array = newarray ;
-        }
-    }
     public:
         array(){
             m_array=NULL ;
@@ -255,6 +241,21 @@ class array {
         int size() {
             return m_size;
         }
+		// expand array size only
+		void expand( int newsize ) {
+			if( newsize>m_arraysize ) {
+				int i;
+				m_arraysize=newsize+ARRAYSTEPSIZE ;
+				T ** newarray = new T * [m_arraysize] ;
+				if( m_array ) {
+					for( i=0; i<m_size; i++ ) {
+						newarray[i] = m_array[i] ;
+					}
+					delete [] m_array ;
+				}
+				m_array = newarray ;
+			}
+		}        
         void setsize(int newsize) {
             int i;
             expand(newsize);
@@ -320,8 +321,14 @@ class array {
                 }
             }
         }
+        // clear all elements
+        void clear(){		
+			while( m_size>0 ) {
+				delete m_array[--m_size] ;
+			}
+        }
         void empty(){
-            setsize(0);
+			clear();
             if( m_array ) {
                 delete [] m_array ;
                 m_array = NULL ;
@@ -353,18 +360,20 @@ class string {
 protected:
     char *m_str;
     void setstring(const char *str){
+		char * nstr = NULL ;
+        if( str ) {
+            nstr=new char [strlen(str)+1];
+            strcpy(nstr, str);
+        }
         if( m_str ) {
             delete [] m_str ;
-            m_str = NULL ;
         }
-        if( str ) {
-            m_str=new char [strlen(str)+1];
-            strcpy(m_str, str);
-        }
+        m_str = nstr ;
     }
     char *getstring(){
         if( m_str==NULL ) {
-            setstring(EMPTY_STRING);
+			m_str = new char [2] ;
+			*m_str = 0 ;
         }
         return m_str;
     }

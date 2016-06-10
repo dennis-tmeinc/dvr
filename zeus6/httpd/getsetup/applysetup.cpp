@@ -68,7 +68,7 @@ char * getsetvalue( char * name )
                     }
                 }
 
-                // clean string
+                // trim string
                 while( l>0 ) {
                     if( v[l-1]<=' ' )  {
                         l--;
@@ -224,11 +224,14 @@ int main()
 
 #ifdef	PWII_APP
 
-		// PW recording method
+		// PW recording method (just in case option)
         v=getsetvalue("pw_recordmethod");
         if( v ) {
-            dvrconfig.setvalue( "system", "pw_recordmethod", v );
+            dvrconfig.setvalueint( "system", "pw_recordmethod", 1 );
         }
+        else {
+            dvrconfig.setvalueint( "system", "pw_recordmethod", 0 );
+		}
 
         v=getsetvalue("vehicleid");
         if( v ) {
@@ -285,6 +288,25 @@ int main()
             if( i<0 ) i=0 ;
             if( i>36000 ) i=36000 ;
             dvrconfig.setvalueint( "system", "archivetime", i );
+        }
+        
+        // trace mark event time (in seconds)
+        v = getsetvalue ("tracemarktime");
+        if( v ) {
+			i=0 ;
+            sscanf( v, "%d", &i);
+            if( i<1 ) i=1 ;
+            if( i>7200 ) i=7200 ;
+            dvrconfig.setvalueint( "system", "tracemarktime", i );
+        }
+        
+        // file buffer size
+        v = getsetvalue ("filebuffersize");
+        if( v ) {
+            i=strlen(v);
+            v[i]='k' ;
+            v[i+1]=0 ;
+            dvrconfig.setvalue( "system", "filebuffersize", v );
         }
 
         v = getsetvalue ("file_size");

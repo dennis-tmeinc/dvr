@@ -17,6 +17,9 @@
 #include <pthread.h>
 #include <sys/ioctl.h>
 #include <stdarg.h>
+
+#include "../cfg.h"
+
 #include "../dvrsvr/genclass.h"
 #include "../dvrsvr/cfg.h"
 #include "../ioprocess/diomap.h"
@@ -1343,7 +1346,7 @@ void reloadconfig()
 {
   int i,fd;
   string v ;
-  config dvrconfig("/etc/dvr/dvr.conf");
+  config dvrconfig(CFG_FILE);
   
   // get tab102b serial port setting
   v = dvrconfig.getvalue( "system", "hostname");
@@ -1498,7 +1501,7 @@ void reloadconfig()
 void appinit() {
   int i,fd;
   string v ;
-  config dvrconfig("/etc/dvr/dvr.conf");
+  config dvrconfig( CFG_FILE );
   
   // get tab102b serial port setting
   v = dvrconfig.getvalue( "system", "hostname");

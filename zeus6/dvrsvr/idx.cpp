@@ -1,5 +1,7 @@
 #include "dvr.h"
 
+#include "idx.h"
+
 void rec_index::addopen(int opentime)
 {
     struct rec_index_item idx;

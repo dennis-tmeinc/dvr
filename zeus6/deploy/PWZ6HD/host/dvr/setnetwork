@@ -1,0 +1,26 @@
+#!/bin/sh
+
+cd /davinci/dvr
+
+if [ -e /sys/class/net/eth0 ] ; then
+ifconfig eth0 down
+ifconfig eth0 `cat eth_ip` netmask `cat eth_mask` broadcast `cat eth_broadcast` up
+fi
+
+sleep 1
+
+if [ -e /sys/class/net/wlan0 ] ; then
+	ifconfig wlan0 down
+	ifconfig wlan0 `cat wifi_ip` netmask `cat wifi_mask` broadcast `cat wifi_broadcast` up
+	wpaconf
+	killall -HUP wpa_supplicant
+fi
+
+route del default
+# add multicast route for ip camera detection
+route add -net 224.0.0.0 netmask 240.0.0.0 dev eth0
+
+GW=`cat gateway_1`
+if [ $GW ] ; then
+    route add default gw $GW
+fi

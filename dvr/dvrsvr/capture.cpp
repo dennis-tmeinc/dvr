@@ -293,7 +293,7 @@ void capture::loadconfig()
 int capture::isworking()
 {
     if( m_started ) {
-        return ! ((g_timetick-m_working_time)>60) ;
+        return ((g_timetick-m_working_time)<30000) ;
     }
     else
         return 1 ;
@@ -317,7 +317,6 @@ void capture::onframe(cap_frame * pcapframe)
     }
     
     rec_onframe(pcapframe);
-    
     net_onframe(pcapframe);
     
 //    screen_onframe(pcapframe);
@@ -1236,7 +1235,6 @@ void cap_init(config &dvrconfig)
     int videostandard ;
     int enabled_channels ;
     enabled_channels = 0 ;
-
     // show acceleration value (0: show g-force value)
 
     cap_gsensor_showacc=dvrconfig.getvalueint("io", "gsensor_showacc");

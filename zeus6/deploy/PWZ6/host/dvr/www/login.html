@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+<meta content="Dennis Chen" name="author" />
+<!--#exec cmd="cgi/login" -->
+<link href="js/jquery-ui.css" rel="stylesheet" type="text/css" />
+<script type="text/javascript" src="js/jquery.js"></script>
+<script type="text/javascript" src="js/jquery-ui.js"></script>
+<script type="text/javascript" src="js/eagle3.js"></script>
+<link href="eagle3.css" rel="stylesheet" type="text/css" />
+<script type="text/javascript">
+
+$(document).ready(function(){
+	$("input#login").button();
+	$("input#login").click( function(event) {
+		event.preventDefault();
+		var fdata = $("form#dvrsetup").serializeArray();
+		$.getJSON( "cgi/loginx", fdata, function(r){
+			if( r.res == '1' ) {
+				document.cookie="ser="+r.ser ;
+				window.location="system.html" ;
+			}
+			else {
+				$( ".dialog#dialog_passworderror" ).dialog("open");
+			}
+		});
+	});
+	
+	// initialize Notes dialog
+	$( ".dialog#dialog_passworderror" ).dialog({
+		autoOpen: false,
+		width:"auto",
+		modal: true,
+		buttons:{
+			"OK": function() {
+				$( this ).dialog( "close" );
+			},
+		}
+	});
+
+});
+
+</script>
+<title>User Login</title>
+</head>
+
+<body>
+<!--#include file="header.i"-->
+<!-- Edit Contacts Dialog -->
+<div class="dialog" title="Password Error!" id="dialog_passworderror">
+	You entered a wrong password! Please retry.
+</div>
+
+<p>&nbsp;</p>
+<form id="dvrsetup" enctype="application/x-www-form-urlencoded" method="post" action="login.html">
+<input name="page" value="login" type="hidden" />
+<table>
+
+<tr>
+<td class="col1">User name:</td>
+<td> <input name="login_username" />&nbsp;</td>
+</tr>
+<tr>
+<td class="col1">Password:</td>
+<td> <input name="login_password" type="password" />&nbsp;</td>
+</tr>
+<tr>
+<td></td>
+<td> <input id="login" value="Login" type="submit" />&nbsp;</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>&nbsp;</td>
+<td><br />
+</td>
+</tr>
+<tr>
+<td>&nbsp;</td>
+<td></td>
+</tr>
+
+</table>
+</form>
+
+
+
+</body>
+</html>

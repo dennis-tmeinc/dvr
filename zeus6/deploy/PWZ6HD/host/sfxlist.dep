@@ -1,0 +1,76 @@
+# self extract file 
+sfxrun.dep sfxrun
+
+# file on /davinci
+./boot.sh
+./dosfsck
+./dosfsckcheck
+./mkdosfs
+./vg_boot.sh
+
+# ID 
+./ID
+
+# dvr
+./dvr/firmwareid
+./dvr/tdevd
+./dvr/setnetwork
+./dvr/dvrinit.sh
+./dvr/fw_printenv
+./dvr/ioprocess
+./dvr/tdevmount
+./dvr/cfg
+./dvr/buzzer
+./dvr/arrow.cursor
+./dvr/tab101check
+./dvr/dvrtime
+./dvr/wpa_cli
+./dvr/tab102.sh
+./dvr/lpc21isp
+./dvr/usbcheck
+./dvr/wpa_cli-action.sh
+./dvr/panelled
+./dvr/smartftp
+./dvr/wpaconf
+./dvr/wpa_passphrase
+./dvr/umountdisks
+./dvr/devicepower
+./dvr/md5check
+./dvr/volumeid
+./dvr/tmefile
+./dvr/eaglehost
+./dvr/wpa_supplicant
+./dvr/tab102
+./dvr/passwd
+./dvr/dvrsvr
+./dvr/glog
+./dvr/rconn
+./dvr/zdaemon
+./dvr/adb
+./dvr/tdevhotplug
+./dvr/mount_backup
+./dvr/fat32vol
+./dvr/inetd.conf
+
+# dvr configure files
+./dvr/dvrsvr.conf
+./dvr/adminpasswd
+./dvr/eth_ip
+./dvr/eth_broadcast
+./dvr/eth_mask
+./dvr/wifi_ip
+./dvr/wifi_broadcast
+./dvr/gateway_1
+./dvr/wifi_mask
+
+# www binary
+./dvr/eaglehttpd
+
+# www files (include all subdirs)
+./dvr/www
+
+# original copied firmware
+dvr/lib
+
+#./dvr/drivers.tar.gz
+dvr/drivers

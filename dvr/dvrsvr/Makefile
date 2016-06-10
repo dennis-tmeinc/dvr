@@ -27,6 +27,7 @@ SOURCES=main.cpp \
 		crypt.cpp \
 		dio.cpp \
 		md5.cpp \
+		fifoswap.cpp \
 		screen.cpp
 
 LDFLAGS= -lpthread -lstdc++ -lrt -Wl,-rpath,.
@@ -37,11 +38,11 @@ SOURCES=main.cpp \
 		dvrsvr.cpp \
 		netsvr.cpp \
 		ptz.cpp \
-		record.cpp \
+		recordbig.cpp \
 		capture.cpp \
 		netcapture.cpp \
 		memory.cpp \
-		dvrfile.cpp \
+		dvrfilebig.cpp \
 		playback.cpp \
 		string.cpp \
 		disk.cpp \
@@ -50,6 +51,7 @@ SOURCES=main.cpp \
 		event.cpp \
 		crypt.cpp \
 		dio.cpp \
+		fifoswap.cpp \
 		screen.cpp \
 		md5.cpp \
 		cppinitpatch.cpp \
@@ -70,6 +72,7 @@ HEADERS=dvr.h \
 		config.h \
 		fbwindow.h \
 		draw.h \
+		fifoswap.h \
 		crypt.h \
 		dir.h \
 	../ioprocess/diomap.h \

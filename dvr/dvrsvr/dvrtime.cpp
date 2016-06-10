@@ -17,6 +17,7 @@ void time_init()
     time_inittimezone();
     clock_gettime(CLOCK_MONOTONIC, &tp );
     timetick_ref = tp.tv_sec ;
+    g_timetick = 0 ;
 }
 
 void time_uninit()
@@ -127,24 +128,17 @@ int time_tick()
     return g_timetick ;
 }
 
-void time_now(struct dvrtime *dvrt)
+time_t time_now(struct dvrtime *dvrt)
 {
     time_t t ;
     struct timeval current_time;
     gettimeofday(&current_time, NULL);
     t = (time_t) current_time.tv_sec ;
     if( dvrt ) {
-        struct tm stm ;
-        localtime_r(&t, &stm);
-        dvrt->year = stm.tm_year + 1900 ;
-        dvrt->month = stm.tm_mon + 1 ;
-        dvrt->day = stm.tm_mday ;
-        dvrt->hour = stm.tm_hour ;
-        dvrt->minute = stm.tm_min ;
-        dvrt->second = stm.tm_sec ;
+		time_dvrtimelocal( t, dvrt );
         dvrt->milliseconds=current_time.tv_usec/1000 ;
-        dvrt->tz=0;
     }
+    return t ;
 }
 
 time_t time_utctime(struct dvrtime *dvrt)
@@ -254,6 +248,7 @@ time_t time_dvrtime_init( struct dvrtime *dvrt,
 {
     time_t t ;
     struct tm stm ;
+    memset( &stm, 0, sizeof(stm) );
     stm.tm_year = year - 1900 ;
     stm.tm_mon =  month - 1 ;
     stm.tm_mday = day ;
@@ -277,6 +272,7 @@ time_t time_dvrtime_zerohour( struct dvrtime *dvrt )
 {
     time_t t ;
     struct tm stm ;
+    memset( &stm, 0, sizeof(stm) );
     stm.tm_year = dvrt->year - 1900 ;
     stm.tm_mon = dvrt->month - 1 ;
     stm.tm_mday = dvrt->day ;
@@ -323,7 +319,7 @@ int  time_dvrtime_diff( struct dvrtime *t1, struct dvrtime *t2)
     return ((int)time_timelocal (t1)-(int)time_timelocal (t2)) ;
 }
 
-// difference in seconds (t1-t2)
+// difference in milliseconds (t1-t2)
 int  time_dvrtime_diffms( struct dvrtime *t1, struct dvrtime *t2 )
 {
     int diff ;
@@ -417,36 +413,37 @@ time_t time_timeutc( struct dvrtime * dvrt);
 struct dvrtime * time_dvrtimelocal( time_t t, struct dvrtime * dvrt)
 {
     struct tm stm ;
-    struct tm * ptm ;
-    ptm = localtime_r(&t, &stm);
-    dvrt->year = ptm->tm_year + 1900 ;
-    dvrt->month = ptm->tm_mon + 1 ;
-    dvrt->day = ptm->tm_mday ;
-    dvrt->hour = ptm->tm_hour ;
-    dvrt->minute = ptm->tm_min ;
-    dvrt->second = ptm->tm_sec ;
+    localtime_r(&t, &stm);
+    dvrt->year = stm.tm_year + 1900 ;
+    dvrt->month = stm.tm_mon + 1 ;
+    dvrt->day = stm.tm_mday ;
+    dvrt->hour = stm.tm_hour ;
+    dvrt->minute = stm.tm_min ;
+    dvrt->second = stm.tm_sec ;
     dvrt->milliseconds = 0 ;
+    dvrt->tz = 0 ;
     return dvrt ;
 }
 
 struct dvrtime * time_dvrtimeutc( time_t t, struct dvrtime * dvrt)
 {
     struct tm stm ;
-    struct tm * ptm ;
-    ptm = gmtime_r(&t, &stm);
-    dvrt->year = ptm->tm_year + 1900 ;
-    dvrt->month = ptm->tm_mon + 1 ;
-    dvrt->day = ptm->tm_mday ;
-    dvrt->hour = ptm->tm_hour ;
-    dvrt->minute = ptm->tm_min ;
-    dvrt->second = ptm->tm_sec ;
+    gmtime_r(&t, &stm);
+    dvrt->year = stm.tm_year + 1900 ;
+    dvrt->month = stm.tm_mon + 1 ;
+    dvrt->day = stm.tm_mday ;
+    dvrt->hour = stm.tm_hour ;
+    dvrt->minute = stm.tm_min ;
+    dvrt->second = stm.tm_sec ;
     dvrt->milliseconds = 0 ;
+    dvrt->tz = 0 ;    
     return dvrt ;
 }
 
 time_t time_timelocal( struct dvrtime * dvrt)
 {
     struct tm stm ;
+    memset( &stm, 0, sizeof(stm));
     stm.tm_year = dvrt->year - 1900 ;
     stm.tm_mon = dvrt->month - 1 ;
     stm.tm_mday = dvrt->day ;
@@ -460,6 +457,7 @@ time_t time_timelocal( struct dvrtime * dvrt)
 time_t time_timeutc( struct dvrtime * dvrt)
 {
     struct tm stm ;
+    memset( &stm, 0, sizeof(stm));
     stm.tm_year = dvrt->year - 1900 ;
     stm.tm_mon = dvrt->month - 1 ;
     stm.tm_mday = dvrt->day ;

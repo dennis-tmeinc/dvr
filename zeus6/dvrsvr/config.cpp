@@ -96,7 +96,6 @@ int config::findsection(char *section)
 {
 	int index ;
 	char * key ;
-	int l;
 	if (section == NULL || *section == 0 ) {
 		return 0;
 	}

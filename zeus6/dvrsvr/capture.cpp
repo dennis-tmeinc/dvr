@@ -1,24 +1,54 @@
 
+#include <sys/types.h>
+
 #include "dvr.h"
+   
+#ifdef  ZEUS8
 
-// OSD constants
+static char Dvr264Header[40] = 
+{
+    '\x46', '\x45', '\x4d', '\x54', '\x01', '\x00', '\x04', '\x00',
+    '\x01', '\x00', '\x01', '\x00', '\x02', '\x00', '\x01', '\x08',
+    '\x40', '\x1f', '\x00', '\x00', '\x00', '\xfa', '\x00', '\x00',
+    '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00',
+    '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00'
+};
 
-#define _OSD_BASE		0x9000
-#define	_OSD_YEAR4		_OSD_BASE+0
-#define _OSD_YEAR2		_OSD_BASE+1
-#define _OSD_MONTH3		_OSD_BASE+2
-#define _OSD_MONTH2		_OSD_BASE+3
-#define _OSD_DAY		_OSD_BASE+4
-#define _OSD_WEEK3		_OSD_BASE+5
-#define	_OSD_CWEEK1		_OSD_BASE+6
-#define	_OSD_HOUR24		_OSD_BASE+7
-#define	_OSD_HOUR12		_OSD_BASE+8
-#define	_OSD_MINUTE		_OSD_BASE+9
-#define _OSD_SECOND		_OSD_BASE+10
-#define _OSD_DEGREESIGN '\xf8'
+#else
 
+static char Dvr264Header[40] = 
+{
+    '\x46', '\x45', '\x4d', '\x54', '\x01', '\x00', '\x01', '\x00',
+    '\x01', '\x00', '\x01', '\x00', '\x01', '\x00', '\x01', '\x10',
+    '\x40', '\x1f', '\x00', '\x00', '\x80', '\x3e', '\x00', '\x00',
+    '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00',
+    '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00'
+};
+
+#endif
+   
 int cap_channels;
 capture ** cap_channel;
+    
+// standard resolution table
+struct res_table_t {
+	int w, h ;
+} ;
+
+#define DEF_WIDTH	(720)
+#define DEF_HEIGHT	(480)
+
+static res_table_t restable[] = {
+	{360,240},
+	{720,240},
+	{528,320},
+	{720,480},
+	{176,120},
+	{1280,720},
+	{1920,1080}
+};
+
+#define RESTABLE_SIZE (sizeof(restable)/sizeof(restable[0]))
 
 unsigned int g_ts_base;
 
@@ -55,28 +85,30 @@ capture::capture( int channel )
     m_channel=channel ;
     m_motion=0;
     m_signal=1;			// assume signal is good at beginning
-    m_oldsignal=1;
-    m_enable=0 ;
     m_working=0 ;
     m_streambytes=0 ;
-    m_remoteosd = 0 ;	// local OSD by default
     m_master=1;
-    //add osd starts
-//    mOsdHeadBuf=(OSDHeader*)osdData;
-    mOsdHeadBuf.MagicNum[0]='T';
-    mOsdHeadBuf.MagicNum[1]='X';
-    mOsdHeadBuf.MagicNum[2]='T';
-    mOsdHeadBuf.reserved[0]=0;
-    mOsdHeadBuf.reserved[1]=0;
-    mOsdHeadBuf.reserved[2]=0;
-    mOsdHeadBuf.wOSDSize=0; 
-    mOSDLineNum=0;
-  //  gpsspeed=0;   
-    mOSDChanged=0;
-    mLastOSDTime=0;
-    mOSDNeedUpdate=0;
-    //add osd ends    
+    
+    // physical channel, -1: not used
+    m_phychannel = -1 ;		// not yet enabled
+	m_audiochannel = -1 ;
+    
     loadconfig();
+    
+    // initial default file header
+    memcpy( &m_header, Dvr264Header, 40 );
+	if(m_attr.Resolution >= 0 && m_attr.Resolution < RESTABLE_SIZE ) {
+		m_header.video_width=restable[m_attr.Resolution].w;
+		m_header.video_height=restable[m_attr.Resolution].h ;
+	}
+	else {
+		m_header.video_width=DEF_WIDTH;
+		m_header.video_height=DEF_HEIGHT;
+	}
+	m_header.video_framerate = m_attr.FrameRate ;
+    
+	m_enable = m_attr.Enable ;
+	m_start = 0 ;			// not started
 }
 
 void capture::loadconfig()
@@ -172,12 +204,8 @@ void capture::loadconfig()
     m_attr.hue       =dvrconfig.getvalueint( section, "hue");
 
     m_attr.key_interval = dvrconfig.getvalueint( section, "key_interval" );
-    if( m_attr.key_interval <= 0  || m_attr.key_interval > 400 ) {
-		m_attr.key_interval = 30 ;							// default 30 frames
-		if( m_attr.key_interval > 3*m_attr.FrameRate ) 		// max 3 seconds per key frames
-			m_attr.key_interval = 3*m_attr.FrameRate ;
-		if( m_attr.key_interval < 10 ) 						// minimum 10 frames per key frames
-			m_attr.key_interval = 10 ;
+    if( m_attr.key_interval < 5  || m_attr.key_interval > 500 ) {
+		m_attr.key_interval = 3*m_attr.FrameRate  ;			// default 3 seconds
 	}
     
     m_attr.b_frames = dvrconfig.getvalueint( section, "b_frames" );
@@ -204,78 +232,6 @@ void capture::loadconfig()
     m_motionalarm_pattern = dvrconfig.getvalueint( section, "motionalarmpattern" );
     m_signallostalarm = dvrconfig.getvalueint( section, "videolostalarm" );
     m_signallostalarm_pattern = dvrconfig.getvalueint( section, "videolostalarmpattern" );
-
-    // reset some attr for special 2 version ()
-    int videotype = dvrconfig.getvalueint( section, "videotype" );
-    if( videotype>0 ) {
-        if( videotype==1 ) {                        // best video
-                m_attr.Resolution = 2 ;
-                m_attr.FrameRate =30;
-                m_attr.PictureQuality=6;
-                m_attr.BitrateEn=1;
-                m_attr.BitMode=0 ;
-                m_attr.Bitrate=1000000;
-                m_attr.key_interval=200 ;
-        }
-        else if( videotype==2 ) {                   // Good Video
-                m_attr.Resolution = 2 ;
-                m_attr.FrameRate =30;
-                m_attr.PictureQuality=5;
-                m_attr.BitrateEn=1;
-                m_attr.BitMode=0 ;
-                m_attr.Bitrate=768000;
-                m_attr.key_interval=240 ;
-        }
-        else if( videotype==3 ) {                   // Best Picture
-                m_attr.Resolution = 3 ;
-                m_attr.FrameRate =12;
-                m_attr.PictureQuality=8;
-                m_attr.BitrateEn=1;
-                m_attr.BitMode=0 ;
-                m_attr.Bitrate=1000000;
-                m_attr.key_interval=80 ;
-        }
-        else if( videotype==4 ) {                   // Better Picture
-                m_attr.Resolution = 3 ;
-                m_attr.FrameRate =15;
-                m_attr.PictureQuality=6;
-                m_attr.BitrateEn=1;
-                m_attr.BitMode=0 ;
-                m_attr.Bitrate=1000000;
-                m_attr.key_interval=100 ;
-        }
-        else if( videotype==5 ) {                   // Good Picture
-                m_attr.Resolution = 3 ;
-                m_attr.FrameRate =20;
-                m_attr.PictureQuality=4;
-                m_attr.BitrateEn=1;
-                m_attr.BitMode=0 ;
-                m_attr.Bitrate=1000000;
-                m_attr.key_interval=120 ;
-        }
-        else if( videotype==6 ) {                   // Long Storage Time
-                m_attr.Resolution = 2 ;
-                m_attr.FrameRate =15;
-                m_attr.PictureQuality=5;
-                m_attr.BitrateEn=1;
-                m_attr.BitMode=0 ;
-                m_attr.Bitrate=768000;
-                m_attr.key_interval=180 ;
-        }
-        
-        if( m_channel<2 ) {             // force first two channel to 768kbps
-            if( m_attr.Bitrate>768000 ) {
-                 m_attr.Bitrate=768000;
-            }
-        }
-        
-        if( dvrconfig.getvalueint( section, "cameratype" )==1 ) {                   // Exterial Camera? change resolution to 528x320
-            if (m_attr.Resolution==3 ) {
-                m_attr.Resolution=2 ;
-            }
-        }
-    }
-    
     
 #ifdef TVS_APP
    m_show_medallion=dvrconfig.getvalueint( section, "show_medallion" );
@@ -289,471 +245,182 @@ void capture::loadconfig()
     m_show_policeid=dvrconfig.getvalueint( section, "show_policeid" );
 #endif
 	m_attr.ShowPeak=dvrconfig.getvalueint(section,"show_gforce");
+	
+	m_type = dvrconfig.getvalueint(section,"type");
 
+	// audio route support
+	tmpstr=dvrconfig.getvalue( section, "audiochannel");
+	if( tmpstr.length()>0 ) {
+		sscanf((char*)tmpstr, "%d", &m_audiochannel);
+	}
+
+	if( m_type == CAP_TYPE_HIKLOCAL ) {
+		m_phychannel = dvrconfig.getvalueint(section,"channel") ;
+		if( m_audiochannel < 0 )
+			m_audiochannel = m_phychannel ;
+	}
+	
+}
+    
+void capture::gpsframe()
+{
+    struct cap_frame capframe;
+    char        * gpsData;
+    char          gpsLength=0;
+    struct gps    mGPS;
+
+	//add the gps data if gps data is available
+	get_gps_data(&mGPS);
+	if(mGPS.gps_valid){
+
+		gpsData=(char *)mem_alloc(1024);
+	
+		//gps Tag
+		gpsData[0]='G';
+		gpsData[1]='P';
+		gpsData[2]='S';
+		gpsData[3]='\0';
+		//reserverd 2 bytes
+		gpsData[4]='\0';
+		gpsData[5]='\0';
+			
+		//GPS length;
+		char* pGps=&gpsData[8];
+		int tempLength = sprintf(pGps,"01,%09.6f%c%010.6f%c%.1fD%06.2f",
+			      mGPS.gps_latitude<0.0000000 ? -mGPS.gps_latitude : mGPS.gps_latitude ,
+			      mGPS.gps_latitude<0.0000000 ? 'S' : 'N' ,
+			      mGPS.gps_longitud<0.0000000 ? -mGPS.gps_longitud: mGPS.gps_longitud,
+			      mGPS.gps_longitud<0.0000000 ? 'W' : 'E' ,
+			      (float)(mGPS.gps_speed * 1.852),      // in km/h.
+			      (float)mGPS.gps_direction 		  
+		);
+		pGps[tempLength]='\0';
+		pGps[tempLength+1]='\0';
+		pGps[tempLength+2]='\0';
+		pGps[tempLength+3]='\0';
+		tempLength=((tempLength+3)>>2)<<2;
+
+		unsigned short *mlength=(unsigned short*)&gpsData[6];
+		*mlength=tempLength;
+		gpsLength=tempLength+8;	
+
+		capframe.channel = m_channel ;
+		capframe.framesize = gpsLength ;
+		capframe.frametype = FRAMETYPE_GPS ;
+		capframe.framedata = (char *) gpsData;
+		onframe(&capframe);
+		
+		mem_free( gpsData );		
+	}  
+
+}
+
+void capture::osdframe() 
+{
+    struct cap_frame capframe;
+    char	* osdData;
+    int		osdLength ;    
+
+    osdData = (char *)mem_alloc(2048);
+    
+	osdLength = updateOSD( osdData ) ;
+
+	capframe.channel = m_channel ;     
+	capframe.framesize = osdLength ;
+	capframe.frametype = FRAMETYPE_OSD ;
+	capframe.framedata = osdData;
+	onframe(&capframe);
+	
+	mem_free(osdData);
 }
 
 extern int screen_onframe( cap_frame * capframe );
 
 void capture::onframe(cap_frame * pcapframe)
 {
-//    if( pcapframe->frametype == FRAMETYPE_KEYVIDEO ) {
-//        time_now(&(pcapframe->frametime));
-//    }
     if(pcapframe->frametype==FRAMETYPE_VIDEO||pcapframe->frametype == FRAMETYPE_KEYVIDEO){
-	m_working=10;
+		m_working=20;
     }
     m_streambytes+=pcapframe->framesize ;               // for bitrate calculation
-    
-  //  if(pcapframe->frametype!=FRAMETYPE_AUDIO)
+    pcapframe->channel = m_channel ;
+
+	// to generate OSD frames, would be different on HIK channel and HDIP channel
+	if( pcapframe->frametype == FRAMETYPE_KEYVIDEO || 
+		pcapframe->frametype == FRAMETYPE_VIDEO  ) 
+	{
+
+		time_t t = time(NULL);
+		if( t!= m_osdtime ) {
+			// generate OSD frame
+			osdframe();
+			m_osdtime = t ;
+		}
+	}
+	
+//	if( pcapframe->frametype == FRAMETYPE_KEYVIDEO ) {
+//		 gpsframe();
+//	}
+
     net_onframe(pcapframe);
     rec_onframe(pcapframe);  
-  //  screen_onframe(pcapframe);                          // testing
 }
 
 // periodic update procedure. (every 0.125 second)
-void capture::update(int updosd)
+// 		to update  signal, motion, osd , etc
+void capture::update()
 {  
-#if 0  
-    if( updosd ) {
-        // update OSD
-        updateOSD();
-    }
-#else
-    
-    //static int mlastsecond=0;
-    //int osdneed;
-    //struct dvrtime newtime;
-    //time_now(&newtime); 
-    //if(newtime.second!=mlastsecond){
-    //   osdneed=1;
-    //   mlastsecond=newtime.second;
-    //}
-    
-    if( updosd) {
-        // update OSD
-	//mOSDChanged=1;
-	//dvr_log("channel:%d update OSD",m_channel);
-	//isOSDChanged();
-	mOSDNeedUpdate=1;
-       // updateOSD1();
-    } 
-#endif
-    if( m_oldsignal!=m_signal ) {
-	if( dio_standby_mode == 0 ) {				// don't record video lost event in standby mode. (Requested by Harrison)
-	        dvr_log("Camera %d video signal %s.", m_channel, m_signal?"on":"lost");
-	}
-        m_oldsignal=m_signal ;
-    }
-  
+	if( event_serialno % 13 == 0 ) {
+		int v = vsignal();
+		if( m_signal != v ) {
+			m_signal = v ;
+			if( !dio_standby_mode ) {				// don't record video lost event in standby mode. (Requested by Harrison)
+				dvr_log("Camera %d video signal %s.", m_channel+1, m_signal?"on":"lost");
+			}		
+		}
+		
+		v = vmotion();
+		if( m_motion != v ) {
+			m_motion = v ;
+//			if( v ) {
+//					dvr_log("Camera %d motion detected!", m_channel+1 );
+//			}
+		}
+		
+	}; 
 }
-
-#ifdef MDVR_APP_ORG
-void capture::updateOSD1(){
-    char * k ;
-    int i, j ;
-    int mLSize=0;
-    int mOSDSize=0;
-    char osdbuf[128] ;
-    int  osdlines3_x = 160 ;
-    int  osdlines3_y = 440 ;
-    float  gps_speed=0.0;
-    struct dvrtime newtime;
-    time_now(&newtime);
-    
-	// printf("updateOSD1\n");
-   
-    mOSDLineNum=0;
-    mOsdHeadBuf.wOSDSize=0;
-////////////////////////////////////////
-    mLSize=0;
-    mOSDLine[mOSDLineNum].MagicNum[0]='s';
-    mOSDLine[mOSDLineNum].MagicNum[1]='t';
-    mOSDLine[mOSDLineNum].reserved[0]=0;
-    mOSDLine[mOSDLineNum].reserved[1]=0;
-    mOSDLine[mOSDLineNum].reserved[3]=0;
-    mOSDLine[mOSDLineNum].reserved[4]=0;
-    mOSDLine[mOSDLineNum].OSDText[0]=ALIGN_LEFT|ALIGN_TOP;
-    mOSDLine[mOSDLineNum].OSDText[1]=8;
-    mOSDLine[mOSDLineNum].OSDText[2]=4;
-    mOSDLine[mOSDLineNum].OSDText[3]=0;
-    mLSize=4;
-    // Show Host Name
-    k=g_hostname ;
-    while( *k ) {
-        mOSDLine[mOSDLineNum].OSDText[mLSize++] = * k++;
-    }
-    mOSDLine[mOSDLineNum].OSDText[mLSize++] = ' ';
-    mOSDLine[mOSDLineNum].OSDText[mLSize++] = ' ';
-    // Show Camera name
-    k=m_attr.CameraName; //&cameraname[0];
-     while( *k ) {
-        mOSDLine[mOSDLineNum].OSDText[mLSize++] = * k++;
-    }
-    mOSDLine[mOSDLineNum].OSDText[mLSize++] = ' ';
-    mOSDLine[mOSDLineNum].OSDText[mLSize++] = ' ';
-    mOSDLine[mOSDLineNum].OSDText[mLSize++] = ' ';
-    mOSDLine[mOSDLineNum].OSDText[mLSize++] = ' ';
-    
-    ///////////////////////////////////////////////////////////////
-   // printf("GPS_enable:%d showgps:%d speed:%f\n",m_attr.GPS_enable,m_attr.ShowGPS,g_gpsspeed);
-    if( m_attr.GPS_enable && m_attr.ShowGPS && g_gpsspeed>-0.1) {
-
-        if( m_attr.GPSUnit ) {			// kmh or mph
-	    gps_speed=g_gpsspeed * 1.852;
-	    if(gps_speed<3.22)
-	       gps_speed=0.0;
-            sprintf( osdbuf, "%.1f km/h", gps_speed );
-        }
-        else {
-	    gps_speed=g_gpsspeed * 1.150779;
-	    if(gps_speed<2.0)
-	      gps_speed=0.0;
-            sprintf( osdbuf, "%.1f mph", gps_speed );
-        }
-        k=osdbuf ;
-        while( *k ) {
-            mOSDLine[mOSDLineNum].OSDText[mLSize++] = * k++;
-        }
-    }   
-    ///////////////////////////////////////////////////////////////
-    mOSDLine[mOSDLineNum].OSDText[mLSize++] = '\n';
-    mOSDLine[mOSDLineNum].wLineSize=mLSize;
-    mOSDLineNum++;
-    mOSDSize+=8+mLSize;
-     //////////////////////////////////////////////////////
-    //second OSD Line
-    mOSDLine[mOSDLineNum].MagicNum[0]='s';
-    mOSDLine[mOSDLineNum].MagicNum[1]='t';
-    mOSDLine[mOSDLineNum].reserved[0]=0;
-    mOSDLine[mOSDLineNum].reserved[1]=0;
-    mOSDLine[mOSDLineNum].reserved[3]=0;
-    mOSDLine[mOSDLineNum].reserved[4]=0;
-    mOSDLine[mOSDLineNum].OSDText[0]=ALIGN_LEFT|ALIGN_TOP;
-    mOSDLine[mOSDLineNum].OSDText[1]=8;
-    mOSDLine[mOSDLineNum].OSDText[2]=28;
-    mOSDLine[mOSDLineNum].OSDText[3]=0;
-    mLSize=4;
-    // date and time
-    sprintf(osdbuf,
-                "%02d/%02d/%04d %02d:%02d:%02d", 
-                 newtime.month,
-                 newtime.day,
-                 newtime.year,
-                 newtime.hour,
-                 newtime.minute,
-                 newtime.second
-    );
-    k=osdbuf ;
-    while( *k ) {
-       mOSDLine[mOSDLineNum].OSDText[mLSize++] = * k++;
-    }
-    mOSDLine[mOSDLineNum].OSDText[mLSize++] = ' ';
-    mOSDLine[mOSDLineNum].OSDText[mLSize++] = ' ';
-   
-   // Show trigger name, if triggered
-    for(j=0; j<num_sensors; j++) {
-        if( m_sensorosd & (1<<j) ) {
-            if( sensors[j]->value() ) {
-                k=sensors[j]->name() ;
-                while( *k ) {
-                     mOSDLine[mOSDLineNum].OSDText[mLSize++] = * k++;
-                }
-                mOSDLine[mOSDLineNum].OSDText[mLSize++] = ' ';
-                if( mLSize>120 ) {
-                    break;
-                }
-            }
-        }
-    }
-
-    mOSDLine[mOSDLineNum].OSDText[mLSize++] = '\n';
-    mOSDLine[mOSDLineNum].wLineSize=mLSize;
-    mOSDLineNum++;
-    mOSDSize+=8+mLSize;
-    ////////////////////////////////////////////////////////////////
-    //third osd
-   // printf("GPS_enable:%d showgpslocation:%d\n",m_attr.GPS_enable,m_attr.showgpslocation);
-    if( m_attr.GPS_enable && m_attr.showgpslocation ) {
-        double lati, longi ;
-        if( gps_location (&lati, &longi) ) {	
-            int east, north ;	  
-	    mOSDLine[mOSDLineNum].MagicNum[0]='s';
-	    mOSDLine[mOSDLineNum].MagicNum[1]='t';
-	    mOSDLine[mOSDLineNum].reserved[0]=0;
-	    mOSDLine[mOSDLineNum].reserved[1]=0;
-	    mOSDLine[mOSDLineNum].reserved[3]=0;
-	    mOSDLine[mOSDLineNum].reserved[4]=0;
-	    mOSDLine[mOSDLineNum].OSDText[0]=ALIGN_LEFT|ALIGN_BOTTOM;
-	    mOSDLine[mOSDLineNum].OSDText[1]=8 ;
-	    mOSDLine[mOSDLineNum].OSDText[2]=8;
-	    mOSDLine[mOSDLineNum].OSDText[3]=0;
-	    mLSize=4;	  
-	  
-            if( lati>=0.0 ) {
-                north='N' ;
-            }
-            else {
-                lati=-lati ;
-                north='S' ;
-            }
-            if( longi>=0.0 ) {
-                east='E' ;
-            }
-            else {
-                longi=-longi ;
-                east='W' ;
-            }
-
-            int ladeg, lamin, lasecond ;
-            int lodeg, lomin, losecond ;
-            ladeg = (int) lati ;
-            lati -= (double)ladeg ;
-            lamin = (int)(lati*60) ;
-            lati -= ((double)lamin)/60.0 ;
-            lasecond = (int)(lati*3600) ;
-            lodeg = (int) longi ;
-            longi -= (double)lodeg ;
-            lomin = (int)(longi*60) ;
-            longi -= ((double)lomin)/60.0 ;
-            losecond = (int)(longi*3600) ;
-            
-            sprintf( osdbuf, "%d\xba%02d\'%02d\"%c %d\xba%02d\'%02d\"%c", 
-                    ladeg, lamin, lasecond, north,
-                    lodeg, lomin, losecond, east );
-            k=osdbuf ;
-            while( *k ) {
-                 mOSDLine[mOSDLineNum].OSDText[mLSize++] = * k++;
-            }
-            mOSDLine[mOSDLineNum].OSDText[mLSize++] = ' ';
-
-            mOSDLine[mOSDLineNum].OSDText[mLSize++] = '\n';
-            mOSDLine[mOSDLineNum].wLineSize=mLSize;
-            mOSDLineNum++;
-            mOSDSize+=8+mLSize;
-        }
-    }
-    //Forth Line
- 
-    //show G_FORCE 
-    if(m_attr.ShowPeak &&isPeakChanged()){
-        mLSize=0;
-	mOSDLine[mOSDLineNum].MagicNum[0]='s';
-	mOSDLine[mOSDLineNum].MagicNum[1]='t';
-	mOSDLine[mOSDLineNum].reserved[0]=0;
-	mOSDLine[mOSDLineNum].reserved[1]=0;
-	mOSDLine[mOSDLineNum].reserved[3]=0;
-	mOSDLine[mOSDLineNum].reserved[4]=0;
-	mOSDLine[mOSDLineNum].OSDText[0]=ALIGN_LEFT|ALIGN_BOTTOM;
-	mOSDLine[mOSDLineNum].OSDText[1]=8;
-	mOSDLine[mOSDLineNum].OSDText[2]=32;
-	mOSDLine[mOSDLineNum].OSDText[3]=0;
-	mLSize=4;        
-	//sprintf( osdbuf, "    F%5.2lf,R%5.2lf,D%5.2lf", g_fb, g_lr, g_ud);
-	sprintf( osdbuf, "    %c%5.2lf,%c%5.2lf,%c%5.2lf",
-		  g_fb>=0.0?'F':'B',
-		  g_fb>=0.0?g_fb:-g_fb,
-		  g_lr>=0.0?'R':'L',
-		  g_lr>=0.0?g_lr:-g_lr, 
-		  g_ud>=1.0?'D':'U',
-		  g_ud>=1.0? (g_ud-1):(1-g_ud));
-	k=osdbuf ;
-	while( *k ) {
-	  mOSDLine[mOSDLineNum].OSDText[mLSize++] = * k++;
-	}       
-        mOSDLine[mOSDLineNum].OSDText[mLSize++] = ' ';
-        mOSDLine[mOSDLineNum].OSDText[mLSize++] = ' '; 	
-        mOSDLine[mOSDLineNum].OSDText[mLSize++] = '\n';
-	mOSDLine[mOSDLineNum].wLineSize=mLSize;
-	mOSDLineNum++;
-	mOSDSize+=8+mLSize;             
-    }  
-    mOsdHeadBuf.wOSDSize=mOSDSize;
-    return;  
-}
-#endif // MDVR_APP_ORG
-
-void capture::OSD1_line(char * text, int align, int posx, int posy)
-{
-    int mLSize=4;
-    mOSDLine[mOSDLineNum].MagicNum[0]='s';
-    mOSDLine[mOSDLineNum].MagicNum[1]='t';
-    mOSDLine[mOSDLineNum].reserved[0]=0;
-    mOSDLine[mOSDLineNum].reserved[1]=0;
-    mOSDLine[mOSDLineNum].reserved[3]=0;
-    mOSDLine[mOSDLineNum].reserved[4]=0;
-    mOSDLine[mOSDLineNum].OSDText[0]=align;
-    mOSDLine[mOSDLineNum].OSDText[1]=posx;
-    mOSDLine[mOSDLineNum].OSDText[2]=posy;
-    mOSDLine[mOSDLineNum].OSDText[3]=0;
-
-    while( *text && mLSize<126 ) {
-       mOSDLine[mOSDLineNum].OSDText[mLSize++] = * text++;
-    }
-
-    mOSDLine[mOSDLineNum].OSDText[mLSize++] = '\n';
-    mOSDLine[mOSDLineNum].wLineSize=mLSize;
-    
-	 mOSDLineNum++;
-	 mOsdHeadBuf.wOSDSize+=8+mLSize;             
-}
-
-#ifdef TVS_APP
-
-void capture::updateOSD1(){
-    int l, j ;
-    char osdbuf[256] ;
-
-   // init OSD
-    mOSDLineNum=0;
-    mOsdHeadBuf.wOSDSize=0;
-    
-    //////////////////////////////////////////////////////
-    // first OSD Line
-    // show medallion and license plate number
-    if( m_show_medallion || m_show_licenseplate ) {
-        sprintf( osdbuf, "%-20s %20s",
-            m_show_medallion?g_id1:"",
-            m_show_licenseplate?g_id2:"" );
- 	     OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_TOP, 8, 4 );
-    }
-
-  
-    //////////////////////////////////////////////////////
-    // second OSD Line
-    // show IVCS and/or camera serial no
-    if( m_show_ivcs || m_show_cameraserial ) {
-        sprintf( osdbuf, "%-20s %18s %c",
-            m_show_ivcs?g_serial : " ",
-            m_show_cameraserial? m_attr.CameraName : " ",
-            m_motion?'*':' ');
- 	     OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_TOP, 8, 28 );
-    }
-        
-    //////////////////////////////////////////////////////
-    // third OSD Line  (the first bottom up)
-    // Date/time and sensor ( always display )
-    struct dvrtime newtime;
-    time_now(&newtime);    
-    sprintf(osdbuf,
-                "%02d/%02d/%04d %02d:%02d:%02d  ", 
-                 newtime.month,
-                 newtime.day,
-                 newtime.year,
-                 newtime.hour,
-                 newtime.minute,
-                 newtime.second
-    );
-   
-	// Show trigger name, if triggered
-    for(j=0; j<num_sensors; j++) {
-        if( m_sensorosd & (1<<j) ) {
-            if( sensors[j]->value() ) {
-            	 l=strlen(osdbuf);
-            	 sprintf( osdbuf+l, "%s ", sensors[j]->name() );
-            }
-        }
-    }
-    OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 8 );
-
-            
-    //////////////////////////////////////////////////////
-    // forth OSD Line ( the second buttom up)
-    // GPS
-	if( m_attr.GPS_enable ) {
-		osdbuf[0]=0 ;
-		if( m_attr.showgpslocation ) {
-			double lati, longi ;
-			if( gps_location (&lati, &longi) ) {	
-				int east, north ;	  
-		  
-            if( lati>=0.0 ) {
-                north='N' ;
-            }
-            else {
-                lati=-lati ;
-                north='S' ;
-            }
-            if( longi>=0.0 ) {
-                east='E' ;
-            }
-            else {
-                longi=-longi ;
-                east='W' ;
-            }
-	
-            int ladeg, lamin, lasecond ;
-            int lodeg, lomin, losecond ;
-            ladeg = (int) lati ;
-            lati -= (double)ladeg ;
-            lamin = (int)(lati*60) ;
-            lati -= ((double)lamin)/60.0 ;
-            lasecond = (int)(lati*3600) ;
-            lodeg = (int) longi ;
-            longi -= (double)lodeg ;
-            lomin = (int)(longi*60) ;
-            longi -= ((double)lomin)/60.0 ;
-            losecond = (int)(longi*3600) ;
-            
-            sprintf( osdbuf, "%d\xba%02d\'%02d\"%c %d\xba%02d\'%02d\"%c ", 
-                    ladeg, lamin, lasecond, north,
-                    lodeg, lomin, losecond, east );
-			}
-	   }
-	         
-		if( m_attr.ShowGPS && g_gpsspeed>-0.1 ) {
-			float  gps_speed=0.0;
-     		l = strlen(osdbuf);
-		   if( m_attr.GPSUnit ) {			// kmh or mph
-				gps_speed=g_gpsspeed * 1.852;
-				if(gps_speed<3.22)
-					gps_speed=0.0;
-
-				sprintf( osdbuf+l, "%.1f km/h", gps_speed );
-		   }
-		   else {
-				gps_speed=g_gpsspeed * 1.150779;
-				if(gps_speed<2.0)
-					gps_speed=0.0;
-
-				sprintf( osdbuf+l, "%.1f mph", gps_speed );
-			}           	
-	   }
-           
-		OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 32 );
-	}
-
-
-	
-
-    //////////////////////////////////////////////////////
-    // fifth OSD Line (the third buttom up)
-    // g-force value
-    if(m_attr.ShowPeak &&isPeakChanged()){
-		sprintf( osdbuf, "%c%5.2lf,%c%5.2lf,%c%5.2lf  ",
-		  g_fb>=0.0?'F':'B',
-		  g_fb>=0.0?g_fb:-g_fb,
-		  g_lr>=0.0?'R':'L',
-		  g_lr>=0.0?g_lr:-g_lr, 
-		  g_ud>=1.0?'D':'U',
-		  g_ud>=1.0? (g_ud-1):(1-g_ud));
-
-    	OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 56 );
-    }  
-
-    
-}
-#endif   // TVS_APP
-
-
+		
 #ifdef PWII_APP
-void capture::updateOSD1(){
-    int l, j, n ;
-    char osdbuf[256] ;
 
-   // init OSD
-    mOSDLineNum=0;
-    mOsdHeadBuf.wOSDSize=0;
-    
+static int osd_line(char * line, char *text, int align, int posx, int posy)
+{
+	int lsize ;
+	line[0] = 's' ;
+	line[1] = 't' ;
+	line[2] = 0 ;
+	line[8] = align ;
+	line[9] = posx ;
+	line[10] = posy ;
+	line[11] = 0 ;
+	
+	lsize = strlen(text);
+	memcpy( line+12, text, lsize);
+	if(lsize&1) {
+		line[ lsize+12 ] = ' ' ; 	// fill with blank
+		lsize++ ;
+	}
+	
+	*(short *)(line+6) = lsize+4 ;
+	return lsize+12 ;
+}
+
+int capture::updateOSD( char * osd ) 
+{
+	int i, j, l;
+	char * osdline ;
+    char osdbuf[256] ;	
+	
+	osdline = osd+8 ;			// first osdline
+	
     // first OSD Line, date/time and Police id
     struct dvrtime newtime;
     time_now(&newtime);    
@@ -765,11 +432,11 @@ void capture::updateOSD1(){
                  newtime.hour,
                  newtime.minute,
                  newtime.second ) ;
-    OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_TOP, 8, 4 );
+    osdline+=osd_line( osdline, osdbuf, ALIGN_LEFT|ALIGN_TOP, 8, 8 );
     
     // first OSD Line right, Police id
     sprintf(osdbuf,"%s", m_show_policeid?g_policeid:"" ) ;
-    OSD1_line( osdbuf, ALIGN_RIGHT|ALIGN_TOP, 8, 4 );
+    osdline+=osd_line( osdline, osdbuf, ALIGN_RIGHT|ALIGN_TOP, 16, 8 );
 
 	// second line, GPS
 	if( m_attr.GPS_enable ) {
@@ -831,7 +498,7 @@ void capture::updateOSD1(){
 				sprintf( osdbuf+l, "%.1f mph", gps_speed );
 			}           	
 	   }
-		OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_TOP, 8, 28 );
+		osdline+=osd_line( osdline, osdbuf, ALIGN_LEFT|ALIGN_TOP, 8, 36 );
 	}
 	
 	// line 2 right, g-force value
@@ -845,358 +512,48 @@ void capture::updateOSD1(){
 		  g_ud>=1.0?'D':'U',
 		  g_ud>=1.0? (g_ud-1):(1-g_ud));
     }
-   	OSD1_line( osdbuf, ALIGN_RIGHT|ALIGN_TOP, 8, 28 );
+   	osdline+=osd_line( osdline, osdbuf, ALIGN_RIGHT|ALIGN_TOP, 16, 36 );
 
     // 3rd line, sensors
-    osdbuf[0]=0 ;
+    l=0;
     if( m_motion ) {
-		osdbuf[0]='*' ;
+		osdbuf[l++]='*' ;
+		osdbuf[l++]=' ' ;
 	}
-	else {
-		osdbuf[0]=' ' ;
+	if( event_tm ) {
+		l+=sprintf( osdbuf+l, "TraceMark " );
 	}
-    osdbuf[1]=' ' ;
-    osdbuf[2]=0 ;
     for(j=0; j<num_sensors; j++) {
         if( m_sensorosd & (1<<j) ) {
             if( sensors[j]->value() ) {
-            	 l=strlen(osdbuf);
-            	 sprintf( osdbuf+l, "%s ", sensors[j]->name() );
+            	 l+=sprintf( osdbuf+l, "%s ", sensors[j]->name() );
             }
         }
     }
-    OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 28 );
+    osdbuf[l] = 0 ;
+    osdline+=osd_line( osdline, osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 36 );
 
     // line 4, camera name
     sprintf( osdbuf, "%s", m_attr.CameraName );
-    OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 8 );
+    osdline+=osd_line( osdline, osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 8 );
 
     // line 4 right, VRI
 	sprintf( osdbuf, "%s", m_show_vri?g_vri:" " );           // optional VRI(video referrence id)
-	OSD1_line( osdbuf, ALIGN_RIGHT|ALIGN_BOTTOM, 8, 8 );
+	osdline+=osd_line( osdline, osdbuf, ALIGN_RIGHT|ALIGN_BOTTOM, 16, 8 );
 
+	// osd header
+	osd[0] = 'T' ;
+	osd[1] = 'X' ;
+	osd[2] = 'T' ;
+	osd[3] = 0 ;
+	
+	* (short *)(osd+6) = (osdline - osd) - 8 ;
+	
+	return (osdline - osd) ;
 }
 
 #endif   // PWII_APP
 
-
-#ifdef MDVR_APP
-void capture::updateOSD1(){
-    int l, j ;
-    char osdbuf[256] ;
-
-   // init OSD
-    mOSDLineNum=0;
-    mOsdHeadBuf.wOSDSize=0;
-    
-    // line 0
-    sprintf( osdbuf, "%s  %s  ", g_hostname, m_attr.CameraName );
-    ///////////////////////////////////////////////////////////////
-   // printf("GPS_enable:%d showgps:%d speed:%f\n",m_attr.GPS_enable,m_attr.ShowGPS,g_gpsspeed);
-    if( m_attr.GPS_enable && m_attr.ShowGPS && g_gpsspeed>-0.1) {
-
-	    float  gps_speed=0.0;
-	        	
-		 l = strlen(osdbuf);
-		 
-        if( m_attr.GPSUnit ) {			// kmh or mph
-	    gps_speed=g_gpsspeed * 1.852;
-	    if(gps_speed<3.22)
-	       gps_speed=0.0;
-            sprintf( osdbuf+l, "%.1f km/h", gps_speed );
-        }
-        else {
-	    gps_speed=g_gpsspeed * 1.150779;
-	    if(gps_speed<2.0)
-	      gps_speed=0.0;
-            sprintf( osdbuf+l, "%.1f mph", gps_speed );
-        }
-    }   
-    OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_TOP, 8, 4 );
-
-
-     //////////////////////////////////////////////////////
-    //second OSD Line
-    // date and time
-    struct dvrtime newtime;
-    time_now(&newtime);    
-    sprintf(osdbuf,
-                "%02d/%02d/%04d %02d:%02d:%02d  ", 
-                 newtime.month,
-                 newtime.day,
-                 newtime.year,
-                 newtime.hour,
-                 newtime.minute,
-                 newtime.second
-    );
-   
-   // Show trigger name, if triggered
-    for(j=0; j<num_sensors; j++) {
-        if( m_sensorosd & (1<<j) ) {
-            if( sensors[j]->value() ) {
-            	 l=strlen(osdbuf);
-            	 sprintf( osdbuf+l, "%s ", sensors[j]->name() );
-            }
-        }
-    }
-    OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_TOP, 8, 28 );
-    
-    ////////////////////////////////////////////////////////////////
-    //third osd
-    // printf("GPS_enable:%d showgpslocation:%d\n",m_attr.GPS_enable,m_attr.showgpslocation);
-    if( m_attr.GPS_enable && m_attr.showgpslocation ) {
-        double lati, longi ;
-        if( gps_location (&lati, &longi) ) {	
-            int east, north ;	  
-	  
-            if( lati>=0.0 ) {
-                north='N' ;
-            }
-            else {
-                lati=-lati ;
-                north='S' ;
-            }
-            if( longi>=0.0 ) {
-                east='E' ;
-            }
-            else {
-                longi=-longi ;
-                east='W' ;
-            }
-
-            int ladeg, lamin, lasecond ;
-            int lodeg, lomin, losecond ;
-            ladeg = (int) lati ;
-            lati -= (double)ladeg ;
-            lamin = (int)(lati*60) ;
-            lati -= ((double)lamin)/60.0 ;
-            lasecond = (int)(lati*3600) ;
-            lodeg = (int) longi ;
-            longi -= (double)lodeg ;
-            lomin = (int)(longi*60) ;
-            longi -= ((double)lomin)/60.0 ;
-            losecond = (int)(longi*3600) ;
-            
-            sprintf( osdbuf, "%d\xba%02d\'%02d\"%c %d\xba%02d\'%02d\"%c ", 
-                    ladeg, lamin, lasecond, north,
-                    lodeg, lomin, losecond, east );
-		    	OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 8 );
-        }
-    }
-    
-    
-    //Forth Line
- 
-    //show G_FORCE 
-    if(m_attr.ShowPeak &&isPeakChanged()){
-		sprintf( osdbuf, "    %c%5.2lf,%c%5.2lf,%c%5.2lf  ",
-		  g_fb>=0.0?'F':'B',
-		  g_fb>=0.0?g_fb:-g_fb,
-		  g_lr>=0.0?'R':'L',
-		  g_lr>=0.0?g_lr:-g_lr, 
-		  g_ud>=1.0?'D':'U',
-		  g_ud>=1.0? (g_ud-1):(1-g_ud));
-    	OSD1_line( osdbuf, ALIGN_LEFT|ALIGN_BOTTOM, 8, 32 );
-    }  
-
-    return;  
-}
-#endif   // MDVR_APP
-
-
-#if 0
-static int  osdbrightness = 240 ;
-static int  osdtranslucent = 0 ;
-static int  osdtwinkle = 1 ;
-static int  osdlines = 2 ;
-static int  osdlines3_x = 20; //160 ;
-static int  osdlines3_y = 440 ;
-
-void capture::updateOSD()
-{
-    char * k ;
-    int i, j ;
-    float gps_speed=0;
-    char osdbuf[128] ;
-    struct hik_osd_type	osd ;
-    
-    if( !m_enable || m_remoteosd ) {
-        return ;
-    }
-    
- //   dvr_log("inside update OSD");
-    osd.brightness = osdbrightness ;
-    osd.translucent = osdtranslucent ;
-    osd.twinkle = osdtwinkle  ;
-    osd.lines = osdlines ;
-    
-    // prepare line 1
-    i=0; 
-    osd.osdline[0][i++]=8 ;           // x position
-    osd.osdline[0][i++]=4 ;           // y position
-    // Show Host Name
-    k=g_hostname ;
-    while( *k ) {
-        osd.osdline[0][i++] = * k++ ;
-    }
-    osd.osdline[0][i++] = ' ' ;
-    osd.osdline[0][i++] = ' ' ;
-    
-    // Show Camera name
-    k=m_attr.CameraName;
-    while( *k) {
-        osd.osdline[0][i++] = * k++ ;
-    }
-    osd.osdline[0][i++] = ' ' ;
-    osd.osdline[0][i++] = ' ' ;
-    
-    if( m_motion ){
-        osd.osdline[0][i++] = '*' ;
-    }
-    else {
-        osd.osdline[0][i++] = ' ' ;
-    }
-    
-    osd.osdline[0][i++] = ' ' ;
-    
-    if( m_attr.GPS_enable && m_attr.ShowGPS && g_gpsspeed>-0.1) {
-#if 0      
-        if( m_attr.GPSUnit ) {			// kmh or mph
-            sprintf( osdbuf, "%.1f km/h", g_gpsspeed * 1.852 );
-        }
-        else {
-            sprintf( osdbuf, "%.1f mph", g_gpsspeed * 1.150779 );
-        }
-#else
-        if( m_attr.GPSUnit ) {			// kmh or mph
-	    gps_speed=g_gpsspeed * 1.852;
-	    if(gps_speed<3.22)
-	       gps_speed=0.0;
-            sprintf( osdbuf, "%.1f km/h", gps_speed );
-        }
-        else {
-	    gps_speed=g_gpsspeed * 1.150779;
-	    if(gps_speed<2.0)
-	      gps_speed=0.0;
-            sprintf( osdbuf, "%.1f mph", gps_speed );
-        }
-#endif        
-        k=osdbuf ;
-        while( *k ) {
-            osd.osdline[0][i++] = * k++ ;
-        }
-    }
-    
-    if(m_attr.ShowPeak &&isPeakChanged()){
-      // dvr_log("peak changed:%d",isPeakChanged());
-       osd.osdline[0][i++]=' ' ;         
-       osd.osdline[0][i++]=' ' ;         
-       sprintf( osdbuf, "    %c%0.2f,%c%0.2f,%c%0.2f",
-		  g_fb>=0.0?'F':'B',
-		  g_fb>=0.0?g_fb:-g_fb,
-		  g_lr>=0.0?'R':'L',
-		  g_lr>=0.0?g_lr:-g_lr, 
-		  g_ud>=1.0?'D':'U',
-		  g_ud>=1.0 ? (g_ud-1.0):(1.0-g_ud));  
-     //   dvr_log("osd:%s",osdbuf);
-        k=osdbuf ;
-	while( *k ) {
-	    osd.osdline[0][i++] = *k++ ;
-	}
-	osd.osdline[0][i++]=' ' ;            
-    }
-    osd.osdline[0][i] = 0;          // null terminate
-    
-    // prepare line 2
-    i=0;
-    osd.osdline[1][i++]=8 ;           // x position
-    osd.osdline[1][i++]=28 ;          // y position
-
-    // date and time
-    osd.osdline[1][i++]=_OSD_MONTH2 ;          // Month
-    osd.osdline[1][i++]='/' ;          
-    osd.osdline[1][i++]=_OSD_DAY ;          // Day
-    osd.osdline[1][i++]='/' ;         
-    osd.osdline[1][i++]=_OSD_YEAR4 ;          // 4 digit year
-    osd.osdline[1][i++]=' ' ;          
-    osd.osdline[1][i++]=_OSD_HOUR24 ;          // 24 hour
-    osd.osdline[1][i++]=':' ;        
-    osd.osdline[1][i++]=_OSD_MINUTE ;          // Minute
-    osd.osdline[1][i++]=':' ;          
-    osd.osdline[1][i++]=_OSD_SECOND ;          // Second
-    osd.osdline[1][i++]=' ' ;         
-    osd.osdline[1][i++]=' ' ;         
-    
-    // Show trigger name, if triggered
-    for(j=0; j<num_sensors; j++) {
-        if( m_sensorosd & (1<<j) ) {
-            if( sensors[j]->value() ) {
-                k=sensors[j]->name() ;
-                while( *k ) {
-                    osd.osdline[1][i++] = *k++ ;
-                }
-                osd.osdline[1][i++]=' ' ;
-                if( i>120 ) {
-                    break;
-                }
-            }
-        }
-    }
-    
-    osd.osdline[1][i]=0 ;
-    
-    // prepare line 3
-    i=0;
-    osd.osdline[2][i++]= osdlines3_x ;
-    osd.osdline[2][i++]= osdlines3_y ;          
-
-    if( m_attr.GPS_enable && m_attr.showgpslocation ) {
-        double lati, longi ;
-        if( gps_location (&lati, &longi) ) {
-            int east, north ;
-            if( lati>=0.0 ) {
-                north='N' ;
-            }
-            else {
-                lati=-lati ;
-                north='S' ;
-            }
-            if( longi>=0.0 ) {
-                east='E' ;
-            }
-            else {
-                longi=-longi ;
-                east='W' ;
-            }
-
-            int ladeg, lamin, lasecond ;
-            int lodeg, lomin, losecond ;
-            ladeg = (int) lati ;
-            lati -= (double)ladeg ;
-            lamin = (int)(lati*60) ;
-            lati -= ((double)lamin)/60.0 ;
-            lasecond = (int)(lati*3600) ;
-            lodeg = (int) longi ;
-            longi -= (double)lodeg ;
-            lomin = (int)(longi*60) ;
-            longi -= ((double)lomin)/60.0 ;
-            losecond = (int)(longi*3600) ;
-            sprintf( osdbuf, "%d\xf8%02d\'%02d\"%c %d\xf8%02d\'%02d\"%c", 
-                    ladeg, lamin, lasecond, north,
-                    lodeg, lomin, losecond, east );    
-            k=osdbuf ;
-            while( *k ) {
-                osd.osdline[2][i++] = * k++ ;
-            }
-            osd.osdline[2][i]=0 ;
-            osd.lines++;
-        }
-    }
-    
-    setosd(&osd);
-    return ;
-}
-#endif
 // check alarm status relate to capture channel(every 0.125 second)
 void capture::alarm()
 {
@@ -1217,37 +574,6 @@ void capture::alarm()
     }
 }
 
-void cap_start()
-{
-    int i; 
-   // dvr_log("cap_start");
-    for( i=0; i<cap_channels; i++) {
-        cap_channel[i]->start();
-    }
-    SystemStart();
-#if 0    
-    for( i=0; i<cap_channels; i++) {
-        cap_channel[i]->updateOSD1 ();
-    }
-#endif    
-   // dvr_log("cap_start done");
-}
-
-void cap_stop()
-{
-    int i; 
-    for( i=0; i<cap_channels; i++) {
-     //   printf("channel:%d stop\n",i);
-        cap_channel[i]->stop();
-	//printf("channel %d stopped\n",i);
-    }
-   // sleep(1);
-  //  printf("start system stop\n");
-    //sleep(20);
-    SystemStop();
-    
-}
-
 void cap_restart(int channel)
 {
     if( channel>=0 && channel<cap_channels ) {
@@ -1255,64 +581,74 @@ void cap_restart(int channel)
     }
 }
 
+void cap_start()
+{
+    int i; 
+
+    for( i=0; i<cap_channels; i++) {
+        cap_channel[i]->start();
+    }
+    
+    // start eagle (zeus) board here
+    eagle_start();
+}
+
+void cap_stop()
+{
+    int i; 
+    for( i=0; i<cap_channels; i++) {
+        cap_channel[i]->stop();
+    }
+    
+    // stop eagle (zeus) board here
+    eagle_stop();
+}
+
 // initial capture card, return channel numbers
 void cap_init()
 {
     int i;
     int videostandard ;
-    int dvrchannels ;			// local analog channel
-    int enabled_channels ;
-    int cap_ch ;
-    enabled_channels = 0 ;
+    int enabled_channels = 0;
     
     config dvrconfig(dvrconfigfile);
     
-    cap_ch = dvrconfig.getvalueint("system", "totalcamera");
-    
+    cap_channels = dvrconfig.getvalueint("system", "totalcamera");
+
     // initialize local capture card (eagle32)
     videostandard = dvrconfig.getvalueint("system", "videostandard");
-    dvrchannels=eagle32_init();
-    
-    // initialize IP camera
-    IpCamera_Init();
-    
-    dvr_log("%d capture card (local) channels detected.", dvrchannels);
-    if( cap_ch<=0 ) {
-        cap_ch=dvrchannels ;
-    }
-    if( cap_ch> MAXCHANNEL ) {
-        cap_ch=MAXCHANNEL ;
+   
+    if( cap_channels<0 || cap_channels > MAXCHANNEL ) {
+        cap_channels=MAXCHANNEL ;
     }
     
     g_ts_base = time(NULL) - 11; /* used to make PTS */
     
-    if( cap_ch > 0 ) {
-        cap_channel = new capture * [cap_ch] ;
+#ifdef SUPPORT_IPCAM    
+    // un init IP camera
+    IpCamera_Init();
+#endif       
+    
+    if( cap_channels > 0 ) {
+        cap_channel = new capture * [cap_channels] ;
     }
-    for (i = 0; i < cap_ch; i++ ) {
+    
+    for (i = 0; i < cap_channels; i++ ) {
         char cameraid[16] ;
         int cameratype ;
         sprintf(cameraid, "camera%d", i+1 );
         cameratype = dvrconfig.getvalueint(cameraid, "type");	
-        if( cameratype == CAP_TYPE_HIKLOCAL ) {			// local capture card
-			int lch = dvrconfig.getvalueint(cameraid, "channel");		// local channel, 0-
-			if( lch==-1 ) lch = i ;
-            if( lch>=0 && lch<dvrchannels ) {
-				// i: logical channel, lch: physical channel
-                cap_channel[i]=new eagle_capture(i, lch);
-            }
-            else {
-                cap_channel[i]=new eagle_capture(i, -1);// dummy channel
-            }
-        }
-        else if( cameratype == CAP_TYPE_HIKIP ) {	// eagle ip camera
+        
+		if( cameratype == CAP_TYPE_HIKIP ) {	// eagle ip camera
             cap_channel[i] = new ipeagle32_capture(i);
         }
-        else if( cameratype == CAP_TYPE_HDIPCAM ) {	// standard HD ip camera 
+#ifdef SUPPORT_IPCAM    
+		else if( cameratype == CAP_TYPE_HDIPCAM ) {		// standard HD ip camera 
             cap_channel[i] = new Ipstream_capture(i);
         }
-        else {
-            cap_channel[i]=new eagle_capture(i, -1);// dummy channel
+#endif                
+        else {		// by default: CAP_TYPE_HIKLOCAL
+			cap_channel[i] = new eagle_capture(i);
 		}
 
         if( cap_channel[i]->enabled() ) {
@@ -1320,13 +656,11 @@ void cap_init()
         }
     }
     
-    cap_channels = cap_ch ;
-    
     if( enabled_channels<=0 ) {
 		dvr_log("No camera been setup!!!");
     }
     else {
-		dvr_log("Total %d cameras, %d camera(s) enabled.",  cap_channels, enabled_channels);
+		dvr_log("Total %d cameras in use, %d camera(s) enabled.",  cap_channels, enabled_channels);
 	}
 }
 
@@ -1334,8 +668,8 @@ void cap_init()
 void cap_uninit()
 {
     int i ;
-    int cap_ch = cap_channels ;
     if( cap_channels > 0 ) {
+		int cap_ch = cap_channels ;
         cap_channels=0 ;
         for (i = 0; i < cap_ch; i++) {
             delete cap_channel[i] ;
@@ -1344,11 +678,11 @@ void cap_uninit()
         delete cap_channel ;
     }
     cap_channel = NULL ;
-    // un initialize local capture card
-    eagle32_uninit ();
     
+#ifdef SUPPORT_IPCAM    
     // un init IP camera
     IpCamera_Uninit();
-    
+#endif    
+
     dvr_log("Capture card uninitialized.");
 }

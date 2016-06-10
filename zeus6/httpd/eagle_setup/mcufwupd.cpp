@@ -112,7 +112,9 @@ int main()
         zargs[2] = "-wipe" ;				// erase flash
         zargs[3] = "-hex" ;					// input .hex file
         zargs[4] = mcufirmwarefile ;		// firmware file
-#if defined (APP_TVS_ZEUS6) || defined (APP_PWZ5)
+#if defined(ZEUS8)    
+        zargs[5] = "/dev/ttyS1" ;			// MCU connection port
+#elif defined (APP_TVS_ZEUS6) || defined (APP_PWZ5)
         zargs[5] = "/dev/ttyS3" ;			// MCU connection port
 #else
         zargs[5] = "/dev/ttyS1" ;			// MCU connection port

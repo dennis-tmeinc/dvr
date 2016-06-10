@@ -1,0 +1,109 @@
+#include "dvr.h"
+#include "fifoswap.h"
+
+struct swap_type {
+	int pos ;
+	int size ;
+};
+
+static class array <swap_type> swaplist ;
+static FILE * swap_file ;
+
+static FILE * swap_open()
+{
+	char swapfilename[260] ;
+	if( rec_basedir.length() <= 0 ) {	// no base dir, no recording disk available
+		return NULL ;
+	}
+	sprintf( swapfilename, "%s/.fswap", (char *)rec_basedir );
+	FILE * f = fopen( swapfilename, "w+" );
+	if( f ) {
+		return f ;
+	}
+	return NULL ;
+}
+	
+int swap_out( void * mem, int size )
+{
+	if( swap_file == NULL ) {
+		swap_file = swap_open() ;
+		if( swap_file == NULL ) {
+			return 0 ;
+		}
+	}
+	
+	// find swap space 
+	swap_type st ;
+	st.pos = 4 ;			// start from , make it positive ^^
+	st.size = size ;
+	int i  ;
+	for( i=0; i<swaplist.size(); i++ ) {
+		if( (swaplist[i].pos - st.pos)  >= st.size ) {			// found gap space 
+			break;
+		}
+		st.pos = swaplist[i].pos + swaplist[i].size ;			// point to the end of this swap
+	}
+	swaplist.insert( st, i );
+
+	fseek( swap_file, st.pos, SEEK_SET );
+	fwrite( mem, 1, st.size, swap_file );
+
+	return st.pos ;
+}
+
+int  swap_in( void * mem, int size, int swappos )
+{
+	int i ;
+	for( i=0; i<swaplist.size(); i++ ) {
+		if( swaplist[i].pos == swappos ) {		// matched 
+			if( mem != NULL && size == swaplist[i].size ) {
+				fseek( swap_file, swappos, SEEK_SET );
+				fread( mem, 1, size, swap_file );
+			}
+			swaplist.remove(i) ;
+			
+			if( swaplist.size()==0 ) {
+				// swap space clear, clean the swap file
+				rewind(swap_file);
+				ftruncate( fileno(swap_file), 0 );
+			}
+			
+			return 1 ;
+		}
+	}
+	
+	// dump errors
+	
+	printf("DUMP\n  mem: %p, size: %d, pos: %d\n", mem, size, swappos ) ;
+	
+	for( i=0; i<swaplist.size(); i++ ) {
+		printf(" %d\t: pos: %d, size: %d\n",  i, swaplist[i].pos, swaplist[i].size );
+	}
+	
+	return 0 ;
+}
+
+int  swap_discard( int swappos )
+{
+	return swap_in( NULL, 0, swappos );
+}
+
+int swap_init()
+{
+	swap_file = NULL ;
+	swaplist.empty() ;	
+}
+
+int swap_finish()
+{
+	swaplist.empty() ;
+	if( swap_file ) {
+		rewind(swap_file);
+		fflush(swap_file);
+		ftruncate( fileno(swap_file), 0 );
+		fclose( swap_file );
+		swap_file = NULL ;
+	}
+}
+
+

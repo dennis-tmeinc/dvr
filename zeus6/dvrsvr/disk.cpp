@@ -8,6 +8,8 @@
 #include <sys/wait.h>
 
 #include "dir.h"
+#include "archive.h"
+#include "../ioprocess/diomap.h"
 
 // tvs fix, minimum disk size in Megabytes (default=1G)
 #define MIN_DISK_SIZE (1024) 
@@ -27,7 +29,8 @@ string g_log_disk ;
 char  g_diskwarning[256] ;		// diskwarning
 int g_nodiskcheck ;
 
-static pthread_mutex_t disk_mutex;
+int disk_scanreq = 1 ;			// request for video file scanning
+
 static float disk_mindiskspace_percent; 	// minimum free space percentage.  
 static int disk_allow_recycle_lfile ;		// allow recycle _L_ files
 
@@ -42,17 +45,6 @@ static string disk_base;                // recording disk base dir
 static string disk_curdiskfile;         // record current disk
 
 int   turndiskon_power=0;
-
-
-inline void disk_lock()
-{
-    pthread_mutex_lock(&disk_mutex);
-}
-
-inline void disk_unlock()
-{
-    pthread_mutex_unlock(&disk_mutex);
-}
 
 char *basefilename(const char *fullpath)
 {
@@ -182,18 +174,15 @@ int disk_size(char *filename)
 }
 
 // remove all files and directory
-void disk_rmdir(const char * tdir, int delete_dvrlog)
+static void disk_rmdir(const char * tdir )
 {
 	dir d( tdir ) ;
 	while( d.find() ) {
 		if( d.isdir() ) {
-			disk_rmdir(d.pathname(), delete_dvrlog );
+			disk_rmdir(d.pathname() );
 		}
 		else {
-			if ( delete_dvrlog ||
-				( strcmp(d.filename(), "dvrlog.txt")!=0) ) {
-				remove(d.pathname());
-			}
+			remove(d.pathname());
 		}
 	}
 	d.close();
@@ -203,44 +192,52 @@ void disk_rmdir(const char * tdir, int delete_dvrlog)
 // remove directory with no files
 int disk_rmemptydir(char *tdir)
 {
-	int files = 0 ;
+	int f = 0 ;
 	dir d( tdir ) ;
-	while( d.find() ) {
-		if( d.isdir() ) {
-			if( disk_rmemptydir(d.pathname()) == 0 ) {
-				rmdir(d.pathname());
-			}
-			else {
-				files++ ;
-			}
-		}
-		else if( d.isfile() ) {
-			files++ ;
-		}
+	while( d.find(NULL, DIR_FINDDIR) ) {
+		f += disk_rmemptydir( d.pathname() ) ;
 	}
-	return files ;
+	if( f==0 ) {
+		d.rewind();
+		f = d.find(NULL, DIR_FINDFILE );
+	}
+	d.close();
+	if( f==0 ) {
+		rmdir( tdir );
+	} 
+	return f;
 }
 
-// remove .264 files and related .k, .idx
+// remove .264 files and related .k, .idx, and all parent folder if it is empty
 static int disk_removefile( const char * file264 ) 
 {
-	int res = -1;
     string f264 ;
     char * fn ;
     char * extension ;
     f264 = file264 ;
     fn = (char *)f264 ;
-    res = remove( fn ) ;
-    if( res != 0 ) {
-    	dvr_log( "Delete file failed: %s", file264 );
-    	return res ;
+    if( remove( fn ) != 0 ) {
+    	dvr_log( "Delete file failed: %s", fn );
+    	return -1 ;
     }
     int l = strlen( fn );
     extension = fn+l-4 ;
     if( strcmp(extension, ".266")==0 ) {
         strcpy( extension, ".k");
-        remove( fn );
+        if( remove( fn )!= 0 ) {
+            dvr_log( "Delete file failed: %s", fn );
+		}
     }
+    
+    // try remove all parent folder
+    char * r ;
+    while( (r = strrchr(fn, '/'))!=NULL ) {
+		*r = 0 ;
+		if( rmdir( fn )!=0 ) {
+			break;
+		}
+	}
+    
     return 0 ;
 }
 
@@ -272,7 +269,7 @@ static int repairfile(const char *filename)
 }
 
 // try to repair partial lock files
-int  repairepartiallock(const char * filename) 
+static int  repairepartiallock(const char * filename) 
 {
     dvrfile vfile ;
     int length, locklength ;
@@ -286,45 +283,50 @@ int  repairepartiallock(const char * filename)
     return 0;
 }
 
-// find any 264 files
-// return 1: found at least one .264 file
-//        0: can't find any .264 file
-int disk_find264(char *tdir)
+// remove directories has no .264 files
+// dirlevel: 0:disk, 1:host, 2:date, 3: channel
+// return 0: empty, 1: .266 files found
+static int disk_rmempty264dir(char *tdir, int dirlevel)
 {
-	char *filename ;
-	int l ;
-	int files = 0 ;
+	int f = 0 ;
+	int r ;
 	dir d( tdir ) ;
 	while( d.find() ) {
-		if( d.isfile() ) {
-			filename = d.filename();
-			l = strlen( filename );
-            if (strcmp( filename+l-4, ".266") == 0) {
-				return 1 ;
-            }
+		if( dirlevel <= 0 ) {
+			if( d.isdir() ) {
+				if( fnmatch( "_*_", d.filename(), 0 )==0 ) {
+					f+=disk_rmempty264dir( d.pathname(), 1 );
+				}
+				else if( fnmatch( "FOUND.*", d.filename(), 0 )==0 ) {
+					// clear disk check files
+					disk_rmdir( d.pathname() );	
+				}
+				else {
+					f+=disk_rmempty264dir( d.pathname(), 0 );
+				}
+			}
 		}
-	}
-	d.rewind();
-	while( d.find() ) {
-		if( d.isdir() ) {
-			if( disk_find264( d.pathname() ) ) {
+		else if( dirlevel==1 || dirlevel==2 ) {
+			if( d.isdir() ) {
+				r = disk_rmempty264dir( d.pathname(), dirlevel+1 );
+				if( r== 0 ) {
+					disk_rmdir( d.pathname() );					
+				}
+				f+=r ;
+			}
+		}
+		else if( dirlevel>=3 ) {
+			if( d.isfile() && fnmatch( "CH*.266", d.filename(), 0 )==0 ) {
 				return 1 ;
 			}
 		}
 	}
-	return 0 ;
-}
 
-// remove directories has no .264 files
-void disk_rmempty264dir(char *tdir)
-{
-    if( disk_find264(tdir)==0 ) {
-		disk_rmdir(tdir, 0);
-    }
+	return f;
 }
 
 // repaire all .264 files under dir
-void disk_repair264(char *tdir)
+static void disk_repair264(char *tdir)
 {
     char * pathname ;
     char * filename ;
@@ -335,8 +337,7 @@ void disk_repair264(char *tdir)
         if( dfind.isdir() ) {
             disk_repair264( pathname );
         }
-        else if( dfind.isfile() &&
-                strstr(filename, ".266") ) 
+        else if( dfind.isfile() && fnmatch( "CH*.266", filename, 0 )==0 ) 
         {
             if( strstr(filename, "_0_") ) {
                 repairfile(pathname);
@@ -346,97 +347,78 @@ void disk_repair264(char *tdir)
             }
         }
     }
-    disk_rmempty264dir(tdir);
 }
 
-
 // fix all "_0_" files & delete non-local video files
-void disk_diskfix(char *tdir)
+// disk: disk mount point
+static void disk_diskfix(char *disk)
 {
     char pattern[512];
     char * pathname ;
     char * filename ;
-    dir dfind(tdir);
     // disable watchdog, so system don't get reset while repairing files
     dio_disablewatchdog();  
-
-    while( dfind.find() ) {
-        pathname = dfind.pathname();
-        filename = dfind.filename();
-        if( dfind.isdir() ) {
-            if( fnmatch( "_*_", filename, 0 )==0 ){ // a root direct for DVR files
-                sprintf( pattern, "_%s_", g_hostname);
-                if( strcasecmp( pattern, filename )!=0 ) {
-					dvr_log("%s is deleted",pathname);
-					disk_rmdir( pathname, 1 );
-                }
-                else {
-					// dvr_log("repair:%s",pathname);
-                    disk_repair264(pathname);
-                }
-            }
-        }
-    }
+    
+    disk_repair264(disk);
+	disk_rmempty264dir(disk, 0);    
     
     dio_enablewatchdog();
 }
 
 // get a list of .264 files, for play back list use
-// dirlevel: 0 before _HOST_, 1: YYYYMMDD, 2: CH00, 3: video files
-static void disk_list264files(const char *tdir, array <f264name> & flist, char * day, int channel, int dirlevel )
+// dirlevel: 0: disk, 1: _HOST_, 2: YYYYMMDD, 3: CH00
+// return files found
+static int disk_list264files(const char *tdir, array <f264name> & flist, char * day, int channel, int dirlevel )
 {
+	int f = 0;
+	int l ;
     char * dname ;
-    int l ;
 
     dir d(tdir);
     while( d.find() ) {
 		if( dirlevel <= 0 ) {
 			if( d.isdir() ) {
-				if( *(d.filename()) == '_' ) {
+				dname = d.filename();
+				l=strlen(dname);
+				if( l>2 && *dname == '_' && *(dname+l-1) == '_' ) {
 					// found _HOST_ pattern
-					disk_list264files( d.pathname(), flist, day, channel, 1 );
+					f+=disk_list264files( d.pathname(), flist, day, channel, 1 );
 				}
 				else {
-					disk_list264files( d.pathname(), flist, day, channel, 0 );
+					f+=disk_list264files( d.pathname(), flist, day, channel, 0 );
 				}
 			}
 		}
-		else if( dirlevel == 1 ) {		// YYYYMMDD
+		else if( dirlevel == 1 ) {		// _HOST_
 			if( d.isdir()  ) {
 				// check day (YYYYMMDD)
 				dname = d.filename();
 				if( *dname == '2' && (day==NULL || strcmp( d.filename(), day )==0 ) ) {
-					disk_list264files( d.pathname(), flist, day, channel, 2 );
+					f += disk_list264files( d.pathname(), flist, day, channel, 2 );
 				}
 			}
 		}
-		else if( dirlevel == 2 ) {		// CH?? 
+		else if( dirlevel == 2 ) {		// YYYYMMDD
 			if( d.isdir() ) {
 				// check channel
 				dname = d.filename();
 				if( strncmp( dname, "CH0", 3 )==0 
 					&& (channel<0 || dname[3] == ('0'+channel ) ) )
 				{
-					disk_list264files( d.pathname(), flist, day, channel, 3 );
+					f += disk_list264files( d.pathname(), flist, day, channel, 3 );
 				}
 			}
 		}
-		else {		// level == 3
-			if( d.isfile() ) {
-				// check channel
-				dname = d.filename();
-				l = strlen(dname);
-				if( strncmp( dname, "CH0", 3 )==0  
-					&& l>4 
-					&& strcmp( dname + l - 4, ".266")==0 ) 
-				{
-					f264name fn ;
-					fn = d.pathname() ;
-					flist.add(fn);
-				}
+		else {		// level == 3,  video files
+			if( d.isfile() && fnmatch( "CH*.266", d.filename(), 0 )==0 ) {
+				f264name fn ;
+				fn = d.pathname() ;
+				flist.add(fn);
+				f++ ;
 			}
 		}
 	}
+	return f;
 }
 
 // get .264 file list by day and channel, for playback
@@ -450,8 +432,8 @@ void disk_listday(array <f264name> & flist, struct dvrtime * day, int channel)
                     day->year,
                     day->month,
                     day->day );
+	flist.setsize(0) ;
     disk_list264files( "/var/dvr/disks",  flist, date, channel, 0 );
-    
     flist.sort();
     
     // to remove repeated files
@@ -474,24 +456,24 @@ void disk_listday(array <f264name> & flist, struct dvrtime * day, int channel)
 	}
 }
 
-
 // get a list of .264 files, for play back list use
 // dirlevel: 0 before _HOST_, 1: YYYYMMDD
-static void disk_listday_help(const char *tdir, array <int> & daylist, int dirlevel )
+static void disk_listday_help(const char *tdir, array <int> & daylist, int channel, int dirlevel )
 {
     char * dname ;
-    int day;
-
+    int l ;
     dir d(tdir);
     while( d.find() ) {
 		if( dirlevel <= 0 ) {
 			if( d.isdir() ) {
-				if( *(d.filename()) == '_' ) {
+				dname = d.filename() ;
+				l = strlen(dname);
+				if( l>2 && *dname == '_' && *(dname+l-1)=='_' ) {
 					// found _HOST_ pattern
-					disk_listday_help( d.pathname(), daylist, 1 );
+					disk_listday_help( d.pathname(), daylist, channel, 1 );
 				}
 				else {
-					disk_listday_help( d.pathname(), daylist, 0 );
+					disk_listday_help( d.pathname(), daylist, channel, 0 );
 				}
 			}
 		}
@@ -499,39 +481,47 @@ static void disk_listday_help(const char *tdir, array <int> & daylist, int dirle
 			if( d.isdir() ) {
 				// check day (YYYYMMDD)
 				dname = d.filename();
-				if( *dname == '2' ) {
+				if( strlen( dname ) == 8 && *dname == '2' ) {
 					int day = atoi(dname);
-					daylist.add( day );
+					if( day>20100000 && day<21000000 ) {
+						if( channel>=0 && channel<10 ) {
+							string chname ;
+							struct stat st ;
+							sprintf( chname.setbufsize(512), "%s/CH%02d", (char *)d.pathname(), channel );
+							if( stat( (char *)chname, &st ) != 0 ) {
+								continue ;
+							}
+						}
+
+						// add to list if not already there
+						int found = 0 ;
+						for( int i = 0; i<daylist.size(); i++  ) {
+							if( daylist[i] == day ) {
+								found=1 ;
+								break;
+							}
+						}						
+						if( !found )
+							daylist.add( day );
+					}
 				}
 			}
 		}
 	}
 }
 
-void disk_getdaylist_bydisk(const char *diskbase, array <int> & daylist)
+void disk_getdaylist_bydisk(const char *diskbase, array <int> & daylist, int channel)
 {
 	int pday ;
 	int pos ;
-	disk_listday_help( diskbase, daylist, 0 ) ;
-	
+	disk_listday_help( diskbase, daylist, channel, 0 ) ;
     daylist.sort();
-    
-    // remove repeated days
-    pday = 0 ;
-    for( pos=0; pos<daylist.size();  ) {
-		if( daylist[pos] == pday ) {
-			daylist.remove(pos);
-		}
-		else {
-			pos++ ;
-		}
-	}
 }
 
 // get full day list for playback
-void disk_getdaylist(array <int> & daylist)
+void disk_getdaylist(array <int> & daylist, int channel)
 {
-	disk_getdaylist_bydisk( "/var/dvr/disks", daylist);
+	disk_getdaylist_bydisk( "/var/dvr/disks", daylist, channel);
 }
 
 // unlock locked file overlaped with specified time range
@@ -540,54 +530,128 @@ int disk_unlockfile( dvrtime * begin, dvrtime * end )
     return 1;
 }
 
+struct t_oldfile {
+	int oldestdate ;		// bcd date of oldest video file (may be smartlog file)
+	int oldesttime ;		// bcd time of oldest video file
+	string filename ;		// oldest file name
+	int  lock ;				// to search lock file only ?
+} ;	
+
 // find oldest .264 files 
 // parameter:
-//      dir:   directory to start search,
-//   oldesttime: keep oldest file time searched
-//   oldestfilename:  oldest file name searched
-//     lock:   locked file searching allowed. ( if(lock==0) don't search locked file)
-int disk_olddestfile( char * tdir,  struct dvrtime *oldesttime, string * oldestfilename, int lock )
+//      dir:   	directory to start search,
+//      oldfile:to return oldest file result
+//      dirlevel: search level  0=disk, 1=_HOST_, 2=YYYYMMDD, 3=CH00 (video files), 4=smartlog 
+static int disk_olddestfile( char * tdir,  t_oldfile * oldfile, int dirlevel )
 {
     char * pathname ;
     char * filename ;
-    int l ;
-    struct dvrtime dvrt ;
-    dir dfind(tdir);
+    int l, d, t ;
     int res = 0 ;
-    time_dvrtime_init(&dvrt, 2000);
+    
+    dir dfind(tdir);
     while( dfind.find() ) {
         pathname = dfind.pathname();
-        if( dfind.isdir() ) {
-            res+=disk_olddestfile( pathname, oldesttime, oldestfilename, lock );
-        }
-        if( dfind.isfile() ) {
-            filename = dfind.filename();
-            l = strlen(filename) ;
-            if( l>4 && strcmp(&filename[l-4], ".266")==0 ) {    // is it a .264 file ?
-				if( f264length( filename ) > 0 ) {				// only for closed file!
-					if( lock || strstr(filename, "_L_")==NULL ) {
-						f264time(filename, &dvrt);
-						if( dvrt < *oldesttime ) {
-							*oldesttime = dvrt ;
-							*oldestfilename = pathname ;
-							res=1 ;
+        if( dirlevel <= 0 ) {
+			if( dfind.isdir() ) {
+				filename = dfind.filename();
+				l = strlen( filename );
+				if( *filename == '_' && *(filename+l-1) == '_' ) {
+					res+=disk_olddestfile( dfind.pathname(), oldfile, 1 );
+				}
+				else if( strcasecmp( filename, "smartlog" )==0 ) {
+					res+=disk_olddestfile( dfind.pathname(), oldfile, 4 );
+				}
+				else {
+					res+=disk_olddestfile( dfind.pathname(), oldfile, 0 );
+				}
+			}
+		}
+		else if( dirlevel == 1 ) {
+			if( dfind.isdir() ) {
+				filename = dfind.filename();
+				if( *filename == '2' ) {
+					if( sscanf(filename, "%d", &d) == 1 ) {
+						if( d>20000000 && d<oldfile->oldestdate ) {
+							res += disk_olddestfile( dfind.pathname(), oldfile, 2 );
 						}
 					}
 				}
-            } 
-        }
-    }
-    
-    return res ;
+			}
+		}
+		else if( dirlevel == 2 ) {
+			if( dfind.isdir() ) {
+				filename = dfind.filename();
+				l = strlen( filename );
+				if( l==4 && *filename == 'C' && *(filename+1) == 'H' ) {
+					res+=disk_olddestfile( dfind.pathname(), oldfile, 3 );
+				}
+			}			
+		}
+		else if( dirlevel == 3 ) {
+			if( dfind.isfile() ) {
+				filename = dfind.filename();
+				l = strlen(filename) ;
+				if( l>24 && *filename=='C' && strcmp(&filename[l-4], ".266")==0 ) {    // is it a .264 file ?
+					if( oldfile->lock || strstr(filename+20, "_L_")==NULL ) {
+						if( sscanf( filename+5, "%8d%6d", &d, &t )==2 ) {
+							if( d < oldfile->oldestdate || 
+								( d == oldfile->oldestdate && t<oldfile->oldesttime ) ) 
+							{
+								oldfile->oldestdate = d ;
+								oldfile->oldesttime = t ;
+								oldfile->filename = dfind.pathname();
+								res = 1 ;
+							}
+						}
+					}
+				}
+			}
+		}
+		else if( dirlevel == 4 ) {
+			if( dfind.isfile() ) {
+				filename = dfind.filename();
+				l = strlen(filename) ;
+				if( l>14 && fnmatch("*_*_?.0??", filename,0)==0 ) {    // is it a smartlog file
+					if( oldfile->lock || strstr(filename+9, "_L.")==NULL ) {
+						filename = strstr( filename, "_2" ) ;
+						if( filename ) {
+							if( sscanf( filename+1, "%d", &d )==1 ) {
+								if( d>20000000 && d<oldfile->oldestdate  )
+								{
+									oldfile->oldestdate = d ;
+									oldfile->oldesttime = 500000 ;		// something big
+									oldfile->filename = dfind.pathname();
+									res = 1 ;
+								}
+							}
+						}
+					}
+				} 
+			}			
+		}
+	}
+	return res ;
 }
 
-
-// To renew a file list on current disk
-int disk_renew( char * filename )
+void disk_scan( char * disk, int *nlen, int *llen )
 {
-    return 0;
+	dir dfind(disk);
+    while( dfind.find() ) {
+		if( dfind.isdir() ) {
+			disk_scan( dfind.pathname(), nlen, llen );
+		}
+		else if( dfind.isfile() && fnmatch( "CH*.266", dfind.filename(), 0 )==0 ) {			// might be video file
+			int flen = f264length( dfind.filename() );
+			if( strstr( dfind.filename(), "_L_" )!=NULL ) {
+				*llen+= flen ;
+			}
+			else {
+				*nlen+= flen ;
+			}
+		}
+	}
 }
-
 
 int disk_testwritable( char * dir ) 
 {
@@ -706,6 +770,9 @@ void FormatFlashToFAT32(char* diskname)
 }
 
 #ifdef APP_PWZ5
+
+struct pw_diskinfo pw_disk[3] ;
+
 // backup disk support, ( if no primary disk being used, mount backup disk )
 static int disk_pw_inittime ;
 
@@ -744,56 +811,21 @@ When ignition is off, after delay shut down timer time out, power on " disk thre
 Then format "disk two"
 
 */ 
-static int disk_pw_recordmethod ;	// 0: "One disk Recording", 1: "Just in case recording", 2: "Auto back up"
-
-/*
-static float disk_pw_disk1_usage ;
-static int disk_pw_disk1_freespace ;
-static int disk_pw_disk1_full = 0 ;
-static int disk_pw_disk1_mounted = 0 ;
-static string disk_pw_disk1 ;
-static string disk_pw_disk1_base ;
-
-static float disk_pw_disk2_usage ;
-static int disk_pw_disk2_freespace ;
-static int disk_pw_disk2_full = 0 ;
-static int disk_pw_disk2_mounted = 0 ;
-static string disk_pw_disk2 ;
-static string disk_pw_disk2_base ;
-
-static float disk_pw_disk3_usage ;
-static int disk_pw_disk3_freespace ;
-static int disk_pw_disk3_mounted = 0 ;
-static int disk_pw_disk3_full = 0 ;
-static string disk_pw_disk3 ;
-static string disk_pw_disk3_base ;
-*/
-
-struct pw_diskinfo {
-	int freespace ;		// free space in MB
-	int totalspace ;	// total space in MB
-	float freeratio ;	// freespace ratio
-	int lowspace ;		// 
-	int mounted ;		// boolean
-	string disk ;		// disk mount point
-	string rec_base ;	// video recording base dir   (disk + _HOST_)
-} pw_disk[3] ;
-
+int disk_pw_recordmethod ;	// 0: "One disk Recording", 1: "Just in case recording", 2: "Auto back up"
 static int disk_pw_curlogdisk = -1 ;
 static int disk_pw_autobackup_run = 0 ;
-static pid_t disk_arch_process1 = (pid_t)0 ;
-static pid_t disk_arch_process2 = (pid_t)0 ;
 
 // no: disk number,  DISK1 :0, DISK2: 1 ...
 static int  disk_pw_diskdev( int no, char * dev )
 {
 	int l = 0 ;
-	string devfile ;
 	FILE * fdev ;
-	sprintf( devfile.setbufsize(200), "/var/dvr/disk%d_device", no+1 );
+	char devfile[]="/var/dvr/disk1_device" ;
+	
+	devfile[13]= '1' + no ;
 	fdev = fopen( devfile, "r");
 	if( fdev ) {
-		if( fscanf( fdev, " %99s", dev )>0 ) {
+		if( fscanf( fdev, " %99s", (dev) ) > 0 ) {
 			l = strlen(dev);
 		}
 		fclose( fdev );
@@ -801,43 +833,28 @@ static int  disk_pw_diskdev( int no, char * dev )
 	return l ;
 }	
 
-pid_t disk_pw_runbackup(char * src, char * dest, int type, int mode )
-{
-	pid_t child ;
-	child = fork();
-	if(child==0){
-		static char * bgarch = "/davinci/dvr/bgarch" ;
-		// child?
-		char atype[20] , amode[20] ;
-		sprintf( atype, "%d", type );
-		sprintf( amode, "%d", mode );
-		execl( bgarch, bgarch, src, dest, atype, amode, NULL ) ;
-	}
-	else if( child>0 ) {
-		return child ;
-	}
-	return 0 ;
-}
-
 // disknum :  0=DISK1, 1=DISK2
-// return 0 success
+// return 1 success
 int  disk_pw_checkdiskspace( int disknum ) 
 {
+	int mounted = 0 ;
+    struct statfs rstfs;
     struct statfs stfs;
-    if (statfs((char*)(pw_disk[disknum].disk), &stfs) == 0) {
+
+    statfs("/var/dvr", &rstfs) ;
+    
+    if (statfs((char*)(pw_disk[disknum].disk), &stfs) == 0  && 
+		memcmp( &(rstfs.f_fsid), &(stfs.f_fsid), sizeof(stfs.f_fsid) ) != 0 )
+	{
 		pw_disk[disknum].freespace = stfs.f_bavail / ((1024 * 1024) / stfs.f_bsize); 
 		pw_disk[disknum].totalspace = stfs.f_blocks/ ((1024 * 1024) / stfs.f_bsize); 
-		pw_disk[disknum].freeratio = ((float)stfs.f_bavail) * 100.0 / ((float)stfs.f_blocks) ;
-		pw_disk[disknum].mounted = 1 ;
-		return 1 ;
+		pw_disk[disknum].reserved = (int) ( disk_mindiskspace_percent * pw_disk[disknum].totalspace / 100 ) ;
+		if( pw_disk[disknum].totalspace > 500 ) {
+			mounted = 1 ;
+		}
 	}
-	else {
-		pw_disk[disknum].freespace = 0 ; 
-		pw_disk[disknum].totalspace = 1 ;
-		pw_disk[disknum].freeratio = 0.0 ;
-		pw_disk[disknum].mounted = 0 ;
-		return 0 ;
-	}
+	pw_disk[disknum].mounted = mounted ;	
+	return mounted ;
 }
 
 // disknum: disk number,  DISK1=0, DISK2=1 ...
@@ -846,10 +863,8 @@ int disk_pw_mount( int disknum )
 {
 	string dev ;
 	string diskpath ;
-	string diskbasepath ;
-	string mountcmd ;
 
-	if( disk_pw_diskdev(disknum, dev.setbufsize(200) )<5 ) {
+	if( disknum>2 || disk_pw_diskdev(disknum, dev.setbufsize(200) )<3 ) {
 		// disk not ready
 		return 0 ;
 	}
@@ -860,130 +875,88 @@ int disk_pw_mount( int disknum )
 	sprintf( diskpath.setbufsize(300), "/var/dvr/disks/%s", (char *)dev );
 	mkdir( diskpath, 0777);
 	
-	sprintf(mountcmd.setbufsize(500), "mount /dev/%s %s -o shortname=winnt", (char *)dev, (char *)diskpath );
-	system( mountcmd );
-	
-	sprintf(diskbasepath.setbufsize(500), "%s/_%s_", (char *)diskpath, g_hostname );
-	mkdir( diskbasepath, 0777);
+	// sprintf(mountcmd.setbufsize(500), "mount -t vfat %s %s -o noatime,shortname=winnt", (char *)dev, (char *)diskpath );
+	// system( mountcmd );
 
+	string devpath ;
+	sprintf( devpath.setbufsize(100), "/dev/%s", (char*)dev );
+	if( mount( devpath, diskpath, "vfat", MS_NOATIME, "shortname=winnt" ) == 0 ) {
+		dvr_log( "Mount %s to %s", (char *)dev, (char *)diskpath );
+	}
+	
 	pw_disk[disknum].disk =  (char *)diskpath ;
-	pw_disk[disknum].rec_base = (char *)diskbasepath ;
+	pw_disk[disknum].mounted =  0 ;
+	pw_disk[disknum].totalspace =  1 ;
+	pw_disk[disknum].freespace =  0 ;
+	pw_disk[disknum].reserved =  0 ;
+	pw_disk[disknum].full =  0 ;
+	pw_disk[disknum].l_len =  1 ;
+	pw_disk[disknum].n_len =  0 ;
 	
 	if( disk_pw_checkdiskspace( disknum ) ) {
-		disk_diskfix(diskbasepath) ;
+		disk_diskfix( pw_disk[disknum].disk ) ;
+		
+		// try reopen recording files, since new disk mounted!
+		rec_break();
+
+		// try rescan disk N/L space
+		disk_scanreq = 1 ;
+		
 		return 1 ;
 	}
 	return 0 ;
 }
+
+// mount disks
+void disk_pw_checkmode()
+{
+	if( pw_disk[0].mounted == 0 ) {
+		if( disk_pw_mount(0) ) {
+			dvr_log("Disk1 mounted.");
+		}
+	}
+	if( pw_disk[1].mounted == 0 ) {
+		if( disk_pw_mount(1) ) {
+			dvr_log("Disk2 mounted.");
+		}
+	}
+	if( dio_curmode() == APPMODE_STANDBY && pw_disk[2].mounted == 0 ) {
+		if( disk_pw_mount(2) ) {
+			dvr_log("Disk3 mounted, start auto-backup!" );
+		}
+	}
+}
+
+/*
+static char *diskmodename[] = {
+	"One disk",
+	"JIC",
+	"Auto backup" 
+};
 
 void disk_pw_checkmode()
 {
 	string cmd ;
 	string dev ;
 	int t = time_gettick() ;
-	if( disk_pw_recordmethod == 1 ) {		// Just In Case recording
+	if( disk_pw_recordmethod == 1  || disk_pw_recordmethod ==2 ) {		// Just In Case recording / Autobackup
 		if( pw_disk[0].mounted == 0 ) {
 			if( disk_pw_mount(0) ) {
-				dvr_log("JIC mode, disk1 mounted.");
-				strcpy( g_diskwarning, "" );
+				dvr_log("%s mode, disk1 mounted.", diskmodename[disk_pw_recordmethod] );
 			}
 		}
 		if( pw_disk[1].mounted == 0 ) {
 			if( disk_pw_mount(1) ) {
-				dvr_log("JIC mode, disk2 mounted.");
-				strcpy( g_diskwarning, "" );
+				dvr_log("%s mode, disk2 mounted.", diskmodename[disk_pw_recordmethod] );
 			}
 		}
-		if( disk_arch_process1 == 0 && pw_disk[0].mounted  && pw_disk[1].mounted ) {
-			// start archive process
-			// ...    run bgarch disk2 disk1 2 1    ( lock only, unlock _L_ )
-			disk_arch_process1 = disk_pw_runbackup( pw_disk[1].disk, pw_disk[0].disk, 2, 1 );
-
-			// force continue recording
-			extern int rec_trigger ;
-			rec_trigger = 1;
-			dvr_log("JIC mode, continue recording all video.");
-		}		
-		
-		if( disk_pw_curlogdisk < 0 ) {
-			if( pw_disk[0].mounted ) {
-				disk_pw_curlogdisk = 0 ;		// use DISK1 as logging disk
-			}
-			else if( t-disk_pw_inittime > 180000  && pw_disk[1].mounted ) {		// use DISK2 as logging disk after 3 minutes
-				disk_pw_curlogdisk = 1 ;		
-			}
-			if( disk_pw_curlogdisk>=0 ) {
-				// write disk content to curdisk file, for glog to work
-				if( strlen( (char *)disk_curdiskfile )>5 ) {
-					FILE * fcurdiskfile = fopen((char *)disk_curdiskfile, "w") ;
-					if( fcurdiskfile ) {
-						fprintf( fcurdiskfile, "%s", (char *)(pw_disk[disk_pw_curlogdisk].disk) ) ;
-						fclose( fcurdiskfile );
-					}
+		if( disk_pw_recordmethod == 2 ) { 		// Auto Backup
+			if( pw_disk[2].mounted == 0 ) {
+				if( disk_pw_mount(2) ) {
+					dvr_log("%s mode, disk3 mounted.", diskmodename[disk_pw_recordmethod] );
 				}
 			}
 		}
-	}
-	else if( disk_pw_recordmethod == 2 ) { 		// Auto Backup
-		if( dio_runmode() ) {
-			// would run as Just In Case recording
-			if( pw_disk[0].mounted == 0 ) {
-				if( disk_pw_mount(0) ) {
-					dvr_log("Auto Backup mode, disk1 mounted.");
-					strcpy( g_diskwarning, "" );
-				}
-			}
-			if( pw_disk[1].mounted == 0 ) {
-				if( disk_pw_mount(1) ) {
-					dvr_log("Auto Backup mode, disk2 mounted.");
-					strcpy( g_diskwarning, "" );
-				}
-			}
-			if( disk_arch_process1 == 0 && pw_disk[0].mounted  && pw_disk[1].mounted ) {
-				// start archive process
-				// ...    run bgarch disk2 disk1 2 1    ( lock only, unlock _L_ )
-				disk_arch_process1 = disk_pw_runbackup( pw_disk[1].disk, pw_disk[0].disk, 2, 1 );
-
-				// force continue recording
-				extern int rec_trigger ;
-				rec_trigger = 1;
-				dvr_log("Auto Backup mode, continue recording all video.");
-			}	
-		}
-		else {
-			if( disk_arch_process2 == 0 && pw_disk[1].mounted ) {		
-				// do copy only when disk 2 available
-				// disk2 mounted, so mount disk3 as auto back disk
-				if( pw_disk[2].mounted == 0 ) {
-					if( disk_pw_mount(2) ) {
-						dvr_log("Auto Backup mode, disk3 mounted for auto backup.");
-						// start auto backup process
-						// ...    run bgarch disk2 disk3 1 2    ( N file only , delete after copy )
-						disk_arch_process2 = disk_pw_runbackup( pw_disk[1].disk, pw_disk[2].disk, 1, 2 );
-					}
-				}
-			}
-		}
-
-		if( disk_pw_curlogdisk < 0 ) {
-			if( pw_disk[0].mounted ) {
-				disk_pw_curlogdisk = 0 ;		// use DISK1 as logging disk
-			}
-			else if( t-disk_pw_inittime > 180000  && pw_disk[1].mounted ) {		// use DISK2 as logging disk after 3 minutes
-				disk_pw_curlogdisk = 1 ;		
-			}
-			if( disk_pw_curlogdisk>=0 ) {
-				// write disk content to curdisk file, for glog to work
-				if( strlen( (char *)disk_curdiskfile )>5 ) {
-					FILE * fcurdiskfile = fopen((char *)disk_curdiskfile, "w") ;
-					if( fcurdiskfile ) {
-						fprintf( fcurdiskfile, "%s", (char *)(pw_disk[disk_pw_curlogdisk].disk) ) ;
-						fclose( fcurdiskfile );
-					}
-				}
-			}
-		}
-
 	}
 	else {		// 0 or other: One disk recording method
 		if( t-disk_pw_inittime <= 180000 ) {	// < 5 minutes, changed to 3 minutes as meeting with Quang, Nov 26, 2015
@@ -996,63 +969,28 @@ void disk_pw_checkmode()
 			}
 		}
 		else if( pw_disk[0].mounted == 0 && pw_disk[1].mounted == 0 ) {
-			// Try mount disk1 or disk2
-			if( pw_disk[0].mounted == 0 ) {
-				if( disk_pw_mount(0) ) {
-					dvr_log("One disk mode, disk1 mounted.");
-					strcpy( g_diskwarning, "" );
-				}
-			}
-			else if( pw_disk[1].mounted == 0 ) {
-				if( disk_pw_mount(1) ) {
-					dvr_log("One disk mode, disk2 mounted.");
-					strcpy( g_diskwarning, "" );
-				}
+			// Try mount disk2
+			if( disk_pw_mount(1) ) {
+				dvr_log("One disk mode, disk2 mounted.");
+				strcpy( g_diskwarning, "" );
 			}
 		}
-		
-		if( disk_pw_curlogdisk < 0 ) {
-			if( pw_disk[0].mounted ) {
-				disk_pw_curlogdisk = 0 ;		// use DISK1 as logging disk
-			}
-			else if( pw_disk[1].mounted ) {		// use DISK2 as logging disk 
-				disk_pw_curlogdisk = 1 ;		
-			}
-			if( disk_pw_curlogdisk>=0 ) {
-				// write disk content to curdisk file, for glog to work
-				if( strlen( (char *)disk_curdiskfile )>5 ) {
-					FILE * fcurdiskfile = fopen((char *)disk_curdiskfile, "w") ;
-					if( fcurdiskfile ) {
-						fprintf( fcurdiskfile, "%s", (char *)(pw_disk[disk_pw_curlogdisk].disk) ) ;
-						fclose( fcurdiskfile );
-					}
-				}
-			}
-		}
-
 	}
-
 }
+*/
 
 // return 1 success
 int  disk_pw_deleteoldfile( char * disk, int lockfile ) 
 {
-	dvrtime oldesttime ;
-	time_dvrtime_init(&oldesttime, 2099);
-    
-	// build video file list
-	string oldestfilename ;
-	if( disk_olddestfile( disk, &oldesttime, &oldestfilename, lockfile ) ) {
-		if( oldestfilename.length()>1 ) {
-			int res = (disk_removefile( (char *) oldestfilename ) == 0) ; 
-			if( res ) {
-				dvr_log( "Recycled file: %s", (char *) oldestfilename  );
-				disk_rmempty264dir( disk );
-			}
-			else {
-				dvr_log( "Recycling file failed: %s",  (char *) oldestfilename  );
-			}
-			return res ;
+    struct t_oldfile oldfile ;
+    oldfile.oldestdate = 30000000 ;
+    oldfile.oldesttime = 0;
+    oldfile.lock = lockfile ;
+
+	if( disk_olddestfile( disk, &oldfile, 0 ) ) {
+		if( oldfile.filename.length()>10 ) {
+			disk_removefile( (char *) oldfile.filename ) ;
+			return 1 ;
 		}
 	}
 	return 0 ;
@@ -1060,48 +998,48 @@ int  disk_pw_deleteoldfile( char * disk, int lockfile )
 
 void disk_pw_checkspace()
 {
-	int res ;
 	int disk ;
-	int retry ;
-	int lowspace ;
-	int diskav = 0 ;
-	int allgood = 1 ;
+	int diskfull ;
+
 	for( disk=0; disk<3; disk++ ) {
 		if( pw_disk[disk].mounted ) {
-			diskav = 1 ;
-			lowspace = 1 ;
-			for( retry=0; retry<10; retry++ ) {		
-				if( disk_pw_checkdiskspace( disk ) ) {
-					if( pw_disk[disk].freeratio < disk_mindiskspace_percent ) {
-						if( disk_pw_deleteoldfile( pw_disk[disk].disk, 0 )==0 ) {
-							if( disk_allow_recycle_lfile ) {
-								disk_pw_deleteoldfile( pw_disk[disk].disk, 1 );
+			if( pw_disk[disk].full == 0 || disk_scanreq ) {
+				diskfull = 1 ;
+				for( int retry=0; retry<20; retry++ ) {
+					if( disk_pw_checkdiskspace( disk ) ) {
+						if( pw_disk[disk].freespace < pw_disk[disk].reserved  ) {
+							if( disk_pw_deleteoldfile( pw_disk[disk].disk, 0 )==0 ) {
+								if( disk_allow_recycle_lfile || disk==2 ) {				// disk 2 , auto backup disk, always allow recycle _L_ files
+									disk_pw_deleteoldfile( pw_disk[disk].disk, 1 );
+								}
 							}
+							disk_scanreq = 1 ;
+						}
+						else {
+							diskfull = 0 ;
+							break ;
 						}
 					}
-					else {
-						lowspace = 0 ;
-					}
 				}
-			}
 
-			if( lowspace != pw_disk[disk].lowspace ) {
-				pw_disk[disk].lowspace = lowspace ;
-				if( lowspace ) {
+				if( diskfull && pw_disk[disk].full == 0 ) {
 					dvr_log("Disk %d space full!", disk+1) ;
-					sprintf( g_diskwarning, "Not enough space on disk %d !", disk+1 ); 
+					pw_disk[disk].full = 1 ;
 				}
-			}
-			if( lowspace ) {
-				allgood = 0 ;
-			}
 
+				// rescan for total L/N file length
+				if( disk_scanreq ) {
+					pw_disk[disk].l_len=0;
+					pw_disk[disk].n_len=0;
+					disk_scan( pw_disk[disk].disk, &(pw_disk[disk].n_len), &(pw_disk[disk].l_len) );
+				}
+				
+			}
 		}
 	}
-	if( diskav && allgood ) {
-		// remove disk warning message
-		g_diskwarning[0]=0 ;
-	}
+	
+	disk_scanreq = 0 ;
+
 }
 
 void disk_pw_init( config &dvrconfig )
@@ -1109,74 +1047,77 @@ void disk_pw_init( config &dvrconfig )
 	disk_pw_recordmethod=dvrconfig.getvalueint("system", "pw_recordmethod");
 	disk_pw_inittime = time_gettick() ;
 	
-	strcpy( g_diskwarning, "No video storage!" );
-	
 	// reset current logging disk
 	disk_pw_curlogdisk = -1 ;
-
-	if( disk_arch_process1 ) {
-		kill( disk_arch_process1, SIGTERM ) ;
-		disk_arch_process1 = (pid_t)0 ;
-	}
-	if( disk_arch_process2 ) {
-		kill( disk_arch_process2, SIGTERM ) ;
-		disk_arch_process2 = (pid_t)0 ;
-	}
+	
+	archive_start();
 }
 
 void disk_pw_uninit()
 {
-	if( disk_arch_process1 ) {
-		kill( disk_arch_process1, SIGTERM ) ;
-		disk_arch_process1 = (pid_t)0 ;
-	}
-	if( disk_arch_process2 ) {
-		kill( disk_arch_process2, SIGTERM ) ;
-		disk_arch_process2 = (pid_t)0 ;
-	}
+	archive_stop();
 }
 
 #endif
 
+
+// to rescan disk N/L file ration
+void disk_rescan()
+{
+	disk_scanreq = 1 ;
+}
+
+
 // retrive base dir for recording
-char * disk_getbasedir( int locked )
+char * disk_getbasedisk( int locked )
 {
 	if( locked ) {
-		if( pw_disk[0].mounted ) {
-			if( !pw_disk[0].lowspace ) {
-				return (char *) (pw_disk[0].rec_base );
-			}
+		if( pw_disk[0].mounted && !pw_disk[0].full ) {
+			return (char *) (pw_disk[0].disk );
 		}
-		else if( pw_disk[1].mounted ) {
-			if( !pw_disk[1].lowspace ) {
-				return (char *) (pw_disk[1].rec_base );
-			}
+		else if( pw_disk[1].mounted && !pw_disk[1].full ) {
+			return (char *) (pw_disk[1].disk );
 		}
 	}
 	else {
-		if( pw_disk[1].mounted ) {
-			if( !pw_disk[1].lowspace ) {
-				return (char *) (pw_disk[1].rec_base );
-			}
+		if( pw_disk[1].mounted && !pw_disk[1].full ) {
+			return (char *) (pw_disk[1].disk );
 		}
-		else if( pw_disk[0].mounted ) {
-			if( !pw_disk[1].lowspace ) {
-				return (char *) (pw_disk[0].rec_base );
-			}
+		else if( pw_disk[0].mounted && !pw_disk[0].full ) {
+			return (char *) (pw_disk[0].disk );
 		}
 	}
 	
 	return NULL ;
 }
 
-char * disk_getlogdir()
+char * disk_getlogdisk()
 {
-	printf("Curlogdisk %d\n", disk_pw_curlogdisk );
+	if( disk_pw_curlogdisk < 0 ) {
+		int t = time_gettick() ;		
+		if( pw_disk[0].mounted ) {
+			disk_pw_curlogdisk = 0 ;		// use DISK1 as logging disk
+		}
+		else if( t-disk_pw_inittime > 180000  && pw_disk[1].mounted ) {		// use DISK2 as logging disk after 3 minutes
+			disk_pw_curlogdisk = 1 ;		
+		}
+		if( disk_pw_curlogdisk>=0 ) {
+			// write disk content to curdisk file, for glog to work
+			if( strlen( (char *)disk_curdiskfile )>5 ) {
+				FILE * fcurdiskfile = fopen((char *)disk_curdiskfile, "w") ;
+				if( fcurdiskfile ) {
+					fprintf( fcurdiskfile, "%s", (char *)(pw_disk[disk_pw_curlogdisk].disk) ) ;
+					fclose( fcurdiskfile );
+				}
+			}
+		}
+	}
+	
 	if( disk_pw_curlogdisk < 0 ) {
 		return NULL ;
 	}
 	else {
-		return (char *)(pw_disk[disk_pw_curlogdisk].rec_base );
+		return (char *)(pw_disk[disk_pw_curlogdisk].disk );
 	}
 }
 
@@ -1195,10 +1136,7 @@ void disk_init(int check_only)
 
     config dvrconfig(dvrconfigfile);
     
-#ifdef APP_PWZ5
-	disk_pw_init( dvrconfig );
-#endif 
-    
+   
 #ifdef TVS_APP_X
 
     // first time init
@@ -1211,9 +1149,6 @@ void disk_init(int check_only)
 
 #endif
 
-    // initial mutex
-    disk_mutex = mutex_init ;
-    
     disk_base = dvrconfig.getvalue("system", "mountdir");
     if (disk_base.length() == 0) {
         disk_base = "/var/dvr/disks";
@@ -1240,12 +1175,15 @@ void disk_init(int check_only)
 	// init pw disk info
 	for( int x=0; x<3; x++ ) {
 		pw_disk[x].freespace = 0 ;
-		pw_disk[x].totalspace = 0 ;
+		pw_disk[x].totalspace = 1 ;
 		pw_disk[x].mounted = 0 ;
 		pw_disk[x].disk = "" ;
-		pw_disk[x].rec_base = "" ;
-		pw_disk[x].lowspace = 0;
+		pw_disk[x].full = 0;
 	}
+	
+#ifdef APP_PWZ5
+	disk_pw_init( dvrconfig );
+#endif 	
 	
     if (!check_only) {
       // check disk
@@ -1258,23 +1196,15 @@ void disk_init(int check_only)
 
 void disk_uninit(int check_only)
 {
-	//sync();
-    
-    disk_lock();
-    
     disk_base="";
     
     if( strlen((char *)disk_curdiskfile )>0 ) {
 		remove( (char *)disk_curdiskfile );
 	}
     
-    disk_unlock();
-    
 #ifdef APP_PWZ5
 	disk_pw_uninit();
 #endif 
-    
-    pthread_mutex_destroy(&disk_mutex);
 
     if (!check_only)
       dvr_log("Disk uninitialized.");

@@ -41,23 +41,23 @@ mountdir=/var/dvr/disks
 
 #minimum free disk space
 # last letter: M=megabytes, K=kilobytes, B=bytes
-mindiskspace=100M
+mindiskspace=200M
 
 #minimum free disk space percentage
-mindiskspace_percent=10
+mindiskspace_percent=8
 
 #maximum file size
-maxfilesize=200M
+maxfilesize=1500M
 
 # file length in time
 # last letter: s=seconds, m=minutes, h=hoursglade
-maxfilelength=3600
+maxfilelength=86400
 
 # file buffer size
 filebuffersize=512k
 
 # low memory. (minimum free memory required. ) (kb)
-lowmemory=15000
+lowmemory=10000
 
 uploadingtime=1800
 archivetime=1800
@@ -75,7 +75,7 @@ norecplayback=0
 noreclive=0
 
 # locked file setting
-prelock=150
+prelock=60
 postlock=150
 
 [network]
@@ -138,7 +138,7 @@ showgps=1
 gpsunit=1
 
 # pre-recording time in seconds
-prerecordtime=150
+prerecordtime=60
 # post-recording time in seconds
 postrecordtime=150
 
@@ -225,7 +225,7 @@ recordalarmen=1
 gpsunit=1
 showgps=1
 postrecordtime=150
-prerecordtime=150
+prerecordtime=60
 sensorosd1=1
 trigger1=1
 sensorosd2=1
@@ -294,6 +294,14 @@ Australia/Norfolk=NFT-11:30 (GMT+11:30) Norfolk Island
 
 # parameters for io module
 [io]
+# to disable smartftp processing gforce data
+gsensor_forward_event=8
+gsensor_backward_event=-8
+gsensor_right_event=8
+gsensor_left_event=-8
+gsensor_down_event=8
+gsensor_up_event=-8
+
 gsensor_forward_trigger=0.5
 gsensor_backward_trigger=0.5
 gsensor_right_trigger=0.5

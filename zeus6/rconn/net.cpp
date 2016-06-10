@@ -137,6 +137,7 @@ int net_available(int s)
 {
 	int av = 0 ;
 	ioctl(s, FIONREAD, &av);
+	if( av<0 ) av = 0 ;
 	return av ;
 }
 

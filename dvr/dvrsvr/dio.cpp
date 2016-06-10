@@ -107,7 +107,7 @@ int dio_kickwatchdog()
 {
     dio_lock();
     if( p_dio_mmap &&
-       p_dio_mmap->dvrwatchdog>=0 )
+       p_dio_mmap->dvrwatchdog>0 )
     {
         p_dio_mmap->dvrwatchdog = 0 ;
     }

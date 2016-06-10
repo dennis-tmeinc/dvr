@@ -4,10 +4,11 @@ include ../config
 all: smartftp
 
 EXTRA_CFLAGS = -I./curl-7.20.1/include
-EXTRA_LDFLAGS = -L./curl-7.20.1/lib/.libs -lcurl -lrt -lpthread
+
+LDFLAGS += -lcurl -lrt -lpthread
 
 smartftp: smartftp.o upload.o parseconfig.o gforce_peak.o hikfile.o
-	$(CC) $(CFLAGS) -o smartftp smartftp.o upload.o parseconfig.o gforce_peak.o hikfile.o $(EXTRA_LDFLAGS) -Wl,-rpath=.
+	$(CC) $(CFLAGS) -o smartftp smartftp.o upload.o parseconfig.o gforce_peak.o hikfile.o $(LDFLAGS) -Wl,-rpath=.
 
 smartftp.o: smartftp.c
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -c -o smartftp.o smartftp.c

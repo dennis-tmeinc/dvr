@@ -10,7 +10,6 @@ int     rec_pause = 0 ;             // 1: to pause recording, while network play
 int     rec_fifobusy ;
 int     rec_lock_all ;			// all files save as locked file
 int     rec_norecord ;
-int     rec_inmemoryprerecord ;	// pre-record in memory
 int     rec_fifo_size ;           // maximum fifo size, over this size, all fifo will be dropped
 int     rec_fifo_minsize ;        // minimum fifo size (keep data in fifo before dump out to file)
 
@@ -1379,8 +1378,6 @@ void rec_init(config &dvrconfig)
     }
 
     rec_lock_all = dvrconfig.getvalueint("system", "lock_all");
-
-    rec_inmemoryprerecord = dvrconfig.getvalueint("system", "inmemoryprerecord");
 
 #ifdef PWII_APP
     pwii_recnostopall = dvrconfig.getvalueint("pwii", "recnostopal");

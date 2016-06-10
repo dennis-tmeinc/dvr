@@ -150,14 +150,22 @@ char redirformat[] = "<meta http-equiv=\"REFRESH\" content=\"0;url=%s\">" ;
 
 int main()
 {
+	const char getsetup[] = "cgi/getsetup" ;
     if( checkloginpassword() ) {
-        char serno[40] ;
+        char buf[160] ;
         // setup configure data
-        system("cgi/getsetup");
+        char * altroot = getenv("ALT_ROOT");
+        if( altroot ) {
+			sprintf(buf,"%s/%s", altroot, getsetup );
+			system( buf );
+		}
+		else {
+			system( getsetup );
+		}
         // make serial number
-        makeserialno( serno, sizeof(serno));
+        makeserialno( buf, sizeof(buf));
         // set cookie
-        set_cookie( "ser", serno );
+        set_cookie( "ser", buf );
         // output a redirect http to system.html
         printf( redirformat, "system.html" );
     }

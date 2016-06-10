@@ -32,10 +32,6 @@ ipeagle32_capture::ipeagle32_capture( int channel )
     m_enable = m_attr.Enable ;
 }
 
-ipeagle32_capture::~ipeagle32_capture()
-{
-    stop();
-}
 #if 1
 void ipeagle32_capture::streamthread()
 {
@@ -103,110 +99,6 @@ void ipeagle32_capture::streamthread()
             }
         }
     }//while( m_state )
-    if( m_streamfd>0 ) {
-        closesocket(m_streamfd);
-        m_streamfd = 0 ;
-    }
-}
-#endif
-
-#if 0
-void ipeagle32_capture::streamthread()
-{
-    struct cap_frame capframe ;
-    struct hd_frame hdframe ;
-    struct hd_subframe subframe ;       // subframes ;
-    int  subframes ;                    // number of sub frames
-    int i;
-    int frametype ;
-    int timeout ;
-    
-    capframe.channel=m_channel ;
-    m_streamfd=0 ;
-    while( m_state ) {
-
-        if( m_streamfd<=0 ) {
-            m_streamfd = net_connect (m_ip.getstring(), m_port) ;
-            if( m_streamfd > 0 ) {
-                if( dvr_openlive (m_streamfd, m_ipchannel, &m_hd264)<=0 ) {
-                    closesocket( m_streamfd ) ;
-                    m_streamfd=0 ;
-                }
-            }
-        }
-        if( m_streamfd<=0 ) {
-            sleep(1);
-            continue ;
-        }
-
-        // recevie frames
-        i = net_recvok(m_streamfd, 100000) ;
-        if( i<0 ) {
-            break; 
-        }
-        else if ( i>0 ) {        
-            hdframe.flag=0 ;
-            if( net_recv (m_streamfd, &hdframe, sizeof(struct hd_frame))>0 ) {
-                if( hdframe.flag==1 ) {                                       // .264 frame
-                    subframes = HD264_FRAMESUBFRAME(hdframe) - 1 ;
-                    frametype =  HD264_FRAMETYPE(hdframe) ;
-                    if( frametype==1 ) {                       // audio frame
-                        capframe.frametype = FRAMETYPE_AUDIO ;
-                    }
-                    else if( frametype==4 ) {                  // video frame
-                        capframe.frametype = FRAMETYPE_VIDEO ;
-                    }
-                    else if( frametype==3 && subframes==0 ) {  // key frame
-                        capframe.frametype = FRAMETYPE_KEYVIDEO ;               
-                    }
-                    else {
-                        capframe.frametype = FRAMETYPE_UNKNOWN ;
-                    }
-
-                    capframe.framesize=sizeof(struct hd_frame)+hdframe.framesize ;
-                    capframe.framedata=(char *)mem_alloc (capframe.framesize) ;
-                    mem_cpy32( capframe.framedata, &hdframe, sizeof(struct hd_frame) );
-//                    memcpy( capframe.framedata, &hdframe, sizeof(struct hd_frame) );
-                    if( net_recv( m_streamfd, capframe.framedata + sizeof(struct hd_frame), hdframe.framesize )<=0 ) {
-                        break;
-                    }
-                    onframe( &capframe );
-                    mem_free( capframe.framedata );			
-                    
-                    capframe.frametype = FRAMETYPE_UNKNOWN ;
-                    
-                    if( subframes>0 ) {
-                        for( i=0; i<subframes; i++ ) {
-                            net_recv( m_streamfd, &subframe, sizeof( struct hd_subframe ) );
-                            if( subframe.framesize>0 && subframe.framesize<500000 ) {
-                                capframe.framesize = sizeof( struct hd_subframe ) + subframe.framesize ;
-                                capframe.framedata = (char *) mem_alloc (capframe.framesize) ;
-                                mem_cpy32( capframe.framedata, &subframe, sizeof(subframe) );
-//                                memcpy( capframe.framedata, &subframe, sizeof(subframe) );
-                                net_recv( m_streamfd, capframe.framedata+sizeof(subframe), subframe.framesize );
-                                onframe(&capframe);
-                                mem_free( capframe.framedata );
-                            }
-                        }
-                    }
-                    
-                    timeout=0 ;
-                }
-                else {
-                    net_clean(m_streamfd);
-                }
-            }
-            else {
-                break;                                                          // error or shutdown
-            }
-        }
-        else {
-            if( ++timeout> 20 ) {
-                closesocket( m_streamfd );
-                m_streamfd = 0 ;
-            }
-        }
-    }
     if( m_streamfd>0 ) {
         closesocket(m_streamfd);
         m_streamfd = 0 ;
@@ -286,6 +178,7 @@ void ipeagle32_capture::setosd( struct hik_osd_type * posd )
 }
 
 // periodic called (0.125s)
+/*
 void ipeagle32_capture::update(int updosd)
 {
     struct dvrtime dvrt ;
@@ -339,3 +232,4 @@ void ipeagle32_capture::update(int updosd)
         capture::update( updosd );
     }
 }
+*/
