@@ -187,6 +187,3 @@ int adb_conn::connect_server()
 		}
 	}
 }
-	
-	
-	

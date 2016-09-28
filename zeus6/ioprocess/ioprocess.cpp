@@ -57,7 +57,6 @@ float battery_low ;		// low battery voltage
 
 int battery_drop_report = 0 ;
 
-
 unsigned int gforce_start=0;
 unsigned int gRecordMode=0;
 unsigned int gHBDRecording=0;
@@ -641,6 +640,12 @@ static unsigned int mic_stat = 0 ;
 // trigger time of EMG1, EMG2
 static int emg1_time, emg2_time ;
 
+static char *battery_status[]={
+		"full" ,
+		"charging",
+		"discharging", 
+		"unknown" };
+
 // callback on receive mcu input msg
 int mcu_oninput( char * ibuf )
 {
@@ -728,9 +733,15 @@ int mcu_oninput( char * ibuf )
 		if( (mic_stat & 5) == 0 ) {
 			mcu_mic_ledoff();
 			mcu_amberled(0);
+
+			// new Amber LED connected to g-force mcu
+			p_dio_mmap->pwii_output &= ~PWII_DUALCAM_LED0 ;
 		}
 		else {
 			mcu_amberled(1);
+			
+			// new Amber LED connected to g-force mcu
+			p_dio_mmap->pwii_output |= PWII_DUALCAM_LED0 ;
 		}
 
 		break;
@@ -854,22 +865,18 @@ int mcu_oninput( char * ibuf )
 	case '\x49' :
 		mcu_response(ibuf);
 		{
-			char *breport[]={
-				"fully charged" ,
-				"charging",
-				"disconnected", "unknown" };
 			p_dio_mmap->battery_voltage = 0.016178 * (int)((unsigned char)ibuf[7]+256*(unsigned int)(unsigned char)ibuf[6]) ; 
 			if( ibuf[5]<0 || ibuf[5]>3 )ibuf[5]=3 ;
 			p_dio_mmap->battery_state = ibuf[5] ;
-			dvr_log("Battery report, battery is %s, voltage: %.2f V.", breport[ibuf[5]], p_dio_mmap->battery_voltage );
+			dvr_log("Battery report, battery state: %s, voltage: %.2f V.", battery_status[p_dio_mmap->battery_state], p_dio_mmap->battery_voltage );
 		}
 		break ;
 		
 	case '\x4a' :
 		mcu_response(ibuf);
 		{
-			if( battery_drop_report == 0 ) {
-				dvr_log( "Battery voltage dropped... " );
+			if( !battery_drop_report ) {
+				dvr_log( "Battery voltage dropped, voltage: %f", p_dio_mmap->battery_voltage );
 				battery_drop_report = 1 ;
 			}
 		}
@@ -980,6 +987,7 @@ int doutput_init()
     }
    
     mcu_dio_output( omap ) ;
+
     mcu_doutputmap = outputmap ;
 	return 0;
 }
@@ -1020,9 +1028,23 @@ int doutput()
         }
     }
     
+    // map bit 0 to dual cam red LED (recording)
+    if( omap & 1 ) {
+		
+		dvr_log("Dual REC LED ON!\n");
+		
+		p_dio_mmap->pwii_output |= PWII_DUALCAM_LED1 ;
+	}
+	else {
+		
+		dvr_log("REC LED OFF!\n");
+		
+		p_dio_mmap->pwii_output &= ~PWII_DUALCAM_LED1 ;
+	}
+        
     mcu_dio_output( omap ) ;
     mcu_doutputmap = outputmap ;
-    
+        
     return 0;
 }
 
@@ -1052,18 +1074,10 @@ int mcu_pwii_output()
 	// ZOOM IN SUPPORT
 	if( x_pwii_output & PWII_LP_ZOOMIN ) {
 		if( s_pwii_output & PWII_LP_ZOOMIN ) {
-#ifdef APP_PWZ8			
-			mcu_camera_nightmode(1);	// night mode
-#else 
 			mcu_camera_zoomin(1);		// zoom in
-#endif			
 		}
 		else {
-#ifdef APP_PWZ8			
-			mcu_camera_nightmode(0);	// night mode off
-#else 
 			mcu_camera_zoomin(0);		// zoom out
-#endif			
 		}
 	}
 	
@@ -1797,19 +1811,28 @@ void battery_check()
 {
 	int battery_state ;
 	int battery_voltage ;
+	float fvoltage ;
     battery_state = mcu_battery_check( &battery_voltage );
-    if( battery_state<0 || battery_state>3 ) 
-		battery_state=3 ;
-    p_dio_mmap->battery_state = battery_state ;
-    p_dio_mmap->battery_voltage = 0.016178 * battery_voltage ;
+    if( battery_state >=0 && battery_state<3 ) {
+		fvoltage = 0.016178 * battery_voltage ;
 
-	if( app_mode > APPMODE_RUN && p_dio_mmap->battery_voltage < battery_low ) {
-		set_app_mode(APPMODE_SHUTDOWN, 1) ;
-		dvr_log( "Battery low, voltage: %.1fV, shutdown system..." , (double)(p_dio_mmap->battery_voltage) );
+		if( fvoltage > 8.0 && fvoltage > p_dio_mmap->battery_voltage ) {	// looks like the battery is charged
+			battery_drop_report = 0 ;
+		}
+		
+		if( battery_drop_report && 						// a voltage drop reported
+			fvoltage < battery_low && 					// low voltage
+			fvoltage < p_dio_mmap->battery_voltage ) 	// discharging
+		{
+			set_app_mode(APPMODE_SHUTDOWN, 30) ;
+			dvr_log( "Battery low, voltage: %.2fV, shutdown system..." , (double)(p_dio_mmap->battery_voltage) );
+		}
+
+		p_dio_mmap->battery_state = battery_state ;		// This value is never be valid!!!
+		p_dio_mmap->battery_voltage = fvoltage ;
 	}
-    
-}
 
+}
 
 // return 
 //        0 : failed
@@ -2987,8 +3010,7 @@ int main(int argc, char * argv[])
             }
         }
 
-       // mcu command check
-#if 1
+		// mcu command check
         if( p_dio_mmap->mcu_cmd != 0 ) {
             if( p_dio_mmap->mcu_cmd == 1 ) {
 				// dvr_log( "HD power off.");
@@ -3030,10 +3052,9 @@ int main(int argc, char * argv[])
                 p_dio_mmap->mcu_cmd=-1;	 // command error, (unknown cmd)
             }
         } 
-#endif
 
-        static unsigned int cpuusage_timer ;
 #if 0
+        static unsigned int cpuusage_timer ;
         if( (runtime - cpuusage_timer)> 5000 ) {    // 5 seconds to monitor cpu usage
             cpuusage_timer=runtime ;
             static int usage_counter=0 ;
@@ -3220,10 +3241,10 @@ int main(int argc, char * argv[])
                                 p_dio_mmap->dvrcmd = 3; // stop recording
                         }
                         sync();
-                        // stop glog recording
-                //        if( p_dio_mmap->glogpid>0 ) {
-                //            kill( p_dio_mmap->glogpid, SIGUSR1 );
-                 //       }
+						// stop glog recording
+						// if( p_dio_mmap->glogpid>0 ) {
+						//     kill( p_dio_mmap->glogpid, SIGUSR1 );
+						// }
                         set_app_mode(APPMODE_NORECORD, 60) ;    // start standby mode
                         dvr_log("Shutdown delay timeout, to stop recording (mode %d).", app_mode);
                     }
@@ -3233,14 +3254,14 @@ int main(int argc, char * argv[])
                     p_dio_mmap->devicepower = 0xffff ;
                     set_app_mode(APPMODE_RUN, 0) ;   // back to normal
 					
-					battery_drop_report = 0 ;		// to enable battery status report, (this is like cheating but to fix problem)
+					battery_drop_report = 0 ;		// re-enable battery status report
 					
                     dvr_log("Power on switch, set to running mode. (mode %d)", app_mode);
                     //turn off wifi power
                     if(!wifi_poweron) {
                         mcu_wifipoweroff();
-			mcu_poepoweroff();
-		    }
+						mcu_poepoweroff();
+					}
                 }
             }
             else if( app_mode==APPMODE_NORECORD ) {  
@@ -3523,7 +3544,7 @@ int main(int argc, char * argv[])
 								// start shutdown
 								p_dio_mmap->devicepower=DEVICEOFF ;    // turn off all devices power
 								modeendtime = runtime+10000;//90000 ;
-								set_app_mode(APPMODE_SHUTDOWN,0) ;    // turn off mode
+								set_app_mode(APPMODE_SHUTDOWN,30) ;    // turn off mode
 								dvr_log("Standby timeout, system shutdown. (mode %d).", app_mode );
 								buzzer( 5, 1000, 500 );
 
@@ -3596,17 +3617,24 @@ int main(int argc, char * argv[])
 #endif
                 }
             }
-            else if( app_mode==APPMODE_SHUTDOWN ) {// turn off mode, no keep power on 
-                sync();
-                if( runtime>modeendtime ) {     // system suppose to turn off during these time
-                    // hard ware turn off failed. May be ignition turn on again? Reboot the system
-                //    dvr_log("Hardware shutdown failed. Try reboot by software!" );
-                //    set_app_mode(APPMODE_REBOOT) ;
-                mcu_setwatchdogtime(10);            // 10 seconds watchdog time out
-				 mcu_reboot();
-				 exit(1);
-				 set_app_mode(APPMODE_QUIT,0) ;                 // quit IOPROCESS
-                }
+            else if( app_mode==APPMODE_SHUTDOWN ) {		// turn off mode, no keep power on 
+				if( p_dio_mmap->dvrpid > 0 ) {
+					kill(p_dio_mmap->dvrpid, SIGTERM);
+				}
+				if( p_dio_mmap->glogpid > 0 ) {
+					kill(p_dio_mmap->glogpid, SIGTERM);
+				}				
+			
+                if( (p_dio_mmap->dvrpid == 0 && p_dio_mmap->glogpid == 0) || runtime>modeendtime ) {     // system suppose to turn off during these time
+					// hard ware turn off failed. May be ignition turn on again? Reboot the system
+					//    dvr_log("Hardware shutdown failed. Try reboot by software!" );
+					//    set_app_mode(APPMODE_REBOOT) ;
+					sync();
+					mcu_setwatchdogtime(10);            // 10 seconds watchdog time out
+					mcu_reboot();
+					exit(1);
+					set_app_mode(APPMODE_QUIT,0) ;                 // quit IOPROCESS
+				}
             }
             else if( app_mode==APPMODE_REBOOT ) {
                 static int reboot_begin=0 ;
@@ -3629,7 +3657,7 @@ int main(int argc, char * argv[])
                 else if( runtime>modeendtime ) { 
                     // program should not go throught here,
                     mcu_reboot ();
-		    exit(1);
+					exit(1);
                    // system("/bin/reboot");                  // do software reboot
                     set_app_mode(APPMODE_QUIT,0) ;                 // quit IOPROCESS
                 }

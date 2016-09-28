@@ -5,10 +5,14 @@
 
 #include "dvr.h"
 #include "dir.h"
+#include "vri.h"
 
 //#define OUTPUT_COMMAND
 
 dvrsvr *dvrsvr::head = NULL;
+
+// used by vri search, just a temperary solution
+static struct dvrtime stream_time ;
 
 dvrsvr::dvrsvr(int fd)
 {
@@ -254,14 +258,14 @@ int dvrsvr::onframe(cap_frame * pframe)
         return 0;
     }
     if ((m_conntype == CONN_REALTIME||m_conntype==CONN_LIVESTREAM) && m_connchannel == pframe->channel) {
-		if( pframe->frametype==FRAMETYPE_KEYVIDEO && m_fifo != NULL ) 
+		if( pframe->frametype==FRAMETYPE_KEYFRAME && m_fifo != NULL ) 
         {		
 			net_fifo *pfifo = m_fifo ;
 			net_fifo *nfifo = pfifo->next ;
 			while( nfifo != NULL ) {
 				if( nfifo->bufsize == sizeof(struct dvr_ans) &&
 					((struct dvr_ans *) nfifo->buf)->anscode == ANSSTREAMDATA &&
-					((struct dvr_ans *) nfifo->buf)->data == FRAMETYPE_KEYVIDEO )
+					((struct dvr_ans *) nfifo->buf)->data == FRAMETYPE_KEYFRAME )
 				{
 					// break the fifo link
 					pfifo->next = NULL ;
@@ -488,6 +492,12 @@ void dvrsvr::onrequest()
         case REQSTREAMDAYLIST:
             ReqStreamDayList ();
             break;
+        case REQDAYCLIPLIST:
+            ReqDayClipList();
+            break;
+        case REQDAYLIST:
+            ReqDayList();
+            break;            
         case REQ2ADJTIME:
             Req2AdjTime();
             break;
@@ -529,6 +539,10 @@ void dvrsvr::onrequest()
 	    case REQCHECKKEY:
 	        ReqCheckKey();
 	        break;
+	        
+	    case REQGETVRI:
+			ReqGetVri();
+			break;
 
 	    case REQSENDDATA:
 	        ReqSendData();
@@ -1007,6 +1021,9 @@ void dvrsvr::ReqOpenLive()
 
     struct dvr_ans ans ;
     int hlen ;
+    
+    // vri hack
+    stream_time.year = 0 ;
 
     if( m_req.data>=0 && m_req.data<cap_channels ) {    
         ans.anscode = ANSSTREAMOPEN;
@@ -1121,6 +1138,10 @@ void dvrsvr::ReqStreamGetDataEx()
 			ans.anssize = sizeof(struct dvrtime) + framesize;
 			ans.data = fi.frametype ; 				//frametype;
 			Send( &ans, sizeof(struct dvr_ans) );
+			
+			// Patch for get VRI
+			stream_time = fi.frametime ;
+			
 			Send( &(fi.frametime), sizeof(struct dvrtime) );
 			Send( fi.framebuf, framesize);
 			mem_free(fi.framebuf);
@@ -1144,6 +1165,7 @@ void dvrsvr::ReqStreamGetData()
 		int framesize = m_playback->readframe(NULL);
 		if( framesize > 0 && framesize<5000000 ) {
 			frame_info fi ;
+			fi.frametype = 0 ;
 			fi.framesize = framesize ;
 			fi.framebuf = (char *)mem_alloc( framesize );
 			m_playback->readframe(&fi);
@@ -1202,7 +1224,6 @@ void dvrsvr::ReqStreamDayInfo()
     struct dvr_ans ans ;
     
     array <struct dayinfoitem> dayinfo ;
- //   dvr_log("RequestStreamDayInfo");
     if( m_req.data == DVRSTREAMHANDLE(m_playback) && 
        m_playback!=NULL &&
        m_recvbuf != NULL &&
@@ -1215,20 +1236,8 @@ void dvrsvr::ReqStreamDayInfo()
         ans.anssize = dayinfo.size()*sizeof(struct dayinfoitem);
         Send( &ans, sizeof(ans));
 
-#ifdef NETDBG
-        printf("Stream DayInfo %04d-%02d-%02d\n",
-               pday->year, pday->month, pday->day );
-#endif  
-   //    dvr_log("Stream DayInfo %04d-%02d-%02d",
-    //           pday->year, pday->month, pday->day );
         if( ans.anssize>0 ) {
             Send( dayinfo.at(0), ans.anssize);
-#if 0
-            int x ;
-            for( x=0; x<dayinfo.size(); x++ ) {
-                dvr_log("%d - %d", dayinfo[x].ontime, dayinfo[x].offtime );
-            }
-#endif  
         }
         return ;
     }
@@ -1290,6 +1299,74 @@ void dvrsvr::ReqStreamDayList()
     DefaultReq();
 }
 
+// get clip file list by disk number
+void dvrsvr::ReqDayClipList()
+{
+    struct dvr_ans ans ;
+    
+    if( m_recvbuf != NULL &&
+       m_req.reqsize>= sizeof(int) )
+    {
+		int bcddate = *(int*)m_recvbuf ;
+		struct dvrtime day ;
+		memset( &day, 0, sizeof(day));
+		day.year = bcddate/10000 ;
+		day.month = bcddate%10000/100 ;
+		day.day = bcddate%100 ;
+        array <f264name> flist ;
+        disk_pw_listdaybydisk(flist, &day, m_req.data);
+        
+        // calculate buffer size
+        int bsize=0;
+		char * fname ;
+        int len ;
+        int i;
+        for( i=0; i<flist.size(); i++ ) {
+			fname = (char *)(flist[i]) ;
+			len = strlen( fname ) ;
+			bsize += len+1 ;
+		}
+
+		char * buf = (char *)mem_alloc(bsize+4);
+		char * cbuf = buf ;
+        for( i=0; i<flist.size(); i++ ) {
+			fname = (char *)(flist[i]) ;
+			len = strlen( fname ) ;
+			memcpy( cbuf, fname, len );
+			cbuf[len]=',' ;
+			cbuf+=len+1 ;
+		}
+		
+        ans.anscode = ANSDAYCLIPLIST;
+        ans.data = flist.size();
+        ans.anssize = bsize;
+        Send( &ans, sizeof(ans));
+        if( ans.anssize>0 ) {
+            Send( buf, ans.anssize);
+        }
+        mem_free(buf);
+        return ;
+    }
+    DefaultReq();
+}
+
+void dvrsvr::ReqDayList()
+{
+	array <int> daylist ;
+	disk_getdaylist(daylist, -1);
+	int lsize = daylist.size();
+    struct dvr_ans ans ;
+	ans.anscode = ANSDAYLIST;
+	ans.data = lsize;
+	ans.anssize = sizeof(int)*lsize;
+	Send( &ans, sizeof(ans));
+	if( lsize>0 ) {
+		int * d_start = daylist.at(0);
+		Send( daylist.at(0), ans.anssize );
+	}
+	return ;	
+}
+
 void dvrsvr::ReqLockInfo()
 {
     struct dvrtime * pday ;
@@ -1310,22 +1387,9 @@ void dvrsvr::ReqLockInfo()
         ans.data = dayinfo.size();
         ans.anssize = dayinfo.size()*sizeof(struct dayinfoitem);
         Send( &ans, sizeof(ans));
-        
-#ifdef NETDBG
-        printf("Stream Lock DayInfo %04d-%02d-%02d\n",
-               pday->year, pday->month, pday->day );
-#endif  
-        
         if( ans.anssize>0 ) {
             Send( dayinfo.at(0), ans.anssize);
         }
-#ifdef NETDBG
-        int x ;
-        for( x=0; x<dayinfo.size(); x++ ) {
-            printf("%d - %d\n", dayinfo[x].ontime, dayinfo[x].offtime );
-        }
-#endif  
-            
         return ;
     }
     DefaultReq();
@@ -1775,19 +1839,35 @@ static void setpoliceid( char * newid )
 	array <string> idlist ;
 	FILE * fid ;
 	int i  ;
-	char buf[120] ;
 	
-	str_trimtail(newid);
-	strcpy( g_policeid, newid ) ;
+	if( newid==NULL ) {
+		g_policeid[0]=0;
+		return ;
+	}
 	
-	idlist[0] = newid ;
+	string snid ;
+	snid = newid ;
+	snid.trim();
+	if( snid.length()<=0 ) {
+		g_policeid[0]=0;
+		return ;
+	}
+	
+	if( strcmp( g_policeid, snid ) == 0 ) 
+		return ;
+	
+	strcpy( g_policeid, snid ) ;
+	
+	// save new police id list
+	idlist[0] = g_policeid ;
 	fid=fopen(g_policeidlistfile, "r");
 	if( fid ) {
 		for( i=1; i<20; ) {
-			if( fgets(buf, 110, fid) ) {
-				str_trimtail(buf);
-				if( strcmp(buf, newid)!=0 ) 
-					idlist[i++]=buf ;
+			if( fgets(snid.setbufsize(120), 119, fid) ) {
+				snid.trim();
+				if( snid.length()>0 && snid!=g_policeid ) {
+					idlist[i++]=snid ;
+				}
 			}
 			else {
 				break;
@@ -1809,10 +1889,31 @@ static void setpoliceid( char * newid )
 	dvr_log( "New Police ID detected : %s", g_policeid );
 }
 
+// Get single line of VRI
+// 		input dvrtime
+void dvrsvr::ReqGetVri()
+{
+    if( m_recvbuf != NULL &&
+        m_req.reqsize >= (int)sizeof(struct dvrtime) ) 
+    {
+		struct dvr_ans ans  ;
+		char * vribuf = vri_lookup( (struct dvrtime *) m_recvbuf );
+		if( vribuf!=NULL ) {
+			ans.anscode = ANSGETVRI ;
+			ans.data = 1 ;
+			ans.anssize = vri_isize();
+			Send( &ans, sizeof(ans));
+			Send( vribuf, ans.anssize );
+			mem_free( vribuf ) ;
+			return ;
+		}
+	}
+    DefaultReq();
+}
+
 void dvrsvr::ReqSendData()
 {
 	struct dvr_ans ans ;
-    
 	switch( m_req.data ) {
 		case PROTOCOL_PW_SETPOLICEID:
 			if( m_recvbuf && m_req.reqsize>0 ) {
@@ -1832,7 +1933,7 @@ void dvrsvr::ReqSendData()
 		case PROTOCOL_PW_SETVRILIST :
 			if( m_recvbuf && m_req.reqsize>0 ) {
 				// select a new offer ID.
-				vri_setlist( m_recvbuf, m_req.reqsize ) ;
+				vri_tag( m_recvbuf, m_req.reqsize );
 			}
 			ans.anscode = ANSOK ;
 			ans.data = 0 ;
@@ -1983,10 +2084,17 @@ void dvrsvr::ReqGetData()
 			FILE * fpid ;
 			fpid=fopen(g_policeidlistfile, "r");
 			i=0;
+			int npid ;
+			npid = 0 ;
 			if( fpid ) {
+				string spoliceid ;
 				for( i=0; i<20; i++ ) {
-					if( fgets(policeid[i], 63, fpid) ) {
-						str_trimtail(policeid[i]);
+					if( fgets(spoliceid.setbufsize( 64 ), 63, fpid) ) {
+						spoliceid.trim();
+						if( spoliceid.length() > 0 ) {
+							strcpy( policeid[npid], spoliceid );
+							npid++;
+						}
 					}
 					else {
 						break;
@@ -1995,8 +2103,8 @@ void dvrsvr::ReqGetData()
 				fclose(fpid);
 			}
 			ans.anscode = ANSGETDATA ;
-			ans.data = i ;
-			ans.anssize = i*64 ;
+			ans.data = npid ;
+			ans.anssize = npid*64 ;
 			Send( &ans, sizeof(ans));
 			Send( &policeid, ans.anssize );
 			
@@ -2005,45 +2113,32 @@ void dvrsvr::ReqGetData()
 		// get vri list 
 		case PROTOCOL_PW_GETVRILISTSIZE:
 			{
-				int vs ;
-				int vis ;
-				vs = vri_getlistsize(&vis);
-				char vrics[40] ;
-				sprintf( vrics, "%d,%d", vs, vis );
+				char vrics[80] ;
+				int l =	sprintf( vrics, "1,%d", vri_isize() );
 				ans.anscode = ANSGETDATA ;
 				ans.data = 0 ;
-				ans.anssize = 40 ;
+				ans.anssize = l+1 ;
 				Send( &ans, sizeof(ans));
-				Send( (void *)vrics, 40 );
+				Send( (void *)vrics, ans.anssize );
 			}
 			break ;
 
 		// get vri list 
 		case PROTOCOL_PW_GETVRILIST:
 			{
-				char * vrilist ;
-				int vrisize ;
-				int vs ;
-				int vis ;
-				vs = vri_getlistsize(&vis);
-				vrisize = vs*vis ;
-				if( vrisize>0 ) {
-					vrilist = new char [vrisize] ;
-					vrisize = vri_getlist(vrilist,vrisize);
+				ans.anscode = ANSGETDATA ;
+				ans.data = 0 ;				
+				char * vribuf = vri_lookup( &stream_time ) ;
+				if( vribuf != NULL ) {
+					ans.anssize = vri_isize() ;
+					Send( &ans, sizeof(ans));
+					Send( vribuf, ans.anssize );
+					mem_free( vribuf );
 				}
 				else {
-					vrilist = NULL ;
-					vrisize = 0;
+					ans.anssize = 0 ;
+					Send( &ans, sizeof(ans));
 				}
-				ans.anscode = ANSGETDATA ;
-				ans.data = 0 ;
-				ans.anssize = vrisize ;
-				Send( &ans, sizeof(ans));
-				if( vrisize>0 ) {
-					Send( (void *)vrilist, vrisize );
-				}
-				if( vrilist )
-					delete [] vrilist ;
 			}
 			break ;
 			
@@ -2110,7 +2205,7 @@ void dvrsvr::ReqGetData()
 				}
 			}
 			break ;					
-			
+						
 		default:
 			DefaultReq();
 	}

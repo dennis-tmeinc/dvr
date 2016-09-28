@@ -24,10 +24,37 @@ cat /proc/frammap/ddr_info
 /sbin/insmod /lib/modules/flcd200-common.ko
 /sbin/insmod /lib/modules/flcd200-pip.ko input_res=9 output_type=53 bf=0 fb0_fb1_share=1 gui_clone_fps=5
 
+camsd=`/mnt/nand/dvr/cfg get system camsd`
+ch14mode="7"
+ch58mode="7"
+ch14norm="5"
+ch58norm="5"
 if [ "$video_system" == "NTSC" ]  ; then
     /sbin/insmod /lib/modules/flcd200-pip2.ko input_res=0 output_type=0 bf=0 d1_3frame=1 fb0_fb1_share=1 lcd_disable=0
+  if [ "$camsd" == "0" ] ; then
+    ch14mode="7"
+    ch14norm="5"
+    ch58mode="7"
+    ch58norm="5"
+  else
+    ch14mode="1"
+    ch14norm="1"
+    ch58mode="1"
+    ch58norm="1"
+  fi
 elif [ "$video_system" == "PAL" ] ; then
     /sbin/insmod /lib/modules/flcd200-pip2.ko input_res=1 output_type=1 bf=0 d1_3frame=1 fb0_fb1_share=1 lcd_disable=0
+  if [ "$camsd" == "0" ] ; then
+    ch14mode="15"
+    ch14norm="4"
+    ch58mode="15"
+    ch58norm="4"
+  else
+    ch14mode="9"
+    ch14norm="0"
+    ch58mode="9"
+    ch58norm="0"
+  fi
 fi
 
 /sbin/insmod /lib/modules/sli10121.ko  #HDMI
@@ -38,18 +65,18 @@ case "$video_frontend" in
 	nvp6114)
             if [ "$video_system" == "NTSC" ] ; then
                 /sbin/insmod /lib/modules/nvp6114.ko dev_num=2 clk_src=4 clk_used=1 vmode=7,7 ch_map=0 notify=1 audio_chnum=8
-                /sbin/insmod /lib/modules/nvp6114a.ko dev_num=2 clk_src=4 clk_used=1 vmode=7,7 ch_map=0 notify=1 audio_chnum=8
+                /sbin/insmod /lib/modules/nvp6114a.ko dev_num=2 clk_src=4 clk_used=1 vmode=${ch14mode},${ch58mode} ch_map=0 notify=1 audio_chnum=8
                 /sbin/insmod /lib/modules/vcap300_common.ko
                 /sbin/insmod /lib/modules/vcap0.ko vi_mode=2,2,2,2 cap_md=1
                 /sbin/insmod /lib/modules/vcap300_nvp6114.ko mode=1,1 norm=5,5 inv_clk=1,1
-                /sbin/insmod /lib/modules/vcap300_nvp6114a.ko mode=1,1 norm=5,5 inv_clk=1,1
+                /sbin/insmod /lib/modules/vcap300_nvp6114a.ko mode=1,1 norm=${ch14norm},${ch58norm} inv_clk=1,1
             else
                 /sbin/insmod /lib/modules/nvp6114.ko dev_num=2 clk_src=4 clk_used=1 vmode=15,15 ch_map=0 notify=1 audio_chnum=8
-                /sbin/insmod /lib/modules/nvp6114a.ko dev_num=2 clk_src=4 clk_used=1 vmode=15,15 ch_map=0 notify=1 audio_chnum=8
+                /sbin/insmod /lib/modules/nvp6114a.ko dev_num=2 clk_src=4 clk_used=1 vmode=${ch14mode},${ch58mode} ch_map=0 notify=1 audio_chnum=8
                 /sbin/insmod /lib/modules/vcap300_common.ko
                 /sbin/insmod /lib/modules/vcap0.ko vi_mode=2,2,2,2 cap_md=1
                 /sbin/insmod /lib/modules/vcap300_nvp6114.ko mode=1,1 norm=4,4 inv_clk=1,1
-                /sbin/insmod /lib/modules/vcap300_nvp6114a.ko mode=1,1 norm=4,4 inv_clk=1,1
+                /sbin/insmod /lib/modules/vcap300_nvp6114a.ko mode=1,1 norm=${ch14norm},${ch58norm} inv_clk=1,1
             fi
             ;;
     *)

@@ -551,9 +551,31 @@ int tab102_recvmsg( unsigned char * recv, int size,int fd)
     int left=0;
     int times=0;
     int i=0;
+
+
+#ifdef APP_PWZ8
+
+// PWZ8 related io check
+void tab102_check_pwz8();
+
+int tab102_rready(int timeout);
+
+	// insert black/white poll here.
+	int poll5s ;
+	for( poll5s = 0 ; poll5s < 50 ; poll5s++ ) {
+		// check camera black/white mode output
+		if( tab102_rready(100000) ) {
+			break ;
+		}
+		else {
+			tab102_check_pwz8();
+		}
+	}
+#endif
+
     struct timeval tv;
-    tv.tv_sec = 5;
-    tv.tv_usec = 0;
+    tv.tv_sec = 0;
+    tv.tv_usec = 1000;
     if( blockUntilReadable(fd, &tv) > 0 ) {
         read(fd,recv, 1);
         n=(int) *recv ;
@@ -562,6 +584,8 @@ int tab102_recvmsg( unsigned char * recv, int size,int fd)
             total=1;
             left=n-1;
             while(times<10){
+				tv.tv_sec = 3;
+				tv.tv_usec = 0;
                 if(blockUntilReadable(fd, &tv) > 0){
 			bytes=read(fd,recv+total,left);
 			/*
@@ -1275,6 +1299,154 @@ int getTrigger(int fd)
   return (retry > 0) ? 0 : 1;
 }
 
+#ifdef APP_PWZ8
+// PWZ8, camera0/1 black/white mode support
+
+#define TAB102_TARGET	(4)
+#define TAB102_SOURCE	(0)
+
+// check if tab102 port ready for read (timeout in micro-seconds)
+int tab102_rready(int timeout)
+{
+    struct timeval tv ;
+    tv.tv_sec = timeout/1000000 ;
+    tv.tv_usec = timeout%1000000 ;
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(comFd, &fds);
+    if (select(comFd + 1, &fds, NULL, NULL, &tv) > 0) {
+        return FD_ISSET(comFd, &fds);
+    } else {
+        return 0;
+    }
+}
+
+// read 1 byte from com port, return -1 for error
+static int tab102_getc()
+{
+	unsigned char c ;
+	if( tab102_rready(1000000) ) {
+		if( read( comFd, &c, 1 ) ) {
+			return (int)(unsigned int)c ;
+		}
+	}
+	return -1 ;
+}
+
+void tab102_event( unsigned char * ibuf ) ;
+
+// send command to tab102
+static int tab102_cmd( int cmd, int datalen = 0, ... )
+{
+    int i, r , rretry ;
+    unsigned char mcu_buf[128] ;
+
+    // validate command
+    if( datalen<0 || datalen>64 ) { 	// wrong command
+        return 0 ;
+    }
+
+    mcu_buf[0] = (unsigned char)(datalen+6) ;	// packet len
+    mcu_buf[1] = (unsigned char)TAB102_TARGET;	// target (TAB102=4)
+    mcu_buf[2] = (unsigned char)TAB102_SOURCE;	// source
+    mcu_buf[3] = (unsigned char)cmd ;			// command
+    mcu_buf[4] = (unsigned char)2 ;				// a request
+
+	if( datalen>0 ) {
+		va_list va ;
+		va_start( va, datalen ) ;
+		for( i=0 ; i<datalen ; i++ ) {
+			mcu_buf[5+i] = (unsigned char) va_arg( va, int );
+		}
+		va_end(va);
+	}
+    mcu_buf[5+datalen] = getChecksum(mcu_buf, 5+datalen); // checksum
+    writeCom(comFd, mcu_buf, 6+datalen );
+
+    // try read response 3 times
+    for(rretry=0;rretry<3;rretry++) {
+		// read first byte (len)
+		r = tab102_getc() ;
+		if( r>5 && r<120  ) {
+			mcu_buf[0] = r ;
+			for( i=1; i<mcu_buf[0]; i++ ) {
+				mcu_buf[i] = tab102_getc();
+			}
+			if( mcu_buf[4] == 3 ) {				// a response
+				if(	mcu_buf[1] == TAB102_SOURCE &&
+					mcu_buf[2] == TAB102_TARGET &&
+					mcu_buf[3] == cmd ) 		// a response to my command
+				{
+					if (verifyChecksum(mcu_buf, mcu_buf[0])) {
+					  printf("\nchecksum error\n");
+					} 
+					return 1;
+				}
+			}
+			else if( mcu_buf[4] == 2 ) {		// an event
+				tab102_event( mcu_buf );
+			}
+		}
+	}
+	return 0 ;
+}
+
+// set LP camera blackwhite mode, bit0: camera0, bit1: camera1
+void tab102_camera_blackwhite( int bw )
+{
+	dprintf("Set blackwhite mode %d ", bw );
+	if( tab102_cmd( 0x24, 1, bw ) ) {
+		dprintf("successful!\n");
+	}
+	else {
+		dprintf("failed!\n");
+	}
+}
+
+// set dual cam leds
+void tab102_camera_leds(int leds) 
+{
+	dprintf("Set dual camera leds %d ", leds );
+	if( tab102_cmd( 0x25, 1, leds ) ) {
+		dprintf("successful!\n");
+	}
+	else {
+		dprintf("failed!\n");
+	}	
+}
+			
+// check camera black/white mode output
+void tab102_check_pwz8()
+{
+	if(p_dio_mmap && comFd > 0) {
+		static unsigned int s_pwii_output = 0 ;
+		int x_pwii_output = p_dio_mmap->pwii_output ^ s_pwii_output ;
+		s_pwii_output ^= x_pwii_output ;
+		
+		// camera BLACK/WHTE mode
+		if( x_pwii_output & (PWII_LP_BW0|PWII_LP_BW1) ) {
+			int bw = 0 ;
+			if( s_pwii_output & PWII_LP_BW0 ) bw|=1 ;
+			if( s_pwii_output & PWII_LP_BW1 ) bw|=2 ;
+			tab102_camera_blackwhite(bw);
+		}
+		
+		// LED lights on dual cam
+		if( x_pwii_output & (PWII_DUALCAM_LED0|PWII_DUALCAM_LED1|PWII_COVERT_MODE) ) {
+			int leds = 0 ;
+			if( (s_pwii_output & PWII_COVERT_MODE )==0 ) {
+				if( s_pwii_output & PWII_DUALCAM_LED0 ) leds|=1 ;
+				if( s_pwii_output & PWII_DUALCAM_LED1 ) leds|=2 ;
+			}
+			tab102_camera_leds(leds);
+		}
+		
+	}
+}
+ 
+#endif
+
+
 int isConfigureChanged()
 {
   if(last_gsensor_direction !=gsensor_direction)
@@ -1903,49 +2075,55 @@ void Tab102_checkPeakdata(unsigned char* ibuf)
 #endif
 }
 
+// tab102 input events, (by dennis)
+void tab102_event( unsigned char * ibuf ) 
+{
+	if((ibuf[0]=='\x0c') &&
+		(ibuf[1]=='\x00') &&
+		(ibuf[2]=='\x04') &&
+		(ibuf[3]== '\x1e' )) {    		  
+		Tab102_sendGforceAck(comFd);			  
+		Tab102_checkPeakdata(ibuf);
+	}
+}			
 
 int Tab102_input(int usdelay,int fd)
 {
-    int res = 0 ;
-    int n ;
-    int repeat ;
-    unsigned char ibuf[50] ;
-    int udelay = usdelay ;
-    struct timeval  timenow;
-    for(repeat=0; repeat<10; repeat++ ) {            
-            n = tab102_recvmsg( ibuf, sizeof(ibuf),fd ) ;     // mcu_recv() will process mcu input messages
-            if( n>0 ) {
-#if 0	      
-	        printf("n=%d=====\n",n);
-		int i=0;
-		for(i=0;i<n;++i)
-		   printf("%x ",ibuf[i]);
-#endif		
-                if((ibuf[0]=='\x0c') &&
-		   (ibuf[1]=='\x00') &&
-	           (ibuf[2]=='\x04') &&
-		   (ibuf[4]=='\x02') &&
-		   (ibuf[3]== '\x1e' )) {    		  
-                   Tab102_sendGforceAck(fd);			  
-		//   printf("process packet\n");
-                   Tab102_checkPeakdata(ibuf);
-	   
-                }                
-            } else {
-	      break; 
-	    }
-    }
-    gettimeofday(&timenow, NULL);
- //   printf("timenow:%d mstarttime:%d\n",timenow.tv_sec,mstarttime);
-    if(timenow.tv_sec-mstarttime>5){
-        p_dio_mmap->gforce_changed=0;
-	//printf("gforce changed is 0\n");
-	p_dio_mmap->gforce_changed=0;
-	p_dio_mmap->gforce_forward_d=0.0;
-	p_dio_mmap->gforce_down_d=0.0;
-	p_dio_mmap->gforce_right_d=0.0;	
-    }
-    return res;
+	int res = 0 ;
+	int n ;
+	int repeat ;
+	unsigned char ibuf[50] ;
+	int udelay = usdelay ;
+	struct timeval  timenow;
+	for(repeat=0; repeat<10; repeat++ ) {            
+		n = tab102_recvmsg( ibuf, sizeof(ibuf),fd ) ;     // mcu_recv() will process mcu input messages
+		if( n>0 ) {
+
+			if((ibuf[0]=='\x0c') &&
+				(ibuf[1]=='\x00') &&
+				(ibuf[2]=='\x04') &&
+				(ibuf[4]=='\x02') &&
+				(ibuf[3]== '\x1e' )) {    		  
+					Tab102_sendGforceAck(fd);			  
+					//   printf("process packet\n");
+					Tab102_checkPeakdata(ibuf);
+
+			}
+		} else {
+			break; 
+		}
+	}
+	gettimeofday(&timenow, NULL);
+	//   printf("timenow:%d mstarttime:%d\n",timenow.tv_sec,mstarttime);
+	if(timenow.tv_sec-mstarttime>5){
+		p_dio_mmap->gforce_changed=0;
+		//printf("gforce changed is 0\n");
+		p_dio_mmap->gforce_changed=0;
+		p_dio_mmap->gforce_forward_d=0.0;
+		p_dio_mmap->gforce_down_d=0.0;
+		p_dio_mmap->gforce_right_d=0.0;	
+	}
+	return res;
 }
 
 int is_correct_version_byte(unsigned char b)
@@ -2459,162 +2637,162 @@ int checkTriggerset()
   return 0;  
   
 }
+
 int setTabLiveFlag()
 {
-  FILE* fw;
-  pid_t tabpid=getpid();
-  fw=fopen("/var/dvr/tab102.pid","w");
-  if(fw){
-    fprintf(fw,"%d",(int)tabpid);
-    fclose(fw);
-  }
-  p_dio_mmap->tab102_isLive=1;
-  p_dio_mmap->tab102pid=tabpid; 
+	FILE* fw;
+	pid_t tabpid=getpid();
+	fw=fopen("/var/dvr/tab102.pid","w");
+	if(fw){
+		fprintf(fw,"%d",(int)tabpid);
+		fclose(fw);
+	}
+	p_dio_mmap->tab102_isLive=1;
+	p_dio_mmap->tab102pid=tabpid; 
 }
+
 
 int main(int argc, char **argv)
 {
-
-  unsigned char buf[1024];
-  FILE* fw=NULL;
-  static struct timeval tm;
-  int starttime0,count;
+	unsigned char buf[1024];
+	FILE* fw=NULL;
+	static struct timeval tm;
+	int starttime0,count;
 #ifdef NET_DEBUG
-  connectDebug();
-  writeNetDebug("tab102 started");
+	connectDebug();
+	writeNetDebug("tab102 started");
 #endif
-  if(argc>=3){
-    printf("argv[1]:%s  argv[2]:%s\n",argv[1],argv[2]);
-    if( strcasecmp( argv[1], "-tw" )==0 ){
-        burn_firmware( argv[2]);
-        return 0;
-    }
-  }
-  appinit();
-  fw=fopen("/var/dvr/tab102log","w");   
-  comFd = openCom(tab102b_port_dev, tab102b_port_baudrate);
-  if (comFd == -1) {
-     fprintf(fw,"open Com port failed\n");
-     fclose(fw);   
-     exit(1);
-  }
-
-  //check update tab102b firmware
-#if 1 
-  if( argc>=3 ) {
-	if( strcasecmp( argv[1], "-fw" )==0 ) {
-		if( argv[2] && update_firmware( argv[2],comFd) ) {
-                        set_mcuReboot();
-			return 0 ;
-		}
-		else {
-                     //   set_mcuReboot();
-			return 1;
+	if(argc>=3){
+		printf("argv[1]:%s  argv[2]:%s\n",argv[1],argv[2]);
+		if( strcasecmp( argv[1], "-tw" )==0 ){
+			burn_firmware( argv[2]);
+			return 0;
 		}
 	}
-  }
+	appinit();
+	fw=fopen("/var/dvr/tab102log","w");
+	comFd = openCom(tab102b_port_dev, tab102b_port_baudrate);
+	if (comFd == -1) {
+		fprintf(fw,"open Com port failed\n");
+		fclose(fw);
+		exit(1);
+	}
+
+	//check update tab102b firmware
+#if 1
+	if( argc>=3 ) {
+		if( strcasecmp( argv[1], "-fw" )==0 ) {
+			if( argv[2] && update_firmware( argv[2],comFd) ) {
+				set_mcuReboot();
+				return 0 ;
+			}
+			else {
+				//   set_mcuReboot();
+				return 1;
+			}
+		}
+	}
 #endif
-  if ((argc >= 2) && !strcmp(argv[1], "-rtc")) {
- 
-       // zero_com(comFd);
-	if (setTab102RTC(comFd)) {
-		fprintf(fw,"set rtc failed\n");
-		fclose(fw);
-		exit(2);
-	}
-#if 0	
-	if (checkContinuousData(comFd)) {
-		printf("check continuous data failed\n");
-	// exit(3);
-	}
-	
-	if (checkPeakData(comFd)) {
-		printf("check peak data failed\n");
-	//  exit(4);
-	}
-#endif	
+	if ((argc >= 2) && !strcmp(argv[1], "-rtc")) {
 
-	if( tab102_version( tab102b_firmware_version,comFd ) ) {
-	// printf("MCU: %s\n", mcu_firmware_version );
-		FILE * tab102versionfile=fopen("/var/dvr/tab102version", "w");
-		if( tab102versionfile ) {
-			fprintf( tab102versionfile, "%s", tab102b_firmware_version );
-			fclose( tab102versionfile );
+		// zero_com(comFd);
+		if (setTab102RTC(comFd)) {
+			fprintf(fw,"set rtc failed\n");
+			fclose(fw);
+			exit(2);
 		}
-	} else{
-		fprintf(fw,"can't get tab102b version\n");
-		fclose(fw);
-		exit(3);
-	}
-        if(setTrigger(comFd)){
-	   fprintf(fw,"setTrigger failed\n"); 
-	}
-	
-       // get0G(comFd);	
-	gettimeofday(&tm, NULL);
-	starttime0=tm.tv_sec;    
-	while(1){
-           sleep(1);
-	   gettimeofday(&tm, NULL);
-	   if((tm.tv_sec-starttime0)>10)
-	     break;
-	}
-	
- 	if(enablePeak(comFd)){
-	   fprintf(fw,"enable peak failed\n"); 
-	   fclose(fw);
-	   exit(4);
-	}   
-		
-	if (startADC(comFd)) {
-		fprintf(fw,"start adc failed\n");
-		fclose(fw);
-		exit(5);
-	}	
-	setTabLiveFlag();
-        while(1){
-	  Tab102_input(5000,comFd);	  
-	  if (checkTab102()) {
-	     fprintf(fw,"checkContinuousData\n"); 
-	     checkContinuousData(comFd);
-	     unlink("/var/dvr/tab102check");
-	     break;
-	  }
-	  
-	  if(checkTriggerset()){
-	     reloadconfig();
-	     if(isConfigureChanged()){
-	        setTrigger(comFd);
-		ChangeStoredValue();
-	     }
-	  }
-       }
-	 
-  } else if((argc >= 2) && !strcmp(argv[1], "-st")){
-      setTrigger(comFd);
-  } else if((argc >= 2) && !strcmp(argv[1], "-gt")){
-      getTrigger(comFd);
-  } else if((argc >= 2) && !strcmp(argv[1], "-reset")) {
-     sendReset(comFd); 
-  } else {
-    if (checkTab102()) {
-	if (checkContinuousData(comFd)) {
-		printf("check continuous data failed\n");
-		fclose(fw);
-		exit(3);
-	}
-	if (checkPeakData(comFd)) {
-		printf("check peak data failed\n");
-		fclose(fw);
-		exit(4);
-	}
-    }
-  }
-  if(fw)
-    fclose(fw); 
-  sendReset(comFd); 
-  close(comFd);
+#if 0
+		if (checkContinuousData(comFd)) {
+			printf("check continuous data failed\n");
+			// exit(3);
+		}
 
-  return 0;
+		if (checkPeakData(comFd)) {
+			printf("check peak data failed\n");
+			//  exit(4);
+		}
+#endif
+
+		if( tab102_version( tab102b_firmware_version,comFd ) ) {
+			// printf("MCU: %s\n", mcu_firmware_version );
+			FILE * tab102versionfile=fopen("/var/dvr/tab102version", "w");
+			if( tab102versionfile ) {
+				fprintf( tab102versionfile, "%s", tab102b_firmware_version );
+				fclose( tab102versionfile );
+			}
+		} else{
+			fprintf(fw,"can't get tab102b version\n");
+			fclose(fw);
+			exit(3);
+		}
+		if(setTrigger(comFd)){
+			fprintf(fw,"setTrigger failed\n");
+		}
+
+		// get0G(comFd);
+		gettimeofday(&tm, NULL);
+		starttime0=tm.tv_sec;
+		while(1){
+			sleep(1);
+			gettimeofday(&tm, NULL);
+			if((tm.tv_sec-starttime0)>10)
+				break;
+		}
+
+		if(enablePeak(comFd)){
+			fprintf(fw,"enable peak failed\n");
+			fclose(fw);
+			exit(4);
+		}
+
+		if (startADC(comFd)) {
+			fprintf(fw,"start adc failed\n");
+			fclose(fw);
+			exit(5);
+		}
+		setTabLiveFlag();
+		while(1){
+			Tab102_input(5000,comFd);
+			if (checkTab102()) {
+				fprintf(fw,"checkContinuousData\n");
+				checkContinuousData(comFd);
+				unlink("/var/dvr/tab102check");
+				break;
+			}
+			if(checkTriggerset()){
+				reloadconfig();
+				if(isConfigureChanged()){
+					setTrigger(comFd);
+					ChangeStoredValue();
+				}
+			}
+		}
+
+	} else if((argc >= 2) && !strcmp(argv[1], "-st")){
+		setTrigger(comFd);
+	} else if((argc >= 2) && !strcmp(argv[1], "-gt")){
+		getTrigger(comFd);
+	} else if((argc >= 2) && !strcmp(argv[1], "-reset")) {
+		sendReset(comFd);
+	} else {
+		if (checkTab102()) {
+			if (checkContinuousData(comFd)) {
+				printf("check continuous data failed\n");
+				fclose(fw);
+				exit(3);
+			}
+			if (checkPeakData(comFd)) {
+				printf("check peak data failed\n");
+				fclose(fw);
+				exit(4);
+			}
+		}
+	}
+	if(fw)
+		fclose(fw);
+	sendReset(comFd);
+	close(comFd);
+
+	return 0;
 }
 

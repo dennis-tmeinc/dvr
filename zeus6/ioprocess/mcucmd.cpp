@@ -205,27 +205,17 @@ int mcu_camera_zoomin(int zoomin)
 	return 1;
 }
 
-void mcu_camera_nightmode( int night )
-{
-	if( night ) {
-		dvr_log("Camera night mode on.");
-		mcu_cmd_target(4, 0x24, 1, 3 );
-	}
-	else {        
-		dvr_log("Camera night mode off.");
-		mcu_cmd_target(4, 0x24, 1, 0 );
-	}
-}
-
 int mcu_battery_check( int * voltage )
 {
 	char * rsp = mcu_cmd(0x48);
 	if( rsp ) {
-//		dvr_log("Battery status :%d", rsp[5] );
 		if( voltage ) {
 			*voltage = (int)((unsigned char)rsp[7]+256*(unsigned int)(unsigned char)rsp[6]) ; 
 		}
-		return (int)rsp[5] ;
+		if( rsp[5]<0 || rsp[5]>3 ) 
+			return 3 ;
+		else 
+			return (int)rsp[5] ;
 	}
 	return -1 ;
 }

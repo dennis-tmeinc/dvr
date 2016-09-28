@@ -1,11 +1,15 @@
 
-# Makefile for Eagle32 DVR ioprocess app
+# Makefile for Eagle32 DVR project
 #
 
 include ../config
 include $(PROJDIR)/arm_tool
 
-LDFLAGS=
+ifeq ($(EAGLE),eagle32)
+LDFLAGS= -lpthread -lstdc++ 
+else
+LDFLAGS= -lpthread -lstdc++ -lrt -Wl,-rpath,.
+endif
 
 CFLAGS+= -Wall
 
@@ -33,4 +37,3 @@ clean :
 	rm -f sfx86
 	rm -f extractsfx
 	rm -f *.o
-	

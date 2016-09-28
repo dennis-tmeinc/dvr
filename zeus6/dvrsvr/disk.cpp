@@ -484,7 +484,7 @@ static void disk_listday_help(const char *tdir, array <int> & daylist, int chann
 				if( strlen( dname ) == 8 && *dname == '2' ) {
 					int day = atoi(dname);
 					if( day>20100000 && day<21000000 ) {
-						if( channel>=0 && channel<10 ) {
+						if( channel>=0 && channel<16 ) {
 							string chname ;
 							struct stat st ;
 							sprintf( chname.setbufsize(512), "%s/CH%02d", (char *)d.pathname(), channel );
@@ -1042,6 +1042,36 @@ void disk_pw_checkspace()
 
 }
 
+// get .264 file list by day and disk number (for pwcontroller)
+void disk_pw_listdaybydisk(array <f264name> & flist, struct dvrtime * day, int disk)
+{
+    char * rootfolder = (char *)"/var/dvr/disks" ;
+	char date[10] ;
+	if( disk>=0 && disk<3 ) {
+		
+printf("Req Disk: %d\n", disk );
+		
+		if( pw_disk[disk].mounted ) {
+			rootfolder = (char *)pw_disk[disk].disk ;
+			
+printf("Req Root: %s\n", 		rootfolder );	
+		}
+		else {
+printf("Req Not Mounted\n" );
+			return ;
+		}
+	}
+	sprintf(date, "%04d%02d%02d", 
+                    day->year,
+                    day->month,
+                    day->day );
+                    
+printf("ReqDate: %s\n", date );
+                    
+    disk_list264files( rootfolder, flist, date, -1, 0 );
+    flist.sort();
+}
+
 void disk_pw_init( config &dvrconfig )
 {
 	disk_pw_recordmethod=dvrconfig.getvalueint("system", "pw_recordmethod");
@@ -1093,12 +1123,13 @@ char * disk_getbasedisk( int locked )
 
 char * disk_getlogdisk()
 {
+	
 	if( disk_pw_curlogdisk < 0 ) {
 		int t = time_gettick() ;		
 		if( pw_disk[0].mounted ) {
 			disk_pw_curlogdisk = 0 ;		// use DISK1 as logging disk
 		}
-		else if( t-disk_pw_inittime > 180000  && pw_disk[1].mounted ) {		// use DISK2 as logging disk after 3 minutes
+		else if( t-disk_pw_inittime > 120000  && pw_disk[1].mounted ) {		// use DISK2 as logging disk after 2 minutes
 			disk_pw_curlogdisk = 1 ;		
 		}
 		if( disk_pw_curlogdisk>=0 ) {
@@ -1119,6 +1150,18 @@ char * disk_getlogdisk()
 	else {
 		return (char *)(pw_disk[disk_pw_curlogdisk].disk );
 	}
+}
+
+
+// retrive base dir for recording
+char * disk_getdisk( int disknum )
+{
+	if( disknum>=0 && disknum<=2 ) {
+		if( pw_disk[disknum].mounted ) {
+			return (char *) ( pw_disk[disknum].disk );
+		}
+	}
+	return NULL ;
 }
 
 void disk_check()

@@ -1,8 +1,3 @@
-/* --- Changes ---
- * 09/25/2009 by Harrison
- *   1. Make this daemon
- *
- */
 
 #include "dvr.h"
 #include "sys/file.h"
@@ -814,8 +809,9 @@ void app_init()
     g_policeid[0]=0;
     fid=fopen(g_policeidlistfile, "r");
     if( fid ) {
-        fgets(g_policeid,sizeof(g_policeid),fid);
+        fgets( t.setbufsize(sizeof(g_policeid)+1), sizeof(g_policeid), fid);
         fclose(fid);
+        strcpy( g_policeid, t.trim() );
     }
 
 #endif

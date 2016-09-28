@@ -433,8 +433,20 @@ class string {
 			return *this ;
         }
                 
-        int operator < ( string & s2 ) {
-            return ( strcmp(getstring(), s2.getstring())<0 );
+        int operator > ( char * s2 ) {
+            return ( strcmp(getstring(), s2)>0 );
+        }
+
+        int operator < ( char * s2 ) {
+            return ( strcmp(getstring(), s2)<0 );
+        }
+        
+        int operator == ( char * s2 ) {
+            return ( strcmp(getstring(), s2) == 0 );
+        }
+
+        int operator != ( char * s2 ) {
+            return ( strcmp(getstring(), s2) != 0 );
         }
         
         int length(){
@@ -487,10 +499,12 @@ class string {
         {
 			if( m_str ) {
 				int l = strlen( m_str );
-				if( l<m_s ) {
-					while( l>0 && m_str[l-1]>0 && m_str[l-1]<=' ' ) {
-						m_str[--l] = 0 ;
-					}
+				if( l>m_s ) l=m_s ;
+				while( l>0 && m_str[l-1]>0 && m_str[l-1]<=' ' ) {
+					l-- ;
+				}
+				if( l<m_s )  {
+					m_str[l] = 0 ;
 				}
 			}
 			return *this ;
@@ -512,21 +526,11 @@ class string {
 		
 		string & trim()
         {
-			if( m_str ) {
-				int l = strlen( m_str );
-				while( l<m_s && l>0  && m_str[l-1]<=' ' && m_str[l-1]>0 ) {
-					m_str[--l] = 0 ;
-				}
-				l = 0 ;
-				while( l<m_s-1 && m_str[l]<=' ' && m_str[l]>0 ) {
-					l++;
-				}
-				if( l>0 )
-					set( &m_str[l] );
-			}
+			trimtail();
+			trimhead();
 			return *this ;
 		}
-
+		
         int isempty() {
 			return m_str==NULL || *m_str==0 ;
         }

@@ -300,8 +300,9 @@ int dio_setstate( int status )
                 // start recording
                 struct dvrtime cliptime ;
                 time_now(&cliptime) ;
+                char vri[128] ;
                 if( g_policeid[0] ) {
-					sprintf( g_vri, "%s-%02d%02d%02d%02d%02d-%s",
+					sprintf( vri, "%s-%02d%02d%02d%02d%02d-%s",
 							(char *)g_hostname,
 							cliptime.year%100,
 							cliptime.month,
@@ -312,7 +313,7 @@ int dio_setstate( int status )
 							);
 				}
 				else {
-					sprintf( g_vri, "%s-%02d%02d%02d%02d%02d",
+					sprintf( vri, "%s-%02d%02d%02d%02d%02d",
 							(char *)g_hostname,
 							cliptime.year%100,
 							cliptime.month,
@@ -321,10 +322,13 @@ int dio_setstate( int status )
 							cliptime.minute
 							);
                 }
-                memcpy( p_dio_mmap->pwii_VRI, g_vri, sizeof(p_dio_mmap->pwii_VRI) );
-                
-                // log new vri
-                vri_log( g_vri ) ;                
+                if( strcmp( vri, g_vri )!=0 ) {
+					strcpy( g_vri, vri );
+					strncpy( p_dio_mmap->pwii_VRI, g_vri, sizeof(p_dio_mmap->pwii_VRI) );
+					
+					// log new vri
+					vri_log( g_vri ) ;             
+				}   
                 
                 rstart = 1 ;
         }
@@ -761,6 +765,22 @@ void dio_pwii_lpzoomin( int on )
         }
         else {
 			p_dio_mmap->pwii_output &= ~PWII_LP_ZOOMIN ;
+        }
+        dio_unlock();
+    }
+}
+
+// For PWZEUS8,
+// set camera0/camera1 black/white mode
+void dio_pwii_bw( int on )
+{
+    if( p_dio_mmap ) {
+        dio_lock();
+        if( on ) {
+            p_dio_mmap->pwii_output |= PWII_LP_BW0|PWII_LP_BW1 ;
+        }
+        else {
+			p_dio_mmap->pwii_output &= ~(PWII_LP_BW0|PWII_LP_BW1) ;
         }
         dio_unlock();
     }

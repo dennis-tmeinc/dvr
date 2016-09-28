@@ -81,7 +81,7 @@ struct dio_mmap {
     int     gforce_changed;
     int     synctimestart;
     
-    int     battery_state ; 		// 0: fully charged, 1: charging, 2: disconnected
+    int     battery_state ; 		// -1: not available, 0: fully charged, 1: charging, 2: disconnected
     float   battery_voltage ;		// voltage
     
     // beeper
@@ -142,6 +142,15 @@ struct dio_mmap {
                                         // BIT 20: COVERT MODE (for ip camera)
                                         // BIT 21: trigger mic1 on by camera recording
                                         // BIT 22: trigger mic2 on by camera recording
+                                        
+                                        // PWZ8 black/white mode for Licence plate reading
+                                        // BIT 24: Camera0 Black/White mode
+                                        // BIT 25: Camera1 Black/White mode
+
+                                        // PWZ8 dual cam LEDs (moved to use gforce controller)
+                                        // BIT 26: LED0, (amber) (MIC on)
+                                        // BIT 27: LED1, (red) (Recording) (mapto io pin0)
+                                        
                                         
     int     pwii_error_LED_flash_timer ; // LED flash timer (output),  0: stayon, others in 0.25 second step
     char    pwii_VRI[128] ;             // current VRI(video recording Id)
@@ -254,6 +263,14 @@ void dio_unlock();
 
 // PW Z6 COVERTY
 #define PWII_COVERT_MODE		(1<<20)
+
+// PWZ8 black/white mode for Licence plate reading
+#define PWII_LP_BW0				(1<<24)
+#define PWII_LP_BW1				(1<<25)
+
+// PWZ8 dual camera LEDs
+#define PWII_DUALCAM_LED0		(1<<26)
+#define PWII_DUALCAM_LED1		(1<<27)
 
 // PWII key codes
 

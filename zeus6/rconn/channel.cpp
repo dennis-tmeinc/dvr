@@ -35,7 +35,7 @@ channel::channel()
 	target = NULL ;
 	r_xoff = 1 ;	
 	s_xoff_flag = 0 ;				// xoff send flag
-	activetime = g_runtime ;				
+	activetime = g_runtime ;
 }
 
 channel::channel( int s ) 

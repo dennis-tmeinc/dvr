@@ -57,8 +57,7 @@ sfxrun.upd sfxrun
 ./dvr/eaglehttpd
 ./dvr/ssl_server
 
-dvr/defconf.22 dvr/defconf
-
+#dvr/defconf.22 dvr/defconf
 
 ./dvr/firmwareid
 

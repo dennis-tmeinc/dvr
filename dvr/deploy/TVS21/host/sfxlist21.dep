@@ -57,7 +57,8 @@ sfxrun.dep sfxrun
 ./dvr/eaglehttpd
 ./dvr/ssl_server
 
-dvr/defconf.21 dvr/defconf
+#dvr/defconf.21 dvr/defconf
+dvr/defconf.MF0003 dvr/defconf
 dvr/dvrsvr.conf
 
 ./dvr/firmwareid

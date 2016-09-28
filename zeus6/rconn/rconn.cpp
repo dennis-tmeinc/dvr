@@ -35,7 +35,7 @@ string	g_server ;
 int     g_port ;
 int     g_runtime ;
 int		g_maxwaitms  ;
-	
+
 static int     g_nointernetaccess ;		// no internet access
 static string  g_did ;					// device id ( use mac addr )
 static string  g_internetkey ;			// internet accessing key
@@ -54,6 +54,7 @@ int runtime()
 }
 
 rconn::rconn()
+	:channel()
 {
 	datalen = 0 ;
 	cmdptr=0;
@@ -129,7 +130,13 @@ int rconn::process()
 
 int rconn::connect_server()
 {
-	return  net_connect( g_server, g_port ) ;
+	if( g_runtime-activetime > 5 ) {		// don't retry connecting in 5 sec
+		activetime = g_runtime ;
+		return  net_connect( g_server, g_port ) ;
+	}
+	else {
+		return -1 ;
+	}
 }
 	
 int  rconn::setfd( struct pollfd * pfd, int max )
@@ -143,11 +150,11 @@ int  rconn::setfd( struct pollfd * pfd, int max )
 			hostname[255]=0 ;
 			sendLineFormat("unit %s %s %s\n", hostname , (char *)g_did, (char *)g_internetkey );
 			stage = STAGE_REG ; 
+			activetime = g_runtime ;
 		}
-		else {
-			if( g_maxwaitms > 30000 ) 
-				g_maxwaitms = 30000 ;		// to retry connection in 30 seconds
-		}
+
+		if( g_maxwaitms > 30000 ) 
+			g_maxwaitms = 30000 ;		// to retry connection in 30 seconds
 	}
 				
 	int nfd = 0 ;
@@ -456,16 +463,16 @@ void rconn_run()
 	struct pollfd * pfd ;
 	int nfd, pfdsize, pfdresize ;
 	
+	g_runtime = runtime() ;
+	g_maxwaitms =  120000 ;
+
 	// starting pollfd size
 	pfdresize = 0 ;
 	pfdsize = 40 ;
 	pfd = new struct pollfd [pfdsize+2] ;
 
 	s_running = 1 ;
-
-	g_runtime = runtime() ;
-	g_maxwaitms =  120000 ;
-	
+		
 	// main channel 
 	rconn * mainconn  = new rconn();
 	
@@ -490,7 +497,7 @@ void rconn_run()
 		// to adjust pollfd size
 		if( nfd>=pfdsize ) {
 			pfdresize = pfdsize * 2 ;
-			g_maxwaitms = 1 ;
+			g_maxwaitms = 0 ;
 		}
 		else if( pfdsize>40 && nfd<(pfdsize/4) ) {
 			pfdresize = pfdsize / 2 ;

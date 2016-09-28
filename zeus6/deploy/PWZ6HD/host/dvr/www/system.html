@@ -55,6 +55,21 @@
 </tr>
 
 <tr>
+<td class="col1"><label for="id_en_file_encryption">Enable File Encryption:</label></td>
+<td><input name="en_file_encryption" id="id_en_file_encryption" value="on" type="checkbox" /></td>
+</tr>
+
+<tr id="id_tr_usemfkey" >
+<td class="col1"><label for="id_en_file_encryption">Use Manufacturer Default Password:</label></td>
+<td><input name="en_use_default_password" id="id_en_use_default_password" value="on" type="checkbox" /></td>
+</tr>
+
+<tr id="id_tr_filepassword" >
+<td class="col1">File Encryption Password:</td>
+<td><input name="file_password" id="id_file_password" value="*****" type="password" /></td>
+</tr>
+
+<tr>
 <td>&nbsp;</td>
 <td></td>
 </tr>
@@ -108,14 +123,12 @@
 <td class="col1">Maximum Archiving Time (seconds):</td>
 <td><input name="archivingtime" /></td>
 </tr>
--->
 
 <tr>
 <td class="col1">File buffer size (kbytes):</td>
 <td><input name="filebuffersize" /></td>
 </tr>
 
-<!--
 <tr>
 <td class="col1">Maximum File Size(MB):</td>
 <td><input name="file_size" /></td>
@@ -169,10 +182,6 @@
 </td>
 </tr>
 -->
-
-<tr>
-<td>&nbsp;</td>
-</tr>
 
 <tr>
 <td class="col1">Number of camera:</td>
@@ -236,6 +245,13 @@
 <tr>
 <td>&nbsp;</td>
 <td></td>
+</tr>
+
+<tr>
+<td class="col1"><label for="id_camsd">Use SD Camera:</label></td>
+<td>
+<input name="camsd" id="id_camsd" value="on" type="checkbox" />
+</td>
 </tr>
 
 <tr>
@@ -533,38 +549,72 @@ function ontimezonechange()
     }
 }
 
-function initform( formvalue )
+
+function filekeyset()
 {
-    var formdata = eval("(" + formvalue + ")") ;
+	if( $("input#id_en_file_encryption")[0].checked ) {
+		$("#id_tr_usemfkey").show();
+		if( $("input#id_en_use_default_password")[0].checked ) {
+			$("#id_tr_filepassword").hide();
+		}
+		else {
+			$("#id_tr_filepassword").show();
+		}
+	}
+	else {
+		$("#id_tr_usemfkey").hide();
+		$("#id_tr_filepassword").hide();
+	}
+}
+
+function initform( formdata )
+{
     JSONinitfield( formdata );
 
     if( formdata.gforce_available != "1" ) {
-	document.getElementById('idtr_gforce_available').style.display="none" ;
-	document.getElementById('idtr_gforce_enable').style.display="none" ;
-	document.getElementById('idtr_gforce_dirforward').style.display="none" ;
-	document.getElementById('idtr_gforce_dirupward').style.display="none" ;
-	document.getElementById('idtr_gforce_mountangle').style.display="none" ;
-	document.getElementById('idtr_gforce_crashdata').style.display="none" ;
-	document.getElementById('idtr_gforce_upward').style.display="none" ;
-	document.getElementById('idtr_gforce_downward').style.display="none" ;
-	document.getElementById('idtr_gforce_left').style.display="none" ;
-	document.getElementById('idtr_gforce_right').style.display="none" ;
-	document.getElementById('idtr_gforce_backward').style.display="none" ;
-	document.getElementById('idtr_gforce_forward').style.display="none" ;
+		document.getElementById('idtr_gforce_available').style.display="none" ;
+		document.getElementById('idtr_gforce_enable').style.display="none" ;
+		document.getElementById('idtr_gforce_dirforward').style.display="none" ;
+		document.getElementById('idtr_gforce_dirupward').style.display="none" ;
+		document.getElementById('idtr_gforce_mountangle').style.display="none" ;
+		document.getElementById('idtr_gforce_crashdata').style.display="none" ;
+		document.getElementById('idtr_gforce_upward').style.display="none" ;
+		document.getElementById('idtr_gforce_downward').style.display="none" ;
+		document.getElementById('idtr_gforce_left').style.display="none" ;
+		document.getElementById('idtr_gforce_right').style.display="none" ;
+		document.getElementById('idtr_gforce_backward').style.display="none" ;
+		document.getElementById('idtr_gforce_forward').style.display="none" ;
     }
 
     if( !document.getElementsByName('show_mountangle')[0].value ) {
-	document.getElementById('idtr_gforce_mountangle').style.display="none" ;
-	document.getElementsByName('gforce_calibration')[0].style.display="" ;
+		document.getElementById('idtr_gforce_mountangle').style.display="none" ;
+		document.getElementsByName('gforce_calibration')[0].style.display="" ;
     }
     else {
-	document.getElementById('idtr_gforce_mountangle').style.display="" ;
-	document.getElementsByName('gforce_calibration')[0].style.display="none" ;
+		document.getElementById('idtr_gforce_mountangle').style.display="" ;
+		document.getElementsByName('gforce_calibration')[0].style.display="none" ;
     }
     ontimezonechange();
 }
 
-ajaxload( "POST", "system_value", initform );
+$(document).ready(function(){
+
+	$.ajaxSetup({ cache: false });
+
+	$.getJSON( "system_value", function( data ) {
+		initform(data) ;
+		filekeyset();
+	});
+	
+	$("input#id_en_file_encryption").click(function() {
+		filekeyset();
+	});
+	
+	$("input#id_en_use_default_password").click(function() {
+		filekeyset();
+	});
+
+});
 
 </script>
 </body>

@@ -145,11 +145,19 @@ static void event_onkey( int key )
 	}
 	else if( keycode==(int)VK_LP ) {                             // LP key
 		if( keydown ) {
-			dio_pwii_lpzoomin( 1 );
+#ifdef APP_PWZ8			
+			dio_pwii_bw( 1 );			// black/white mode
+#else 
+			dio_pwii_lpzoomin( 1 );		// zoom in
+#endif			
 			dvr_log("LP pressed!");
 		}
 		else {
-			dio_pwii_lpzoomin( 0 );
+#ifdef APP_PWZ8			
+			dio_pwii_bw( 0 );			// black/white mode off
+#else 
+			dio_pwii_lpzoomin( 0 );		// zoom in
+#endif			
 			dvr_log("LP released!");
 		}
 	}

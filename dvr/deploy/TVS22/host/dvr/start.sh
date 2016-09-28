@@ -12,7 +12,7 @@ rm -r /opt/*
 rm /bin/chat /bin/pppd /bin/pppoe /bin/t1 /bin/update
 
 # make working directory
-mount -t ramfs ramfs /var
+mount -t tmpfs tmpfs /var
 mkdir /var/dvr
 mkdir /var/dvr/disks
 

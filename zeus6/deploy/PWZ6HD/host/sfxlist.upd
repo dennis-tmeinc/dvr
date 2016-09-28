@@ -51,6 +51,7 @@ sfxrun.upd sfxrun
 ./dvr/mount_backup
 ./dvr/fat32vol
 ./dvr/inetd.conf
+./dvr/mfkey
 
 # www binary
 ./dvr/eaglehttpd

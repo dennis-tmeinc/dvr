@@ -110,7 +110,7 @@ void mem_free(void *pmem)
     pthread_mutex_unlock(&mem_mutex);
 }
 
-// optimized memory copy (to be used by mem_addref only)
+// optimized memory copy (to be used in mem_addref only)
 inline void mem_cp32( int *dst, int *src, int len )
 {
 	len = (len+(sizeof(int)-1))/sizeof(int) ;

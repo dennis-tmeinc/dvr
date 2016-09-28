@@ -32,7 +32,7 @@ int mk_pdir( char * path )
 	char * slash  ;
 	
 	// delete the old file
-	if( lstat(path, &stbuf) == 0 ) {
+ 	if( lstat(path, &stbuf) == 0 ) {
 		return remove(path) ;
 	}
 	
@@ -50,6 +50,8 @@ int mk_pdir( char * path )
 	}
 	return 0 ;
 }
+
+#define TMP_F	".xf"
 
 int extract( const char * sfxfile, const char * pattern )
 {
@@ -93,7 +95,7 @@ int extract( const char * sfxfile, const char * pattern )
 			printf("ERROR : pdir - %s!\n", filename );
 		}
 		else if( S_ISREG(fhd.filemode) ) {
-			fp_file = fopen( filename, "w" );
+			fp_file = fopen( TMP_F, "w" );
 			if( fp_file ) {
 	            if( fhd.compsize>0 ) {
 					if( (fhd.filemode & LZMA_FLAG) ) {
@@ -127,7 +129,7 @@ int extract( const char * sfxfile, const char * pattern )
 							while( dpos < bsize ) {
 								int r = lzmadec_dec( bufcomp+dpos, bsize-dpos, &decout, &decoutsize );
 								if( decoutsize>0 ) {
-									if( decoutsize > (int)fhd.filesize ) {
+									if( decoutsize > fhd.filesize ) {
 										decoutsize = fhd.filesize ;
 									}
 									fwrite( decout, 1, decoutsize, fp_file );
@@ -144,7 +146,7 @@ int extract( const char * sfxfile, const char * pattern )
 						// end decoding
 						lzmadec_dec( bufcomp, 0, &decout, &decoutsize );
 						if( decoutsize>0 ) {
-							if( decoutsize > (int)fhd.filesize ) {
+							if( decoutsize > fhd.filesize ) {
 								decoutsize = fhd.filesize ;
 							}							
 							fwrite( decout, 1, decoutsize, fp_file );
@@ -170,24 +172,28 @@ int extract( const char * sfxfile, const char * pattern )
 						printf("copy : %s\n", filename );
 					}
 				}
-				fchmod( fileno(fp_file), fhd.filemode&0777 );
 				fclose( fp_file ) ;
+				remove( filename );
+				rename( TMP_F, filename );
+				chmod( filename, fhd.filemode&0777 );
+				
 				extfiles++;
 			}
 			else {
-				printf("ERROR : can't open %s\n", filename);
+				printf("ERROR : can't create %s\n", filename);
 			}
         }
         else if( S_ISLNK(fhd.filemode) ) {
             bufcomp = (unsigned char *)malloc( fhd.compsize+1 ) ;
             fread( bufcomp, 1, fhd.compsize, fp );
             bufcomp[ fhd.compsize ]=0;
+			remove( filename );
 			symlink( (char *)bufcomp, filename );
 			printf("link : %s -> %s\n", filename, bufcomp );
 			free( bufcomp );
 			extfiles++;
 			fhd.compsize = 0 ;
-        }        
+        }
         else {
 			printf("ERROR : file type %x - %s\n", fhd.filemode, filename );
 		}

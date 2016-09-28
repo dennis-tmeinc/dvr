@@ -74,7 +74,7 @@ int archive_file( FILE * archive, char * ifilename, char * ofilename )
 			
 			// read source file
 			int lzmabufsize = filestat.st_size ;
-			buf = (unsigned char *)malloc( lzmabufsize );
+			buf = (unsigned char *)malloc( lzmabufsize+8 );
 			fhd.filesize = fread( buf, 1, lzmabufsize, srcfile );
 			fclose( srcfile );
 			if( fhd.filesize < 0 ) {

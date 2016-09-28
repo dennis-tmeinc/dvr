@@ -40,7 +40,7 @@ int dvrfile::open(const char *filename, char *mode )
 	m_lastframetime = 0 ;
     if( *mode == 'w' ) {
 		
-		m_handle = ::open( filename, O_WRONLY | O_CREAT | O_DIRECT , 0666 );
+		m_handle = ::open( filename, O_WRONLY | O_CREAT , 0666 );
 		
 		if (m_handle <= 0 ) {
 			dvr_log("open file:%s failed",filename);
@@ -250,7 +250,7 @@ int dvrfile::writeframe( rec_fifo * frame )
 // write a new frame, return 1 success, 0: failed
 int dvrfile::writeframe(unsigned char * buf, int size, int frametype, dvrtime * frametime)
 {
-	if( frametype == FRAMETYPE_KEYVIDEO && m_khandle ) {
+	if( frametype == FRAMETYPE_KEYFRAME && m_khandle ) {
 		m_curframe++ ;
 		m_lastframetime = time_dvrtime_diffms(frametime, &m_filetime) ;		// if size==0, then this is then ending frame
 		if( size>0 ) {
@@ -567,12 +567,15 @@ int dvrfile::repairpartiallock()
     
     seek(0);
     read( lockfilehead, 40 );
+
+	// duplicate header
+    lockfile.seek(0);
     lockfile.write( lockfilehead, 40 );
     lockfile.m_fileencrypt=0 ;
     
     for( i=breakindex ; i<m_keyarray.size(); i++ ) {
         // if rec_busy, delay for 0.1 s
-	/*
+		/*
         for( busywait=0; busywait<10; busywait++) {
             if( rec_busy==0 ) break ;
             usleep(1000);
@@ -591,18 +594,18 @@ int dvrfile::repairpartiallock()
             framesize = m_filesize - m_keyarray[i].koffset ;
         }
         if(framesize<0)
-	  break;
-	if(framesize>10*1024*1024)
-	  break;
-      //  dvr_log("i=%d keysize:%d framesize=%d",i,m_keyarray.size(),framesize);
-      //dvr_log("%d:%d",m_keyarray[i+1].koffset,m_keyarray[i].koffset);
+			break;
+		if(framesize>10*1024*1024)
+			break;
+		//  dvr_log("i=%d keysize:%d framesize=%d",i,m_keyarray.size(),framesize);
+		//dvr_log("%d:%d",m_keyarray[i+1].koffset,m_keyarray[i].koffset);
         frametime = m_filetime ;
         time_dvrtime_addms( &frametime, m_keyarray[i].ktime );
         
         framebuf = (unsigned char *) malloc ( framesize ) ;
         seek( framepos );
         read( framebuf, framesize );
-        lockfile.writeframe( framebuf, framesize, FRAMETYPE_KEYVIDEO, &frametime );
+        lockfile.writeframe( framebuf, framesize, FRAMETYPE_KEYFRAME, &frametime );
         free( framebuf );
         
     }
@@ -800,6 +803,7 @@ int dvrfile::breakLfile( char * filename, struct dvrtime * locktime )
 	framebuf = new unsigned char [40] ;
 	nfile.seek(0);
 	nfile.read( framebuf, 40 );
+	lfile.seek(0);
 	lfile.write( framebuf, 40 );
     delete framebuf ;
 
@@ -837,7 +841,7 @@ int dvrfile::breakLfile( char * filename, struct dvrtime * locktime )
 		frametime = filetime ;
 		time_dvrtime_addms( &frametime, nfile.m_keyarray[i].ktime ) ;
 		
-		lfile.writeframe( framebuf, framesize, FRAMETYPE_KEYVIDEO, &frametime );
+		lfile.writeframe( framebuf, framesize, FRAMETYPE_KEYFRAME, &frametime );
 		
 		delete framebuf ;
 		

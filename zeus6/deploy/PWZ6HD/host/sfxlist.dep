@@ -51,9 +51,9 @@ sfxrun.dep sfxrun
 ./dvr/mount_backup
 ./dvr/fat32vol
 ./dvr/inetd.conf
+./dvr/mfkey
 
 # dvr configure files
-./dvr/dvrsvr.conf
 ./dvr/adminpasswd
 ./dvr/eth_ip
 ./dvr/eth_broadcast
@@ -62,6 +62,7 @@ sfxrun.dep sfxrun
 ./dvr/wifi_broadcast
 ./dvr/gateway_1
 ./dvr/wifi_mask
+./dvr/dvrsvr.conf
 
 # www binary
 ./dvr/eaglehttpd

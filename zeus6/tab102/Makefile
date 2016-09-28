@@ -9,11 +9,15 @@ include ../config
 
 LDFLAGS := -lpthread -lstdc++
 
-OUT = tab102
-OBJS = tab102.o string.o config.o # add here
+SOURCE = tab102.cpp
+EXTRASOURCE = ../dvrsvr/string.cpp ../dvrsvr/config.cpp
+EXTRAHEADER = ../dvrsvr/genclass.h ../dvrsvr/cfg.h ../ioprocess/diomap.h
 
-$(OUT): $(OBJS)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $(OUT) $(OBJS)
+OUT = tab102
+OBJS = tab102.o
+
+$(OUT): $(SOURCE) $(EXTRASOURCE) $(EXTRAHEADER) 
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $(OUT) $(SOURCE) $(EXTRASOURCE)
 
 %.o: %.cpp
 	$(CC) -c $(CFLAGS) $< -o $@

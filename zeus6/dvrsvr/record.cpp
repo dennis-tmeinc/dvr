@@ -176,7 +176,7 @@ void rec_channel::onframe(cap_frame * pframe)
 		nfifo = newfifo( pframe );
 		nfifo->rectype = m_recstate ;
 		putfifo( nfifo );
-		if( pframe->frametype == FRAMETYPE_KEYVIDEO ) {
+		if( pframe->frametype == FRAMETYPE_KEYFRAME ) {
 			m_fifokey = 1 ;
 		}
 		
@@ -353,7 +353,7 @@ void rec_channel::closefile()
 		int  filelength ;
     		
 		rec_fifo rf ;			// end of file frame
-		rf.frametype = FRAMETYPE_KEYVIDEO ;
+		rf.frametype = FRAMETYPE_KEYFRAME ;
 		if( m_fifohead ) {
 			rf.time = m_fifohead->time ;
 		}
@@ -410,7 +410,7 @@ void rec_channel::recorddata(rec_fifo * data)
     }
     
     // check if file need to be broken
-    if ( m_file.isopen() && data->frametype == FRAMETYPE_KEYVIDEO ) {	// must be a key frame
+    if ( m_file.isopen() && data->frametype == FRAMETYPE_KEYFRAME ) {	// must be a key frame
         if( m_reqbreak ||
 			m_file.tell() > rec_maxfilesize ||
 			m_file.getfiletime()->day != data->time.day ) 
@@ -427,7 +427,7 @@ void rec_channel::recorddata(rec_fifo * data)
     }
 		
     // create new dvr file
-    if ( (!m_file.isopen()) && data->frametype == FRAMETYPE_KEYVIDEO ) {	// need to open a new file
+    if ( (!m_file.isopen()) && data->frametype == FRAMETYPE_KEYFRAME ) {	// need to open a new file
 		m_reqbreak=0;
 
 		// retrieve base dir depends on file type ?
@@ -621,7 +621,7 @@ int rec_channel::dorecord()
 		
 		int k=0; 
 		while( m_fifohead && wsize<1000000 && k<5 && rec_run ) {
-			if( m_fifohead->frametype == FRAMETYPE_KEYVIDEO ) 
+			if( m_fifohead->frametype == FRAMETYPE_KEYFRAME ) 
 			{
 				if(	 m_file.isopen() && m_fifohead->rectype != m_filerecstate ) 
 				{
@@ -1071,15 +1071,20 @@ void rec_pwii_toggle_rec( int c )
 {
 	int i ;
 	int rec = 0 ;
+	
+	
+	printf("Toogle %d, tm %d\n", c, event_tm);
+	
 	for( i=0; i<rec_channels ; i++ ) {
         if( recchannel[i]->m_c_channel == c ) {
 			if( recchannel[i]->recstate_rec() ) {
+				// turn off tracemark
+				event_tm = 0 ;			
+				
 				rec = 0 ;
 				if( i==0 ) {
 					// to turn off mic emg input
 					dio_pwii_emg_off();
-					// also turn off tracemark
-					event_tm = 0 ;			
 				}
 			}
 			else {

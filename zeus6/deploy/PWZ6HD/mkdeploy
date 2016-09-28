@@ -113,8 +113,8 @@ cp -v ${BASEROOT}/dosfsck_check/dosfsckcheck .
 cd ${DEPROOT}/host/dvr
 echo copy dvr host files
 for rfile in $RELEASEFILES ; do
-	cp -v ${BASEROOT}/${rfile} .
 	BASE=`basename ${rfile}`
+	cp -v ${BASEROOT}/${rfile} .
 	${STRIP} ${BASE}
 done
 
@@ -126,8 +126,8 @@ cd www
 mkdir cgi
 cd cgi
 for cfile in $CGIFILES ; do
-	cp -v ${BASEROOT}${cfile} . 
 	BASE=`basename ${cfile}`
+	cp -v ${BASEROOT}${cfile} . 
 	${STRIP} ${BASE}
 done
 

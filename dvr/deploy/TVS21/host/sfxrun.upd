@@ -36,6 +36,10 @@ for i in 1 2 3 4 5 6 7 8 9 10 ; do
   fi
 done
 
+echo "Preserv MF id"
+tvsmfid=`/davinci/dvr/cfg get system tvsmfid`
+filepassword=`/davinci/dvr/cfg get system filepassword`
+
 # start copying files
 if [ -n "${FWUPDMSG}" ] ; then 
     echo "Writing new firmware..." >> ${FWUPDMSG}
@@ -50,6 +54,10 @@ rm sfxrun
 
 # set up name server
 echo "nameserver 8.8.8.8" > /etc/resolv.conf
+
+echo "Restore MF id"
+/davinci/dvr/cfg -f/davinci/dvr/defconf set system tvsmfid $tvsmfid
+/davinci/dvr/cfg -f/davinci/dvr/defconf set system filepassword $filepassword
 
 # stop panel led flashing
 /davinci/dvr/panelled 0

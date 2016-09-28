@@ -236,7 +236,10 @@ struct hd_subframe {
 #define FRAMETYPE_264FILEHEADER	(10)
 #define FRAMETYPE_OSD		(11)			// TXT
 #define FRAMETYPE_GPS		(12)			// GPS
+#define FRAMETYPE_KEYOSD	(15)			// KEY OSD TXT
 #define FRAMETYPE_OTHER		(20)
+
+#define FRAMETYPE_KEYFRAME  (FRAMETYPE_KEYOSD)
 
 enum REC_STATE {
     REC_STOP,           // no recording
@@ -576,7 +579,7 @@ protected:
 	// to generate gps data frame
 	virtual void gpsframe() ;
 	// to generate a OSD frame for eagle channel
-	virtual void osdframe() ;	
+	virtual void osdframe( int keyosd = 0 ) ;	
 
 	void alarm();                   // update alarm relate to capture channel
 	virtual void start(){};				// start capture
@@ -715,7 +718,8 @@ time_t time_dvrtime_init( struct dvrtime *dvrt,
 						int second=0,
 						int milliseconds=0 );
 time_t time_dvrtime_zerohour( struct dvrtime *dvrt );
-time_t time_dvrtime_nextday( struct dvrtime *dvrt );
+time_t dvrtime_prevday( struct dvrtime *dvrt );
+time_t dvrtime_nextday( struct dvrtime *dvrt );
 
 int  time_dvrtime_diff( struct dvrtime *t1, struct dvrtime *t2) ;	// difference in seconds
 int  time_dvrtime_diffms( struct dvrtime *t1, struct dvrtime *t2 ); // difference in milliSecond
@@ -739,50 +743,10 @@ int time_setrtc();
 // retrive milliseconds
 int time_gettick();
 
-inline int operator > ( struct dvrtime & t1, struct dvrtime & t2 )
-{
-    if(      t1.year   != t2.year )   return (t1.year   > t2.year);
-    else if( t1.month  != t2.month )  return (t1.month  > t2.month);
-    else if( t1.day    != t2.day )    return (t1.day    > t2.day);
-    else if( t1.hour   != t2.hour )   return (t1.hour   > t2.hour);
-    else if( t1.minute != t2.minute ) return (t1.minute > t2.minute);
-    else if( t1.second != t2.second ) return (t1.second > t2.second);
-    else return (t1.milliseconds > t2.milliseconds);
-}
-
-inline int operator < ( struct dvrtime & t1, struct dvrtime & t2 )
-{
-    if(      t1.year   != t2.year )   return (t1.year   < t2.year);
-    else if( t1.month  != t2.month )  return (t1.month  < t2.month);
-    else if( t1.day    != t2.day )    return (t1.day    < t2.day);
-    else if( t1.hour   != t2.hour )   return (t1.hour   < t2.hour);
-    else if( t1.minute != t2.minute ) return (t1.minute < t2.minute);
-    else if( t1.second != t2.second ) return (t1.second < t2.second);
-    else return (t1.milliseconds > t2.milliseconds);
-}
-
-inline int operator == ( struct dvrtime & t1, struct dvrtime & t2 )
-{
-    return (t1.year         == t2.year     &&
-            t1.month        == t2.month    &&
-            t1.day          == t2.day      &&
-            t1.hour         == t2.hour     &&
-            t1.minute       == t2.minute   &&
-            t1.second       == t2.second   &&
-            t1.milliseconds == t2.milliseconds );
-    
-}
-
-inline int operator != (struct dvrtime & t1, struct dvrtime & t2 )
-{
-    return (t1.year         != t2.year   ||
-            t1.month        != t2.month  ||
-            t1.day          != t2.day    ||
-            t1.hour         != t2.hour   ||
-            t1.minute       != t2.minute ||
-            t1.second       != t2.second ||
-            t1.milliseconds != t2.milliseconds );
-};
+int operator > ( struct dvrtime & t1, struct dvrtime & t2 );
+int operator < ( struct dvrtime & t1, struct dvrtime & t2 );
+int operator == ( struct dvrtime & t1, struct dvrtime & t2 );
+int operator != (struct dvrtime & t1, struct dvrtime & t2 );
 
 struct dvrtime operator + ( struct dvrtime & t, int seconds ) ;
 struct dvrtime operator + ( struct dvrtime & t, double seconds ) ;
@@ -882,6 +846,8 @@ void disk_uninit(int);
 int do_disk_check();
 char * disk_getbasedisk( int locked );
 char * disk_getlogdisk();
+char * disk_getdisk( int disknum );
+void disk_pw_listdaybydisk(array <f264name> & flist, struct dvrtime * day, int disk);
 
 
 // live video service
@@ -1084,12 +1050,15 @@ enum reqcode_type {
     REQ2SYSTEMSETUPEX,
     REQ2GETGPS,
     REQSTREAMFILEHEADER,
+    REQDAYCLIPLIST, REQDAYLIST,
+    REQGETVRI,
 
     REQ3BEGIN = 300,
     REQSENDDATA,
     REQGETDATA,
     REQCHECKKEY,
     REQUSBKEYPLUGIN, // plug-in a new usb key. (send by plug-in autorun program)
+    
 
     // for communicate in or between eagle boards
     REQ5BEGIN = 500,
@@ -1132,6 +1101,8 @@ enum anscode_type {
     ANS2TIME, ANS2ZONEINFO, ANS2TIMEZONE, ANS2CHSTATE, ANS2SETUPPAGE, ANS2STREAMBYTES,
     ANS2JPEG, ANS2STREAMDATAEX, ANS2SYSTEMSETUPEX, ANS2GETGPS,
     ANSSTREAMFILEHEADER,
+    ANSDAYCLIPLIST,ANSDAYLIST,
+    ANSGETVRI,
 
     ANS3BEGIN = 300,
     ANSSENDDATA,
@@ -1262,6 +1233,8 @@ class dvrsvr {
         void ReqStreamDayInfo();
         void ReqStreamMonthInfo();
         void ReqStreamDayList();
+        void ReqDayClipList();
+        void ReqDayList();
         void ReqLockInfo();
         void ReqUnlockFile();
         void Req2SetLocalTime();
@@ -1277,6 +1250,7 @@ class dvrsvr {
         void Req2GetChState();
         void Req2GetSetupPage();
         void Req2GetStreamBytes();
+		void ReqGetVri();
 		void ReqSendData();
 		void ReqGetData();
         
@@ -1476,6 +1450,7 @@ int isstandbymode();
 // return pwii media key event, 0=no key event, 1=key event
 int dio_getpwiikeycode( int * keycode, int * keydown) ;
 void dio_pwii_lpzoomin( int on );
+void dio_pwii_bw( int on );
 void dio_pwii_mic_off();
 void dio_pwii_mic_on();
 void dio_pwii_emg_off();
@@ -1555,8 +1530,12 @@ void vri_log( char * vri );
 int vri_getlistsize( int * itemsize );
 // retrieve vri list
 int vri_getlist( char * buf, int bufsize );
+// get a single vri 
+int vri_getvri( char * vribuf, struct dvrtime * dvrt );
 // update vri list items
 void vri_setlist( char * buf, int bufsize );
+// return vri record size
+int vri_isize() ;
 	
 	
 #endif  // PWII_APP	

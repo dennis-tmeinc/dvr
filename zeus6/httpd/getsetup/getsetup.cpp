@@ -345,12 +345,23 @@ int main()
         // en_file_encryption
         int file_encrypt = dvrconfig.getvalueint("system", "fileencrypt");
         if( file_encrypt>0 ) {
-            fprintf(fvalue, "\"bool_en_file_encryption\":\"on\"," );
             fprintf(fvalue, "\"en_file_encryption\":\"on\"," );
         }
+        
+        char * mfkey = readfile( "/davinci/dvr/mfkey" );
+        value = dvrconfig.getvalue("system", "filepassword");
+        if( strcmp( mfkey, (char *)value ) == 0 ) {
+            fprintf(fvalue, "\"en_use_default_password\":\"on\"," );
+		}
 
         fprintf( fvalue, "\"file_password\":\"********\",");
 
+#ifdef APP_PWZ8
+        // sd camera
+        ivalue = dvrconfig.getvalueint("system", "camsd");
+        if( ivalue ) 
+			fprintf(fvalue, "\"camsd\":\"on\",");
+#endif        
 
         // gpslog enable
         ivalue = dvrconfig.getvalueint("glog", "gpsdisable");

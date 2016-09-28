@@ -555,7 +555,7 @@ void sig_handler(int signum)
     if( signum == SIGUSR1 ) {
         sigcap |= 1 ;
     }
-    else if( signum == SIGUSR2 ) {
+    else if( signum == SIGUSR2 || signum == SIGHUP ) {
         sigcap |= 2 ;
     }
     else if( signum == SIGPIPE ) {
@@ -3420,6 +3420,7 @@ int main(int argc, char **argv)
     signal(SIGUSR2, sig_handler);
     signal(SIGUSR1, sig_handler);
     signal(SIGPIPE, sig_handler);
+    signal(SIGHUP,  sig_handler);
         
     if( appinit()==0 ) {
       return 1;
@@ -3444,9 +3445,9 @@ int main(int argc, char **argv)
 	    }
 	    if( sigcap&2 ) {
 	      if( app_state==1 ) {
-		app_state=0 ;       // to let sensor thread exit
-		//appfinish();    
-		re_appinit();
+			app_state=0 ;       // to let sensor thread exit
+			//appfinish();    
+			re_appinit();
 	      }
 	      app_state=1 ;
 	    }

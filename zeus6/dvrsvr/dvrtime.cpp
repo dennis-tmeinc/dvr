@@ -275,28 +275,6 @@ time_t time_dvrtime_zerohour( struct dvrtime *dvrt )
     return t ;
 }
 
-time_t time_nextday( struct dvrtime *dvrt )
-{
-    time_t nday ;
-    struct tm stm ;
-    stm.tm_year = dvrt->year - 1900 ;
-    stm.tm_mon = dvrt->month - 1 ;
-    stm.tm_mday = dvrt->day+1 ;
-    stm.tm_hour = 0 ;
-    stm.tm_min = 0 ;
-    stm.tm_sec = 0 ;
-    stm.tm_isdst=-1 ;		// mktime to automacit correct dst
-    nday=mktime( &stm );	// correct dst
-    dvrt->year = stm.tm_year + 1900 ;
-    dvrt->month = stm.tm_mon + 1 ;
-    dvrt->day   = stm.tm_mday ;
-    dvrt->hour = 0 ;
-    dvrt->minute = 0 ;
-    dvrt->second = 0 ;
-    dvrt->milliseconds = 0 ;
-    return nday ;
-}
-
 // difference in seconds (t1-t2)
 int  time_dvrtime_diff( struct dvrtime *t1, struct dvrtime *t2)
 {
@@ -427,6 +405,53 @@ time_t time_timeutc( struct dvrtime * dvrt)
     return timegm( &stm );
 }
 
+
+// return the next day
+time_t dvrtime_nextday( struct dvrtime *dvrt )
+{
+    time_t nday ;
+    struct tm stm ;
+    stm.tm_year = dvrt->year - 1900 ;
+    stm.tm_mon = dvrt->month - 1 ;
+    stm.tm_mday = dvrt->day+1 ;
+    stm.tm_hour = dvrt->hour ;
+    stm.tm_min = dvrt->minute ;
+    stm.tm_sec = dvrt->second ;
+    stm.tm_isdst=-1 ;		// mktime to automatic correct dst
+    nday=mktime( &stm );	// correct dst
+    dvrt->year = stm.tm_year + 1900 ;
+    dvrt->month = stm.tm_mon + 1 ;
+    dvrt->day   = stm.tm_mday ;
+    dvrt->hour = stm.tm_hour ;
+    dvrt->minute = stm.tm_min ;
+    dvrt->second = stm.tm_sec ;
+    dvrt->milliseconds = 0 ;
+    return nday ;
+}
+
+// return previous day
+time_t dvrtime_prevday( struct dvrtime *dvrt )
+{
+    time_t nday ;
+    struct tm stm ;
+    stm.tm_year = dvrt->year - 1900 ;
+    stm.tm_mon = dvrt->month - 1 ;
+    stm.tm_mday = dvrt->day-1 ;
+    stm.tm_hour = dvrt->hour ;
+    stm.tm_min = dvrt->minute ;
+    stm.tm_sec = dvrt->second ;
+    stm.tm_isdst=-1 ;		// mktime to automatic correct dst
+    nday=mktime( &stm );	// correct dst
+    dvrt->year = stm.tm_year + 1900 ;
+    dvrt->month = stm.tm_mon + 1 ;
+    dvrt->day   = stm.tm_mday ;
+    dvrt->hour = stm.tm_hour ;
+    dvrt->minute = stm.tm_min ;
+    dvrt->second = stm.tm_sec ;
+    dvrt->milliseconds = 0 ;
+    return nday ;
+}
+
 // appliction up time in seconds
 int time_uptime()
 {
@@ -459,4 +484,46 @@ int time_gettick()
 	}
 	return (tp.tv_sec-s_tick)*1000 + tp.tv_nsec/1000000 ;
 }
+
+// dvrtime compair
+int operator > ( struct dvrtime & t1, struct dvrtime & t2 )
+{
+	time_t tt1 = time_timelocal( &t1 );
+	time_t tt2 = time_timelocal( &t2 );
+	if( tt1==tt2 ) {
+		return (t1.milliseconds > t2.milliseconds);
+	}
+	else {
+		return (tt1 > tt2 );
+	}
+}
+
+int operator < ( struct dvrtime & t1, struct dvrtime & t2 )
+{
+	time_t tt1 = time_timelocal( &t1 );
+	time_t tt2 = time_timelocal( &t2 );
+	if( tt1==tt2 ) {
+		return (t1.milliseconds < t2.milliseconds);
+	}
+	else {
+		return (tt1 < tt2 );
+	}
+}
+
+int operator == ( struct dvrtime & t1, struct dvrtime & t2 )
+{
+	time_t tt1 = time_timelocal( &t1 );
+	time_t tt2 = time_timelocal( &t2 );
+	if( tt1!=tt2 ) {
+		return (t1.milliseconds == t2.milliseconds);
+	}
+	else {
+		return 1 ;
+	}
+}
+
+int operator != (struct dvrtime & t1, struct dvrtime & t2 )
+{
+	return ! (t1 == t2 );
+};
 

@@ -79,13 +79,16 @@ static int adb_service( int fd, char * service )
 
 static void adb_startservice()
 {
+	printf("Start adb service.\n");
+	
 	system("/davinci/dvr/adb start-server");
 }
 
 static int adb_ready ;				// 1: ready, 0: waiting
 static int adb_wait_socket = -1 ;
 
-static void adb_wait()
+// scan/wait for android device
+static void adb_wait_for_device()
 {
 	int s ;
 	if( adb_wait_socket <= 0 ) {
@@ -123,6 +126,9 @@ static void adb_wait()
 					if( strcasecmp( device, "device" )==0 ) {
 						// found online device
 						online = 1 ;
+						
+						printf("Found online device: %s\n", adb_device );
+						
 						break ;
 					}
 					n+=x ;
@@ -134,11 +140,7 @@ static void adb_wait()
 		}
 	}
 	if( online ) {
-		if( adb_wait_socket>0 ) {
-			close(adb_wait_socket);
-			adb_wait_socket = -1 ;
-		}
-		
+	
 		// use shell command to start pwv service
 		s = adb_local_connect();
 		if( s>=0 ) {
@@ -154,6 +156,14 @@ static void adb_wait()
 
 			// android device ready!
 			adb_ready = 1 ;
+		
+			printf( "Android device ready!\n");
+			
+			// cloase waiting socket
+			if( adb_wait_socket>0 ) {
+				close(adb_wait_socket);
+				adb_wait_socket = -1 ;
+			}
 		}
 	}
 }
@@ -184,14 +194,25 @@ int adb_conn::connect_server()
 		if( s>=0 ) {
 			return s ;
 		}
-		// not ready, go for 
+		// not ready
 		adb_ready = 0 ;
+		if( adb_wait_socket>0 ) {
+			close(adb_wait_socket);
+			adb_wait_socket = -1 ;
+		}
 	}
-	
-	adb_wait() ;
-	// scan every 2 seconds
-	if( g_maxwaitms > 2000 ) {
-		g_maxwaitms = 2000 ;
+			
+	if( adb_wait_socket>0 ) {
+		adb_wait_for_device() ;
+		activetime = g_runtime ;
+	}
+	else if( g_runtime-activetime > 5 ) {		// don't retry scan in 5 sec
+		adb_wait_for_device() ;
+		activetime = g_runtime ;
+	}
+	// max wait time
+	if( g_maxwaitms > 1000 ) {
+		g_maxwaitms = 1000 ;
 	}	
 	return -1 ;
 }

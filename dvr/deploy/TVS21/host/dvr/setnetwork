@@ -1,8 +1,17 @@
 #!/bin/sh
 
 # reconfigure ether net
-ifconfig eth0:1 up `/davinci/dvr/cfg get network eth_ip`
-ifconfig eth0:1 netmask `/davinci/dvr/cfg get network eth_mask`
+ieth=eth0:1
+eth_ip=`/davinci/dvr/cfg get network eth_ip`
+eth_mask=`/davinci/dvr/cfg get network eth_ip`
+
+if [ -z "$eth_ip" ] ; then 
+  eth_ip=192.168.1.100
+  eth_mask=255.255.255.0
+fi
+
+ifconfig eth0:1 up $eth_ip 
+ifconfig eth0:1 netmask $eth_mask
 
 # reconfig wifi, (if interface availabe)
 if [ -f /var/dvr/wifidev ] ; then
@@ -17,4 +26,8 @@ fi
 sleep 3
 
 route del default
-route add default gw `/davinci/dvr/cfg get network gateway`
+
+gateway=`/davinci/dvr/cfg get network gateway`
+if [ -n "$gateway" ] ; then
+route add default gw $gateway
+fi

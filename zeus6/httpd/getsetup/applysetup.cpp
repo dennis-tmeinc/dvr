@@ -135,7 +135,6 @@ void setadminpassword( char * password )
     }
 }
 
-
 // c64 key should be 400bytes
 void fileenckey( char * password, char * c64key )
 {
@@ -171,6 +170,44 @@ char * getbroadcastaddr(char* ipaddr,char* ipmask)
     network.s_addr = ip.s_addr & netmask.s_addr;
     broadcast.s_addr = network.s_addr | ~netmask.s_addr;
     return inet_ntoa(broadcast);
+}
+
+
+static char * rtrim( char * s )
+{
+	while( *s > 1 && *s <= ' ' ) {
+		s++ ;
+	}
+	return s ;
+}
+
+static char * ltrim( char * s )
+{
+	int l = strlen(s);
+	while( l>0 ) {
+		if( s[l-1] <= ' ' ) 
+			l-- ;
+		else 
+			break ;
+	}
+	s[l] = 0 ;
+	return s ;
+}
+
+static char * readfile( char * filename )
+{
+	static char sbuf[1024] ;
+	FILE * f ;
+	f = fopen( filename, "r" );
+    if( f ) {
+		int r=fread( sbuf, 1, sizeof(sbuf)-1, f );
+		fclose( f );
+		if( r>0 ) {
+			sbuf[r]=0 ;
+			return ltrim(rtrim(sbuf)) ;
+		}
+	}
+	return NULL ;
 }
 
 static void savefile( char * filename, char * v )
@@ -254,6 +291,30 @@ int main()
         v=getsetvalue("adminpassword");
         if( v!=NULL && strcmp(v, "*****" )!=0 ) {
 			setadminpassword(v);
+		}
+		
+       
+        // file encryptions
+        v = getsetvalue ("en_file_encryption");
+        dvrconfig.setvalueint( "system", "fileencrypt", v?1:0 );
+        
+        if( v ) {
+			v = getsetvalue ("en_use_default_password");
+			if( v ) {
+				// use default mf key
+				char * mfkey = readfile( "/davinci/dvr/mfkey" );
+				dvrconfig.setvalue( "system", "filepassword", mfkey );
+			}
+			else {
+				// use user set password
+				v = getsetvalue ("file_password");
+				if( strcmp( v, "********" ) != 0 ) {
+					// do set password
+					char filec64key[400] ;
+					fileenckey( v, filec64key );
+					dvrconfig.setvalue("system", "filepassword", filec64key);	// save password to config file
+				}
+			}
 		}
         
 		// all other values
@@ -362,6 +423,12 @@ int main()
                 dvrconfig.setvalueint( "system", "noreclive", 0 );
             }
         }
+        
+#ifdef APP_PWZ8
+        // sd camera
+        v = getsetvalue ("camsd");
+		dvrconfig.setvalueint( "system", "camsd", v?1:0 );
+#endif    
         
         // gpslog enable
 		v = getsetvalue ("en_gpslog");

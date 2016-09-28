@@ -1,75 +1,78 @@
 #include <stdio.h>
-#include <errno.h>
-#include <math.h>
-#include <time.h>
-#include <string.h>
-#include <netdb.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
-#include <sys/socket.h>
 #include <linux/rtc.h>
+#include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
-
-#ifdef  DVR_APP
-
-#define  MCU_SUPPORT
+#include <errno.h>
+#include <math.h>
+#include <sys/time.h>
+#include <time.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
 
 #include "../cfg.h"
+
 #include "../dvrsvr/genclass.h"
-#include "../dvrsvr/config.h"
+#include "../dvrsvr/cfg.h"
 #include "../ioprocess/diomap.h"
+
+#define MCU_SUPPORT
+
+// check http://tf.nist.gov/tf-cgi/servers.cgi for servr ip
+// check http://support.ntp.org/bin/view/Servers/WebHome
+
+char htpserver[]="www.ntp.org" ;
+char ntpserver[]="pool.ntp.org" ;
+char nistserver[]="time.nist.gov" ;
+
+char dvrconfigfile[]= CFG_FILE ;
+
+#ifdef MCU_SUPPORT
+
+struct dio_mmap * p_dio_mmap ;
 
 char dvriomap[256] = "/var/dvr/dvriomap" ;
 
-#endif
-
-// check http://tf.nist.gov/tf-cgi/servers.cgi for servr ip
-char nistserver[]="64.90.182.55" ;
-
-// check http://support.ntp.org/bin/view/Servers/WebHome
-char ntpserver[]="64.90.182.55" ;
+#endif		// MCU_SUPPORT
 
 void inittz()
 {
-#ifdef DVR_APP
     char * p ;
-    config dvrconfig(CFG_FILE);
+    config dvrconfig(dvrconfigfile);
     string tz ;
     string tzi ;
-
+    
     tz=dvrconfig.getvalue( "system", "timezone" );
     if( tz.length()>0 ) {
-        tzi=dvrconfig.getvalue( "timezones", tz );
+        tzi=dvrconfig.getvalue( "timezones", tz.getstring() );
         if( tzi.length()>0 ) {
-            p=strchr(tzi, ' ' ) ;
+            p=strchr(tzi.getstring(), ' ' ) ;
             if( p ) {
                 *p=0;
             }
-            p=strchr(tzi, '\t' ) ;
+            p=strchr(tzi.getstring(), '\t' ) ;
             if( p ) {
                 *p=0;
             }
-            setenv("TZ", tzi, 1);
+            setenv("TZ", tzi.getstring(), 1);
         }
         else {
-            setenv("TZ", tz, 1);
+            setenv("TZ", tz.getstring(), 1);
         }
     }
-#endif
 }
 
 int readrtc(struct tm * ptm)
 {
     int res=0;
-    int hrtc = open("/dev/rtc", O_RDONLY );
+    int hrtc = open("/dev/rtc0", O_RDONLY );
+    if( hrtc<0 ) {
+		hrtc = open("/dev/rtc", O_RDONLY );
+	}
     if( hrtc>0 ) {
         memset( ptm, 0, sizeof(struct tm));
         if( ioctl( hrtc, RTC_RD_TIME, ptm )==0 ) {
@@ -83,7 +86,10 @@ int readrtc(struct tm * ptm)
 int setrtc(struct tm * ptm)
 {
     int res=0;
-    int hrtc = open("/dev/rtc", O_WRONLY );
+    int hrtc = open("/dev/rtc0", O_WRONLY );
+    if( hrtc < 0 ) {
+		hrtc = open("/dev/rtc", O_WRONLY );
+	}
     if( hrtc>0 ) {
         if( ioctl( hrtc, RTC_SET_TIME, ptm )==0 ) {
             res=1;
@@ -124,7 +130,7 @@ int printlocaltime()
            ptm->tm_mday, ptm->tm_hour,
            ptm->tm_min, ptm->tm_sec,
            int(tv.tv_usec/1000),
-           ptm->tm_zone,
+           ptm->tm_zone, 
            1900 + ptm->tm_year);
     return 1;
 }
@@ -141,7 +147,7 @@ int printutc()
            ptm->tm_mday, ptm->tm_hour,
            ptm->tm_min, ptm->tm_sec,
            int(tv.tv_usec/1000),
-           ptm->tm_zone,
+           ptm->tm_zone, 
            1900 + ptm->tm_year);
     return 1 ;
 }
@@ -155,12 +161,13 @@ int printrtc()
                mon_name[rtctm.tm_mon],
                rtctm.tm_mday, rtctm.tm_hour,
                rtctm.tm_min, rtctm.tm_sec,
-               "RTC",
+               "RTC", 
                1900 + rtctm.tm_year);
         return 1;
     }
     else {
-        return 0;       // error !
+		printf("RTC error!\n");
+        return 1;       // error !
     }
 }
 
@@ -187,7 +194,7 @@ int setlocaltime(char * datetime)
         tv.tv_usec=0;
         tv.tv_sec=(time_t)mktime(&tmtime);
         return settimeofday( &tv, NULL )==0 ;
-    }
+    }	
 }
 
 int utctortc()
@@ -218,7 +225,7 @@ int localtortc()
     gettimeofday( &tv, NULL );
     ptm = localtime( &tv.tv_sec );
     return setrtc(ptm);
-
+    
 }
 
 int rtctolocal()
@@ -241,22 +248,31 @@ int rtctolocal()
 int readmcu(struct tm * t)
 {
     int res=0;
+    int fd ;
     int i;
-    config dvrconfig(CFG_FILE);
-    string iomapfile ;
-    iomapfile = dvrconfig.getvalue( "system", "iomapfile");
+    char * p ;
+    config dvrconfig(dvrconfigfile);
+    string iomapfile = dvrconfig.getvalue( "system", "iomapfile");
     if( iomapfile.length()>0 ) {
-        strncpy( dvriomap, iomapfile, sizeof(dvriomap));
+        strncpy( dvriomap, iomapfile.getstring(), sizeof(dvriomap));
     }
-    if( dio_mmap( dvriomap )==NULL ) {
+    fd = open(dvriomap, O_RDWR, S_IRWXU);
+    if( fd<=0 ) {
         return 0 ;
     }
+    p=(char *)mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
+    close( fd );								// fd no more needed
+    if( p==(char *)-1 || p==NULL ) {
+        return 0;
+    }
+    p_dio_mmap = (struct dio_mmap *)p ;
+    
     if( p_dio_mmap->iopid<=0 ) {	// IO not started !
-        dio_munmap();
+        munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
         return 0 ;
     }
-
-    // wait
+    
+    // wait 
     for( i=0;i<1000; i++ ) {
         if( p_dio_mmap->rtc_cmd==0 ) break;
         if( p_dio_mmap->rtc_cmd<0 ) {
@@ -266,26 +282,24 @@ int readmcu(struct tm * t)
         usleep(1000);
     }
     p_dio_mmap->rtc_cmd = 1 ;		// read rtc command
-    // wait
+    // wait 
     for( i=0;i<1000; i++ ) {
-        if( p_dio_mmap->rtc_cmd!=1 )
+        if( p_dio_mmap->rtc_cmd!=1 ) 
             break;
         usleep(1000);
     }
-
+    
     if( p_dio_mmap->rtc_cmd==0 ) {
-        dio_lock();
         t->tm_year=p_dio_mmap->rtc_year-1900 ;
         t->tm_mon =p_dio_mmap->rtc_month-1 ;
         t->tm_mday=p_dio_mmap->rtc_day ;
         t->tm_hour=p_dio_mmap->rtc_hour ;
         t->tm_min =p_dio_mmap->rtc_minute ;
         t->tm_sec =p_dio_mmap->rtc_second ;
-        dio_unlock();
         mktime(t);
         res=1 ;
     }
-    dio_munmap();
+    munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
     return res ;
 }
 
@@ -294,21 +308,31 @@ int readmcu(struct tm * t)
 int writemcu(struct tm * t)
 {
     int res=0;
+    int fd ;
     int i;
-    config dvrconfig(CFG_FILE);
-    string iomapfile( dvrconfig.getvalue( "system", "iomapfile") ) ;
+    char * p ;
+    config dvrconfig(dvrconfigfile);
+    string iomapfile = dvrconfig.getvalue( "system", "iomapfile");
     if( iomapfile.length()>0 ) {
-        strncpy( dvriomap, iomapfile, sizeof(dvriomap));
+        strncpy( dvriomap, iomapfile.getstring(), sizeof(dvriomap));
     }
-    if( dio_mmap( dvriomap )==NULL ) {
+    fd = open(dvriomap, O_RDWR, S_IRWXU);
+    if( fd<=0 ) {
         return 0 ;
     }
+    p=(char *)mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
+    close( fd );								// fd no more needed
+    if( p==(char *)-1 || p==NULL ) {
+        return 0;
+    }
+    p_dio_mmap = (struct dio_mmap *)p ;
+    
     if( p_dio_mmap->iopid<=0 ) {	// IO not started !
-        dio_munmap();
+        munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
         return res ;
     }
-
-    // wait
+    
+    // wait 
     for( i=0;i<1000; i++ ) {
         if( p_dio_mmap->rtc_cmd==0 ) break;
         if( p_dio_mmap->rtc_cmd<0 ) {
@@ -317,7 +341,6 @@ int writemcu(struct tm * t)
         }
         usleep(1000);
     }
-    dio_lock();
     p_dio_mmap->rtc_year=t->tm_year+1900 ;
     p_dio_mmap->rtc_month=t->tm_mon+1;
     p_dio_mmap->rtc_day=t->tm_mday;
@@ -325,18 +348,17 @@ int writemcu(struct tm * t)
     p_dio_mmap->rtc_minute=t->tm_min;
     p_dio_mmap->rtc_second=t->tm_sec;
     p_dio_mmap->rtc_cmd = 2 ;		// set rtc command
-    dio_unlock();
-    // wait
+    // wait 
     for( i=0;i<1000; i++ ) {
-        if( p_dio_mmap->rtc_cmd!=2 )
+        if( p_dio_mmap->rtc_cmd!=2 ) 
             break;
         usleep(1000);
     }
-
+    
     if( p_dio_mmap->rtc_cmd==0 ) {
         res=1 ;
     }
-    dio_munmap();
+    munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
     return res ;
 }
 
@@ -349,7 +371,7 @@ int mcu()
                mon_name[rtctm.tm_mon],
                rtctm.tm_mday, rtctm.tm_hour,
                rtctm.tm_min, rtctm.tm_sec,
-               "MCU",
+               "MCU", 
                1900 + rtctm.tm_year);
         return 1 ;
     }
@@ -412,25 +434,36 @@ int mcutolocal()
 int readgps(struct tm * t)
 {
     int res=0;
-    config dvrconfig(CFG_FILE);
-    string iomapfile( dvrconfig.getvalue( "system", "iomapfile")) ;
+    int fd ;
+    char * p ;
+    config dvrconfig(dvrconfigfile);
+    string iomapfile = dvrconfig.getvalue( "system", "iomapfile");
     if( iomapfile.length()>0 ) {
-        strncpy( dvriomap, iomapfile, sizeof(dvriomap));
+        strncpy( dvriomap, iomapfile.getstring(), sizeof(dvriomap));
     }
-    if( dio_mmap( dvriomap )==NULL ) {
+    fd = open(dvriomap, O_RDWR, S_IRWXU);
+    if( fd<=0 ) {
         return 0 ;
     }
+    p=(char *)mmap( NULL, sizeof(struct dio_mmap), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0 );
+    close( fd );								// fd no more needed
+    if( p==(char *)-1 || p==NULL ) {
+        return 0;
+    }
+    p_dio_mmap = (struct dio_mmap *)p ;
+    
     if( p_dio_mmap->iopid<=0 ) {	// IO not started !
-        dio_munmap() ;
+        munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
         return res ;
     }
-
+    
     if( p_dio_mmap->gps_valid ) {
         time_t tt=(time_t)p_dio_mmap->gps_gpstime ;
         gmtime_r( &tt, t );
         res=1 ;
     }
-    dio_munmap();
+    
+    munmap( p_dio_mmap, sizeof( struct dio_mmap ) );
     return res ;
 }
 
@@ -443,7 +476,7 @@ int gps()
                mon_name[ttm.tm_mon],
                ttm.tm_mday, ttm.tm_hour,
                ttm.tm_min, ttm.tm_sec,
-               "GPS",
+               "GPS", 
                1900 + ttm.tm_year);
         return 1 ;
     }
@@ -486,11 +519,11 @@ int net_connect(const char *netname, int port, int type, struct my_sockaddr * ad
     struct addrinfo *ressave;
     int sockfd;
     char service[20];
-
+    
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = type;
-
+    
     sprintf(service, "%d", port);
     res = NULL;
     if (getaddrinfo(netname, service, &hints, &res) != 0) {
@@ -502,7 +535,7 @@ int net_connect(const char *netname, int port, int type, struct my_sockaddr * ad
         return -1;
     }
     ressave = res;
-
+    
     /*
      Try open socket with each address getaddrinfo returned,
      until getting a valid socket.
@@ -511,7 +544,7 @@ int net_connect(const char *netname, int port, int type, struct my_sockaddr * ad
     while (res) {
         sockfd = socket(res->ai_family,
                         res->ai_socktype, res->ai_protocol);
-
+        
         if (sockfd != -1) {
             if( ad!=NULL ) {
                 ad->addrlen = res->ai_addrlen ;
@@ -530,14 +563,14 @@ int net_connect(const char *netname, int port, int type, struct my_sockaddr * ad
         }
         res = res->ai_next;
     }
-
+    
     freeaddrinfo(ressave);
-
+    
     if (sockfd == -1) {
         printf("Error:netsvr:net_connect!");
         return -1;
     }
-
+    
     return sockfd;
 }
 
@@ -562,16 +595,14 @@ int  nist_daytime(char * server)
     int n ;
     int res=0 ;
     if( server==NULL ) {
-        fd = net_connect(nistserver, 13, SOCK_STREAM, NULL);
-    }
-    else {
-        fd = net_connect(server, 13, SOCK_STREAM, NULL);
-    }
+		server = nistserver ;
+	}
+    fd = net_connect(server, 13, SOCK_STREAM, NULL);
     if( fd>0 ) {
         if( net_recvok( fd, 3 ) ) {
             n=recv(fd, buf, 512,0);
             buf[n]=0 ;
-            printf("%s", buf);
+            printf(buf);
             res=1 ;
         }
         else {
@@ -614,11 +645,9 @@ int ntp_gettime(char * server, struct ntp_block * ntpb)
     int n ;
     int res=0;
     if( server==NULL ) {
-        fd = net_connect(ntpserver, 123, SOCK_DGRAM, &ad );
-    }
-    else {
-        fd = net_connect(server, 123, SOCK_DGRAM, &ad);
-    }
+		server = ntpserver ;
+	}
+    fd = net_connect(server, 123, SOCK_DGRAM, &ad);
     if( fd>0 ) {
         memset(&sntpb, 0, sizeof(sntpb));
         sntpb.VN=3 ;
@@ -654,16 +683,14 @@ double ntp_offset(char * server)
     struct ntp_block ntpb ;
     struct timeval tv_send ;
     struct timeval tv_recv ;
-
+    
     int fd ;
     int n ;
     double res=0.0;
     if( server==NULL ) {
-        fd = net_connect(ntpserver, 123, SOCK_DGRAM, &ad);
-    }
-    else {
-        fd = net_connect(server, 123, SOCK_DGRAM, &ad);
-    }
+		server = ntpserver ;
+	}
+    fd = net_connect(server, 123, SOCK_DGRAM, &ad);    
     if( fd>0 ) {
         memset(&ntpb, 0, sizeof(ntpb));
         ntpb.VN=3 ;
@@ -680,7 +707,7 @@ double ntp_offset(char * server)
                 t1 = (double)tv_send.tv_sec + ((double)tv_send.tv_usec)/1000000.0 ;
                 t4 = (double)tv_recv.tv_sec + ((double)tv_recv.tv_usec)/1000000.0 ;
                 t2 = (double)ntohl(ntpb.Receive_Timestamp)-2208988800. + (double)ntohl(ntpb.Receive_Timestamp_f)*pow(2., -32 ) ;
-                t3 = (double)ntohl(ntpb.Transmit_Timestamp)-2208988800. + (double)ntohl(ntpb.Transmit_Timestamp_f)*pow(2., -32 ) ;
+                t3 = (double)ntohl(ntpb.Transmit_Timestamp)-2208988800. + (double)ntohl(ntpb.Transmit_Timestamp_f)*pow(2., -32 ) ; 
                 res = -(t4-t3+t1-t2)/2 ;
             }
             else {
@@ -707,7 +734,7 @@ int ntp(char * server)
     int i;
     int point ;
     struct timeval tv ;
-
+    
     memset( &ntpb, 0, sizeof(ntpb));
     if( ntp_gettime( server, &ntpb) ) {
         ui = ntohl(ntpb.Transmit_Timestamp);
@@ -730,7 +757,7 @@ int ntp(char * server)
                rtctm.tm_mday, rtctm.tm_hour,
                rtctm.tm_min, rtctm.tm_sec,
                (int)(tv.tv_usec/1000),
-               "NTP",
+               "NTP", 
                1900 + rtctm.tm_year);
         return 1 ;
     }
@@ -744,7 +771,7 @@ int ntptoutc(char * server)
     int i;
     int point ;
     struct timeval tv ;
-
+    
     memset( &ntpb, 0, sizeof(ntpb));
     if( ntp_gettime( server, &ntpb) ) {
         ui = ntohl(ntpb.Transmit_Timestamp);
@@ -777,14 +804,11 @@ int htp(char * server)
     char * pbuf ;
     char * kbuf ;
     int res=0 ;
-    if( server==NULL ) {
-        fd = net_connect("www.ntp.org", 80, SOCK_STREAM, &ad );
-        sprintf(buf, "GET / HTTP/1.1\nHost: %s \n\n", "www.ntp.org" );
-    }
-    else {
-        fd = net_connect(server, 80, SOCK_STREAM, &ad);
-        sprintf(buf, "GET / HTTP/1.1\nHost: %s \n\n", server );
-    }
+    if( server == NULL ) {
+		server = htpserver ;
+	}
+    fd = net_connect(server, 80, SOCK_STREAM, &ad);
+    sprintf(buf, "HEAD / HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", server );
     if( fd>0 ) {
         send(fd, buf, strlen(buf), 0);
         if( net_recvok( fd, 3 ) ) {
@@ -821,14 +845,11 @@ int htp_gettime(char * server, struct tm * t)
     int n ;
     char buf[HTTPRSIZE] ;
     char * pbuf ;
-    if( server==NULL ) {
-        fd = net_connect("www.ntp.org", 80, SOCK_STREAM, &ad );
-        sprintf(buf, "GET / HTTP/1.1\nHost: %s \n\n", "www.ntp.org" );
-    }
-    else {
-        fd = net_connect(server, 80, SOCK_STREAM, &ad);
-        sprintf(buf, "GET / HTTP/1.1\nHost: %s \n\n", server );
-    }
+    if( server == NULL ) {
+		server = htpserver ;
+	}
+    fd = net_connect(server, 80, SOCK_STREAM, &ad);
+    sprintf(buf, "HEAD / HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", server );
     if( fd>0 ) {
         send(fd, buf, strlen(buf), 0);
         if( net_recvok( fd, 3 ) ) {
@@ -843,7 +864,7 @@ int htp_gettime(char * server, struct tm * t)
                         char wday[10], month[10] ;
                         int mday, year, hour, minute, second ;
                         n=sscanf( pbuf, "Date: %4s %02d %3s %d %02d:%02d:%02d",
-                                 wday,
+                                 wday,  
                                  &mday,
                                  month,
                                  &year,
@@ -870,27 +891,29 @@ int htp_gettime(char * server, struct tm * t)
     return res;
 }
 
-
 int htptoutc(char * server)
 {
     struct tm t ;
     struct timeval tv ;
     struct timeval rem ;
     time_t thtp ;
-    int diffs ;
+    int diffs, diffus ;
     if( htp_gettime(server, &t) ) {
         thtp = timegm(&t);
         gettimeofday(&tv, NULL);
         diffs = (int)thtp - (int)tv.tv_sec ;
-        if( diffs>2 || diffs<-2 ) {
+        if( diffs>1 || diffs<-2 ) {
             tv.tv_sec = thtp ;
-            tv.tv_usec = 0 ;
+            tv.tv_usec = 500000 ;
             settimeofday( &tv, NULL );
         }
         else {
-            tv.tv_sec = diffs ;
-            tv.tv_usec = 0 ;
-            adjtime(&tv, &rem);
+            diffus = 500000 - (int)tv.tv_usec + diffs*1000000 ;
+            if( diffus>500000 || diffus<-500000 ) {
+                tv.tv_sec = diffus/1000000 ;
+                tv.tv_usec = diffus%1000000 ;
+                adjtime(&tv, &rem);	
+            }
         }
         return 1 ;
     }
@@ -905,7 +928,7 @@ int cool(char * arg)
     tv.tv_sec=(time_t)offset ;
     tv.tv_usec=(int)((offset-(double)tv.tv_sec)*1000000.0) ;
     adjtime(&tv, &rem);
-    printf("offset: %f, tv: %d-%d, rem : %d-%d\n", offset,
+    printf("offset: %f, tv: %d-%d, rem : %d-%d\n", offset, 
            (int) tv.tv_sec, (int)tv.tv_usec,
            (int) rem.tv_sec, (int) rem.tv_usec );
     return 1 ;
@@ -990,14 +1013,12 @@ int main(int argc, char * argv[])
     else if( strcmp(argv[1], "htptoutc" )==0 ) {
         res=htptoutc(argv[2]);
     }
-#ifdef MCU_SUPPORT
     else if( strcmp(argv[1], "gps" )==0 ) {
         res=gps();
     }
     else if( strcmp(argv[1], "gpstoutc" )==0 ) {
         res=gpstoutc();
     }
-#endif
     else if( strcmp(argv[1], "cool" )==0 ) {
         res=cool(argv[2]);
     }
@@ -1017,5 +1038,3 @@ int main(int argc, char * argv[])
         return 1 ;
     }
 }
-
-

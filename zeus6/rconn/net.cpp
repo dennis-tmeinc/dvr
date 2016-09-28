@@ -1,5 +1,4 @@
 /*
-
   net.cpp
 
     network interface
@@ -23,28 +22,38 @@
 
 #include "net.h"
 
-// get sockad from string address
-int net_addr(struct sockad *addr, const char *netname, int port, int family )
+// get addrinfo 
+static struct addrinfo * net_addrinfo( const char *netname, int port, int family, int socktype )
 {	
     struct addrinfo hints;
     struct addrinfo *res;
     char service[20] ;
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = family ;
-    hints.ai_socktype = SOCK_STREAM ;
+    hints.ai_socktype = socktype ;
     if( netname==NULL ) {
         hints.ai_flags = AI_PASSIVE ;
     }
     sprintf(service, "%u", port);
     res = NULL;
     if (getaddrinfo( netname, service, &hints, &res) == 0) {
+		return res ;
+	}
+    return NULL;
+}
+
+// get sockad from string address
+int net_addr(struct sockad *addr, const char *netname, int port, int family )
+{	
+    struct addrinfo *res;
+    res = net_addrinfo( netname, port, family, SOCK_STREAM );
+    if( res ) {
 		memcpy(addr, res->ai_addr, res->ai_addrlen);
 		addr->len = res->ai_addrlen;
 		freeaddrinfo(res);
         return 1;
-    }
-    return 0;
-
+	}
+	return 0 ;
 }
 
 // return host name and port number
@@ -56,38 +65,63 @@ char * net_name(struct sockad *sad, char * host, int hostlen )
     return NULL;
 }
 
+// return port number from sockad
+int net_port( struct sockad *sad )
+{
+	char service[80] ;
+	if( getnameinfo( SADDR(*sad), sad->len, NULL, 0, service, 80, NI_NUMERICSERV )==0 ) {
+		return atoi(service);
+    }
+    return 0;
+}
+
 int net_connect( const char * host, int port )
 {
-    struct sockad sad ;
-    int s = socket(AF_INET, SOCK_STREAM, 0);
-    if( s>=0 && net_addr( &sad, host, port) ) {
-		if( connect(s, SADDR(sad), sad.len)==0 ) {
-			return s ;
+	int s = -1 ;
+	struct addrinfo *rai;
+	struct addrinfo *ai;
+    rai = net_addrinfo( host, port, AF_UNSPEC, SOCK_STREAM );
+    if( rai ) {
+		ai = rai ;
+		while( ai!=NULL ) {
+			s = socket( ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+			if(s>=0) {
+				if( connect(s, ai->ai_addr, ai->ai_addrlen)==0 ) {
+					break ;
+				}
+				close(s);
+				s = -1 ;
+			}
+			ai = ai->ai_next ;
 		}
-    }
-    if( s>=0 ) close(s);
-    return -1;
+		freeaddrinfo(rai);
+	}
+	return s ;
 }
 
 int net_connect_local(const char * sname)
 {
-    int s;
-    struct sockaddr_un addr;
-    socklen_t alen;
-    size_t namelen;
+	int s;
+	struct sockad addr ;
 
     s = socket(AF_LOCAL, SOCK_STREAM, 0);
     if(s < 0) return -1;
 
     memset(&addr, 0, sizeof(addr));
-    namelen  = strlen(sname);
+    addr.s.saddr_un.sun_family = AF_LOCAL;
+    addr.len = sizeof(addr.s);
+    
+    if( *sname != 0  ) {		// socket file
+		strcpy( addr.s.saddr_un.sun_path, sname );
+		addr.len = offsetof(struct sockaddr_un, sun_path) + strlen(addr.s.saddr_un.sun_path) + 1 ;
+	}
+	else {						// abstract socket name
+		addr.s.saddr_un.sun_path[0] = 0 ;
+		strcpy( addr.s.saddr_un.sun_path+1, sname+1 );
+		addr.len = offsetof(struct sockaddr_un, sun_path) + strlen(addr.s.saddr_un.sun_path+1) + 1 ;
+	}
 
-    addr.sun_path[0] = 0;
-    memcpy(addr.sun_path + 1, sname, namelen);
-    addr.sun_family = AF_LOCAL;
-    alen = namelen + offsetof(struct sockaddr_un, sun_path) + 1;
-
-    if(connect(s, (struct sockaddr *) &addr, alen) < 0) {
+    if(connect(s, SADDR(addr), addr.len) < 0) {
 		close(s);
 		return -1 ;
     }
@@ -102,20 +136,34 @@ int net_bind(int socket, int port, char * host)
     return bind(socket, SADDR(sad), sad.len) ;
 }
 
-int net_listen( int port, int reuse )
+int net_listen( int port )
 {
-    int s = socket(AF_INET, SOCK_STREAM, 0);
-    if( reuse ) {
-		setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int) ) ;
+	int s = -1 ;
+	struct addrinfo *rai;
+	struct addrinfo *ai;
+    rai = net_addrinfo( NULL, port, AF_UNSPEC, SOCK_STREAM );
+    if( rai ) {
+		ai = rai ;
+		while( ai!=NULL ) {
+			s = socket( ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+			if(s>=0) {
+				int reuse = 1 ;
+				setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(int) ) ;
+				if( bind(s, ai->ai_addr, ai->ai_addrlen) == 0 ) {
+					listen( s, 10 );
+					break ;
+				}
+				close(s);
+				s=-1 ;
+			}
+			ai = ai->ai_next ;
+		}
+		freeaddrinfo(rai);
 	}
-    if( net_bind( s, port, NULL ) == 0 ) {
-		listen( s, 10 );
-		return s ;
-	}
-	close(s);
-	return -1 ;
+	return s ;
 }
 
+// get my routable ip address (not public ip)
 unsigned int net_myip(struct sockad *addr)
 {
     struct sockad sad ;

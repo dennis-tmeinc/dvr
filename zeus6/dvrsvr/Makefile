@@ -39,6 +39,7 @@ HEADERS=../cfg.h\
 		block.h  \
 		record.h \
 		dir.h \
+		vri.h \
 		archive.h \
 		../ioprocess/diomap.h
 
@@ -47,7 +48,7 @@ OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 CFLAGS += -Os
 
 ifeq ($(EAGLE),zeus8)
-  LDFLAGS += -lpthread -lm -lstdc++ -lipcamerasdk -luuid -L./lib -leagle -lgm  
+  LDFLAGS += -lpthread -lm -lstdc++ -lipcamerasdk -luuid -L./libzeus8 -leagle -lgm  
   
 else
   LDFLAGS += -lpthread -lm -lstdc++ \

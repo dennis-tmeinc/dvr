@@ -23,10 +23,11 @@
 #define MCU_SUPPORT
 
 // check http://tf.nist.gov/tf-cgi/servers.cgi for servr ip
-char nistserver[]="64.90.182.55" ;
-
 // check http://support.ntp.org/bin/view/Servers/WebHome
-char ntpserver[]="64.90.182.55" ;
+
+char htpserver[]="www.ntp.org" ;
+char ntpserver[]="pool.ntp.org" ;
+char nistserver[]="time.nist.gov" ;
 
 char dvrconfigfile[]= CFG_FILE ;
 
@@ -594,11 +595,9 @@ int  nist_daytime(char * server)
     int n ;
     int res=0 ;
     if( server==NULL ) {
-        fd = net_connect(nistserver, 13, SOCK_STREAM, NULL);
-    }
-    else {
-        fd = net_connect(server, 13, SOCK_STREAM, NULL);
-    }
+		server = nistserver ;
+	}
+    fd = net_connect(server, 13, SOCK_STREAM, NULL);
     if( fd>0 ) {
         if( net_recvok( fd, 3 ) ) {
             n=recv(fd, buf, 512,0);
@@ -646,11 +645,9 @@ int ntp_gettime(char * server, struct ntp_block * ntpb)
     int n ;
     int res=0;
     if( server==NULL ) {
-        fd = net_connect(ntpserver, 123, SOCK_DGRAM, &ad );
-    }
-    else {
-        fd = net_connect(server, 123, SOCK_DGRAM, &ad);
-    }
+		server = ntpserver ;
+	}
+    fd = net_connect(server, 123, SOCK_DGRAM, &ad);
     if( fd>0 ) {
         memset(&sntpb, 0, sizeof(sntpb));
         sntpb.VN=3 ;
@@ -691,11 +688,9 @@ double ntp_offset(char * server)
     int n ;
     double res=0.0;
     if( server==NULL ) {
-        fd = net_connect(ntpserver, 123, SOCK_DGRAM, &ad);
-    }
-    else {
-        fd = net_connect(server, 123, SOCK_DGRAM, &ad);
-    }
+		server = ntpserver ;
+	}
+    fd = net_connect(server, 123, SOCK_DGRAM, &ad);    
     if( fd>0 ) {
         memset(&ntpb, 0, sizeof(ntpb));
         ntpb.VN=3 ;
@@ -809,14 +804,11 @@ int htp(char * server)
     char * pbuf ;
     char * kbuf ;
     int res=0 ;
-    if( server==NULL ) {
-        fd = net_connect("www.ntp.org", 80, SOCK_STREAM, &ad );
-        sprintf(buf, "GET / HTTP/1.1\nHost: %s \n\n", "www.ntp.org" );
-    }
-    else {
-        fd = net_connect(server, 80, SOCK_STREAM, &ad);
-        sprintf(buf, "GET / HTTP/1.1\nHost: %s \n\n", server );
-    }
+    if( server == NULL ) {
+		server = htpserver ;
+	}
+    fd = net_connect(server, 80, SOCK_STREAM, &ad);
+    sprintf(buf, "HEAD / HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", server );
     if( fd>0 ) {
         send(fd, buf, strlen(buf), 0);
         if( net_recvok( fd, 3 ) ) {
@@ -853,14 +845,11 @@ int htp_gettime(char * server, struct tm * t)
     int n ;
     char buf[HTTPRSIZE] ;
     char * pbuf ;
-    if( server==NULL ) {
-        fd = net_connect("www.ntp.org", 80, SOCK_STREAM, &ad );
-        sprintf(buf, "GET / HTTP/1.1\nHost: %s \n\n", "www.ntp.org" );
-    }
-    else {
-        fd = net_connect(server, 80, SOCK_STREAM, &ad);
-        sprintf(buf, "GET / HTTP/1.1\nHost: %s \n\n", server );
-    }
+    if( server == NULL ) {
+		server = htpserver ;
+	}
+    fd = net_connect(server, 80, SOCK_STREAM, &ad);
+    sprintf(buf, "HEAD / HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", server );
     if( fd>0 ) {
         send(fd, buf, strlen(buf), 0);
         if( net_recvok( fd, 3 ) ) {
@@ -901,7 +890,6 @@ int htp_gettime(char * server, struct tm * t)
     }
     return res;
 }
-
 
 int htptoutc(char * server)
 {

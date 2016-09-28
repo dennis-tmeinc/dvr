@@ -8,7 +8,7 @@ export PROJDIR proj EAGLE
 
 # cross compile toolchain for zeus8 board
 
-SYSROOT=/mnt/udu/Dennis/zeus8/toolchain_gnueabi-4.4.0_ARMv5TE
+SYSROOT=$(PROJDIR)/toolchain/zeus8/toolchain_gnueabi-4.4.0_ARMv5TE
 CROSS_COMPILE_PREFIX=$(SYSROOT)/usr/bin/arm-unknown-linux-uclibcgnueabi-
 
 export CROSS_COMPILE=$(CROSS_COMPILE_PREFIX)

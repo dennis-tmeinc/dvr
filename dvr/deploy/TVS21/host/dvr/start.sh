@@ -63,8 +63,7 @@ if [ $fmupdate = 1 ]; then
 fi
 
 # set debugging ip address
-boardid=`cat /davinci/ID/BOARDID`
-ifconfig eth0 192.168.247.${boardid}
+ifconfig eth0 192.168.247.100
 
 # setup initial TZ environment
 cd /davinci/dvr

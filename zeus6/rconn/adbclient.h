@@ -7,6 +7,8 @@
 
 class adb_conn
 	:public rconn {
+public:
+	adb_conn() : rconn() {}
 		
 protected:
 	// connect to remote server, make it extendable
