@@ -65,7 +65,7 @@ int mcu_bootupready(int* D1)
         return 1 ;
     }
 
-printf("BOOT RDY?\n");    
+	printf("BOOT RDY?\n");    
     
     char * rsp = mcu_cmd( 0x11, 1, 1 ) ;
     if( rsp ) {
@@ -110,7 +110,7 @@ int mcu_iosensorrequest()
 
 int mcu_iosensor_send()
 {
-    mcu_sendcmd( 0x13, 2, (iosensor_inverted & 0xff), (iosensor_inverted>>8)&0xff ) ;
+    mcu_cmd( 0x13, 2, (iosensor_inverted & 0xff), (iosensor_inverted>>8)&0xff ) ;
 	return 0 ;
 }
 
@@ -243,7 +243,7 @@ int mcu_campower()
 //      flash: 0=off, 1=flash
 void mcu_led(int led, int flash)
 {
-	mcu_sendcmd( 0x2f, 2, led, flash );
+	mcu_cmd( 0x2f, 2, led, flash );
 }
 
 // Device Power
@@ -254,6 +254,31 @@ void mcu_devicepower(int device, int poweron )
 {
 	if( mcu_cmd( 0x2e, 2, device, (poweron!=0) ) ) {
 		dvr_log( "Device %d %s.", device, poweron?"on":"off");
+	}
+}
+
+// Extended Device Power (cmd 38/39/3A/3B/4B/4C)
+//   parameters:
+//      device:  0= Wifi, 1=USB, 2=POE, 3=Radar(Tab101)
+//      poweron: 0=poweroff, 1=poweron
+void mcu_devicepower_ex(int device, int poweron )
+{
+	static int dev_tab[] = {
+		0x38, 0x39, 0x3a, 0x3b, 0x4b, 0x4c
+	};
+	if( device<6 && mcu_cmd( dev_tab[device], 1, (poweron!=0) ) ) {
+		dvr_log( "Extended power control (%d) %s.", device, poweron?"on":"off");
+	}
+}
+
+// USB34 Power (cmd 51)
+//   parameters:
+//      device:  0=USB3, 1=USB4, 2=USB3 BUS 3=USB4 BUS
+//      poweron: 0=poweroff, 1=poweron
+void mcu_devicepower_usb34(int device, int poweron )
+{
+	if( mcu_cmd( 0x51, 1, (poweron)?(1<<device):(0x10<<device) ) ) {
+		dvr_log( "USB34 power control (%d) %s.", device, poweron?"on":"off");
 	}
 }
 
@@ -504,7 +529,6 @@ void mcu_mic_on( int mic )
 	}
     mcu_cmd( cmd );
 	dvr_log("Turn on mic %d.", mic+1);
-
 }
 
 void mcu_mic_off( int mic )
@@ -517,7 +541,6 @@ void mcu_mic_off( int mic )
 		cmd = 0x53 ;
 	}
     mcu_cmd( cmd );
-
 	dvr_log("Turn off mic %d.", mic+1);
 }
 

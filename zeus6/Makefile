@@ -45,7 +45,7 @@ pwz6:
 	cp cfg.h.pwz6 cfg.h
 	cp config.pwz6 config
 
-tvz6:
+tvsz6:
 	cp cfg.h.tvsz6 cfg.h
 	cp config.tvsz6 config
 

@@ -192,20 +192,20 @@ static void disk_rmdir(const char * tdir )
 // remove directory with no files
 int disk_rmemptydir(char *tdir)
 {
-	int f = 0 ;
 	dir d( tdir ) ;
 	while( d.find(NULL, DIR_FINDDIR) ) {
-		f += disk_rmemptydir( d.pathname() ) ;
+		disk_rmemptydir( d.pathname() ) ;
 	}
-	if( f==0 ) {
-		d.rewind();
-		f = d.find(NULL, DIR_FINDFILE );
+	
+	d.rewind();
+	if( d.find() ) {
+		// find anything
+		return 1 ;
 	}
 	d.close();
-	if( f==0 ) {
-		rmdir( tdir );
-	} 
-	return f;
+
+	rmdir( tdir );
+	return 0;
 }
 
 // remove .264 files and related .k, .idx, and all parent folder if it is empty
@@ -361,6 +361,9 @@ static void disk_diskfix(char *disk)
     
     disk_repair264(disk);
 	disk_rmempty264dir(disk, 0);    
+	
+	// extra, remove all empty directoy
+	disk_rmemptydir(disk);
     
     dio_enablewatchdog();
 }

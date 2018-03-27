@@ -549,7 +549,12 @@ int main()
             if( value.length()>0 ) {
                 fprintf(fvalue, "\"camera_name\":\"%s\",", (char *)value );
             }
-
+            
+            // m_enablejicaudio, record audio in JIC mode
+            if( dvrconfig.getvalueint(section, "enablejicaudio") ) {
+                fprintf(fvalue, "\"enablejicaudio\":\"on\"," );
+            }
+            
             // camera_type
             ivalue = dvrconfig.getvalueint(section, "type");
             fprintf(fvalue, "\"camera_type\":\"%d\",", ivalue );

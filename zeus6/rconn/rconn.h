@@ -32,11 +32,13 @@ public:
 	char cmdline[LINEBUFSIZE] ;
 	int  cmdptr ;
 	int  datalen ;		// remaining data length to transfer to target
+	int  maxidle ;		// max idle time
+	int  nping ;
 		
 	slist channel_list ;
 
 	rconn();
-	~rconn();
+	virtual ~rconn();
 
 	virtual void closechannel(void) ;
 	virtual int  process()  ;
@@ -48,6 +50,7 @@ public:
 	virtual int  block() {
 		return m_block ;
 	}		
+	virtual void ping();
 	
 	channel * findbyId( char * id ) ;
 
@@ -73,7 +76,7 @@ private:
 	void  cmd_data( int argc, char * argv[] ) ;
 	void  cmd_xon( int argc, char * argv[] ) ;
 	void  cmd_xoff( int argc, char * argv[] ) ;
-
+	void  cmd_echo( int argc, char * argv[] ) ;
 };
 
 

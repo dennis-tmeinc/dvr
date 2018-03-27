@@ -36,6 +36,7 @@ rec_channel::rec_channel(int channel)
     sprintf(cameraname, "camera%d", m_channel+1 );
 
     m_recordmode = dvrconfig.getvalueint( cameraname, "recordmode");
+    m_enablejicaudio = dvrconfig.getvalueint( cameraname, "enablejicaudio"); 
     
 #ifdef MDVR_APP    
     m_triggersensor = 0 ;
@@ -172,9 +173,21 @@ void rec_channel::onframe(cap_frame * pframe)
         }
     }
     else {
+		// if( m_enablejicaudio == 0 && pframe->frametype == FRAMETYPE_AUDIO && m_recstate != REC_LOCK ) {
+			// don't record _N_ audio,
+			// just ignor this frame
+			// return ;
+		//}
+		
 		// build new fifo frame
 		nfifo = newfifo( pframe );
 		nfifo->rectype = m_recstate ;
+		
+		if( m_enablejicaudio == 0 && nfifo->frametype == FRAMETYPE_AUDIO && m_recstate != REC_LOCK ) {
+			// slience auido frame
+			nfifo->frametype = FRAMETYPE_AUDIO_SILENT ;
+		}
+		
 		putfifo( nfifo );
 		if( pframe->frametype == FRAMETYPE_KEYFRAME ) {
 			m_fifokey = 1 ;

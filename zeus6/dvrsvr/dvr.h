@@ -125,6 +125,7 @@ extern int g_memdirty; 			// dirty memory
 
 void *mem_alloc(int size);
 void mem_free(void *pmem);
+void *mem_clone(void *pmem, int memsize);
 void mem_dropcache() ;
 void *mem_addref(void *pmem, int memsize=0);
 int mem_refcount(void *pmem);
@@ -237,6 +238,9 @@ struct hd_subframe {
 #define FRAMETYPE_OSD		(11)			// TXT
 #define FRAMETYPE_GPS		(12)			// GPS
 #define FRAMETYPE_KEYOSD	(15)			// KEY OSD TXT
+
+#define FRAMETYPE_AUDIO_SILENT	(16)		// slient audio
+
 #define FRAMETYPE_OTHER		(20)
 
 #define FRAMETYPE_KEYFRAME  (FRAMETYPE_KEYOSD)
@@ -325,17 +329,21 @@ typedef struct {
 // dvrfile
 class dvrfile {
   protected:
-    FILE * m_khandle;
-    
+    FILE * m_khandle ;
+    FILE * m_mirror_khandle ;
     int    m_handle ;
+    int    m_mirror_handle ;
+    
     char * m_writebuf ; 
     int    m_writebufsize ;
     int    m_writepos ;
     
     struct hd_file m_fileheader ;
 	int    m_fileencrypt ;		// if file is encrypted?
+	unsigned char m_encbuf[1024] ;
 
 	string m_filename ;
+	string m_mirror_filename ;
 	int    m_openmode ;			// 0: read, 1: write
 
 	struct dvrtime m_filetime ;	// file start time
@@ -357,6 +365,10 @@ class dvrfile {
 	char * getfilename() {
 		return (char *)m_filename ;
 	}
+	
+	int setfilename( const char *filename ) ;
+	int setmirrorname( const char *filename );
+	int open(char *mode );
 	
 	int open(const char *filename, char *mode );
 	int writeopen(const char *filename, char *mode,void* pheader);
@@ -835,6 +847,7 @@ struct pw_diskinfo {
 
 extern struct pw_diskinfo pw_disk[3] ;
 
+int disk_rmemptydir(char *tdir);
 void disk_listday(array <f264name> & list, struct dvrtime * day, int channel);
 void disk_getdaylist(array <int> & daylist, int channel=-1);
 int disk_unlockfile( dvrtime * begin, dvrtime * end );

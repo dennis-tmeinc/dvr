@@ -77,7 +77,7 @@ static void StreamReadCallBack(CALLBACK_DATA CallBackData,void* context)
 	}
 	if( capframe.framedata != NULL ) {
 		mem_free( capframe.framedata );
-	}	
+	}
 }
 
 eagle_capture::eagle_capture( int channel ) 

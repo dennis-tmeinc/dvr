@@ -23,6 +23,8 @@
 #define ID_CDC		(2)
 //  04, RF module addr, also tab102??
 #define ID_RF 		(4)		
+#define ID_TAB102	(4)		
+
 
 #define MCU_CMD_RESET	        (0)
 #define MCU_CMD_REBOOT	        (0x01) 			// this command would send back response compare to MCU_CMD_RESET (USED on ZEUS project)
@@ -106,24 +108,23 @@ void mcu_clear(int delay=0);
 // check data check sum
 // return 0: checksum correct
 char mcu_checksum( char * data );
-// calculate check sum of data
-void mcu_calchecksum( char * data );
 
 // send constructed mcu message
-int mcu_send( char * msg );
+//int mcu_send( char * msg );
 // receive a mcu message
 //int mcu_recv( char * rmsg, int rsize, int usdelay=1000000, int * usremain=NULL);
 // char * mcu_recv( int usdelay=1000000, int * usremain=NULL);
+// char * mcu_recv( int usdelay = 5, int * usremain = NULL );
 
 // send command to mcu without waiting for responds
-int mcu_sendcmd(int cmd, int datalen=0, ...);
+int mcu_sendcmd_target_data(int target, int cmd, int datalen=0, char * data=NULL );
 int mcu_sendcmd_target(int target, int cmd, int datalen=0, ...);
+int mcu_sendcmd(int cmd, int datalen=0, ...);
+
 // send command and wait for responds
-//int mcu_cmd(char * rsp, int cmd, int datalen=0, ...);
-//int mcu_cmd_target(char * rsp, int target, int cmd, int datalen=0, ...);
-char * mcu_cmd(int cmd, int datalen=0, ...);
+char * mcu_cmd_target_data(int target, int cmd, int datalen=0, char * data=NULL );
 char * mcu_cmd_target(int target, int cmd, int datalen=0, ...);
-char * mcu_recv( int usdelay = 5, int * usremain = NULL );
+char * mcu_cmd(int cmd, int datalen=0, ...);
 
 // check mcu input
 // parameter
@@ -179,6 +180,9 @@ void mcu_led(int led, int flash);
 //      device:  0= GPS, 1= Slave Eagle boards, 2=Network switch
 //      poweron: 0=poweroff, 1=poweron
 void mcu_devicepower(int device, int poweron );
+void mcu_devicepower_ex(int device, int poweron );
+void mcu_devicepower_usb34(int device, int poweron );
+
 // return 1: success
 //        0: failed
 int mcu_w_rtc(time_t tt);

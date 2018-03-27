@@ -17,6 +17,7 @@ class rec_channel {
     protected:
         int     m_channel;
         int     m_recordmode ;				// 0: continue mode, 123: triggering mode, other: no recording
+        int     m_enablejicaudio;			// 0: record all audio, 1: don't record audio into _N_ frame
 
 #if defined(TVS_APP) || defined(PWII_APP)
         unsigned int m_triggersensor[32] ;  // trigger sensors

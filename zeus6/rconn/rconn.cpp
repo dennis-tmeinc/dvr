@@ -45,12 +45,12 @@ static int     s_running ;				// global running connections
 const char default_server[] = "pwrev.us.to" ;
 const int  default_port = 15600 ;
 
-// return runtime in seconds
+// return runtime in milli seconds
 int runtime()
 {
 	struct timespec ts ;
 	clock_gettime(CLOCK_MONOTONIC, &ts);
-	return (int)(ts.tv_sec) ;
+	return (int)(ts.tv_sec*1000 + ts.tv_nsec/1000000) ;
 }
 
 rconn::rconn()
@@ -58,8 +58,10 @@ rconn::rconn()
 {
 	datalen = 0 ;
 	cmdptr=0;
-	r_xoff = 0 ;		
+	r_xoff = 0 ;
 	m_block = 0 ;
+	maxidle = 100000 ;
+	nping = 0 ;
 }
 
 rconn::~rconn()
@@ -83,11 +85,12 @@ void rconn::closechannel(void)
 int rconn::process() 
 {
 	if( sfd!=NULL && sfd->fd == sock ) {
-
-		if( g_runtime - activetime > 100 ) {
-			sendLine("p\n");
-		}
+		if( sock>=0 && ( sfd->revents & POLLOUT ) ) {
+			do_send();
+		}				
+		
 		if( sock>=0 && ( sfd->revents & POLLIN ) ) {
+			activetime = g_runtime ;
 			if( datalen>0 ) {
 				int r = do_read( datalen );
 				if( r>0 ) {
@@ -101,10 +104,23 @@ int rconn::process()
 				do_cmd();
 			}
 		}
-
-		if( sock>=0 && ( sfd->revents & POLLOUT ) ) {
-			do_send();
+		
+		if( sock>= 0 ) {
+			if( g_runtime - activetime > maxidle || (nping && (g_runtime - activetime > 500) ) ) {
+				if( ++nping>1 ) {
+					close(sock);
+					sock=-1;
+				}
+				else {
+					ping();
+					nping++ ;
+					activetime = g_runtime ;
+				}
+			}
+			if( nping && g_maxwaitms>1000 ) 
+				g_maxwaitms = 1000 ;
 		}
+
 	}
 
 	if( sock<0 ) {
@@ -130,31 +146,28 @@ int rconn::process()
 
 int rconn::connect_server()
 {
-	if( g_runtime-activetime > 5 ) {		// don't retry connecting in 5 sec
-		activetime = g_runtime ;
-		return  net_connect( g_server, g_port ) ;
-	}
-	else {
-		return -1 ;
-	}
+	return  net_connect( g_server, g_port ) ;
 }
 	
 int  rconn::setfd( struct pollfd * pfd, int max )
 {
 	// try reopen server socket
 	if( sock < 0 ) {
-		sock = 	connect_server();
-		if( sock >= 0 ) {
-			char hostname [256] ;
-			gethostname(hostname, 255);
-			hostname[255]=0 ;
-			sendLineFormat("unit %s %s %s\n", hostname , (char *)g_did, (char *)g_internetkey );
-			stage = STAGE_REG ; 
-			activetime = g_runtime ;
+		if( g_runtime-activetime > 3000 ) {		// don't retry connecting in 3 sec
+			sock = 	connect_server();
+			if( sock >= 0 ) {
+				char hostname [256] ;
+				gethostname(hostname, 255);
+				hostname[255]=0 ;
+				sendLineFormat("unit %s %s %s\n", hostname , (char *)g_did, (char *)g_internetkey );
+				stage = STAGE_REG ; 
+				activetime = g_runtime ;
+				ping();
+			}
 		}
 
-		if( g_maxwaitms > 30000 ) 
-			g_maxwaitms = 30000 ;		// to retry connection in 30 seconds
+		if( g_maxwaitms > 1000 )
+			g_maxwaitms = 1000 ;		// to retry connection in 10 seconds
 	}
 				
 	int nfd = 0 ;
@@ -205,6 +218,11 @@ void rconn::xon( channel * peer )
 { 
 	sendLineFormat( "xon %s\n", peer->id );
 }	
+
+void rconn::ping() 
+{
+	sendLine("p\n");
+}
 
 // do the command line receiving
 void rconn::do_cmd()
@@ -296,7 +314,7 @@ void  rconn::cmd_connect( int argc, char * argv[] )
 	if( *target == '*' ) {
 		target = "127.0.0.1" ;
 	}
-
+	
 	int tsock = net_connect( target, atoi( argv[3]) );
 	if( tsock<0 ) {
 		sendLineFormat("close %s\n", argv[1]);
@@ -324,7 +342,7 @@ void  rconn::cmd_connect( int argc, char * argv[] )
 		close( tsock );
 		return;
 	}
-				
+	
 	channel * tch = new channel(tsock);
 	channel * sch = new channel(ssock);
 	tch->connect( sch );
@@ -405,6 +423,14 @@ void  rconn::cmd_xoff( int argc, char * argv[] )
 	}
 }
 
+// echo, echo for ping command
+// command:
+//    e
+void  rconn::cmd_echo( int argc, char * argv[] ) 
+{
+	nping = 0 ;			// ping cleared
+}
+
 void rconn::cmd( int argc, char * argv[] )
 {
 	if( strcmp( argv[0], "mconn")==0 ) {			// multi- connection
@@ -427,6 +453,9 @@ void rconn::cmd( int argc, char * argv[] )
 	}
 	else if(strcmp( argv[0], "xoff")==0 ) {
 		cmd_xoff( argc, argv );
+	}
+	else if(strcmp( argv[0], "e")==0 ) {
+		cmd_echo( argc, argv );
 	}
 }
 
@@ -464,7 +493,7 @@ void rconn_run()
 	int nfd, pfdsize, pfdresize ;
 	
 	g_runtime = runtime() ;
-	g_maxwaitms =  120000 ;
+	g_maxwaitms =  0 ;
 
 	// starting pollfd size
 	pfdresize = 0 ;
@@ -476,10 +505,6 @@ void rconn_run()
 	// main channel 
 	rconn * mainconn  = new rconn();
 	
-#ifdef ANDROID_CLIENT
-	adb_conn * adbconn = new adb_conn();
-#endif	
-
 	while( s_running ) {
 		if( pfdresize > 0 ) {		// to adjust pollfd size 
 			delete pfd ;
@@ -491,7 +516,7 @@ void rconn_run()
 		nfd += mainconn->setfd( pfd+nfd, pfdsize-nfd ); 
 
 #ifdef ANDROID_CLIENT
-		nfd += adbconn->setfd( pfd+nfd, pfdsize-nfd ); 
+		nfd += adb_setfd( pfd+nfd, pfdsize-nfd ); 
 #endif			
 
 		// to adjust pollfd size
@@ -511,13 +536,13 @@ void rconn_run()
 			r = 0;
 		}
 		g_runtime = runtime() ;
-		g_maxwaitms =  120000 ;
+		g_maxwaitms =  60000 ;
 		
 		if( r>=0 ) {
 			mainconn->process() ;
 
 #ifdef ANDROID_CLIENT
-			adbconn->process();
+			adb_process();
 #endif				
 
 		}
@@ -529,8 +554,7 @@ void rconn_run()
 			mainconn = new rconn();
 
 #ifdef ANDROID_CLIENT
-			delete adbconn ;
-			adbconn = new adb_conn();
+			adb_reset();
 #endif	
 
 		}
@@ -540,13 +564,17 @@ void rconn_run()
 	delete mainconn ;
 
 #ifdef ANDROID_CLIENT
-	delete adbconn ;
+	adb_reset();
 #endif	
 	
 	delete [] pfd ;
 	return  ;
 }
 
+static void s_handler(int signum)
+{
+	s_running = 0 ;
+}
 
 void rc_init()
 {
@@ -612,6 +640,11 @@ void rc_init()
 		g_did = v ;
 		fclose( fdid );
 	}
+	
+	// setup signal handler
+	signal(SIGINT, s_handler);
+	signal(SIGTERM, s_handler);
+	signal(SIGPIPE, SIG_IGN );
 		
 }
 
@@ -623,23 +656,12 @@ void rc_main()
 		rc_init();
 		g_internetkey = "V5d0DgUgu?f51u5#i3FV" ;
 		g_did = g_did+"V" ;
-		signal(SIGPIPE, SIG_IGN );
 		rconn_run();
 	}
 }
 #else 
-
-static void s_handler(int signum)
-{
-	s_running = 0 ;
-}
-
 int main() 
 {
-	// setup signal
-	signal(SIGINT, s_handler);
-	signal(SIGTERM, s_handler);
-	signal(SIGPIPE, SIG_IGN );
 	rc_init();
 	rconn_run();
 	return 0 ;

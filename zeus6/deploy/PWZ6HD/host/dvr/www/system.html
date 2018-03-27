@@ -54,6 +54,8 @@
 <td><input name="adminpassword" value="*****" type="password" /></td>
 </tr>
 
+<!--
+
 <tr>
 <td class="col1"><label for="id_en_file_encryption">Enable File Encryption:</label></td>
 <td><input name="en_file_encryption" id="id_en_file_encryption" value="on" type="checkbox" /></td>
@@ -68,6 +70,8 @@
 <td class="col1">File Encryption Password:</td>
 <td><input name="file_password" id="id_file_password" value="*****" type="password" /></td>
 </tr>
+
+-->
 
 <tr>
 <td>&nbsp;</td>
@@ -92,7 +96,7 @@
 </tr>
 
 <tr>
-<td class="col1"><label for="id_pw_recordmethod">Just in case recording:</label></td>
+<td class="col1"><label for="id_pw_recordmethod">Just-In-Case Recording:</label></td>
 <td>
 <input name="pw_recordmethod" id="id_pw_recordmethod" value="on" type="checkbox" />
 </td>
@@ -552,7 +556,7 @@ function ontimezonechange()
 
 function filekeyset()
 {
-	if( $("input#id_en_file_encryption")[0].checked ) {
+	if( $("input#id_en_file_encryption")[0] && $("input#id_en_file_encryption")[0].checked ) {
 		$("#id_tr_usemfkey").show();
 		if( $("input#id_en_use_default_password")[0].checked ) {
 			$("#id_tr_filepassword").hide();

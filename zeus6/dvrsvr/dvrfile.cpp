@@ -13,11 +13,22 @@ static volatile int file_busy = 0 ;						// busy counter,
 unsigned char g_filekey[260] ;
 static unsigned char file_encrypt_RC4_table[1024] ;		// RC4 encryption table
 
+static unsigned char * block_crypt( unsigned char * otext, unsigned char * itext, int textsize )
+{
+	if( textsize > 1024 ) textsize = 1024 ;
+    for(int i=0; i<textsize; i++) {
+		otext[i] = itext[i] ^ file_encrypt_RC4_table[i] ;
+	}
+	return otext ;
+}
+
 dvrfile::dvrfile()
 {
     m_khandle = NULL;
-    
+    m_mirror_khandle = NULL ;
     m_handle = 0;
+    m_mirror_handle = 0 ;
+    
     m_writebuf = NULL ; 
     m_writebufsize = 0 ;
     m_writepos = 0 ;
@@ -28,38 +39,61 @@ dvrfile::~dvrfile()
     close();
 }
 
-int dvrfile::open(const char *filename, char *mode )
+int dvrfile::setfilename( const char *filename ) 
+{
+    m_filename=filename ;
+    m_mirror_filename = "";	
+}
+
+int dvrfile::setmirrorname( const char *filename ) 
+{
+    m_mirror_filename = filename;	
+}
+
+int dvrfile::open(char *mode )
 {
     close();
 
-    m_filename=filename ;
-    f264time(filename, &m_filetime);
+    f264time(m_filename, &m_filetime);
     m_openmode=0;
 	m_curframe=0 ;
 	m_fileencrypt=file_encrypt ;    		// default enc
 	m_lastframetime = 0 ;
+		
+    m_writebuf = NULL ; 
+    m_writebufsize = 0 ;
+    m_writepos = 0 ;
+		
     if( *mode == 'w' ) {
-		
-		m_handle = ::open( filename, O_WRONLY | O_CREAT , 0666 );
-		
-		if (m_handle <= 0 ) {
-			dvr_log("open file:%s failed",filename);
-			m_handle = 0 ;
-			return 0;
-		}
-		
+
 		// prepare header
-		int channel = f264channel(filename) ;
+		int channel = f264channel(m_filename) ;
 		if( channel>=0 && channel<cap_channels ) {
 			// get file header from capture channel
-			memcpy( &m_fileheader, &( cap_channel[channel]->m_header ), sizeof(m_fileheader));
+			if( m_fileencrypt ) {
+				// RC4_block_crypt( (unsigned char*)&m_fileheader, sizeof(m_fileheader), 0, file_encrypt_RC4_table, 1024);
+				block_crypt( (unsigned char *)&m_fileheader, (unsigned char *)&( cap_channel[channel]->m_header ),  sizeof(m_fileheader) );
+			}
+			else {
+				memcpy( &m_fileheader, &( cap_channel[channel]->m_header ), sizeof(m_fileheader));
+			}
 		}
 		else {
 			return 0;
 		}
+
+		m_handle = ::open( m_filename, O_WRONLY | O_CREAT , 0666 );
 		
-		if( m_fileencrypt ) {
-			RC4_block_crypt( (unsigned char*)&m_fileheader, sizeof(m_fileheader), 0, file_encrypt_RC4_table, 1024);
+		if (m_handle <= 0 ) {
+			dvr_log("open file:%s failed",(char *)m_filename);
+			m_handle = 0 ;
+			return 0;
+		}
+		
+		// open mirror file
+		if ( m_mirror_filename.length()>10 ) {
+			m_mirror_handle = ::open( m_mirror_filename, O_WRONLY | O_CREAT , 0666 );
+			if( m_mirror_handle<0 ) m_mirror_handle = 0 ;
 		}
 					
         m_openmode = 1;
@@ -69,7 +103,7 @@ int dvrfile::open(const char *filename, char *mode )
 		
 		// setup file write buffer, alignment to 2048
 		m_writebufsize = file_bufsize ;
-		m_writebuf = (char *)mmap( NULL, m_writebufsize, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0 );
+		m_writebuf = (char *)malloc(m_writebufsize) ;
 		m_writepos = 0 ;
 		
 		// to write file header
@@ -84,18 +118,30 @@ int dvrfile::open(const char *filename, char *mode )
 			m_khandle=fopen( pk, "a" );
 			setlinebuf( m_khandle );
 		}
+		
+		// open mirror key file
+		if ( m_mirror_handle > 0 ) {
+			keyfilename = (char *) m_mirror_filename ;
+			char * pk = (char *)keyfilename ;
+			int l=strlen(pk);
+			if( l>24 && strcmp( pk+l-4, ".266")==0 ) {
+				strcpy( pk+l-4,".k");
+				m_mirror_khandle=fopen( pk, "a" );
+				setlinebuf( m_mirror_khandle );
+			}
+		}
     }
     else if( *mode == 'r' ) {
 		
 		if( strchr( mode, '+' ) ) { 
-			m_handle = ::open( filename, O_RDWR );
+			m_handle = ::open( m_filename, O_RDWR );
 		}
 		else {
-			m_handle = ::open( filename, O_RDONLY );
+			m_handle = ::open( m_filename, O_RDONLY );
 		}
 				
 		if (m_handle <= 0) {
-			dvr_log("open file:%s failed",filename);
+			dvr_log("open file:%s failed",(char *)m_filename);
 			m_handle = 0 ;
 			return 0;
 		}
@@ -112,7 +158,7 @@ int dvrfile::open(const char *filename, char *mode )
 			return 0;
 		}
 		
-        if( m_fileheader.flag == 0x544d4546 ) {
+        if( m_fileheader.flag ==  ((struct hd_file *)&(cap_channel[0]->m_header))->flag ) {
             m_fileencrypt=0 ;	// no encrypted
         }
         else {
@@ -128,35 +174,52 @@ int dvrfile::open(const char *filename, char *mode )
 	return isopen();
 }
 
+
+int dvrfile::open(const char *filename, char *mode )
+{
+	setfilename( filename ) ;
+	return open( mode );
+}
+
 void dvrfile::close()
 {
 	if( m_khandle ) {
 		fclose(m_khandle);
 		m_khandle=NULL;
 	}
+	if( m_mirror_khandle ) {
+		fclose(m_mirror_khandle);
+		m_mirror_khandle=NULL;
+	}	
+
+	
+	if( m_openmode ) {  // open for write
+		
+		if( m_writepos > 0 )  {
+			flush();
+		}
+		truncate(tell());
+		
+		// free( m_writebuf_internal );
+		if( m_writebuf ) {
+			free( m_writebuf );
+			m_writebuf = NULL ; 
+		}
+	}
 
 	if( m_handle ) {
-		
-        if( m_openmode ) {  // open for write
-			
-            int wsize = tell();
-           	if( m_writepos > 0 )  {
-				::write( m_handle, m_writebuf, m_writebufsize );
-				m_writepos = 0 ;
-			}
-            truncate(wsize);
-            
-            // free( m_writebuf_internal );
-            
-            munmap( m_writebuf, m_writebufsize );
-            m_writebuf = NULL ; 
-        }
-
+		fsync( m_handle );
 		if( ::close(m_handle)!=0 ) {
 			dvr_log("Close file failed : %s",m_filename.getstring() );
 		}
-		
         m_handle = 0;
+    }
+
+	if( m_mirror_handle ) {
+		if( ::close(m_mirror_handle)!=0 ) {
+			dvr_log("Close mirror file failed : %s",m_mirror_filename.getstring() );
+		}
+        m_mirror_handle = 0;
     }
 
 	m_keyarray.empty();
@@ -165,12 +228,8 @@ void dvrfile::close()
 int dvrfile::read(void *buffer, size_t buffersize)
 {
     if( m_handle && buffer && buffersize>0 ) {
-		if( m_openmode ) {
-			return 0 ;
-		}
-		else {
-			return ::read( m_handle, buffer, buffersize );
-		}
+		flush();
+		return ::read( m_handle, buffer, buffersize );
     }
     else {
         return 0 ;
@@ -180,19 +239,17 @@ int dvrfile::read(void *buffer, size_t buffersize)
 int dvrfile::write(void *buffer, size_t buffersize)
 {
 	int w = 0 ;
-    if( m_handle && buffer && buffersize>0 && m_openmode ) {
+    if( buffer && m_openmode && m_writebufsize > 0 ) {
 		while( w < buffersize ) {
-			int r =  m_writebufsize - m_writepos ;
-			if( r > (buffersize-w) ) {
-				r = (buffersize-w) ;
-			}
-			memcpy( m_writebuf + m_writepos, ((char *)buffer) + w, r );
-			w += r ;
-			m_writepos += r ;
+			int s = m_writebufsize - m_writepos  ;
+			if( s > buffersize - w ) 
+				s = buffersize - w ;
+			memcpy( m_writebuf + m_writepos, ((char *)buffer) + w, s );
+			m_writepos += s ;
 			if( m_writepos >= m_writebufsize ) {
-				::write( m_handle, m_writebuf, m_writebufsize );
-				m_writepos = 0 ;
+				flush();
 			}
+			w += s ;
 		}
 	}
 	return w;
@@ -200,6 +257,15 @@ int dvrfile::write(void *buffer, size_t buffersize)
         
 void dvrfile::flush()
 {
+	if( m_writepos > 0  && m_writebuf != NULL ) {
+		if( m_handle ) {
+			::write( m_handle, m_writebuf, m_writepos );
+		}
+		if( m_mirror_handle ) {
+			::write( m_mirror_handle, m_writebuf, m_writepos );
+		}
+		m_writepos = 0 ;
+	}
 }
 
 int dvrfile::tell() 
@@ -214,8 +280,13 @@ int dvrfile::tell()
 
 int dvrfile::seek(int pos, int from) 
 {
-    if( m_handle && m_openmode == 0 ) {
-		return ::lseek(m_handle, pos, from);
+    if( m_handle ) {
+		flush();
+		int s = ::lseek(m_handle, pos, from);
+		if( m_mirror_handle ) {
+			::lseek( m_mirror_handle, s, SEEK_SET );
+		}
+		return s ;
 	}
     else {
         return 0 ;
@@ -227,6 +298,9 @@ int dvrfile::truncate( int tsize )
     int res = 0 ;
     if( m_handle ) {
 		res=ftruncate( m_handle, tsize);
+	}
+    if( m_mirror_handle ) {
+		res=ftruncate( m_mirror_handle, tsize);
 	}
     return res ;
 }
@@ -241,6 +315,7 @@ int dvrfile::readheader(void * buffer, size_t headersize)
 	return sizeof(m_fileheader) ;
 }
 
+
 // write a new frame, return 1 success, 0: failed
 int dvrfile::writeframe( rec_fifo * frame )
 {
@@ -250,20 +325,37 @@ int dvrfile::writeframe( rec_fifo * frame )
 // write a new frame, return 1 success, 0: failed
 int dvrfile::writeframe(unsigned char * buf, int size, int frametype, dvrtime * frametime)
 {
-	if( frametype == FRAMETYPE_KEYFRAME && m_khandle ) {
+	if( frametype == FRAMETYPE_KEYFRAME ) {
 		m_curframe++ ;
 		m_lastframetime = time_dvrtime_diffms(frametime, &m_filetime) ;		// if size==0, then this is then ending frame
 		if( size>0 ) {
-			fprintf(m_khandle,"%d,%d\n", 
-				m_lastframetime ,
-				tell() );
+			int offset = tell() ;
+			if( m_khandle != NULL ) {
+				fprintf(m_khandle,"%d,%d\n", 
+					m_lastframetime ,
+					offset );
+			}
+			if( m_mirror_khandle != NULL ) {
+				fprintf(m_mirror_khandle,"%d,%d\n", 
+					m_lastframetime ,
+					offset );
+			}
 		}
 	}
 	
 	if( buf && size>0 ) {
-		if( m_fileencrypt ) {
+		if( m_fileencrypt || frametype == FRAMETYPE_AUDIO_SILENT ) {
+			unsigned char * silence_audio_buf = NULL ;
 			int peslen ;
 			int peshlen ;
+			
+			// silent audio hack
+			if( frametype == FRAMETYPE_AUDIO_SILENT ) {
+				silence_audio_buf = (unsigned char * )mem_clone( buf, size );
+				// replace buf with silent audio buf
+				buf = silence_audio_buf ;
+			}
+			
 			while( size > 0 ) {
 				if( buf[0]==0 && buf[1]==0 && buf[2]==1 ) {
 					// AV frame
@@ -276,17 +368,25 @@ int dvrfile::writeframe(unsigned char * buf, int size, int frametype, dvrtime * 
 							peslen += 6 ;
 						}
 						else {
+							// this could be made by Harrison
 							peslen = ((((unsigned int)buf[15])<<24) |
 								(((unsigned int)buf[16])<<16) |
 								(((unsigned int)buf[17])<<8) |
 								((unsigned int)buf[18])) + peshlen ;
+								
+							// or we can just use all full frame
+							// peslen = size ;	
 						}
 						if( peslen > size ) {
 							peslen = size ;
 						}
 						
 						if( buf[3] == 0xe0 ) {			//video frame
-							// look for video frame tag 00 00 01 21/25/61/65/41/45
+							// look for video frame tag (nal type) 00 00 01 21/25/41/45/61/65
+							// tag:
+							//		 bit7   : forbidden_zero_bit , must be 0
+							//       bit6-5 : nal_ref_idc, (not to be 0 ?)
+							//       bit4-0 : nal_unit_type, 5: video I frame, 1: video non-I (P) frame
 							int vtag = peshlen ;
 							while( (peslen-vtag)>10 ) {
 								if( buf[vtag] == 0 &&
@@ -300,7 +400,7 @@ int dvrfile::writeframe(unsigned char * buf, int size, int frametype, dvrtime * 
 								vtag++ ;
 							}
 						}
-					
+				
 						// save header
 						if( peshlen > 0 ) {
 							write( buf, peshlen );
@@ -309,18 +409,33 @@ int dvrfile::writeframe(unsigned char * buf, int size, int frametype, dvrtime * 
 							peslen-=peshlen ;
 						}
 						
-						// save encrypted parts
+						// save payload (to encrypt) parts
 						if( peslen>0 ) {
+							
+							// silent audio hack
+							if( frametype == FRAMETYPE_AUDIO_SILENT ) {
+								memset( buf, 0, peslen ) ;
+							}
+							
 							peshlen = peslen ;						
 							if( peshlen > 1024 ) {
 								peshlen = 1024 ;
 							}
 							// do encryption
-							unsigned char * xbuf = new unsigned char [peshlen] ;						
-							memcpy( xbuf, buf, peshlen );
-							RC4_block_crypt( xbuf, peshlen, 0, file_encrypt_RC4_table, 1024);
-							write( xbuf, peshlen );
-							delete xbuf ;
+							
+							//unsigned char * xbuf = new unsigned char [peshlen] ;						
+							//memcpy( xbuf, buf, peshlen );
+							//RC4_block_crypt( xbuf, peshlen, 0, file_encrypt_RC4_table, 1024);
+							//write( xbuf, peshlen );
+							//delete xbuf ;
+							
+							if( m_fileencrypt ) {
+								unsigned char xbuf[peshlen] ;
+								write( block_crypt( xbuf , buf, peshlen ), peshlen );
+							}
+							else {
+								write( buf, peshlen );
+							}
 							
 							buf+=peshlen ;
 							size-=peshlen ;	
@@ -332,7 +447,7 @@ int dvrfile::writeframe(unsigned char * buf, int size, int frametype, dvrtime * 
 						peslen = 14 + (buf[13] & 0x7) ;
 					}
 					else {
-						// other PES, save it all
+						// other PES, save it 
 						peslen = ((((unsigned int)buf[4])<<8) |
 						 ((unsigned int)buf[5])) + 6 ;
 					}
@@ -359,6 +474,11 @@ int dvrfile::writeframe(unsigned char * buf, int size, int frametype, dvrtime * 
 				}	
 									
 			}
+			
+			if( silence_audio_buf ) {
+				mem_free( silence_audio_buf );
+			}
+			
 			return 1 ;
 		}
 		else {
@@ -931,7 +1051,7 @@ void file_init()
     
     v=dvrconfig.getvalue("system", "filebuffersize");
     char unit='k' ;
-    file_bufsize=(256*1024) ;
+    file_bufsize=0 ;
     int n=sscanf(v.getstring(), "%d%c", &file_bufsize, &unit);
     if( n==2 && (unit=='M' || unit=='m' ) ) {
         file_bufsize*=1024*1024 ;
@@ -940,7 +1060,7 @@ void file_init()
         file_bufsize*=1024 ;
     }
     file_bufsize &= ~(4095) ;
-    if( file_bufsize<64*1024)file_bufsize=(64*1024) ;
+    if( file_bufsize<256*1024)file_bufsize=(256*1024) ;
     if( file_bufsize>(4*1024*1024) ) file_bufsize=(4*1024*1024) ;
     
     //file_nodecrypt=dvrconfig.getvalueint("system", "file_nodecrypt");

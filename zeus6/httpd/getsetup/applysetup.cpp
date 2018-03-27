@@ -284,7 +284,7 @@ int main()
 
         v=getsetvalue("unit");
         if( v ) {
-            dvrconfig.setvalue( "unit", "serial", v );
+            dvrconfig.setvalue( "system", "serial", v );
         }
         
         // adminpassword
@@ -295,6 +295,8 @@ int main()
 		
        
         // file encryptions
+        /*
+         
         v = getsetvalue ("en_file_encryption");
         dvrconfig.setvalueint( "system", "fileencrypt", v?1:0 );
         
@@ -316,6 +318,7 @@ int main()
 				}
 			}
 		}
+		*/ 
         
 		// all other values
 
@@ -561,6 +564,16 @@ int main()
             if( v ) {
                 dvrconfig.setvalue(section,"name",v);
             }
+            
+            
+			// m_enablejicaudio, record audio in JIC mode
+			v=getsetvalue( "enablejicaudio" );
+            if( v ) {
+                dvrconfig.setvalueint(section,"enablejicaudio", 1);
+            }
+            else {
+                dvrconfig.setvalueint(section,"enablejicaudio", 0);
+			}
             
             // camera_type
             v=getsetvalue( "camera_type" );

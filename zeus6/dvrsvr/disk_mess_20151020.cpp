@@ -479,8 +479,7 @@ int disk_rmemptydir(char *dir)
     return files ;
 }
 
-// remove .264 files and related .k, .idx
-
+// remove .264 files and related .k
 static void disk_removefile( const char * file264 ) 
 {
     string f264 ;
@@ -490,24 +489,25 @@ static void disk_removefile( const char * file264 )
     	dvr_log( "Delete file failed: %s", file264 );
     	return ;
     }
-    extension=strstr( f264.getstring(), ".266" );
-    if( extension ) {
-        strcpy( extension, ".k");
-        if(remove( f264.getstring() )<0){
-	    char* strp=strstr(f264.getstring(),"_N_");
-	    if(strp){
-	        *(strp+1)='L';
-	    } else {
-	       strp=strstr(f264.getstring(),"_L_");   
-	       if(strp){
-		 *(strp+1)='N'; 
-	       }
-	    }
-	    if(strp){
-	       remove(f264.getstring());
-	     //  dvr_log("file:%s is deleted",f264.getstring());
-	    }	  	  
-	}
+    extension=strrchr( f264.getstring(), '.' );
+    if( extension && strcmp( extension, ".266" )==0 ) {
+		strcpy( extension, ".k");
+		if(remove( f264.getstring() )<0){
+			char* strp=strstr(f264.getstring(),"_N_");
+			if(strp){
+				*(strp+1)='L';
+			} 
+			else {
+			   strp=strstr(f264.getstring(),"_L_");   
+			   if(strp){
+					*(strp+1)='N'; 
+			   }
+			}
+			if(strp){
+			   remove(f264.getstring());
+				//  dvr_log("file:%s is deleted",f264.getstring());
+			}	  	  
+		}
     }
 }
 

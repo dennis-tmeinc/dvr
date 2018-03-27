@@ -56,6 +56,23 @@ static int checkdisks()
 				! pw_disk[ archive_param[archive_curtask].dst ].full );
 }
 
+// create folder for dest file
+static void archive_destfolder( char * destfile )
+{
+	char * rslash = strrchr( destfile, '/' );
+	if( rslash != NULL ) {
+		struct stat st ;		// destfile stat
+		* rslash = 0 ;
+		if( stat( destfile, &st )!=0 ) {	// file not exist
+			archive_destfolder( destfile );
+			// create destination folder
+			mkdir( destfile, 0777 );
+		}
+		// restore slash
+		* rslash = '/' ;
+	}
+}
+
 // return 1: success, 0: fail, -1: to quit
 static int archive_copyfile( char * srcfile, char * destfile )
 {
@@ -90,14 +107,16 @@ printf("archive: %s -> %s\n", srcfile, destfile );
         if( fdest ) fclose( fdest );
         return 0 ;
     }
+    
+    int filebufsize = 128*1024 ;
 
-    filebuf=(char *)malloc(128*1024);
+    filebuf=new char [filebufsize] ;
     complete = 0 ;
 	// scan files
 	while( archive_run==1 &&
 		  checkrunmode() && 
 		  checkdisks() ) {
-		r=fread( filebuf, 1, 128*1024, fsrc );
+		r=fread( filebuf, 1, filebufsize, fsrc );
 		if( r>0 ) {
 			fwrite( filebuf, 1, r, fdest ) ;
 		}
@@ -109,13 +128,17 @@ printf("archive: %s -> %s\n", srcfile, destfile );
 			usleep(10000);			// make it nicer
 		}
     }
-    free(filebuf);
+    delete filebuf;
     fclose( fsrc ) ;
     if( fclose( fdest ) != 0 ) {
 		complete=0 ;
 	}
     
     if( complete ) {				// copy completed
+		
+		// create destination folder
+		archive_destfolder( destfile );
+					
 		rename( archive_target_tmpfile, destfile );
 		
 		int srcmode = archive_param[archive_curtask].srcmode ;
@@ -153,7 +176,6 @@ static int archive_copydir( char * srcdir, char * destdir )
 		  sdir.find() ) {
 		if( sdir.isdir() ) {
 			sprintf( destfile, "%s/%s", destdir, sdir.filename() );
-			mkdir( destfile, 0777 );
 			archive_copydir( sdir.pathname(), destfile );
 		}
     }
@@ -200,6 +222,10 @@ static void * archive_thread_proc( void * )
 		if( checkrunmode() && checkdisks() ) { 
 			sprintf( archive_target_tmpfile.setbufsize(512), "%s/.ARF", (char *)( pw_disk[ archive_param[archive_curtask].dst ].disk ) );			
 			archive_copydir( pw_disk[ archive_param[archive_curtask].src ].disk, pw_disk[ archive_param[archive_curtask].dst ].disk ) ; 
+
+			// remove all empty folders
+			disk_rmemptydir(pw_disk[ archive_param[archive_curtask].src ].disk) ;
+			disk_rmemptydir(pw_disk[ archive_param[archive_curtask].dst ].disk) ;
 		}
 		archive_curtask=(archive_curtask+1)%3 ;
 		// sleep

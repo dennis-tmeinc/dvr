@@ -18,6 +18,10 @@ LDFLAGS= -lstdc++ -lpthread
 rconn : $(SOURCES) $(HEADERS) $(EXTSOURCES) $(EXTHEADERS)
 	$(CC) -g $(CFLAGS) -o $@ $(SOURCES) $(EXTSOURCES) $(LDFLAGS)
 	$(STRIP) $@
+	
+usbrst: usbrst.cpp
+	$(CC) -g $(CFLAGS) -o $@ usbrst.cpp $(LDFLAGS)
+	
 
 %.o : %.cpp $(HEADERS)  $(EXTHEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@

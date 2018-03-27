@@ -303,6 +303,9 @@ int dvrsvr::onframe(cap_frame * pframe)
 
 void dvrsvr::onrequest()
 {
+	
+//	dvr_log( "Onrequest: %d, data: %d, bufsize: %d", m_req.reqcode, m_req.data, m_req.reqsize );
+	
     switch (m_req.reqcode) {
         case REQOK:
             ReqOK();
@@ -1914,6 +1917,9 @@ void dvrsvr::ReqGetVri()
 void dvrsvr::ReqSendData()
 {
 	struct dvr_ans ans ;
+	
+	// dvr_log( "REQSendData: %d - %d ", m_req.data, m_req.reqsize );
+	
 	switch( m_req.data ) {
 		case PROTOCOL_PW_SETPOLICEID:
 			if( m_recvbuf && m_req.reqsize>0 ) {
@@ -1931,6 +1937,9 @@ void dvrsvr::ReqSendData()
 			break;
 		
 		case PROTOCOL_PW_SETVRILIST :
+		
+			//dvr_log( "PW TAG : %d : %s",  m_req.reqsize, m_recvbuf );
+		
 			if( m_recvbuf && m_req.reqsize>0 ) {
 				// select a new offer ID.
 				vri_tag( m_recvbuf, m_req.reqsize );

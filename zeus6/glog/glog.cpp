@@ -41,6 +41,7 @@
 
 #include <signal.h>
 #include <time.h>
+#include <math.h>
 #include <assert.h>
 #include <string.h>
 #include <fcntl.h>
@@ -1557,19 +1558,27 @@ int	sensor_log()
     // log g sensor value
     if( gforce_log_enable ) {
         if( p_dio_mmap->gforce_log0 ) {
-            // we record forward/backward, right/left acceleration value, up/down as g-force value
-            gps_logprintf(16, ",%.1f,%.1f,%.1f", 
-                          (double) - p_dio_mmap->gforce_forward_0,
-                          (double) - p_dio_mmap->gforce_right_0,
-                          (double) p_dio_mmap->gforce_down_0 );
+			if( fabs(p_dio_mmap->gforce_forward_0) > 0.3 ||
+				fabs(p_dio_mmap->gforce_right_0) > 0.3 ||
+				fabs(p_dio_mmap->gforce_down_0 - 1.0) > 1.0 ) {
+				// we record forward/backward, right/left acceleration value, up/down as g-force value
+				gps_logprintf(16, ",%.1f,%.1f,%.1f", 
+							  (double) - p_dio_mmap->gforce_forward_0,
+							  (double) - p_dio_mmap->gforce_right_0,
+							  (double) p_dio_mmap->gforce_down_0 );
+			}
             p_dio_mmap->gforce_log0=0;
         }
         if( p_dio_mmap->gforce_log1 ) {
-            // we record forward/backward, right/left acceleration value, up/down as g-force value
-            gps_logprintf(16, ",%.1f,%.1f,%.1f", 
-                          (double) - p_dio_mmap->gforce_forward_1,
-                          (double) - p_dio_mmap->gforce_right_1,
-                          (double) p_dio_mmap->gforce_down_1 );
+			if( fabs(p_dio_mmap->gforce_forward_1) > 0.3 ||
+				fabs(p_dio_mmap->gforce_right_1) > 0.3 ||
+				fabs(p_dio_mmap->gforce_down_1 - 1.0) > 1.0 ) {
+				// we record forward/backward, right/left acceleration value, up/down as g-force value
+				gps_logprintf(16, ",%.1f,%.1f,%.1f", 
+							  (double) - p_dio_mmap->gforce_forward_1,
+							  (double) - p_dio_mmap->gforce_right_1,
+							  (double) p_dio_mmap->gforce_down_1 );
+			}			
             p_dio_mmap->gforce_log1=0;
         }
     }

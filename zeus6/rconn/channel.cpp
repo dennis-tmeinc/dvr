@@ -138,7 +138,7 @@ int channel::process()
 	}
 	
 	if( sock<0 ||
-		(g_runtime - activetime) > 3600 ) {		// 1 hrs idling to close
+		(g_runtime - activetime) > 3600000 ) {		// 1 hr idling to close
 		return 0 ;
 	}
 	
@@ -213,7 +213,7 @@ void channel::xon( channel * peer )
 // push out pending send fifo
 void channel::do_send()
 {
-	if( sfifo.first()!=NULL ) {
+	if( sock>=0 && sfifo.first()!=NULL ) {
 		packet * p = (packet *)(sfifo.first()->item) ;
 		if( p->len() > 0 ) {
 			int r = net_send( sock, p->r(), p->len() ) ;
@@ -241,7 +241,6 @@ int  channel::do_read(int maxsize)	// do read packet from socket and send to tar
 	packet * p = new packet(maxsize) ;
 	r = net_recv( sock, p->w(), p->siz() );
 	if( r>0 ) {
-		activetime = g_runtime ;
 		p->writ(r) ;
 		if( target ) {
 			target->sendpacket( p->addref(), this );
@@ -252,6 +251,8 @@ int  channel::do_read(int maxsize)	// do read packet from socket and send to tar
 		sock=-1;
 	}
 	packet::release( p );
+	activetime = g_runtime ;
+
 	return r ;
 }
 

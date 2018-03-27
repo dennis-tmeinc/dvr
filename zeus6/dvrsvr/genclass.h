@@ -432,6 +432,11 @@ class string {
 			strcat( expand( length()+strlen(s2)+1 ), s2 );
 			return *this ;
         }
+        
+        string & operator += ( const char * s2 ) {
+			strcat( expand( length()+strlen(s2)+1 ), s2 );
+			return *this ;
+        }
                 
         int operator > ( char * s2 ) {
             return ( strcmp(getstring(), s2)>0 );

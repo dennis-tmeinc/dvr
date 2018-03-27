@@ -206,9 +206,9 @@ void dio_unlock();
 
 // virtual MIC io pins 
 #define PWII_MIC1_MIC			(1<<(MCU_INPUTNUM))
-#define PWII_MIC1_EMG			(2<<(MCU_INPUTNUM))
-#define PWII_MIC2_MIC			(4<<(MCU_INPUTNUM))
-#define PWII_MIC2_EMG			(8<<(MCU_INPUTNUM))
+#define PWII_MIC1_EMG			((PWII_MIC1_MIC)<<1)
+#define PWII_MIC2_MIC			((PWII_MIC1_MIC)<<2)
+#define PWII_MIC2_EMG			((PWII_MIC1_MIC)<<3)
 
 // PWII status 
 #define DVR_LOCK        (0x80)			// recording locked file (any channel) (PWII only)
@@ -238,7 +238,7 @@ void dio_unlock();
 #define  PWII_BT_MIC1          	(1<<16)
 
 
-// PWII CDC led
+// PWII CDC led (outputs)
 #define PWII_LED_C1             (1)
 #define PWII_LED_C2             (1<<1)
 #define PWII_LED_MIC            (1<<2)
@@ -315,5 +315,41 @@ enum e_keycode {
 #define VK_REAR (VK_C2)
 #define VK_TM   (VK_EM)
 
+// device power bits
+// full off
+#define DEVICEOFF (0)
+// full on
+#define DEVICEON  (0xffffffff)
+
+#define DEVPOWER_FULL	(0xffffffff)
+#define DEVPOWER_OFF	(0)
+
+// cmd 0x2e
+#define DEVPOWER_GPS	(1)
+#define DEVPOWER_WIFI	(1<<1)
+#define DEVPOWER_MIC	(1<<2)
+#define DEVPOWER_ZOOMCAM (1<<3)
+#define DEVPOWER_CAMERA (1<<4)
+
+// all 0x2e bits
+#define DEVPOWER_2E			(DEVPOWER_GPS|DEVPOWER_WIFI|DEVPOWER_MIC|DEVPOWER_ZOOMCAM|DEVPOWER_CAMERA)
+#define DEVPOWER_2E_FIRST	(DEVPOWER_GPS)
+#define DEVPOWER_2E_NUM		(5)
+
+// ? cmd 38/39/3A/3B, Wifi Power/bus switch, USB switch, POE Power, Radar Power
+#define DEVPOWER_38		(1<<8)
+#define DEVPOWER_39		(1<<9)
+#define DEVPOWER_3A		(1<<10)
+#define DEVPOWER_3B		(1<<11)
+#define DEVPOWER_4B		(1<<12)
+#define DEVPOWER_4C		(1<<13)
+#define DEVPOWER_EX_FIRST	(DEVPOWER_38)
+#define DEVPOWER_EX_NUM		(6)
+
+// ? cmd 51 USB34 POWER BUS CONTROL
+#define DEVPOWER_51			(1<<16)
+#define DEVPOWER_51_FIRST	(DEVPOWER_51)
+#define DEVPOWER_51_NUM		(4)
 
 #endif
+

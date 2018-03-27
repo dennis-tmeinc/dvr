@@ -312,7 +312,6 @@ void capture::gpsframe()
 		
 		mem_free( gpsData );		
 	}
-
 }
  
 void capture::osdframe( int keyosd ) 
@@ -343,20 +342,25 @@ extern int screen_onframe( cap_frame * capframe );
 
 void capture::onframe(cap_frame * pcapframe)
 {
+	pcapframe->channel = m_channel ;
+    m_streambytes+=pcapframe->framesize ;               // for bitrate calculation
+    
 	// to generate OSD frames, would be different on HIK channel and HDIP channel
 	if( pcapframe->frametype == FRAMETYPE_KEYVIDEO ) {
 		// mark channel is working
 		m_working=20;
 
+		m_osdtime = time(NULL) ;
 		// insert key osd frame
 		osdframe(1);
-		m_osdtime = time(NULL) ;
-		
+
 		// insert GPS frame. (removed)
 		//gpsframe();
 	}
 	else if( pcapframe->frametype == FRAMETYPE_VIDEO  ) 
 	{
+		// mark channel is working
+		m_working=20;
 
 		time_t t = time(NULL);
 		if( t!= m_osdtime ) {
@@ -366,11 +370,8 @@ void capture::onframe(cap_frame * pcapframe)
 		}
 	}
 	
-    pcapframe->channel = m_channel ;
-    m_streambytes+=pcapframe->framesize ;               // for bitrate calculation
-
-    rec_onframe(pcapframe);  
     net_onframe(pcapframe);
+    rec_onframe(pcapframe);  
 }
 
 // periodic update procedure. (every 0.125 second)

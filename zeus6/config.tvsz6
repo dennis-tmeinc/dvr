@@ -5,16 +5,15 @@ EAGLE=eagle32
 
 # cross compile toolchain
 
-SYSROOT=/home/dennis/proj/zeus6/arm-eabi-uclibc
-
+SYSROOT=$(PROJDIR)/../toolchain/zeus6/arm-eabi-uclibc
 CROSS_COMPILE_PREFIX=$(SYSROOT)/usr/bin/arm-linux-
 
 export CROSS_COMPILE=$(CROSS_COMPILE_PREFIX)
 export CC=$(CROSS_COMPILE_PREFIX)gcc
 export GPP=$(CROSS_COMPILE_PREFIX)g++
 export STRIP=$(CROSS_COMPILE_PREFIX)strip
+export CFLAGS += --sysroot=$(SYSROOT)
+export LDFLAGS +=  --sysroot=$(SYSROOT)
 
 # debugging folder
 debug_folder=/home/dennis/nfsroot/eagletest
-
-CFLAGS+= --sysroot=/home/dennis/proj/zeus6/arm-eabi-uclibc

@@ -9,7 +9,7 @@ SOURCES=ioprocess.cpp mcu.cpp mcucmd.cpp tab102.cpp serial.cpp
 EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h
 EXTSOURCES=../dvrsvr/config.cpp ../dvrsvr/string.cpp
 
-HEADERS=diomap.h
+HEADERS=diomap.h mcu.h serial.h
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
 

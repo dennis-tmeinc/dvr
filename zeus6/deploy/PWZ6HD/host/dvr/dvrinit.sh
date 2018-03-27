@@ -40,6 +40,8 @@ echo "start dvr"
 # start dvr server
 zdaemon dvrsvr
 
+adb start-server
+
 # start remote access
 echo "start rconn"
 zdaemon rconn

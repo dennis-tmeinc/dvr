@@ -56,21 +56,18 @@ void appfinish()
 int main(int argc, char * argv[])
 {
 	unsigned int devicepower;
-    
-	if( argc<2 ) {
-		printf("Usage: devicepower [devicepowermap]\n");
-		printf("       powermap: bit0=GPS, bit1=Slave Eagle32, bit2=Network switch\n");
-		return 1;
-	}
-	
-	devicepower=0 ;
-	sscanf(argv[1], "%i", &devicepower);
 	
     if( appinit()==0 ) {
         return 1;
     }
 
-	p_dio_mmap->devicepower = devicepower & 0xffff ;		
+	if( argc>=2 ) {
+		devicepower=0 ;
+		sscanf(argv[1], "%i", &devicepower);
+		p_dio_mmap->devicepower = devicepower ;		
+	}
+
+	printf("Device Power: 0x%08x \n", p_dio_mmap->devicepower );
 
 	appfinish();
     return 0;

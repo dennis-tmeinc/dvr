@@ -76,8 +76,6 @@ unsigned int gHardDiskon=0;
 #define RESET_ON_IGNON 1
 #endif
 
-// change this to 0xffff to temporarily disable device power off
-#define DEVICEOFF 0
 
 // HARD DRIVE LED and STATUS
 #define HDLED	  (0x10)
@@ -98,11 +96,6 @@ void mcu_event_remove();
 unsigned int input_map_table [MCU_INPUTNUM] = 
 	{ 0, 1, 2, 3, 4, 5, 10, 11, 12 };
 
-// virtual MIC io pins
-#define PWII_MIC1_MIC			(1<<(MCU_INPUTNUM))
-#define PWII_MIC1_EMG			(2<<(MCU_INPUTNUM))
-#define PWII_MIC2_MIC			(4<<(MCU_INPUTNUM))
-#define PWII_MIC2_EMG			(8<<(MCU_INPUTNUM))
 
 // translate output bits
 #define MAXOUTPUT    (8)
@@ -121,7 +114,6 @@ int hdlock=0 ;	// HD lock status
 int hdinserted=0 ;
 
 #define PANELLEDNUM (3)
-#define DEVICEPOWERNUM (5)
 
 struct baud_table_t {
     speed_t baudv ;
@@ -160,7 +152,8 @@ unsigned int iosensor_inverted=0;
 char shutdowncodestr[256]="";
 
 unsigned int panelled=0 ;
-unsigned int devicepower=0xffff;
+// static current device power bit map
+unsigned int devicepower=DEVPOWER_FULL;
 
 pid_t   pid_smartftp = 0 ;
 pid_t   pid_tab102 = 0 ;
@@ -683,7 +676,7 @@ int mcu_oninput( char * ibuf )
 			else {
 				p_dio_mmap->inputmap &= ~ PWII_MIC1_MIC ;
 				// mic off command
-				// mcu_mic_off( 0 );
+				// mic1 off , mcu_mic_off( 0 ); 
 				p_dio_mmap->pwii_output &= ~PWII_MIC1_ON  ;
 			}
 		}
@@ -712,7 +705,7 @@ int mcu_oninput( char * ibuf )
 			else {
 				p_dio_mmap->inputmap &= ~ PWII_MIC2_MIC ;
 				// redundant mic off command
-				// mcu_mic_off( 1 );
+				// turn mic 2 off 
 				p_dio_mmap->pwii_output &= ~PWII_MIC2_ON  ;
 			}
 		}
@@ -729,17 +722,12 @@ int mcu_oninput( char * ibuf )
 			*/
 		}
 		
-		// to turn off LED on camera
+		// to turn off LED on camera (mic led)
 		if( (mic_stat & 5) == 0 ) {
-			mcu_mic_ledoff();
-			mcu_amberled(0);
-
 			// new Amber LED connected to g-force mcu
 			p_dio_mmap->pwii_output &= ~PWII_DUALCAM_LED0 ;
 		}
 		else {
-			mcu_amberled(1);
-			
 			// new Amber LED connected to g-force mcu
 			p_dio_mmap->pwii_output |= PWII_DUALCAM_LED0 ;
 		}
@@ -1015,8 +1003,6 @@ int doutput()
     }
 
     if( outputmap == mcu_doutputmap ) return 1 ;
-
-    //printf("\np_dio_mmap->outputmap:%x\n",p_dio_mmap->outputmap);
     outputmapx = (outputmap^output_inverted) ;
 
     // bit 2 is beep. (from July 6, 2009)
@@ -1030,19 +1016,14 @@ int doutput()
     
     // map bit 0 to dual cam red LED (recording)
     if( omap & 1 ) {
-		
-		dvr_log("Dual REC LED ON!\n");
-		
 		p_dio_mmap->pwii_output |= PWII_DUALCAM_LED1 ;
 	}
 	else {
-		
-		dvr_log("REC LED OFF!\n");
-		
 		p_dio_mmap->pwii_output &= ~PWII_DUALCAM_LED1 ;
 	}
-        
+
     mcu_dio_output( omap ) ;
+
     mcu_doutputmap = outputmap ;
         
     return 0;
@@ -1054,6 +1035,46 @@ int mcu_dinput()
 {
     dinputmap( (unsigned int )mcu_dio_input() ) ;
     return 1 ;
+}
+
+// check device power bit changes
+int device_power()
+{
+	// update device power
+	int nbits = p_dio_mmap->devicepower ;
+	int xbits = devicepower ^ nbits ;
+	if( xbits ) {
+		int dev;
+		int tbit ;
+		// cmd 2e power bits changed
+		for( dev=0 ; dev<DEVPOWER_2E_NUM; dev++ ) {
+			tbit = DEVPOWER_2E_FIRST << dev ;
+			if( xbits & tbit ) {
+				mcu_devicepower( dev, (nbits & tbit)!=0 );
+			}
+		}
+
+		// extend power bits, cmd 38-3A power bits changed
+		for( dev=0 ; dev<DEVPOWER_EX_NUM; dev++ ) {
+			tbit = DEVPOWER_EX_FIRST << dev ;
+			if( xbits & tbit ) {
+				mcu_devicepower_ex( dev, (nbits & tbit)!=0 );
+			}
+		}
+
+		// cmd 51 (USB34 POWER BUS)
+		for( dev=0 ; dev<DEVPOWER_51_NUM; dev++ ) {
+			tbit = DEVPOWER_51_FIRST << dev ;
+			if( xbits & tbit ) {
+				mcu_devicepower_usb34( dev, (nbits & tbit)!=0 );
+			}
+		}
+		
+		devicepower = nbits ;
+		
+		// reset network interface, some how network interface dead after device power changes
+		// setnetwork();
+	}
 }
 
 #ifdef PWII_APP   
@@ -1114,6 +1135,29 @@ int mcu_pwii_output()
 			doutput_trigger() ;
 			// restore amber led
 			mcu_amberled( (mic_stat & 5) != 0 );
+		}
+	}
+	
+	// new Amber LED connected to g-force mcu
+	// here is for compatible code for old amber LEDs
+	if( x_pwii_output & PWII_DUALCAM_LED0 ){
+		if( s_pwii_output & PWII_DUALCAM_LED0 ) {
+			mcu_amberled(1);
+		}
+		else {
+			mcu_mic_ledoff();
+			mcu_amberled(0);
+		}
+	}
+	
+	// new amble LED 1 (red light on dual cam, processed to tab102 process )
+	// just to show some log here
+	if( x_pwii_output & PWII_DUALCAM_LED1 ){
+		if( s_pwii_output & PWII_DUALCAM_LED1 ) {
+			dvr_log("Dualcam REC LED on.\n");
+		}
+		else {
+			dvr_log("Dualcam REC LED off.\n");
 		}
 	}
 	
@@ -1953,7 +1997,7 @@ int appinit()
     motion_control= dvrconfig.getvalueint("io","sensor_powercontrol");
 
     p_dio_mmap->panel_led = 0;
-    p_dio_mmap->devicepower = 0xffff;	// assume all device is power on
+    p_dio_mmap->devicepower = DEVPOWER_FULL;	// assume all device is power on
     
     p_dio_mmap->iopid = getpid () ;	// io process pid
     
@@ -2795,7 +2839,7 @@ int main(int argc, char * argv[])
       }
 #endif
     }
-  //  printf("this is in daemon mode\n");
+    //  printf("this is in daemon mode\n");
     if( appinit()==0 ) {
       //  system("/bin/reboot"); 
         return 1;
@@ -2870,8 +2914,8 @@ int main(int argc, char * argv[])
     p_dio_mmap->panel_led = 0;
     
     // initialize device power
-    devicepower = 0 ;
-    p_dio_mmap->devicepower = 0xffff;	// assume all device is power on
+    devicepower = DEVICEOFF ;
+    p_dio_mmap->devicepower = DEVPOWER_FULL;	// assume all device is power on
  //   mcu_wifipoweroff();
     if(wifi_enable_ex){  
         if(wifi_poweron) {
@@ -2898,7 +2942,7 @@ int main(int argc, char * argv[])
     while( app_mode ) {
 
         // do input pin polling
-        mcu_input(5000);      
+        mcu_input(10000);      
 		
 #ifdef PWII_APP   
 		mcu_pwii_output();
@@ -2906,7 +2950,10 @@ int main(int argc, char * argv[])
 
         // do digital output
         doutput();
-        
+
+		// update device power bits
+        device_power();
+
         // check input status (PWZ8)
         input_check();
   
@@ -3251,7 +3298,7 @@ int main(int argc, char * argv[])
                     
                 }
                 else {
-                    p_dio_mmap->devicepower = 0xffff ;
+                    p_dio_mmap->devicepower = DEVPOWER_FULL ;
                     set_app_mode(APPMODE_RUN, 0) ;   // back to normal
 					
 					battery_drop_report = 0 ;		// re-enable battery status report
@@ -3286,7 +3333,7 @@ int main(int argc, char * argv[])
 			    kill(p_dio_mmap->glogpid, SIGTERM);
 			}			
 			if(gHBDRecording){
-			    p_dio_mmap->devicepower=(p_dio_mmap->devicepower&0xffee);  
+			    p_dio_mmap->devicepower = DEVPOWER_FULL &  ~(DEVPOWER_GPS | DEVPOWER_CAMERA) ;
 			}
 #endif			
 
@@ -3327,7 +3374,7 @@ int main(int argc, char * argv[])
                 else {
 #if 0		  
                     // start dvr recording
-                    p_dio_mmap->devicepower = 0xffff ;
+                    p_dio_mmap->devicepower = DEVPOWER_FULL ;
                     set_app_mode(APPMODE_RUN) ;   // back to normal
                     dvr_log("Power on switch, set to running mode. (mode %d)", app_mode);
 		    if(!wifi_poweron) {
@@ -3359,11 +3406,11 @@ int main(int argc, char * argv[])
                    if(gHBDRecording){
 			if(p_dio_mmap->dvrstatus & DVR_NETWORK)
 			{
-			   p_dio_mmap->devicepower=0xfffe ;
+			   p_dio_mmap->devicepower = DEVPOWER_FULL &  ~(DEVPOWER_GPS) ; 
 			  // printf("turn on camera\n");
 			} else {
 			   //printf("turn off camera\n");
-			    p_dio_mmap->devicepower=0xffee ;
+			    p_dio_mmap->devicepower = DEVPOWER_FULL &  ~(DEVPOWER_GPS | DEVPOWER_CAMERA) ;
 			}		      
 		    }
 		    
@@ -3381,11 +3428,11 @@ int main(int argc, char * argv[])
 			}
 			if(p_dio_mmap->dvrstatus & DVR_NETWORK)
 			{
-			   p_dio_mmap->devicepower=0xfffe ;
+			   p_dio_mmap->devicepower = DEVPOWER_FULL &  ~(DEVPOWER_GPS) ;
 			  // printf("turn on camera\n");
 			} else {
 			   //printf("turn off camera\n");
-			    p_dio_mmap->devicepower=0xffee ;
+			    p_dio_mmap->devicepower = DEVPOWER_FULL &  ~(DEVPOWER_GPS | DEVPOWER_CAMERA) ;
 			}
 		    }	      		    
 #endif		     
@@ -3455,7 +3502,7 @@ int main(int argc, char * argv[])
 			p_dio_mmap->tab102_ready=0;	
 			
 			mstarttime=runtime;
-			p_dio_mmap->devicepower=0xffff ;    // turn on all devices power
+			p_dio_mmap->devicepower=DEVPOWER_FULL ;    // turn on all devices power
 			set_app_mode(APPMODE_RUN, 0) ;          // back to normal
 			dvr_log("Power on switch, set to running mode. (mode %d)", app_mode);	    
 			if( pid_tab102 > 0 ) {
@@ -3511,7 +3558,7 @@ int main(int argc, char * argv[])
                    (p_dio_mmap->dvrstatus & DVR_RUN) &&
                    (p_dio_mmap->dvrstatus & DVR_NETWORK) )
                 {
-                    p_dio_mmap->devicepower=0xffff ;    // turn on all devices power
+                    p_dio_mmap->devicepower=DEVPOWER_FULL ;    // turn on all devices power
                 }
                 else {
 		    if(wifi_enable_ex==0){
@@ -3522,8 +3569,8 @@ int main(int argc, char * argv[])
 		      } else {
 			 //turn camera power off
 			 // mcu_devicepower(4,0);
-			 p_dio_mmap->devicepower=(p_dio_mmap->devicepower&0xffef);
-		      }
+			 p_dio_mmap->devicepower &= ~ ( DEVPOWER_CAMERA );
+		      }  
 		    } else {
 		       p_dio_mmap->devicepower=DEVICEOFF ;  
 		    }
@@ -3590,7 +3637,7 @@ int main(int argc, char * argv[])
 			if(tab102_wait()&&smartftp_wait()){
 				p_dio_mmap->tab102_ready=0;    
 				mstarttime=runtime;
-				p_dio_mmap->devicepower=0xffff ;    // turn on all devices power
+				p_dio_mmap->devicepower=DEVPOWER_FULL ;    // turn on all devices power
 				set_app_mode(APPMODE_RUN,0) ;          // back to normal
 				dvr_log("Power on switch, set to running mode. (mode %d)", app_mode);
 
@@ -3618,6 +3665,7 @@ int main(int argc, char * argv[])
                 }
             }
             else if( app_mode==APPMODE_SHUTDOWN ) {		// turn off mode, no keep power on 
+				dvr_log("Shutting down ...");
 				if( p_dio_mmap->dvrpid > 0 ) {
 					kill(p_dio_mmap->dvrpid, SIGTERM);
 				}
@@ -3893,30 +3941,31 @@ int main(int argc, char * argv[])
 
         static unsigned int panel_timer ;
         if( (runtime - panel_timer)> 2000 ) {    // 2 seconds to update pannel
-            panel_timer=runtime ;
-            unsigned int panled = p_dio_mmap->panel_led ;
-            if( p_dio_mmap->dvrpid> 0 && (p_dio_mmap->dvrstatus & DVR_RUN) ) {
-                static int videolostbell=0 ;
-                if( (p_dio_mmap->dvrstatus & DVR_VIDEOLOST)!=0 ) {
-                    //panled|=4 ;
-		     p_dio_mmap->outputmap|=0x04;
-                    if( videolostbell==0 ) {
-                        buzzer( 5, 1000, 500 );
-                        videolostbell=1;
-                    }
-                }
-                else {
-                    videolostbell=0 ;
-		    p_dio_mmap->outputmap&=~0x04;
-                }
-            }
-            
-            if( p_dio_mmap->dvrpid>0 && (p_dio_mmap->dvrstatus & DVR_NODATA)!=0 && app_mode==APPMODE_RUN ) {
-               // panled|=2 ;     // error led
-	        p_dio_mmap->outputmap|=0x08;
-            } else {
-	        p_dio_mmap->outputmap&=~0x08;
-	    }
+			panel_timer=runtime ;
+			unsigned int panled = p_dio_mmap->panel_led ;
+			
+			if( p_dio_mmap->dvrpid> 0 && (p_dio_mmap->dvrstatus & DVR_RUN) ) {
+				static int videolostbell=0 ;
+				if( (p_dio_mmap->dvrstatus & DVR_VIDEOLOST)!=0 ) {
+					//panled|=4 ;
+					p_dio_mmap->outputmap|=0x04;
+					if( videolostbell==0 ) {
+						buzzer( 5, 1000, 500 );
+						videolostbell=1;
+					}
+				}
+				else {
+					videolostbell=0 ;
+					p_dio_mmap->outputmap&=~0x04;
+				}
+			}
+
+			if( p_dio_mmap->dvrpid>0 && (p_dio_mmap->dvrstatus & DVR_NODATA)!=0 && app_mode==APPMODE_RUN ) {
+				// panled|=2 ;     // error led
+				p_dio_mmap->outputmap|=0x08;
+			} else {
+				p_dio_mmap->outputmap&=~0x08;
+			}
 #if 0       
             // update panel LEDs
             if( panelled != panled ) {
@@ -3928,18 +3977,6 @@ int main(int argc, char * argv[])
                 panelled = panled ;
             }
 #endif            
-            // update device power
-            if( devicepower != p_dio_mmap->devicepower ) {
-                for( i=0; i<DEVICEPOWERNUM; i++ ) {
-                    if( (devicepower ^ p_dio_mmap->devicepower) & (1<<i) ) {
-                        mcu_devicepower(i, p_dio_mmap->devicepower & (1<<i) );
-                    }
-                }
-                devicepower = p_dio_mmap->devicepower ;
-                
-                // reset network interface, some how network interface dead after device power changes
-                setnetwork();
-            }
             
         }
         

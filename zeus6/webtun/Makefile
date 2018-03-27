@@ -8,15 +8,19 @@ SOURCES=webtun.cpp
 
 HEADERS=
 
-EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h ../rconn/channel.h ../rconn/net.h
-EXTSOURCES=../dvrsvr/config.cpp ../rconn/rconn.cpp ../rconn/channel.cpp ../rconn/net.cpp
+EXTHEADERS=../dvrsvr/cfg.h ../dvrsvr/genclass.h 
+EXTSOURCES=../dvrsvr/config.cpp 
 
 OBJS = $(patsubst %.cpp, %.o, $(SOURCES))
-CFLAGS+= -I../rconn
+CFLAGS+= -I../rconn 
 LDFLAGS+= -lcurl -lstdc++ -lpthread
 
+# CFLAGS+= -DRCMAIN 
+# EXTHEADERS+= ../rconn/channel.h  ../rconn/net.h
+# EXTSOURCES+= ../rconn/rconn.cpp ../rconn/channel.cpp ../rconn/net.cpp
+
 webtun : $(SOURCES) $(EXTSOURCES) $(EXTHEADERS)
-	$(CC) $(CFLAGS) -DRCMAIN -o $@ $(SOURCES) $(EXTSOURCES) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $(SOURCES) $(EXTSOURCES) $(LDFLAGS)
 	$(STRIP) $@
 
 testcurl : testcurl.cpp $(EXTSOURCES) $(EXTHEADERS)

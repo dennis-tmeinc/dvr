@@ -286,24 +286,12 @@ int Tab102b_setTrigger()
   txbuf[40] =  v & 0xff;
   txbuf[41] = direction_table[gsensor_direction][2]; // direction
   
-  int retry=3; 
-  while( retry-- > 0 ) {
-	  mcu_send( txbuf ) ;
-	  char * rsp = mcu_recv();
-	  if( rsp ) {
-		if(rsp[0]=='\x06' &&
-		rsp[2]=='\x04' &&
-		rsp[3]=='\x12' &&
-		rsp[4]=='\x03') 
-		{
-			break;
-			
-		}
-       }
-  }
-
-  return (retry > 0) ? 0 : 1 ;
- 
+  
+	if( mcu_cmd_target_data( ID_TAB102, 0x12, 37, txbuf+5 ) ) {
+		return 0 ;
+	}
+	return -1 ;
+  
 }
 
 void Tab102b_sendUploadConfirm()

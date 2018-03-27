@@ -7,8 +7,7 @@ export PROJDIR proj EAGLE
 
 # cross compile toolchain
 
-SYSROOT=/home/dennis/proj/zeus6/arm-eabi-uclibc
-
+SYSROOT=$(PROJDIR)/../toolchain/zeus6/arm-eabi-uclibc
 CROSS_COMPILE_PREFIX=$(SYSROOT)/usr/bin/arm-linux-
 
 export CROSS_COMPILE=$(CROSS_COMPILE_PREFIX)

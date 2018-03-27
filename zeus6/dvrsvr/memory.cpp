@@ -120,6 +120,20 @@ inline void mem_cp32( int *dst, int *src, int len )
 	while( --len ) ;
 }
 
+void *mem_clone(void *pmem, int memsize)
+{
+	void * nmem = mem_alloc(memsize) ;
+	if( nmem ) {
+		if( (((int)pmem)&3)==0 ) {
+			mem_cp32( (int*)nmem, (int *)pmem, memsize ) ;
+		}
+		else {
+			memcpy( (void *)nmem, (void *)pmem, memsize );
+		}
+	}
+	return nmem ;
+}
+
 void *mem_addref(void *pmem, int memsize)
 {
     pthread_mutex_lock(&mem_mutex);
@@ -130,16 +144,7 @@ void *mem_addref(void *pmem, int memsize)
 	}
 	else {
 		pthread_mutex_unlock(&mem_mutex) ;
-		void * nmem = mem_alloc(memsize) ;
-		if( nmem ) {
-			if( (((int)pmem)&3)==0 ) {
-				mem_cp32( (int*)nmem, (int *)pmem, memsize ) ;
-			}
-			else {
-				memcpy( (void *)nmem, (void *)pmem, memsize );
-			}
-		}
-		return nmem ;
+		return mem_clone(pmem, memsize);
 	}
 }
 

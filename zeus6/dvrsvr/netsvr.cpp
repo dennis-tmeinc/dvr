@@ -381,6 +381,7 @@ void *net_thread(void *param)
     fd_set exceptfds;
     int fd;
     int flag ;
+    int acttime = 0 ;
     dvrsvr *pconn;
     dvrsvr *pconn1;
     
@@ -474,22 +475,21 @@ void *net_thread(void *param)
             }
             
             net_active=5 ;            		// 5 seconds for active delay
+            acttime = time_gettick();
         }
         else {		// time out , or error!
-			if( net_active > 0 ) {
-				net_active-- ;
-			}
-			else {
+			
+			if( ( time_gettick() - acttime ) > 600000 ) {
 				while( dvrsvr::head != NULL ) {
 					pconn = dvrsvr::head->m_next ;
 					delete dvrsvr::head ;
 					dvrsvr::head = pconn ;
 				}			
+			}
 			
 #if defined (TVS_APP) || defined (PWII_APP)
-				dvr_logkey( 0, NULL );
+			dvr_logkey( 0, NULL );
 #endif
-			}
 
 		}
 

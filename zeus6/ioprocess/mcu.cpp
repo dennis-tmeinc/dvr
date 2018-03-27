@@ -122,6 +122,12 @@ int mcu_read(char * sbuf, size_t bufsize, int wait, int interval)
     return nread ;
 }
 
+// read one byte
+static int mcu_read1( char * rbuf)
+{
+	return serial_read( mcu_handle, rbuf, 1 );
+}
+
 int mcu_write(void * buf, int bufsize)
 {
     if( mcu_handle>0 ) {
@@ -162,7 +168,7 @@ char mcu_checksum( char * data )
 }
 
 // calculate check sum of data
-void mcu_calchecksum( char * data )
+static void mcu_calchecksum( char * data )
 {
     char ck = 0 ;
     char i = *data ;
@@ -176,7 +182,7 @@ void mcu_calchecksum( char * data )
 // send constructed message to mcu
 // return 0 : failed
 //        >0 : success
-int mcu_send( char * msg )
+static int mcu_send( char * msg )
 {
     mcu_calchecksum(msg );
     
@@ -188,13 +194,12 @@ int mcu_send( char * msg )
 }
 
 // send command to mcu with variable argument
-static int mcu_sendcmd_va( int target, int cmd, int datalen, va_list arg )
+int mcu_sendcmd_target_data( int target, int cmd, int datalen, char * data )
 {
-    int i ;
     char mcu_buf[datalen+10] ;
-
-    // validate command
-    if( datalen<0 || datalen>64 ) { 	// wrong command
+    
+    // validate command len
+    if( datalen<0 || datalen>MCU_MAX_MSGSIZE-6 ) { 	// wrong command
         return 0 ;
     }
 
@@ -203,105 +208,139 @@ static int mcu_sendcmd_va( int target, int cmd, int datalen, va_list arg )
     mcu_buf[2] = (char)ID_HOST ;
     mcu_buf[3] = (char)cmd ;
     mcu_buf[4] = (char)2 ;				// this is a request
+    
+    if( datalen>0 )
+		memcpy( mcu_buf+5, data, datalen );
 
-    for( i=0 ; i<datalen ; i++ ) {
-        mcu_buf[5+i] = (char) va_arg( arg, int );
-    }
     return mcu_send(mcu_buf) ;
+}
+
+// send command to mcu with variable argument
+static int mcu_sendcmd_va( int target, int cmd, int datalen, va_list va )
+{
+	char data[datalen+1] ;
+	for( int i=0 ; i<datalen ; i++ ) {
+        data[i] = (char) va_arg( va, int );
+    }
+	return mcu_sendcmd_target_data( target, cmd, datalen, data);
 }
 
 // send command to mcu without waiting for responds
 int mcu_sendcmd(int cmd, int datalen, ...)
 {
+	int r ;
     va_list v ;
     va_start( v, datalen ) ;
-    return mcu_sendcmd_va( ID_MCU, cmd, datalen, v ) ;
+    r = mcu_sendcmd_va( ID_MCU, cmd, datalen, v ) ;
+    va_end(v);
+    return r ;
 }
 
 // send command to mcu without waiting for responds
 int mcu_sendcmd_target(int target, int cmd, int datalen, ...)
 {
+	int r;
     va_list v ;
     va_start( v, datalen ) ;
-    return mcu_sendcmd_va( target, cmd, datalen, v ) ;
+    r = mcu_sendcmd_va( target, cmd, datalen, v ) ;
+    va_end(v);
+    return r;
+    
 }
 
-// receive one data package from mcu
+// receive one data package from mcu, with static buffer
 // return : received msg
-//          NULL : failed
-static int mcu_recvmsg(char * msgbuf, int bufsize, int usdelay )
+//          NULL : failed or timeout
+static char * mcu_recvmsg( int rdelay )
 {
-    int n;
+	static int  recvsiz = 0 ;
+	static char recvbuf[MCU_MAX_MSGSIZE+10] ;
 
-    if( mcu_read(msgbuf, 1, usdelay ) ) {
-        n=(int) msgbuf[0] ;
-        if( n>=5 && n<bufsize ) {
-            n=mcu_read(msgbuf+1, n-1, usdelay, usdelay )+1 ;
+	int err = 0 ;
+	while( mcu_dataready( rdelay, &rdelay) ) {
+		mcu_read1( recvbuf+recvsiz ) ;
+		recvsiz++ ;
+		if( recvsiz>5 ) {
+			if( recvsiz >= (int) recvbuf[0] ) {
+				recvsiz = 0;
 
 #ifdef MCU_DEBUG
-			mcu_debug_out( msgbuf, "recv: ");
+			mcu_debug_out( recvbuf, "recv: ");
+#endif
+				if( recvbuf[1]==ID_HOST &&           	// correct target
+					(recvbuf[4]==2 ||recvbuf[4]==3 ) &&	// correct send/recv
+					mcu_checksum( recvbuf ) == 0 )   // correct checksum
+				{
+					return recvbuf ;
+				}
+				else {
+					err = 1 ;
+					break ;
+				}
+			}
+            if( strncmp(recvbuf, "Enter", 5 )==0 ) {
+                // MCU reboots, why?
+                dvr_log("MCU power down!!!");
+                sync();sync();sync();
+                err = 1 ;
+				recvsiz = 0;
+                break ;
+            }
+		}
+		else {
+			int n=(int) recvbuf[0] ;
+			if( n<5 || n>MCU_MAX_MSGSIZE ) {
+				// some thing wrong
+				err = 1 ;
+				recvsiz = 0;
+				break ;
+			}
+		}
+	}
+	if( err ) {
+		mcu_clear(100000);
+	}
+	return NULL ;
+}
+
+// receive one data package from mcu, with static buffer
+// return : received msg
+//          NULL : failed
+/*
+static char * mcu_recvmsg_x( int usdelay )
+{
+    if( mcu_read(recvbuf, 1, usdelay ) ) {
+        int n=(int) recvbuf[0] ;
+        if( n>=5 && n<MCU_MAX_MSGSIZE-2 ) {
+            n=mcu_read(recvbuf+1, n-1, usdelay, usdelay )+1 ;
+
+#ifdef MCU_DEBUG
+			mcu_debug_out( recvbuf, "recv: ");
 #endif
             
-            if( n==(int)msgbuf[0] &&            // correct size
-                msgbuf[1]==0 &&                 // correct target
-                mcu_checksum( msgbuf ) == 0 )   // correct checksum
+            if( n==(int)recvbuf[0] &&            // correct size
+                recvbuf[1]==ID_HOST &&           // correct target
+                (recvbuf[4]==2 ||recvbuf[4]==3 ) &&	// correct send/recv
+                mcu_checksum( recvbuf ) == 0 )   // correct checksum
             {
-                return n ;
+                return recvbuf ;
             }
-            if( strncmp(msgbuf, "Enter", 5 )==0 ) {
+            if( strncmp(recvbuf, "Enter", 5 )==0 ) {
                 // MCU reboots, why?
                 dvr_log("MCU power down!!!");
                 sync();sync();sync();
             }
         }
     }
-
     mcu_clear(100000);
-    return 0 ;
-}
-
-// receive one data package from mcu, with static buffer
-// return : received msg
-//          NULL : failed
-static char * mcu_recvmsg( int usdelay )
-{
-	static char rbuf[MCU_MAX_MSGSIZE] ;
-    int n = mcu_recvmsg(rbuf, MCU_MAX_MSGSIZE, usdelay);
-    if( n>0 ) return rbuf ;
-    else return NULL ;
-}
-
-// to receive a message from mcu
-/*
-int mcu_recv( char * rmsg, int rsize, int usdelay, int * usremain)
-{
-    int recvsize ;
-    while( mcu_dataready(usdelay, &usdelay) ) {
-        recvsize = mcu_recvmsg(rmsg, rsize, usdelay) ;
-        if( recvsize > 0 ) {
-            if( rmsg[4]=='\x02' ) {             // is it an input message ?
-				mcu_oninput( rmsg );
-            }
-            else {
-                if( usremain ) {
-                    * usremain=usdelay ;
-                }
-                return recvsize ;                  // it could be a responding message
-            }
-        }
-        else {
-            break;
-        }
-    }
-    if( usremain ) {
-        * usremain=usdelay ;
-    }
-    return 0 ;
+    return NULL ;
 }
 */
-
-// to receive a message from mcu, use static buffer
-char * mcu_recv( int usdelay, int * usremain)
+	
+// to receive a message from mcu
+// return : received msg
+//          NULL : failed
+static char * mcu_recv( int usdelay, int * usremain)
 {
 	char * rmsg ;
     int recvsize ;
@@ -329,26 +368,24 @@ char * mcu_recv( int usdelay, int * usremain)
 
 // wait for response from mcu
 // return responds buffer
-char * mcu_waitrsp(int target, int cmd, int delay=MCU_CMD_DELAY)
+static char * mcu_waitrsp(int target, int cmd, int delay=MCU_CMD_DELAY)
 {
     while( delay>=0 ) {                          	// wait until delay time out
 		char * rsp = mcu_recv(delay, &delay ) ;
-        if( rsp ) {     					// received a responds
-            if( rsp[2]==(char)target &&         // resp from my target (MCU)
-                rsp[3]==(char)cmd &&            // correct resp for my CMD
+        if( rsp ) {    
+			if( rsp[2]==(char)target &&         // resp from my target (MCU)
                 rsp[4]==3 )                     // it is a responds
             {
-                return rsp ;
-            }
-            else if( rsp[2]==(char)target &&    // resp from correct target (MCU)
-                rsp[3]==(char)0xff &&           // possibly not-supported command
-                rsp[4]==3 )                     // it is responds
-            {
-				if( rsp[5] == cmd ) {
-					return NULL ;
+	            if( rsp[3]==(char)cmd )         // correct resp for my CMD
+				{
+					return rsp ;
 				}
-				break;
-            }
+				else if( rsp[3]==(char)0xff && 	// possibly not-supported command
+					rsp[5] == cmd ) 			// not supported command
+				{
+					return (char *)-1 ;
+				}
+			}
             // ignor all other messages and continue wait for correct responds
         }	  
         else {
@@ -358,35 +395,47 @@ char * mcu_waitrsp(int target, int cmd, int delay=MCU_CMD_DELAY)
     return NULL ;		// timeout error
 }
 
-// Send command to mcu and check responds, with variable argument
+static int mcu_errors ;
+
+// Send command to mcu and check responds
 // return
-//       size of response
-//       0 if failed
-static char * mcu_cmd_va(int target, int cmd, int datalen, va_list arg)
+//       response buffer
+//       NULL if failed
+char * mcu_cmd_target_data(int target, int cmd, int datalen, char * data )
 {
-    // validate command
-    if( datalen<0 || datalen>64 ) { 	// wrong command
+    // validate command length
+    if( datalen<0 || datalen>MCU_MAX_MSGSIZE-6 ) { 	// wrong command
         return NULL ;
     }
 
     int retry=3 ;
     while( retry-->0 ) {
-        if( mcu_sendcmd_va( target, cmd, datalen, arg ) ) {
+        if( mcu_sendcmd_target_data( target, cmd, datalen, data ) ) {
 			char * rsp = mcu_waitrsp(target, cmd) ;		// wait rsp from MCU
             if( rsp ) {
+				if( rsp == (char *)-1 ) {
+#ifdef MCU_DEBUG
+        printf("MCU cmd 0x%02x not supported\n", cmd );
+#endif
+					rsp = NULL ;
+				}
+				mcu_errors=0 ;
 				return rsp ;
             }
         }
 
 #ifdef MCU_DEBUG
-        printf("MCU no response, retry!!!\n" );
+        printf("MCU no response, retry!!! - target:%d, cmd: 0x%02x\n", target, cmd );
 #endif
     }
-
-    return NULL ;
+    
+	if( ++mcu_errors>10 ) {
+		sleep(1);
+		mcu_restart();      // restart mcu port
+		mcu_errors=0 ;
+	}
+	return NULL;
 }
-
-static int mcu_errors ;
 
 // Send command to mcu and check responds
 // return
@@ -394,19 +443,16 @@ static int mcu_errors ;
 //       NULL if failed
 static char * mcu_cmd_target_va(int target, int cmd, int datalen, va_list va )
 {
-    char * rsp = mcu_cmd_va( target, cmd, datalen, va );
-    if( rsp ) {
-		mcu_errors=0 ;
-		return rsp ;
-	}
-	else {
-        if( ++mcu_errors>10 ) {
-            sleep(1);
-            mcu_restart();      // restart mcu port
-            mcu_errors=0 ;
-        }
-        return NULL;
+    // validate command length
+    if( datalen<0 || datalen>MCU_MAX_MSGSIZE-6 ) { 	// wrong command
+        return NULL ;
     }
+    
+    char data[datalen] ;
+	for( int i=0 ; i<datalen ; i++ ) {
+        data[i] = (char) va_arg( va, int );
+    }
+    return mcu_cmd_target_data(target, cmd, datalen, data );
 }
 
 // Send command to target mcu and check responds
@@ -441,22 +487,18 @@ char * mcu_cmd(int cmd, int datalen, ...)
 // return
 //		number of input message received.
 //      0: timeout (no message)
-//     -1: error
 int mcu_input(int usdelay)
 {
     int res = 0 ;
-    while( mcu_dataready(usdelay, &usdelay) ) {
-		char * mcu_msg = mcu_recvmsg( usdelay ) ;
-		if( mcu_msg ) {
-            if( mcu_msg[4]=='\x02' ) {             // is it an input message ? ignor other message ( a delayed response )
-				mcu_oninput( mcu_msg );
-                res++;
-            }
-            // ignore other messages
-        }
-        else {
-            return -1 ;
-        }
+    char * mcu_msg ;
+    //while( mcu_dataready(usdelay, &usdelay) ) {
+    while( (mcu_msg = mcu_recvmsg(usdelay))!=NULL ) {
+		if( mcu_msg[4]=='\x02' ) {             // is it an input message ? ignor other message ( a delayed response )
+			mcu_oninput( mcu_msg );
+			res++;
+		}
+		// ignore other messages
+		usdelay = 1000 ;
     }
     return res ;
 }
